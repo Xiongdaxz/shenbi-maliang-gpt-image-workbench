@@ -30,22 +30,27 @@ jobs:
             os: windows-latest
             target: ""
             executable: ShenbiMaliang.exe
-            archive: shenbi-maliang-windows-x64-portable.zip
+            archive: 01-shenbi-maliang-windows-x64-portable.zip
+          - name: windows-arm64
+            os: windows-11-arm
+            target: ""
+            executable: ShenbiMaliang.exe
+            archive: 02-shenbi-maliang-windows-arm64-portable.zip
           - name: linux-x64
             os: ubuntu-latest
             target: ""
             executable: shenbi-maliang
-            archive: shenbi-maliang-linux-x64-portable.zip
+            archive: 03-shenbi-maliang-linux-x64-portable.zip
           - name: macos-x64
             os: macos-15-intel
             target: ""
             executable: shenbi-maliang
-            archive: shenbi-maliang-macos-x64-portable.zip
+            archive: 04-shenbi-maliang-macos-x64-portable.zip
           - name: macos-arm64
             os: macos-latest
             target: ""
             executable: shenbi-maliang
-            archive: shenbi-maliang-macos-arm64-portable.zip
+            archive: 05-shenbi-maliang-macos-arm64-portable.zip
 
     steps:
       - name: Checkout
@@ -232,13 +237,13 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          Compress-Archive -Path "release/shenbi-maliang-source" -DestinationPath "release/shenbi-maliang-source-run.zip" -Force
+          Compress-Archive -Path "release/shenbi-maliang-source" -DestinationPath "release/06-shenbi-maliang-source-run.zip" -Force
 
       - name: Upload source artifact
         uses: actions/upload-artifact@v7
         with:
-          name: shenbi-maliang-source-run.zip
-          path: release/shenbi-maliang-source-run.zip
+          name: 06-shenbi-maliang-source-run.zip
+          path: release/06-shenbi-maliang-source-run.zip
           if-no-files-found: error
 
   publish:
@@ -250,14 +255,65 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag_name || github.ref }}
+
       - name: Download release artifacts
         uses: actions/download-artifact@v8
         with:
           path: release-assets
+          merge-multiple: true
+
+      - name: Create release notes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tagName = "${{ github.event.release.tag_name || inputs.tag_name || github.ref_name }}"
+          $lines = Get-Content -Path "docs/changelog.md"
+          $headingPattern = "^##\s+$([regex]::Escape($tagName))(\s+-\s+.*)?\s*$"
+          $start = -1
+
+          for ($i = 0; $i -lt $lines.Count; $i++) {
+            if ($lines[$i] -match $headingPattern) {
+              $start = $i
+              break
+            }
+          }
+
+          if ($start -lt 0) {
+            @(
+              "## $tagName",
+              "",
+              "本版本暂无独立发布说明，请查看仓库中的 docs/changelog.md。"
+            ) | Set-Content -Encoding UTF8 -Path "release-notes.md"
+            return
+          }
+
+          $end = $lines.Count
+          for ($i = $start + 1; $i -lt $lines.Count; $i++) {
+            if ($lines[$i] -match "^##\s+") {
+              $end = $i
+              break
+            }
+          }
+
+          $section = @($lines[$start..($end - 1)])
+          while ($section.Count -gt 0 -and [string]::IsNullOrWhiteSpace($section[-1])) {
+            $section = @($section[0..($section.Count - 2)])
+          }
+          $section | Set-Content -Encoding UTF8 -Path "release-notes.md"
 
       - name: Upload assets to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event.release.tag_name || inputs.tag_name || github.ref_name }}
-          generate_release_notes: true
-          files: release-assets/**/*.zip
+          body_path: release-notes.md
+          files: |
+            release-assets/01-shenbi-maliang-windows-x64-portable.zip
+            release-assets/02-shenbi-maliang-windows-arm64-portable.zip
+            release-assets/03-shenbi-maliang-linux-x64-portable.zip
+            release-assets/04-shenbi-maliang-macos-x64-portable.zip
+            release-assets/05-shenbi-maliang-macos-arm64-portable.zip
+            release-assets/06-shenbi-maliang-source-run.zip

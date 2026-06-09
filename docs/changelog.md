@@ -2,6 +2,12 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.23 - 2026-06-10
+
+- 新增 Windows ARM64 便携发布包，Windows ARM 设备可下载对应版本直接运行。
+- 调整 GitHub Release 附件命名顺序，发布包会按 Windows x64、Windows ARM64、Linux x64、macOS Intel、macOS Apple Silicon、源码运行包排列。
+- 发布说明改为直接展示当前版本更新内容，不再只显示自动生成的跳转链接。
+
 ## v0.1.22 - 2026-06-10
 
 - 精简 Windows、Linux、macOS 便携发布包，移除不需要随包携带的完整构建依赖。
