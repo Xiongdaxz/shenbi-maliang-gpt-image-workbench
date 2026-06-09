@@ -109,7 +109,7 @@ data/     本地运行数据目录，启动后自动生成
 - `shenbi-maliang-windows-x64-portable.zip`：解压后进入 `shenbi-maliang` 目录，双击 `ShenbiMaliang.exe`。
 - `shenbi-maliang-linux-x64-portable.zip`：解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang`。
 - `shenbi-maliang-macos-arm64-portable.zip` / `shenbi-maliang-macos-x64-portable.zip`：按芯片架构下载，解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang`。
-- `shenbi-maliang-source-run.zip`：源码运行包，不包含 exe，解压后执行 `bun install --frozen-lockfile`、`bun run build`、`bun run start`。
+- `shenbi-maliang-source-run.zip`：源码运行包，不包含 exe。Windows 执行 `start-update.bat`，Linux/macOS 执行 `bash ./start.sh`；也可以手动执行 `bun install --frozen-lockfile`、`bun run build`、`bun run start`。
 
 GitHub Release 页面也会自动提供原始 `Source code (zip)` 和 `Source code (tar.gz)`。如果只是想按命令运行项目，建议下载 `shenbi-maliang-source-run.zip`；如果要查看完整仓库历史，建议直接 `git clone`。运行数据会自动创建到 `data/`，升级前请先备份 `data/`。
 

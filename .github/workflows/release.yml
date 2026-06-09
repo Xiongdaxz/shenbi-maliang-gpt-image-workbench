@@ -154,6 +154,7 @@ jobs:
             "SECURITY.md",
             "CONTRIBUTING.md",
             "start-update.bat",
+            "start.sh",
             "index.html",
             "vite.config.ts",
             "tsconfig.json",
@@ -179,6 +180,20 @@ jobs:
           - Bun
 
           ## Run
+
+          Windows:
+
+          ```powershell
+          .\start-update.bat
+          ```
+
+          Linux / macOS:
+
+          ```bash
+          bash ./start.sh
+          ```
+
+          Manual commands:
 
           ```bash
           bun install --frozen-lockfile
