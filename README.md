@@ -104,14 +104,17 @@ data/     本地运行数据目录，启动后自动生成
 
 ## 📦 发布包
 
-正式版本会在 GitHub Releases 提供便携压缩包：
+正式版本会在 GitHub Releases 提供以下发布包：
 
-- `shenbi-maliang-windows-x64-portable.zip`：解压后进入 `shenbi-maliang` 目录，双击 `ShenbiMaliang.exe`。
-- `shenbi-maliang-linux-x64-portable.zip`：解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang`。
-- `shenbi-maliang-macos-arm64-portable.zip` / `shenbi-maliang-macos-x64-portable.zip`：按芯片架构下载，解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang`。
-- `shenbi-maliang-source-run.zip`：源码运行包，不包含 exe。Windows 执行 `start-update.bat`，Linux/macOS 执行 `bash ./start.sh`；也可以手动执行 `bun install --frozen-lockfile`、`bun run build`、`bun run start`。
+| 类型 | 平台/架构 | 包名 | 格式 | 启动方式 |
+| --- | --- | --- | --- | --- |
+| 便携运行包 | Windows x64 | `shenbi-maliang-windows-x64-portable.zip` | zip + exe | 解压后进入 `shenbi-maliang` 目录，双击 `ShenbiMaliang.exe` |
+| 便携运行包 | Linux x64 | `shenbi-maliang-linux-x64-portable.zip` | zip + 可执行文件 | 解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
+| 便携运行包 | macOS Apple Silicon | `shenbi-maliang-macos-arm64-portable.zip` | zip + 可执行文件 | 解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
+| 便携运行包 | macOS Intel | `shenbi-maliang-macos-x64-portable.zip` | zip + 可执行文件 | 解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
+| 源码运行包 | Windows / Linux / macOS | `shenbi-maliang-source-run.zip` | zip + 源码 | Windows 执行 `start-update.bat`；Linux/macOS 执行 `bash ./start.sh` |
 
-GitHub Release 页面也会自动提供原始 `Source code (zip)` 和 `Source code (tar.gz)`。如果只是想按命令运行项目，建议下载 `shenbi-maliang-source-run.zip`；如果要查看完整仓库历史，建议直接 `git clone`。运行数据会自动创建到 `data/`，升级前请先备份 `data/`。
+`shenbi-maliang-source-run.zip` 不包含 exe、`node_modules` 和构建产物，也可以手动执行 `bun install --frozen-lockfile`、`bun run build`、`bun run start`。GitHub Release 页面还会自动提供原始 `Source code (zip)` 和 `Source code (tar.gz)`；如果要查看完整仓库历史，建议直接 `git clone`。运行数据会自动创建到 `data/`，升级前请先备份 `data/`。
 
 ## 🙏 鸣谢
 
