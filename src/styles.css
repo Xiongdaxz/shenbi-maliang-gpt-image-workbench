@@ -1,0 +1,282 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: var(--app-text);
+  background: var(--app-bg);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color-scheme: light;
+  --app-bg: #f7f7f5;
+  --app-surface: #ffffff;
+  --app-surface-muted: #fbfbfa;
+  --app-surface-soft: #f9fafb;
+  --app-surface-raised: rgba(255, 255, 255, 0.98);
+  --app-sidebar-bg: #f9f9f9;
+  --app-card-bg: #ffffff;
+  --app-menu-bg: rgba(255, 255, 255, 0.98);
+  --app-select-menu-bg: rgba(255, 255, 255, 0.96);
+  --app-select-menu-shadow: 0 18px 54px rgba(15, 23, 42, 0.18);
+  --app-settings-backdrop-bg: rgba(17, 24, 39, 0.18);
+  --app-archived-backdrop-bg: rgba(17, 24, 39, 0.16);
+  --app-settings-modal-border: rgba(209, 213, 219, 0.96);
+  --app-settings-side-border: #ececec;
+  --app-settings-summary-bg: #fafafa;
+  --app-settings-avatar-bg: #ececea;
+  --app-archived-modal-border: rgba(209, 213, 219, 0.95);
+  --app-archived-modal-shadow: 0 24px 80px rgba(15, 23, 42, 0.2);
+  --app-input-bg: #ffffff;
+  --app-preview-bg: #f3f4f6;
+  --app-bubble-bg: #f4f4f4;
+  --app-bubble-fade: linear-gradient(180deg, rgba(244, 244, 244, 0), #f4f4f4 86%);
+  --app-text: #111827;
+  --app-text-inverted: #ffffff;
+  --app-muted: #6b7280;
+  --app-subtle: #9ca3af;
+  --app-label: #374151;
+  --app-body-text: #374151;
+  --app-link: #0b74de;
+  --app-activity-color: #1e90ff;
+  --app-activity-soft: rgba(30, 144, 255, 0.22);
+  --app-border: #e5e7eb;
+  --app-border-soft: #eeeeec;
+  --app-border-strong: #d1d5db;
+  --app-border-muted: rgba(209, 213, 219, 0.9);
+  --app-hover-bg: #ececec;
+  --app-active-bg: rgba(17, 24, 39, 0.1);
+  --app-selected-bg: #f3f4f6;
+  --app-selected-soft-bg: #f9fafb;
+  --app-overlay-bg: rgba(17, 24, 39, 0.36);
+  --app-overlay-soft-bg: rgba(17, 24, 39, 0.18);
+  --app-shadow: 0 18px 52px rgba(15, 23, 42, 0.18);
+  --app-modal-shadow: 0 28px 90px rgba(15, 23, 42, 0.22);
+  --app-danger: #dc2626;
+  --app-danger-bg: #fef2f2;
+  --app-danger-border: #fecaca;
+  --danger-outline-border: #f19999;
+  --danger-outline-hover-border: #ef4444;
+  --danger-outline-hover-bg: #fff5f5;
+  --button-default-bg: var(--app-surface);
+  --button-default-hover-bg: var(--app-hover-bg);
+  --button-default-border: #d9d9d9;
+  --button-primary-bg: #050505;
+  --button-primary-hover-bg: #1f1f1f;
+  --button-primary-text: #ffffff;
+  --button-danger-bg: #ef3f46;
+  --button-danger-hover-bg: #dc2626;
+  --control-focus-border: rgba(17, 24, 39, 0.62);
+  --control-focus-ring: rgba(17, 24, 39, 0.08);
+  --control-selected-border: #111827;
+  --control-selected-bg: var(--app-selected-bg);
+  --control-selected-soft-bg: var(--app-selected-soft-bg);
+  --app-scrollbar-thumb: #e5e5e5;
+  --app-scrollbar-track: transparent;
+}
+
+html[data-appearance="dark"] {
+  color-scheme: dark;
+  --app-bg: #151513;
+  --app-surface: #20201d;
+  --app-surface-muted: #1b1b19;
+  --app-surface-soft: #24231f;
+  --app-surface-raised: rgba(31, 31, 28, 0.98);
+  --app-sidebar-bg: #1b1b18;
+  --app-card-bg: #20201d;
+  --app-menu-bg: rgba(31, 31, 28, 0.98);
+  --app-input-bg: #191916;
+  --app-preview-bg: #2a2925;
+  --app-bubble-bg: #2a2926;
+  --app-bubble-fade: linear-gradient(180deg, rgba(42, 41, 38, 0), #2a2926 86%);
+  --app-text: #f4f1ea;
+  --app-text-inverted: #111827;
+  --app-muted: #b4b0a7;
+  --app-subtle: #8f8a82;
+  --app-label: #b4b0a7;
+  --app-body-text: #c9c4ba;
+  --app-link: #c7a25e;
+  --app-activity-color: #b69047;
+  --app-activity-soft: rgba(156, 123, 58, 0.30);
+  --app-border: #34332f;
+  --app-border-soft: #2c2b27;
+  --app-border-strong: #504f47;
+  --app-border-muted: rgba(80, 79, 71, 0.86);
+  --app-hover-bg: #2c2b27;
+  --app-active-bg: rgba(244, 241, 234, 0.12);
+  --app-selected-bg: #35342f;
+  --app-selected-soft-bg: #292824;
+  --app-overlay-bg: rgba(5, 5, 4, 0.62);
+  --app-overlay-soft-bg: rgba(5, 5, 4, 0.52);
+  --app-shadow: 0 18px 52px rgba(0, 0, 0, 0.42);
+  --app-modal-shadow: 0 28px 90px rgba(0, 0, 0, 0.56);
+  --app-danger: #f87171;
+  --app-danger-bg: rgba(127, 29, 29, 0.24);
+  --app-danger-border: rgba(248, 113, 113, 0.38);
+  --button-default-bg: #24231f;
+  --button-default-hover-bg: #33322d;
+  --button-default-border: #45443d;
+  --app-select-menu-bg: rgba(31, 31, 28, 0.98);
+  --app-select-menu-shadow: var(--app-shadow);
+  --app-settings-backdrop-bg: var(--app-overlay-soft-bg);
+  --app-archived-backdrop-bg: var(--app-overlay-soft-bg);
+  --app-settings-modal-border: var(--app-border-muted);
+  --app-settings-side-border: var(--app-border-soft);
+  --app-settings-summary-bg: var(--app-surface-soft);
+  --app-settings-avatar-bg: var(--app-hover-bg);
+  --app-archived-modal-border: var(--app-border-muted);
+  --app-archived-modal-shadow: var(--app-modal-shadow);
+  --danger-outline-border: var(--app-danger-border);
+  --danger-outline-hover-border: var(--app-danger);
+  --danger-outline-hover-bg: var(--app-danger-bg);
+  --button-primary-bg: #1e90ff;
+  --button-primary-hover-bg: #3aa0ff;
+  --button-primary-text: #ffffff;
+  --button-danger-bg: #dc2626;
+  --button-danger-hover-bg: #ef4444;
+  --control-focus-border: rgba(244, 241, 234, 0.72);
+  --control-focus-ring: rgba(244, 241, 234, 0.12);
+  --control-selected-border: #f4f1ea;
+  --app-scrollbar-thumb: #45443d;
+}
+
+html[data-appearance="maliang"] {
+  color-scheme: light;
+  --app-bg: #f5f0e6;
+  --app-surface: #fffdf8;
+  --app-surface-muted: #f1e7d7;
+  --app-surface-soft: #f7efe2;
+  --app-surface-raised: rgba(255, 253, 248, 0.96);
+  --app-sidebar-bg: #efe4d2;
+  --app-card-bg: rgba(255, 253, 248, 0.92);
+  --app-menu-bg: rgba(255, 253, 248, 0.98);
+  --app-input-bg: rgba(255, 253, 248, 0.72);
+  --app-preview-bg: #eadfcd;
+  --app-bubble-bg: rgba(250, 241, 226, 0.92);
+  --app-bubble-fade: linear-gradient(180deg, rgba(250, 241, 226, 0), rgba(250, 241, 226, 0.96) 86%);
+  --app-text: #172033;
+  --app-text-inverted: #fffdf8;
+  --app-muted: rgba(123, 96, 46, 0.76);
+  --app-subtle: rgba(123, 96, 46, 0.54);
+  --app-label: #6f5220;
+  --app-body-text: #4f432f;
+  --app-link: #7d5f2b;
+  --app-activity-color: #7d5f2b;
+  --app-activity-soft: rgba(125, 95, 43, 0.24);
+  --app-border: rgba(156, 123, 58, 0.24);
+  --app-border-soft: rgba(156, 123, 58, 0.18);
+  --app-border-strong: rgba(156, 123, 58, 0.42);
+  --app-border-muted: rgba(156, 123, 58, 0.30);
+  --app-hover-bg: rgba(156, 123, 58, 0.10);
+  --app-active-bg: rgba(156, 123, 58, 0.16);
+  --app-selected-bg: rgba(156, 123, 58, 0.18);
+  --app-selected-soft-bg: rgba(156, 123, 58, 0.08);
+  --app-overlay-bg: rgba(50, 39, 23, 0.30);
+  --app-overlay-soft-bg: rgba(50, 39, 23, 0.18);
+  --app-shadow: 0 18px 52px rgba(87, 74, 56, 0.16);
+  --app-modal-shadow: 0 28px 90px rgba(87, 74, 56, 0.22);
+  --app-danger: #9f312c;
+  --app-danger-bg: rgba(159, 49, 44, 0.08);
+  --app-danger-border: rgba(159, 49, 44, 0.24);
+  --button-default-bg: rgba(255, 253, 248, 0.62);
+  --button-default-hover-bg: rgba(156, 123, 58, 0.12);
+  --button-default-border: rgba(156, 123, 58, 0.34);
+  --app-select-menu-bg: rgba(255, 253, 248, 0.98);
+  --app-select-menu-shadow: 0 18px 54px rgba(87, 74, 56, 0.16);
+  --app-settings-backdrop-bg: rgba(50, 39, 23, 0.18);
+  --app-archived-backdrop-bg: rgba(50, 39, 23, 0.16);
+  --app-settings-modal-border: rgba(156, 123, 58, 0.34);
+  --app-settings-side-border: rgba(156, 123, 58, 0.20);
+  --app-settings-summary-bg: rgba(255, 253, 248, 0.62);
+  --app-settings-avatar-bg: rgba(156, 123, 58, 0.12);
+  --app-archived-modal-border: rgba(156, 123, 58, 0.32);
+  --app-archived-modal-shadow: 0 24px 80px rgba(87, 74, 56, 0.20);
+  --danger-outline-border: rgba(159, 49, 44, 0.30);
+  --danger-outline-hover-border: rgba(159, 49, 44, 0.58);
+  --danger-outline-hover-bg: rgba(159, 49, 44, 0.08);
+  --button-primary-bg: #7d5f2b;
+  --button-primary-hover-bg: #6f5220;
+  --button-primary-text: #fffdf4;
+  --button-danger-bg: #9f312c;
+  --button-danger-hover-bg: #84231f;
+  --control-focus-border: rgba(156, 123, 58, 0.68);
+  --control-focus-ring: rgba(188, 155, 89, 0.10);
+  --control-selected-border: #7d5f2b;
+  --app-scrollbar-thumb: rgba(156, 123, 58, 0.34);
+}
+
+html {
+  scrollbar-gutter: auto;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--app-bg);
+  color: var(--app-text);
+}
+
+* {
+  scrollbar-color: var(--app-scrollbar-thumb) var(--app-scrollbar-track);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--app-scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid var(--app-scrollbar-track);
+  border-radius: 999px;
+  background: var(--app-scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: visible;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.center-screen,
+.login-page,
+.config-login {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+

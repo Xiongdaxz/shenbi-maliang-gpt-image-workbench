@@ -1,0 +1,111 @@
+name: Release Packages
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  package:
+    name: Package ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows
+            os: windows-latest
+            archive: gpt-image-workbench-windows.zip
+          - name: linux
+            os: ubuntu-latest
+            archive: gpt-image-workbench-linux.zip
+          - name: macos
+            os: macos-latest
+            archive: gpt-image-workbench-macos.zip
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run build
+
+      - name: Create package directory
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $packageRoot = "release/gpt-image-workbench"
+          New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
+
+          $items = @(
+            "dist",
+            "server",
+            "src",
+            "public",
+            "scripts",
+            "docs",
+            ".github",
+            ".gitignore",
+            "package.json",
+            "bun.lock",
+            "README.md",
+            "README.en.md",
+            "LICENSE",
+            "SECURITY.md",
+            "CONTRIBUTING.md",
+            "start-update.bat",
+            "index.html",
+            "vite.config.ts",
+            "tsconfig.json",
+            "tailwind.config.ts",
+            "postcss.config.js"
+          )
+
+          foreach ($item in $items) {
+            if (Test-Path $item) {
+              Copy-Item -Path $item -Destination $packageRoot -Recurse -Force
+            }
+          }
+
+          @'
+          # GPT Image Workbench Release Package / 发布包
+
+          ## 中文
+
+          1. 安装 Bun。
+          2. 执行 `bun install --frozen-lockfile`。
+          3. 执行 `bun run start`。
+          4. 打开 http://127.0.0.1:8787。
+
+          运行数据会自动生成到 `data/`。
+
+          ## English
+
+          1. Install Bun.
+          2. Run `bun install --frozen-lockfile`.
+          3. Run `bun run start`.
+          4. Open http://127.0.0.1:8787.
+
+          Runtime data will be created in `data/`.
+          '@ | Set-Content -Encoding UTF8 -Path "$packageRoot/RUNNING.md"
+
+      - name: Compress package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Compress-Archive -Path "release/gpt-image-workbench" -DestinationPath "release/${{ matrix.archive }}" -Force
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpt-image-workbench-${{ matrix.name }}
+          path: release/${{ matrix.archive }}
+          if-no-files-found: error

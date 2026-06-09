@@ -1,0 +1,330 @@
+import type {
+  CSSProperties,
+  PointerEventHandler,
+  ReactEventHandler,
+  ReactNode,
+  RefObject,
+  WheelEventHandler
+} from "react";
+import { ChevronLeft, ChevronRight, Maximize2, RefreshCw, RotateCcw, RotateCw, ZoomIn, ZoomOut, X } from "lucide-react";
+import { ImageDownloadMenu } from "./ImageDownloadMenu";
+import { cx } from "../lib/cx";
+import type { CaseGroupImage, ImageReferenceItem } from "../types";
+import type { ImagePreviewItem } from "./ImagePreviewModal";
+
+export type PreviewNavigatorMetrics = {
+  scale: number;
+  imageWidth: number;
+  imageHeight: number;
+  rectLeft: number;
+  rectTop: number;
+  rectWidth: number;
+  rectHeight: number;
+};
+
+type ImagePreviewStageProps = {
+  canNext: boolean;
+  canPan: boolean;
+  canPrev: boolean;
+  imageSrc: string;
+  imageSize: { width: number; height: number } | null;
+  imageStyle: CSSProperties;
+  imagePixelSnapped: boolean;
+  item: ImagePreviewItem;
+  navigatorMetrics: PreviewNavigatorMetrics | null;
+  previewDragging: boolean;
+  previewRotation: number;
+  showNavigator: boolean;
+  stageRef: RefObject<HTMLDivElement | null>;
+  onImageLoad: ReactEventHandler<HTMLImageElement>;
+  onNavigatorPointerCancel: PointerEventHandler<HTMLDivElement>;
+  onNavigatorPointerDown: PointerEventHandler<HTMLDivElement>;
+  onNavigatorPointerMove: PointerEventHandler<HTMLDivElement>;
+  onNavigatorPointerUp: PointerEventHandler<HTMLDivElement>;
+  onNext: () => void;
+  onPointerCancel: PointerEventHandler<HTMLDivElement>;
+  onPointerDown: PointerEventHandler<HTMLDivElement>;
+  onPointerMove: PointerEventHandler<HTMLDivElement>;
+  onPointerUp: PointerEventHandler<HTMLDivElement>;
+  onPrev: () => void;
+  onWheel: WheelEventHandler<HTMLDivElement>;
+};
+
+export function ImagePreviewStage({
+  canNext,
+  canPan,
+  canPrev,
+  imageSrc,
+  imageSize,
+  imageStyle,
+  imagePixelSnapped,
+  item,
+  navigatorMetrics,
+  previewDragging,
+  previewRotation,
+  showNavigator,
+  stageRef,
+  onImageLoad,
+  onNavigatorPointerCancel,
+  onNavigatorPointerDown,
+  onNavigatorPointerMove,
+  onNavigatorPointerUp,
+  onNext,
+  onPointerCancel,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPrev,
+  onWheel
+}: ImagePreviewStageProps) {
+  return (
+    <div
+      className={cx("case-preview-stage", showNavigator && "has-navigator", canPan && "is-pannable", previewDragging && "is-dragging")}
+      ref={stageRef}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      onWheel={onWheel}
+    >
+      <button className="case-preview-nav prev" type="button" onClick={onPrev} disabled={!canPrev} aria-label="上一张">
+        <ChevronLeft size={24} />
+      </button>
+      <img
+        key={imageSrc}
+        className={cx("case-preview-image", imagePixelSnapped && "is-pixel-snapped")}
+        src={imageSrc}
+        alt={item.title}
+        draggable={false}
+        style={{
+          width: imageSize?.width,
+          height: imageSize?.height,
+          ...imageStyle
+        }}
+        onLoad={onImageLoad}
+      />
+      {showNavigator && navigatorMetrics && imageSize ? (
+        <div className={cx("case-preview-navigator", canPan && "is-active")} aria-label="长图预览导航">
+          <div
+            className="case-preview-navigator-track"
+            style={{
+              width: navigatorMetrics.imageWidth,
+              height: navigatorMetrics.imageHeight
+            }}
+            onPointerDown={onNavigatorPointerDown}
+            onPointerMove={onNavigatorPointerMove}
+            onPointerUp={onNavigatorPointerUp}
+            onPointerCancel={onNavigatorPointerCancel}
+          >
+            <img
+              src={item.thumbnailUrl ?? item.previewUrl ?? item.imageUrl}
+              alt=""
+              draggable={false}
+              style={{
+                width: imageSize.width * navigatorMetrics.scale,
+                height: imageSize.height * navigatorMetrics.scale,
+                transform: `translate(-50%, -50%) rotate(${previewRotation}deg)`
+              }}
+            />
+            <span
+              className="case-preview-navigator-window"
+              style={{
+                left: navigatorMetrics.rectLeft,
+                top: navigatorMetrics.rectTop,
+                width: navigatorMetrics.rectWidth,
+                height: navigatorMetrics.rectHeight
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
+      <button className="case-preview-nav next" type="button" onClick={onNext} disabled={!canNext} aria-label="下一张">
+        <ChevronRight size={24} />
+      </button>
+    </div>
+  );
+}
+
+type ImagePreviewToolbarProps = {
+  actions: ReactNode;
+  activeGroupImageIndex: number;
+  fileSizeLabel: string;
+  groupImages: CaseGroupImage[];
+  index: number;
+  item: ImagePreviewItem;
+  itemCount: number;
+  referenceImages: ImageReferenceItem[];
+  sizeLabel: string;
+  zoomLabel: string;
+  onCopyDescription: () => void;
+  onGroupImageSelect: (index: number) => void;
+  onOriginalSize: () => void;
+  onReferencePreview: (reference: ImageReferenceItem) => void;
+  onReset: () => void;
+  onRotateLeft: () => void;
+  onRotateRight: () => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  toolbarRef?: RefObject<HTMLDivElement | null>;
+};
+
+export function ImagePreviewToolbar({
+  actions,
+  activeGroupImageIndex,
+  fileSizeLabel,
+  groupImages,
+  index,
+  item,
+  itemCount,
+  referenceImages,
+  sizeLabel,
+  zoomLabel,
+  onCopyDescription,
+  onGroupImageSelect,
+  onOriginalSize,
+  onReferencePreview,
+  onReset,
+  onRotateLeft,
+  onRotateRight,
+  onZoomIn,
+  onZoomOut,
+  toolbarRef
+}: ImagePreviewToolbarProps) {
+  return (
+    <div className="case-preview-bottom">
+      {groupImages.length > 1 ? (
+        <div className="case-preview-group-thumbs" aria-label="组图缩略图">
+          <span className="case-preview-reference-label">组图</span>
+          <div className="case-preview-group-thumb-list">
+            {groupImages.map((image, imageIndex) => (
+              <button
+                key={image.id}
+                type="button"
+                className={cx(imageIndex === activeGroupImageIndex && "active")}
+                onClick={() => onGroupImageSelect(imageIndex)}
+                aria-label={`查看组图第 ${imageIndex + 1} 张`}
+                aria-pressed={imageIndex === activeGroupImageIndex}
+              >
+                <img src={image.imageThumbnailUrl ?? image.imagePreviewUrl ?? image.imageUrl} alt="" loading="lazy" />
+                {image.isCover ? <span className="case-preview-cover-dot">封面</span> : null}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      <div className="case-preview-toolbar" ref={toolbarRef}>
+        <div className="case-preview-info">
+          <h3>{item.title}</h3>
+          {item.description ? (
+            <button
+              className="case-preview-description"
+              type="button"
+              onClick={onCopyDescription}
+              aria-label="复制完整文案"
+              title="点击复制文案"
+            >
+              <span className="case-preview-description-text">{item.description}</span>
+              <span className="case-preview-description-popover" role="tooltip">
+                {item.description}
+              </span>
+            </button>
+          ) : null}
+          <span className="case-preview-info-meta">
+            <span>{index + 1} / {itemCount}</span>
+            {item.metaItems?.map((metaItem) => (
+              <span key={metaItem}>{metaItem}</span>
+            ))}
+            <span>尺寸 {sizeLabel}</span>
+            {fileSizeLabel ? <span>{fileSizeLabel}</span> : null}
+            {item.sourceUsername ? <span>作者：{item.sourceUsername}</span> : null}
+            {typeof item.useCount === "number" ? <span>使用：{item.useCount} 次</span> : null}
+            {typeof item.favoriteCount === "number" ? <span>收藏：{item.favoriteCount} 次</span> : null}
+          </span>
+        </div>
+        <div className="case-preview-divider" aria-hidden="true" />
+        <div className="case-preview-controls">
+          <div className="case-preview-control-row">
+            <div className="case-preview-transform-tools" aria-label="图片预览工具">
+              <button className="case-preview-tool" type="button" onClick={onRotateLeft} aria-label="向左旋转" title="向左旋转">
+                <RotateCcw size={16} />
+              </button>
+              <button className="case-preview-tool" type="button" onClick={onRotateRight} aria-label="向右旋转" title="向右旋转">
+                <RotateCw size={16} />
+              </button>
+              <button className="case-preview-tool" type="button" onClick={onZoomOut} aria-label="缩小" title="缩小">
+                <ZoomOut size={16} />
+              </button>
+              <span className="case-preview-zoom">{zoomLabel}</span>
+              <button className="case-preview-tool" type="button" onClick={onZoomIn} aria-label="放大" title="放大">
+                <ZoomIn size={16} />
+              </button>
+              <button className="case-preview-tool text" type="button" onClick={onReset} aria-label="重置预览" title="重置预览">
+                <RefreshCw size={15} />
+                重置
+              </button>
+              <button className="case-preview-tool text" type="button" onClick={onOriginalSize} aria-label="原始尺寸" title="原始尺寸">
+                <Maximize2 size={15} />
+                原始尺寸
+              </button>
+            </div>
+            {actions ? <div className="case-preview-actions">{actions}</div> : null}
+            {referenceImages.length > 0 ? (
+              <div className="case-preview-references" aria-label="素材">
+                <span className="case-preview-reference-label">素材</span>
+                <div className="case-preview-reference-list">
+                  {referenceImages.map((reference) => (
+                    <div className="case-preview-reference-item" key={reference.id}>
+                      <button
+                        className="case-preview-reference-thumb"
+                        type="button"
+                        onClick={() => onReferencePreview(reference)}
+                        aria-label={`查看引用素材 ${reference.name}`}
+                        title={reference.name}
+                      >
+                        <img src={reference.thumbnailUrl ?? reference.previewUrl ?? reference.url} alt={reference.name} loading="lazy" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type ReferenceLightboxProps = {
+  reference: ImageReferenceItem;
+  onClose: () => void;
+};
+
+export function ReferenceLightbox({ reference, onClose }: ReferenceLightboxProps) {
+  return (
+    <div className="case-reference-lightbox" onMouseDown={onClose}>
+      <button
+        type="button"
+        className="case-reference-lightbox-close"
+        onMouseDown={(event) => event.stopPropagation()}
+        onClick={onClose}
+        aria-label="关闭引用预览"
+      >
+        <X size={20} />
+      </button>
+      <ImageDownloadMenu
+        source={{ type: "image-reference", id: reference.id }}
+        rootClassName="case-reference-lightbox-download"
+        iconSize={18}
+        ariaLabel="下载引用素材"
+        title="下载引用素材"
+        placement="bottom-end"
+        stopMouseDownPropagation
+      />
+      <div className="case-reference-lightbox-frame" onMouseDown={(event) => event.stopPropagation()}>
+        <img src={reference.previewUrl ?? reference.url} alt={reference.name} />
+        <span>{reference.name}</span>
+      </div>
+    </div>
+  );
+}

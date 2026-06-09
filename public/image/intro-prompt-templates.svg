@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 560" role="img" aria-label="Prompt templates introduction">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#f7fee7"/>
+      <stop offset=".5" stop-color="#f8fafc"/>
+      <stop offset="1" stop-color="#ecfccb"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#0f172a" flood-opacity=".16"/>
+    </filter>
+  </defs>
+  <rect width="760" height="560" rx="42" fill="url(#bg)"/>
+  <rect x="102" y="78" width="556" height="404" rx="34" fill="#fff" opacity=".58" stroke="#fff" filter="url(#shadow)"/>
+  <rect x="146" y="118" width="154" height="18" rx="9" fill="#111827" opacity=".74"/>
+  <rect x="146" y="158" width="96" height="30" rx="15" fill="#ecfccb" stroke="#bef264"/>
+  <rect x="254" y="158" width="112" height="30" rx="15" fill="#fff" stroke="#d9f99d"/>
+  <rect x="378" y="158" width="104" height="30" rx="15" fill="#fff" stroke="#bbf7d0"/>
+  <rect x="146" y="224" width="226" height="202" rx="26" fill="#f7fee7" stroke="#bef264"/>
+  <rect x="174" y="254" width="80" height="12" rx="6" fill="#0f172a" opacity=".24"/>
+  <rect x="174" y="284" width="158" height="34" rx="17" fill="#ecfccb" stroke="#bef264"/>
+  <rect x="174" y="336" width="132" height="34" rx="17" fill="#f0fdf4" stroke="#86efac"/>
+  <rect x="174" y="388" width="108" height="18" rx="9" fill="#0f172a" opacity=".18"/>
+  <rect x="408" y="224" width="206" height="202" rx="26" fill="#f0fdf4" stroke="#86efac"/>
+  <path d="M462 300l16-30 16 30 30 16-30 16-16 30-16-30-30-16z" fill="#65a30d" opacity=".92"/>
+  <path d="M542 272l10-18 10 18 18 10-18 10-10 18-10-18-18-10z" fill="#16a34a" opacity=".9"/>
+  <rect x="448" y="382" width="128" height="14" rx="7" fill="#0f172a" opacity=".18"/>
+  <path d="M356 318c22-26 44-26 66 0" fill="none" stroke="#65a30d" stroke-width="10" stroke-linecap="round"/>
+  <path d="M356 350c22 26 44 26 66 0" fill="none" stroke="#16a34a" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="350" cy="318" r="6" fill="#65a30d"/>
+  <circle cx="428" cy="350" r="6" fill="#16a34a"/>
+</svg>

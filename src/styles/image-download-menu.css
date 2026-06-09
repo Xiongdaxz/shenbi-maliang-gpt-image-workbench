@@ -1,0 +1,122 @@
+.image-download-menu {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.image-download-trigger {
+  font: inherit;
+  cursor: pointer;
+}
+
+.image-download-trigger:disabled {
+  cursor: not-allowed;
+}
+
+.image-download-menu.case-reference-lightbox-download .image-download-trigger {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  line-height: 1;
+}
+
+.image-download-popover {
+  position: fixed;
+  z-index: 360;
+  max-width: calc(100vw - 24px);
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.68);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
+  padding: 6px;
+  color: #111827;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.2);
+  backdrop-filter: blur(18px) saturate(1.16);
+  -webkit-backdrop-filter: blur(18px) saturate(1.16);
+}
+
+.image-download-status {
+  padding: 12px 13px;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.image-download-status.error {
+  color: #b42318;
+}
+
+.image-download-option,
+.image-actions .image-download-popover .image-download-option {
+  width: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #111827;
+  padding: 10px 11px;
+  box-shadow: none;
+  text-align: left;
+  white-space: normal;
+  transform: none;
+  transition:
+    background 140ms ease,
+    color 140ms ease;
+}
+
+.image-download-option:hover,
+.image-actions .image-download-popover .image-download-option:hover {
+  background: rgba(17, 24, 39, 0.07);
+  color: #111827;
+  box-shadow: none;
+  transform: none;
+}
+
+.image-download-option-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.image-download-option-copy strong {
+  min-width: 0;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.image-download-option-copy small {
+  min-width: 0;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.image-download-option-meta {
+  justify-self: end;
+  color: #4b5563;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+}

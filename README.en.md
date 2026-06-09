@@ -1,0 +1,112 @@
+# Shenbi Maliang GPT Image Workbench
+
+[简体中文](README.md) | English
+
+Shenbi Maliang GPT Image Workbench is an AI image generation and image editing workbench designed for private team deployments.
+
+## Highlights
+
+- User workspace design and conversational interaction inspired by ChatGPT Web.
+- Separate user workspace and admin console: users create, admins configure and maintain.
+- Unified management for image providers, team accounts, assets, cases, and prompt templates.
+- Supports OpenAI-compatible APIs, CPA proxies, ChatGPT Web routes, and private image endpoints.
+- Local-first runtime data, suitable for internal team use, private deployment, and customization.
+
+## Quick Start
+
+```bash
+bun install
+bun run build
+bun run start
+```
+
+Open:
+
+- User workspace: http://127.0.0.1:8787
+- Admin console: http://127.0.0.1:8787/config
+- Health check: http://127.0.0.1:8787/api/health
+
+For development, run backend and frontend dev servers separately:
+
+```bash
+bun run dev:api
+bun run dev:web
+```
+
+## First Run
+
+1. Open `http://127.0.0.1:8787/config`.
+2. Initialize the admin password.
+3. Configure an image provider, such as an OpenAI-compatible API, CPA proxy, ChatGPT Web route, or private image endpoint.
+4. Create user accounts, or enable registration according to your deployment needs.
+5. Return to the user workspace, sign in with a user account, and start generating or editing images.
+
+## User Workspace
+
+The user workspace is for image creation and asset management:
+
+- Conversational text-to-image generation.
+- Continue editing from existing images.
+- Upload local images as references.
+- Choose reference assets from the asset library.
+- View chat history and generated images.
+- Favorite, download, preview, and manage generated images.
+- Add selected images to inspiration cases.
+- Use prompt templates to generate structured prompts.
+- Manage personal and shared assets.
+
+## Admin Console
+
+The admin console is available at `/config` and is for administrators and deployment maintainers:
+
+- Manage users, teams, and account status.
+- Configure image providers, models, sizes, qualities, routing modes, and retry settings.
+- Manage CPA, ChatGPT Web, API, and other image channels.
+- Manage account pools, quota refresh, and request logs.
+- Configure proxy, email, SMS, registration, and password reset settings.
+- Manage inspiration cases, shared asset review, and branding assets.
+- View admin audit logs, image request logs, and model request logs.
+- Adjust global switches and selected runtime settings.
+
+## Runtime Data
+
+The app creates a local `data/` directory:
+
+- `data/app.db`: users, chats, images, assets, cases, and business data.
+- `data/config.db`: admin password, providers, secrets, account pools, proxy, email/SMS settings.
+- `data/files/`: generated images, uploaded assets, masks, and reference images.
+
+When migrating or backing up the app, back up the entire `data/` directory.
+
+## Project Structure
+
+```text
+server/   Backend APIs, image routing, database initialization, file service
+src/      User/admin pages, components, state management, API client
+public/   Static assets
+scripts/  Helper scripts
+docs/     Deployment, routing, and database documentation
+data/     Local runtime data directory, created automatically
+```
+
+## Windows Helper
+
+Windows users can run:
+
+```powershell
+.\start-update.bat
+```
+
+The script installs dependencies, builds the frontend, stops the old service, and starts the new service. See [Windows deployment](docs/windows10-deployment.md) for details.
+
+## Acknowledgements
+
+This project references the following open-source projects for image API compatibility, ChatGPT Web image routing, and CPA/Responses routing design:
+
+- [ChatGpt-Image-Studio](https://github.com/peiyizhi0724/ChatGpt-Image-Studio)
+- [chatgpt2api](https://github.com/basketikun/chatgpt2api)
+- [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI)
+
+## License
+
+MIT. See [LICENSE](LICENSE).
