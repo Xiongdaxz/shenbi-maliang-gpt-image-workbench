@@ -118,9 +118,10 @@ data/     本地运行数据目录，启动后自动生成
 
 ## 🙏 鸣谢
 
-本项目在图片接口兼容、ChatGPT Web 图片链路和 CPA/Responses 路由设计上参考了以下开源项目，特此感谢：
+本项目的前台页面设计和对话交互体验参考了 ChatGPT Web 端。
 
-- [ChatGpt-Image-Studio](https://github.com/peiyizhi0724/ChatGpt-Image-Studio)
+项目在 ChatGPT Web 图片链路、CPA/Responses 路由和接口兼容设计上参考了以下开源项目，特此感谢：
+
 - [chatgpt2api](https://github.com/basketikun/chatgpt2api)
 - [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI)
 

@@ -118,9 +118,10 @@ Official versions provide the following packages in GitHub Releases:
 
 ## 🙏 Acknowledgements
 
-This project references the following open-source projects for image API compatibility, ChatGPT Web image routing, and CPA/Responses routing design:
+The user workspace design and conversational interaction are inspired by ChatGPT Web.
 
-- [ChatGpt-Image-Studio](https://github.com/peiyizhi0724/ChatGpt-Image-Studio)
+This project references the following open-source projects for ChatGPT Web image routing, CPA/Responses routing, and API compatibility design:
+
 - [chatgpt2api](https://github.com/basketikun/chatgpt2api)
 - [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI)
 
