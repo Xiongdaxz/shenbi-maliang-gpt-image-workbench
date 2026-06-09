@@ -93,11 +93,17 @@ jobs:
           $ErrorActionPreference = "Stop"
           $packageRoot = "release/shenbi-maliang"
           New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
+          New-Item -ItemType Directory -Force -Path "$packageRoot/node_modules" | Out-Null
           Copy-Item -Path "release-bin/${{ matrix.executable }}" -Destination "$packageRoot/${{ matrix.executable }}" -Force
           Copy-Item -Path "dist" -Destination $packageRoot -Recurse -Force
           Copy-Item -Path "scripts" -Destination $packageRoot -Recurse -Force
-          Copy-Item -Path "node_modules" -Destination $packageRoot -Recurse -Force
           Copy-Item -Path "package.json", "bun.lock", "README.md", "README.en.md", "LICENSE" -Destination $packageRoot -Force
+
+          $runtimeModules = @("sharp", "detect-libc", "semver")
+          foreach ($module in $runtimeModules) {
+            Copy-Item -Path "node_modules/$module" -Destination "$packageRoot/node_modules/$module" -Recurse -Force
+          }
+          Copy-Item -Path "node_modules/@img" -Destination "$packageRoot/node_modules/@img" -Recurse -Force
 
           @'
           # Shenbi Maliang Portable Package
