@@ -91,7 +91,7 @@ server/   Backend APIs, image routing, database initialization, file service
 src/      User/admin pages, components, state management, API client
 public/   Static assets
 scripts/  Helper scripts
-docs/     Deployment, routing, and database documentation
+docs/     Routing, database, and project documentation
 data/     Local runtime data directory, created automatically
 ```
 
@@ -103,7 +103,7 @@ Windows users can run:
 .\start-update.bat
 ```
 
-The script installs dependencies, builds the frontend, stops the old service, and starts the new service. See [Windows deployment](docs/windows10-deployment.md) for details.
+The script installs dependencies, builds the frontend, stops the old service, and starts the new service.
 
 ## Acknowledgements
 
