@@ -109,8 +109,9 @@ Official versions provide portable archives in GitHub Releases:
 - `shenbi-maliang-windows-x64-portable.zip`: unzip, open the `shenbi-maliang` directory, and double-click `ShenbiMaliang.exe`.
 - `shenbi-maliang-linux-x64-portable.zip`: unzip, open the `shenbi-maliang` directory, then run `chmod +x ./shenbi-maliang && ./shenbi-maliang`.
 - `shenbi-maliang-macos-arm64-portable.zip` / `shenbi-maliang-macos-x64-portable.zip`: download the archive for your CPU architecture, unzip it, open the `shenbi-maliang` directory, then run `chmod +x ./shenbi-maliang && ./shenbi-maliang`.
+- `shenbi-maliang-source-run.zip`: source run package without an executable. Unzip it, then run `bun install --frozen-lockfile`, `bun run build`, and `bun run start`.
 
-GitHub Releases also provide `Source code (zip)` and `Source code (tar.gz)` automatically for developers who want the source package or customization. Portable packages create `data/` next to the executable. Back up `data/` before upgrading.
+GitHub Releases also provide the raw `Source code (zip)` and `Source code (tar.gz)` automatically. Use `shenbi-maliang-source-run.zip` if you want to run the project with commands, or `git clone` if you want the full repository history. Runtime data is created in `data/`. Back up `data/` before upgrading.
 
 ## 🙏 Acknowledgements
 

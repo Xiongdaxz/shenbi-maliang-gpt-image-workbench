@@ -10,8 +10,8 @@ permissions:
   contents: write
 
 jobs:
-  package:
-    name: Package ${{ matrix.name }}
+  portable:
+    name: Portable ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -116,15 +116,113 @@ jobs:
           $ErrorActionPreference = "Stop"
           Compress-Archive -Path "release/shenbi-maliang" -DestinationPath "release/${{ matrix.archive }}" -Force
 
-      - name: Upload package artifact
+      - name: Upload portable artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.archive }}
           path: release/${{ matrix.archive }}
           if-no-files-found: error
 
-      - name: Upload package to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+  source:
+    name: Source run package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create source run package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $packageRoot = "release/shenbi-maliang-source"
+          New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
+
+          $directories = @("server", "src", "public", "scripts", "docs")
+          foreach ($directory in $directories) {
+            if (Test-Path $directory) {
+              Copy-Item -Path $directory -Destination $packageRoot -Recurse -Force
+            }
+          }
+
+          $files = @(
+            "package.json",
+            "bun.lock",
+            "README.md",
+            "README.en.md",
+            "LICENSE",
+            "SECURITY.md",
+            "CONTRIBUTING.md",
+            "start-update.bat",
+            "index.html",
+            "vite.config.ts",
+            "tsconfig.json",
+            "tailwind.config.ts",
+            "postcss.config.js"
+          )
+          foreach ($file in $files) {
+            if (Test-Path $file) {
+              Copy-Item -Path $file -Destination $packageRoot -Force
+            }
+          }
+          if (Test-Path ".env.example") {
+            Copy-Item -Path ".env.example" -Destination $packageRoot -Force
+          }
+
+          @'
+          # Shenbi Maliang Source Run Package
+
+          This package contains source files and does not include `node_modules`, `dist`, runtime data, or compiled executables.
+
+          ## Requirements
+
+          - Bun
+
+          ## Run
+
+          ```bash
+          bun install --frozen-lockfile
+          bun run build
+          bun run start
+          ```
+
+          Open:
+
+          - User workspace: http://127.0.0.1:8787
+          - Admin console: http://127.0.0.1:8787/config
+          - Health check: http://127.0.0.1:8787/api/health
+
+          Runtime data is created in `data/`. Back up `data/` before upgrading.
+          '@ | Set-Content -Encoding UTF8 -Path "$packageRoot/RUNNING.md"
+
+      - name: Compress source run package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Compress-Archive -Path "release/shenbi-maliang-source" -DestinationPath "release/shenbi-maliang-source-run.zip" -Force
+
+      - name: Upload source artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shenbi-maliang-source-run.zip
+          path: release/shenbi-maliang-source-run.zip
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - portable
+      - source
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Upload assets to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release/${{ matrix.archive }}
+          files: release-assets/**/*.zip
