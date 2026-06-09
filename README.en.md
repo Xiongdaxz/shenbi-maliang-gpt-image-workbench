@@ -127,11 +127,12 @@ This project references the following open-source projects for ChatGPT Web image
 
 ## ⚠️ Disclaimer
 
-This project is intended for learning, research, internal technical validation, private deployment, and customization reference. It does not provide any official model service, account quota, API key, or commercial service commitment.
+This project is intended for learning, research, technical exchange, internal technical validation, private deployment, and customization reference. It does not provide any official model service, account quota, API key, or commercial service commitment.
 
 - This project is not an official project of OpenAI, ChatGPT, or any related service provider, and is not endorsed by them.
 - Users are responsible for complying with applicable laws and regulations, as well as the terms of service, usage policies, and content policies of OpenAI, ChatGPT, model providers, proxy services, and third-party APIs.
 - Do not use this project for unauthorized commercial services, illegal content generation, infringement of others' rights, access-control bypassing, bulk API abuse, or any use that violates applicable service terms.
+- Using accounts, cookies, proxies, reverse-engineered routes, or automated requests may trigger third-party risk controls, verification challenges, rate limits, quota deductions, temporary restrictions, account suspension, or service termination. Use only accounts and APIs you are authorized to use, and avoid testing with important primary accounts or production accounts.
 - Users are responsible for managing API keys, cookies, account credentials, proxy settings, and runtime data. Any consequences related to credential leakage, account risk, API costs, generated content, or data compliance are the user's responsibility.
 - AI-generated content may be inaccurate, inappropriate, infringing, or otherwise unexpected. Before using generated content in public, production, or commercial scenarios, users should perform manual review, copyright checks, and compliance assessment.
 - This disclaimer is not legal advice. For commercial or production use, consult qualified legal or compliance professionals based on your actual use case.
