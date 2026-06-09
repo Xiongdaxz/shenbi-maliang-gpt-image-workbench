@@ -105,16 +105,6 @@ Official versions provide portable archives in GitHub Releases:
 
 Portable packages create `data/` next to the executable. Back up `data/` before upgrading.
 
-## Windows Helper
-
-Windows users can run:
-
-```powershell
-.\start-update.bat
-```
-
-The script installs dependencies, builds the frontend, stops the old service, and starts the new service.
-
 ## Acknowledgements
 
 This project references the following open-source projects for image API compatibility, ChatGPT Web image routing, and CPA/Responses routing design:
