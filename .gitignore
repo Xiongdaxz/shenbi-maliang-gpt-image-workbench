@@ -5,6 +5,8 @@ runtime/
 output/
 logs/
 tmp/
+release/
+release-bin/
 repo-src-full/
 .trae/
 

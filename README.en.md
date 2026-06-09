@@ -95,6 +95,16 @@ docs/     Routing, database, and project documentation
 data/     Local runtime data directory, created automatically
 ```
 
+## Release Packages
+
+Official versions provide portable archives in GitHub Releases:
+
+- `shenbi-maliang-windows-x64-portable.zip`: unzip, open the `shenbi-maliang` directory, and double-click `ShenbiMaliang.exe`.
+- `shenbi-maliang-linux-x64-portable.zip`: unzip, open the `shenbi-maliang` directory, then run `chmod +x ./shenbi-maliang && ./shenbi-maliang`.
+- `shenbi-maliang-macos-arm64-portable.zip` / `shenbi-maliang-macos-x64-portable.zip`: download the archive for your CPU architecture, unzip it, open the `shenbi-maliang` directory, then run `chmod +x ./shenbi-maliang && ./shenbi-maliang`.
+
+Portable packages create `data/` next to the executable. Back up `data/` before upgrading.
+
 ## Windows Helper
 
 Windows users can run:

@@ -6,6 +6,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   package:
     name: Package ${{ matrix.name }}
@@ -15,15 +18,26 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: windows
+          - name: windows-x64
             os: windows-latest
-            archive: gpt-image-workbench-windows.zip
-          - name: linux
+            target: ""
+            executable: ShenbiMaliang.exe
+            archive: shenbi-maliang-windows-x64-portable.zip
+          - name: linux-x64
             os: ubuntu-latest
-            archive: gpt-image-workbench-linux.zip
-          - name: macos
+            target: ""
+            executable: shenbi-maliang
+            archive: shenbi-maliang-linux-x64-portable.zip
+          - name: macos-x64
+            os: macos-15-intel
+            target: ""
+            executable: shenbi-maliang
+            archive: shenbi-maliang-macos-x64-portable.zip
+          - name: macos-arm64
             os: macos-latest
-            archive: gpt-image-workbench-macos.zip
+            target: ""
+            executable: shenbi-maliang
+            archive: shenbi-maliang-macos-arm64-portable.zip
 
     steps:
       - name: Checkout
@@ -35,77 +49,82 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build
+      - name: Build frontend
         run: bun run build
 
-      - name: Create package directory
+      - name: Compile portable executable
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $packageRoot = "release/gpt-image-workbench"
-          New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
-
-          $items = @(
-            "dist",
-            "server",
-            "src",
-            "public",
-            "scripts",
-            "docs",
-            ".github",
-            ".gitignore",
-            "package.json",
-            "bun.lock",
-            "README.md",
-            "README.en.md",
-            "LICENSE",
-            "SECURITY.md",
-            "CONTRIBUTING.md",
-            "start-update.bat",
-            "index.html",
-            "vite.config.ts",
-            "tsconfig.json",
-            "tailwind.config.ts",
-            "postcss.config.js"
+          New-Item -ItemType Directory -Force -Path "release-bin" | Out-Null
+          $buildArgs = @(
+            "build",
+            "./server/portable.ts",
+            "--compile",
+            "--external=sharp",
+            "--compile-autoload-package-json",
+            "--outfile=release-bin/${{ matrix.executable }}"
           )
-
-          foreach ($item in $items) {
-            if (Test-Path $item) {
-              Copy-Item -Path $item -Destination $packageRoot -Recurse -Force
-            }
+          if ("${{ matrix.target }}") {
+            $buildArgs += "--target=${{ matrix.target }}"
           }
+          if ("${{ matrix.name }}" -like "windows-*") {
+            $buildArgs += @(
+              "--windows-title=Shenbi Maliang",
+              "--windows-description=Shenbi Maliang GPT Image Workbench",
+              "--windows-publisher=Xiongdaxz"
+            )
+          }
+          & bun @buildArgs
+
+      - name: Create portable package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $packageRoot = "release/shenbi-maliang"
+          New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
+          Copy-Item -Path "release-bin/${{ matrix.executable }}" -Destination "$packageRoot/${{ matrix.executable }}" -Force
+          Copy-Item -Path "dist" -Destination $packageRoot -Recurse -Force
+          Copy-Item -Path "scripts" -Destination $packageRoot -Recurse -Force
+          Copy-Item -Path "node_modules" -Destination $packageRoot -Recurse -Force
+          Copy-Item -Path "package.json", "bun.lock", "README.md", "README.en.md", "LICENSE" -Destination $packageRoot -Force
 
           @'
-          # GPT Image Workbench Release Package / 发布包
+          # Shenbi Maliang Portable Package
 
-          ## 中文
+          ## Windows
 
-          1. 安装 Bun。
-          2. 执行 `bun install --frozen-lockfile`。
-          3. 执行 `bun run start`。
-          4. 打开 http://127.0.0.1:8787。
+          Open this directory and double-click `ShenbiMaliang.exe`, then open http://127.0.0.1:8787 if the browser does not open automatically.
 
-          运行数据会自动生成到 `data/`。
+          ## Linux / macOS
 
-          ## English
+          Open this directory and run:
 
-          1. Install Bun.
-          2. Run `bun install --frozen-lockfile`.
-          3. Run `bun run start`.
-          4. Open http://127.0.0.1:8787.
+          ```bash
+          chmod +x ./shenbi-maliang
+          ./shenbi-maliang
+          ```
 
-          Runtime data will be created in `data/`.
+          Then open http://127.0.0.1:8787 if the browser does not open automatically.
+
+          No Bun or npm install is required. Runtime data is created in `data/` next to the executable. Back up `data/` before upgrading.
           '@ | Set-Content -Encoding UTF8 -Path "$packageRoot/RUNNING.md"
 
-      - name: Compress package
+      - name: Compress portable package
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          Compress-Archive -Path "release/gpt-image-workbench" -DestinationPath "release/${{ matrix.archive }}" -Force
+          Compress-Archive -Path "release/shenbi-maliang" -DestinationPath "release/${{ matrix.archive }}" -Force
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gpt-image-workbench-${{ matrix.name }}
+          name: ${{ matrix.archive }}
           path: release/${{ matrix.archive }}
           if-no-files-found: error
+
+      - name: Upload package to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/${{ matrix.archive }}
