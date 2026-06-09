@@ -12,6 +12,12 @@
 - 支持接入 OpenAI 兼容接口、CPA 代理、ChatGPT Web 或私有图片接口。
 - 数据默认保存在本地，适合团队内部使用、私有部署和二次开发。
 
+## 在线预览
+
+- GitHub Pages: <https://xiongdaxz.github.io/shenbi-maliang-gpt-image-workbench/>
+
+在线地址是静态前端预览，用于查看界面和项目风格；登录、后台配置、图片生成、文件存储等完整功能需要按下面步骤本地部署后使用。
+
 ## 快速启动
 
 ```bash

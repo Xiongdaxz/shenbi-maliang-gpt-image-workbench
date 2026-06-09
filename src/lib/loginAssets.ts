@@ -1,4 +1,5 @@
 import type { LoginAssets } from "../api";
+import { publicAssetPath } from "./publicAssets";
 
 export type LoginTheme = "light" | "dark";
 
@@ -12,31 +13,31 @@ type RememberedLogin = {
 
 const DEFAULT_LOGIN_BACKGROUNDS: Record<LoginTheme, string[]> = {
   light: [
-    "/login/login_1.png",
-    "/login/login_2.png",
-    "/login/login_3.png",
-    "/login/login_4.png",
-    "/login/login_5.png"
+    publicAssetPath("/login/login_1.png"),
+    publicAssetPath("/login/login_2.png"),
+    publicAssetPath("/login/login_3.png"),
+    publicAssetPath("/login/login_4.png"),
+    publicAssetPath("/login/login_5.png")
   ],
   dark: [
-    "/login/login_dark_1.png",
-    "/login/login_dark_2.png",
-    "/login/login_dark_3.png",
-    "/login/login_dark_4.png",
-    "/login/login_dark_5.png"
+    publicAssetPath("/login/login_dark_1.png"),
+    publicAssetPath("/login/login_dark_2.png"),
+    publicAssetPath("/login/login_dark_3.png"),
+    publicAssetPath("/login/login_dark_4.png"),
+    publicAssetPath("/login/login_dark_5.png")
   ]
 };
 
 const DEFAULT_LOGIN_TITLE_ART: Record<LoginTheme, string> = {
-  light: "/login/login_title.png",
-  dark: "/login/login_dark_title.png"
+  light: publicAssetPath("/login/login_title.png"),
+  dark: publicAssetPath("/login/login_dark_title.png")
 };
 
 const DEFAULT_LOGIN_TITLE_FALLBACKS = [
-  "/login/login_title.png",
-  "/login/login_title2.png",
-  "/login/login_title1.png",
-  "/login/logon_title.png"
+  publicAssetPath("/login/login_title.png"),
+  publicAssetPath("/login/login_title2.png"),
+  publicAssetPath("/login/login_title1.png"),
+  publicAssetPath("/login/logon_title.png")
 ];
 
 export const DEFAULT_LOGIN_ASSETS: LoginAssets = {

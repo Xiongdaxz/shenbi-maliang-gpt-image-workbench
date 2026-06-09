@@ -12,6 +12,12 @@ Shenbi Maliang GPT Image Workbench is an AI image generation and image editing w
 - Supports OpenAI-compatible APIs, CPA proxies, ChatGPT Web routes, and private image endpoints.
 - Local-first runtime data, suitable for internal team use, private deployment, and customization.
 
+## Online Preview
+
+- GitHub Pages: <https://xiongdaxz.github.io/shenbi-maliang-gpt-image-workbench/>
+
+The online URL is a static frontend preview for checking the interface and product style. Login, admin configuration, image generation, and file storage require a local backend deployment.
+
 ## Quick Start
 
 ```bash

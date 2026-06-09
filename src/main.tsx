@@ -37,10 +37,13 @@ const queryClient = new QueryClient({
   }
 });
 
+const baseUrl = import.meta.env.BASE_URL || "/";
+const routerBasename = baseUrl === "/" ? undefined : baseUrl.replace(/\/$/, "");
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      <BrowserRouter basename={routerBasename}>
         <Routes>
           <Route path="/config/*" element={<ConfigApp />} />
           <Route path="/*" element={<App />} />

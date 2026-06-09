@@ -32,6 +32,7 @@ import { MarkdownView } from "./components/MarkdownView";
 import { copyTextToClipboard } from "./lib/clipboard";
 import { cx } from "./lib/cx";
 import { formatImageFileSize } from "./lib/format";
+import { publicAssetPath } from "./lib/publicAssets";
 import type {
   ChangelogEntry,
   ConfigStatistics,
@@ -56,7 +57,7 @@ import type {
 import type { ConfigAssetReviewItem, ConfigCaseReviewItem } from "./api/config";
 import { ConfirmDialog, CustomSelect, PromptDialog, ToastProvider, useToast } from "./ui";
 
-const PROJECT_LOGO_SRC = "/image/logo.png";
+const PROJECT_LOGO_SRC = publicAssetPath("/image/logo.png");
 const CONFIG_TAB_STORAGE_KEY = "gpt-image.config.activeTab";
 const ACCOUNT_USAGE_AUTO_REFRESH_STORAGE_KEY = "gpt-image.config.accountUsageAutoRefreshAt";
 const ACCOUNT_USAGE_AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
