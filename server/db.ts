@@ -9,6 +9,7 @@ import {
   IMAGE_DIR,
   IMAGE_MASK_DIR,
   IMAGE_REFERENCE_DIR,
+  SECURE_BRANDING_DIR,
   SECURE_ASSET_DIR,
   SECURE_IMAGE_DIR,
   SECURE_IMAGE_REFERENCE_DIR
@@ -22,6 +23,7 @@ await Promise.all([
   mkdir(IMAGE_MASK_DIR, { recursive: true }),
   mkdir(SECURE_IMAGE_DIR, { recursive: true }),
   mkdir(SECURE_ASSET_DIR, { recursive: true }),
+  mkdir(SECURE_BRANDING_DIR, { recursive: true }),
   mkdir(SECURE_IMAGE_REFERENCE_DIR, { recursive: true })
 ]);
 

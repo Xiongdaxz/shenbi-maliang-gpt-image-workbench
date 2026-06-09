@@ -66,6 +66,7 @@ import {
   requireConfig
 } from "./auth";
 import { registerAssetRoutes } from "./assetRoutes";
+import { registerBrandingRoutes } from "./branding";
 import { registerCaseRoutes } from "./caseRoutes";
 import { registerChangelogRoutes } from "./changelogRoutes";
 import { registerFileRoutes } from "./fileRoutes";
@@ -264,6 +265,8 @@ api.onError((error, c) => {
 api.get("/health", (c) => c.json({ ok: true }));
 
 registerUserRoutes(api);
+
+registerBrandingRoutes(api);
 
 registerFileRoutes(api);
 

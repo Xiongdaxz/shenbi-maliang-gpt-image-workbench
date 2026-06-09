@@ -10,6 +10,7 @@ export const IMAGE_MASK_DIR = path.join(FILES_DIR, "image-masks");
 export const SECURE_FILES_DIR = path.join(FILES_DIR, "secure");
 export const SECURE_IMAGE_DIR = path.join(SECURE_FILES_DIR, "images");
 export const SECURE_ASSET_DIR = path.join(SECURE_FILES_DIR, "assets");
+export const SECURE_BRANDING_DIR = path.join(SECURE_FILES_DIR, "branding");
 export const SECURE_IMAGE_REFERENCE_DIR = path.join(SECURE_FILES_DIR, "image-references");
 export const PUBLIC_LOGIN_DIR = path.join(ROOT, "public", "login");
 export const DIST_LOGIN_DIR = path.join(ROOT, "dist", "login");

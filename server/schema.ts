@@ -1378,6 +1378,40 @@ export function initConfigDb() {
   `);
 
   configDb.run(`
+    create table if not exists branding_assets (
+      id text primary key,
+      type text not null,
+      source text not null default 'uploaded',
+      name text not null,
+      path text not null default '',
+      url text not null default '',
+      mime_type text not null default '',
+      size integer not null default 0,
+      image_width integer not null default 0,
+      image_height integer not null default 0,
+      enabled integer not null default 1,
+      sort_order integer not null default 100,
+      created_at text not null,
+      updated_at text not null
+    )
+  `);
+  configDb.run("create index if not exists branding_assets_type_idx on branding_assets(type, source, sort_order)");
+
+  configDb.run(`
+    create table if not exists branding_settings (
+      id text primary key,
+      site_name text not null default '神笔马良',
+      active_logo_asset_id text not null default '',
+      active_favicon_asset_id text not null default '',
+      active_login_title_light_asset_id text not null default '',
+      active_login_title_dark_asset_id text not null default '',
+      login_background_light_ids_json text not null default '[]',
+      login_background_dark_ids_json text not null default '[]',
+      updated_at text not null
+    )
+  `);
+
+  configDb.run(`
     create table if not exists smtp_settings (
       id text primary key,
       enabled integer not null default 0,

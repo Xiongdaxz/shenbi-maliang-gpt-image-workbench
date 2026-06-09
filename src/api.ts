@@ -5,6 +5,7 @@ export {
   type EditImagePayload,
   type GenerateImagePayload,
   type LoginAssets,
+  type PublicBranding,
   type PromptTemplateExportDownload,
   type PromptTemplateOptimizePayload,
   type PromptTemplateOptimizeStyle,

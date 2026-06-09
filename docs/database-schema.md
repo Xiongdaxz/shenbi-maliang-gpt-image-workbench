@@ -450,6 +450,40 @@
 | `expires_at` | 过期时间 |
 | `created_at` | 创建时间 |
 
+### branding_assets
+
+全站品牌图片资源。系统默认资源保留为 `builtin`，指向当前 `public/` 静态资源；后台上传资源为 `uploaded`，文件保存到本地加密文件目录。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 品牌资源 ID |
+| `type` | 资源类型：`logo` Logo、`favicon` 浏览器图标、`login_title` 登录标题图、`login_background_light` 浅色登录背景、`login_background_dark` 暗色登录背景 |
+| `source` | 来源：`builtin` 系统默认、`uploaded` 后台上传 |
+| `name` | 后台展示名称 |
+| `path` | 上传资源的加密文件相对路径；系统默认资源为空 |
+| `url` | 系统默认资源的静态 URL；上传资源为空，运行时通过 `/api/files/branding/:id` 读取 |
+| `mime_type` / `size` | MIME 类型和文件大小 |
+| `image_width` / `image_height` | 图片尺寸；系统默认资源可为 `0` |
+| `enabled` | 是否可用，`0` 否、`1` 是 |
+| `sort_order` | 后台列表和默认背景池排序 |
+| `created_at` / `updated_at` | 创建和更新时间 |
+
+### branding_settings
+
+全站品牌展示配置。未配置时自动使用当前默认站点名、默认 Logo、默认登录标题图和 `public/login` 下的现有背景图。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 固定为 `default` |
+| `site_name` | 站点名称，默认 `神笔马良` |
+| `active_logo_asset_id` | 当前工作台和配置中心 Logo 资源 |
+| `active_favicon_asset_id` | 当前浏览器图标资源 |
+| `active_login_title_light_asset_id` | 浅色登录页标题图资源 |
+| `active_login_title_dark_asset_id` | 暗色登录页标题图资源 |
+| `login_background_light_ids_json` | 浅色登录背景轮播资源 ID JSON 数组；为空或失效时回退默认背景 |
+| `login_background_dark_ids_json` | 暗色登录背景轮播资源 ID JSON 数组；为空或失效时回退默认背景 |
+| `updated_at` | 更新时间 |
+
 ### global_switch_settings
 
 系统级布尔总开关的唯一运行时来源。迁移时会把旧表里的总开关值写入对应 `type`，补齐默认值后删除旧 `registration_settings` 表。

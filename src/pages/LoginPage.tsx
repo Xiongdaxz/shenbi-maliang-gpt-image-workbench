@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Eye, EyeOff, LockKeyhole, Mail, Moon, RefreshCw, ShieldCheck, Sun, UserRound } from "lucide-react";
 import { api, type LoginAssets } from "../api";
 import { cx } from "../lib/cx";
+import { DEFAULT_SITE_NAME } from "../lib/branding";
 import { useToast } from "../ui";
 import {
   DEFAULT_LOGIN_ASSETS,
@@ -64,6 +65,7 @@ export function LoginPage() {
   const [registerCooldown, setRegisterCooldown] = useState(0);
   const [resetCooldown, setResetCooldown] = useState(0);
   const [rememberPassword, setRememberPassword] = useState(() => Boolean(rememberedLogin.account || rememberedLogin.password));
+  const [siteName, setSiteName] = useState(DEFAULT_SITE_NAME);
   const [loginAssets, setLoginAssets] = useState<LoginAssets>(DEFAULT_LOGIN_ASSETS);
   const [loginTheme, setLoginTheme] = useState<LoginTheme>(() => initialLoginTheme);
   const [loginBackground, setLoginBackground] = useState(() => pickLoginBackground(initialLoginTheme));
@@ -79,6 +81,7 @@ export function LoginPage() {
   const titleLeaveTimeoutRef = useRef<number | null>(null);
   const titleEnterTimeoutRef = useRef<number | null>(null);
   const registrationStatus = useQuery({ queryKey: ["registration-status"], queryFn: api.registrationStatus });
+  const branding = useQuery({ queryKey: ["branding"], queryFn: api.branding });
   const registrationEnabled = registrationStatus.data?.enabled !== false;
   const login = useMutation({
     mutationFn: () => api.login(account, password),
@@ -301,29 +304,22 @@ export function LoginPage() {
   );
 
   useEffect(() => {
-    let active = true;
-    api
-      .loginAssets()
-      .then((assets) => {
-        if (!active) return;
-        const nextAssets = normalizeLoginAssets(assets);
-        setLoginAssets(nextAssets);
-        setLoginBackground((current) =>
-          loginBackgroundsFor(nextAssets, loginTheme).includes(current)
-            ? current
-            : pickLoginBackground(loginTheme, current, nextAssets)
-        );
-        setVisibleTitleSrc((current) =>
-          current === loginTitleFor(DEFAULT_LOGIN_ASSETS, loginTheme) ? loginTitleFor(nextAssets, loginTheme) : current
-        );
-      })
-      .catch(() => {
-        if (active) setLoginAssets(DEFAULT_LOGIN_ASSETS);
-      });
-    return () => {
-      active = false;
-    };
-  }, [loginTheme]);
+    if (!branding.data) {
+      if (branding.error) setLoginAssets(DEFAULT_LOGIN_ASSETS);
+      return;
+    }
+    const nextAssets = normalizeLoginAssets(branding.data.loginAssets);
+    setSiteName(branding.data.siteName?.trim() || DEFAULT_SITE_NAME);
+    setLoginAssets(nextAssets);
+    setLoginBackground((current) =>
+      loginBackgroundsFor(nextAssets, loginTheme).includes(current)
+        ? current
+        : pickLoginBackground(loginTheme, current, nextAssets)
+    );
+    setVisibleTitleSrc((current) =>
+      current === loginTitleFor(DEFAULT_LOGIN_ASSETS, loginTheme) ? loginTitleFor(nextAssets, loginTheme) : current
+    );
+  }, [branding.data, branding.error, loginTheme]);
 
   useEffect(() => {
     if (loginBackgroundsFor(loginAssets, loginTheme).length < 2) return;
@@ -446,7 +442,7 @@ export function LoginPage() {
             key={visibleTitleSrc}
             className={cx("login-title-art", titleTransition === "leaving" && "is-leaving", titleTransition === "entering" && "is-entering")}
             src={visibleTitleSrc}
-            alt="神笔马良"
+            alt={siteName}
             onError={handleTitleArtError}
           />
         </div>

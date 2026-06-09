@@ -3,11 +3,14 @@ import * as Tabs from "@radix-ui/react-tabs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
+  ArrowDown,
+  ArrowUp,
   Bot,
   Bug,
   Check,
   Database,
   FolderOpen,
+  ImageIcon,
   KeyRound,
   Lightbulb,
   LogOut,
@@ -17,24 +20,30 @@ import {
   ScrollText,
   Plus,
   RefreshCw,
+  RotateCcw,
   Save,
   Shield,
   ShieldCheck,
   SlidersHorizontal,
   Smartphone,
   Trash2,
+  Upload,
   Users,
   WandSparkles
 } from "lucide-react";
-import { configApi } from "./api";
+import { api, configApi } from "./api";
 import { LightweightLineChart } from "./components/LightweightChart";
 import { MarkdownView } from "./components/MarkdownView";
+import { ProjectLogo } from "./components/ProjectLogo";
+import { DEFAULT_SITE_NAME, useDocumentBranding } from "./lib/branding";
 import { copyTextToClipboard } from "./lib/clipboard";
 import { cx } from "./lib/cx";
 import { formatImageFileSize } from "./lib/format";
-import { publicAssetPath } from "./lib/publicAssets";
 import type {
   ChangelogEntry,
+  BrandingAsset,
+  BrandingAssetType,
+  BrandingSettings,
   ConfigStatistics,
   DebugSettings,
   ImageAccount,
@@ -57,7 +66,6 @@ import type {
 import type { ConfigAssetReviewItem, ConfigCaseReviewItem } from "./api/config";
 import { ConfirmDialog, CustomSelect, PromptDialog, ToastProvider, useToast } from "./ui";
 
-const PROJECT_LOGO_SRC = publicAssetPath("/image/logo.png");
 const CONFIG_TAB_STORAGE_KEY = "gpt-image.config.activeTab";
 const ACCOUNT_USAGE_AUTO_REFRESH_STORAGE_KEY = "gpt-image.config.accountUsageAutoRefreshAt";
 const ACCOUNT_USAGE_AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
@@ -74,6 +82,7 @@ const CONFIG_TAB_VALUES = [
   "smtp",
   "sms",
   "starterCopy",
+  "branding",
   "imageMode",
   "cpa",
   "proxy",
@@ -105,6 +114,7 @@ const CONFIG_NAV_ITEMS: ConfigNavItem[] = [
   { value: "smtp", label: "邮件配置", Icon: Mail },
   { value: "sms", label: "短信配置", Icon: Smartphone },
   { value: "starterCopy", label: "空白页文案", Icon: Bot },
+  { value: "branding", label: "品牌设置", Icon: ImageIcon },
   { value: "imageMode", label: "模式配置", Icon: SlidersHorizontal },
   { value: "cpa", label: "CPA 同步", Icon: RefreshCw },
   { value: "proxy", label: "代理配置", Icon: Network },
@@ -124,7 +134,7 @@ const CONFIG_NAV_CATEGORIES: Array<{
   { value: "members", label: "组织", items: ["users", "teams"] },
   { value: "content", label: "内容", items: ["assetReviews", "caseReviews", "starterCopy", "changelog"] },
   { value: "generation", label: "生成", items: ["imageAccounts", "providers", "promptOptimizer", "safetyReview", "imageMode", "cpa"] },
-  { value: "system", label: "系统", items: ["smtp", "sms", "proxy", "debug", "modelLogs", "requests", "audit"] }
+  { value: "system", label: "系统", items: ["branding", "smtp", "sms", "proxy", "debug", "modelLogs", "requests", "audit"] }
 ];
 
 function isConfigTabValue(value: string | null | undefined): value is ConfigTabValue {
@@ -133,7 +143,9 @@ function isConfigTabValue(value: string | null | undefined): value is ConfigTabV
 
 function configNavItemsForCategory(categoryValue: ConfigNavCategoryValue) {
   const category = CONFIG_NAV_CATEGORIES.find((item) => item.value === categoryValue) ?? CONFIG_NAV_CATEGORIES[0];
-  return CONFIG_NAV_ITEMS.filter((item) => category.items.includes(item.value));
+  return category.items
+    .map((value) => CONFIG_NAV_ITEMS.find((item) => item.value === value))
+    .filter((item): item is ConfigNavItem => Boolean(item));
 }
 
 function storedConfigTab(): ConfigTabValue {
@@ -156,10 +168,6 @@ function shouldAutoRefreshAccountUsage() {
     // If browser storage is unavailable, keep the per-mount guard below as the fallback.
   }
   return true;
-}
-
-function ProjectLogo({ className, alt = "神笔马良" }: { className?: string; alt?: string }) {
-  return <img className={["project-logo", className].filter(Boolean).join(" ")} src={PROJECT_LOGO_SRC} alt={alt} />;
 }
 
 type ConfigUser = {
@@ -370,6 +378,9 @@ function emptyProvider(channel: ProviderConfig["channel"] = "api", existingIds: 
 
 export default function ConfigApp() {
   const status = useQuery({ queryKey: ["config-status"], queryFn: configApi.status });
+  const branding = useQuery({ queryKey: ["branding"], queryFn: api.branding });
+
+  useDocumentBranding(branding.data);
 
   if (status.isLoading) {
     return <div className="center-screen">加载配置入口...</div>;
@@ -517,6 +528,9 @@ function ConfigDashboard() {
         </Tabs.Content>
         <Tabs.Content value="starterCopy">
           <StarterCopySettingsPanel />
+        </Tabs.Content>
+        <Tabs.Content value="branding">
+          <BrandingSettingsPanel />
         </Tabs.Content>
         <Tabs.Content value="imageMode">
           <ImageModePanel />
@@ -4217,7 +4231,7 @@ function PromptOptimizerDialog({
   );
 }
 
-function emptySmtpSettings(): SmtpSettings {
+function emptySmtpSettings(defaultFromName = DEFAULT_SITE_NAME): SmtpSettings {
   return {
     enabled: false,
     useProxy: false,
@@ -4226,14 +4240,14 @@ function emptySmtpSettings(): SmtpSettings {
     secure: true,
     username: "",
     passwordSecret: "",
-    fromName: "神笔马良",
+    fromName: defaultFromName,
     fromEmail: "",
     testRecipientEmail: "",
     updatedAt: ""
   };
 }
 
-function normalizeSmtpSettings(form: SmtpSettings): SmtpSettings {
+function normalizeSmtpSettings(form: SmtpSettings, defaultFromName = DEFAULT_SITE_NAME): SmtpSettings {
   const port = Number(form.port);
   return {
     ...form,
@@ -4241,7 +4255,7 @@ function normalizeSmtpSettings(form: SmtpSettings): SmtpSettings {
     port: Number.isFinite(port) ? Math.max(1, Math.min(65535, Math.trunc(port))) : 465,
     username: form.username.trim(),
     passwordSecret: form.passwordSecret,
-    fromName: form.fromName.trim() || "神笔马良",
+    fromName: form.fromName.trim() || defaultFromName,
     fromEmail: form.fromEmail.trim().toLowerCase(),
     testRecipientEmail: form.testRecipientEmail.trim().toLowerCase()
   };
@@ -4251,9 +4265,11 @@ function SmtpSettingsPanel() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const query = useQuery({ queryKey: ["config-smtp-settings"], queryFn: configApi.smtpSettings });
-  const [form, setForm] = useState<SmtpSettings>(emptySmtpSettings());
+  const branding = useQuery({ queryKey: ["branding"], queryFn: api.branding });
+  const defaultFromName = branding.data?.siteName?.trim() || DEFAULT_SITE_NAME;
+  const [form, setForm] = useState<SmtpSettings>(() => emptySmtpSettings(defaultFromName));
   const save = useMutation({
-    mutationFn: () => configApi.saveSmtpSettings(normalizeSmtpSettings(form)),
+    mutationFn: () => configApi.saveSmtpSettings(normalizeSmtpSettings(form, defaultFromName)),
     onSuccess: (data) => {
       setForm(data.settings);
       showToast("邮件配置已保存");
@@ -4267,8 +4283,12 @@ function SmtpSettingsPanel() {
 
   useEffect(() => {
     if (!query.data?.settings) return;
-    setForm(query.data.settings);
-  }, [query.data?.settings]);
+    const settings = query.data.settings;
+    setForm({
+      ...settings,
+      fromName: !settings.updatedAt && settings.fromName === DEFAULT_SITE_NAME ? defaultFromName : settings.fromName
+    });
+  }, [defaultFromName, query.data?.settings]);
 
   const patch = (value: Partial<SmtpSettings>) => setForm((current) => ({ ...current, ...value }));
 
@@ -4635,6 +4655,503 @@ function StarterCopySettingsPanel() {
         {regenerate.error ? <div className="form-error">{regenerate.error.message}</div> : null}
       </div>
       <StarterCopyPreview copy={query.data?.today} />
+    </section>
+  );
+}
+
+function emptyBrandingSettings(): BrandingSettings {
+  return {
+    siteName: DEFAULT_SITE_NAME,
+    activeLogoAssetId: "",
+    activeFaviconAssetId: "",
+    activeLoginTitleLightAssetId: "",
+    activeLoginTitleDarkAssetId: "",
+    loginBackgroundLightAssetIds: [],
+    loginBackgroundDarkAssetIds: [],
+    updatedAt: ""
+  };
+}
+
+function normalizeBrandingSettings(settings?: BrandingSettings | null): BrandingSettings {
+  const fallback = emptyBrandingSettings();
+  return {
+    ...fallback,
+    ...settings,
+    siteName: settings?.siteName?.trim() || DEFAULT_SITE_NAME,
+    loginBackgroundLightAssetIds: Array.isArray(settings?.loginBackgroundLightAssetIds)
+      ? settings.loginBackgroundLightAssetIds.filter(Boolean)
+      : [],
+    loginBackgroundDarkAssetIds: Array.isArray(settings?.loginBackgroundDarkAssetIds)
+      ? settings.loginBackgroundDarkAssetIds.filter(Boolean)
+      : []
+  };
+}
+
+function brandingAssetsFor(assets: BrandingAsset[], type: BrandingAssetType) {
+  return assets
+    .filter((asset) => asset.type === type)
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt));
+}
+
+function brandingAssetById(assets: BrandingAsset[], id: string) {
+  return assets.find((asset) => asset.id === id) ?? null;
+}
+
+function uniqueBrandingAssetsByUrl(assets: BrandingAsset[], activeId?: string) {
+  const unique: BrandingAsset[] = [];
+  const seen = new Set<string>();
+  for (const asset of assets) {
+    const key = asset.url || asset.id;
+    const existingIndex = unique.findIndex((item) => (item.url || item.id) === key);
+    if (existingIndex >= 0) {
+      if (asset.id === activeId) unique[existingIndex] = asset;
+      continue;
+    }
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(asset);
+  }
+  return unique;
+}
+
+function moveBrandingId(ids: string[], id: string, direction: -1 | 1) {
+  const index = ids.indexOf(id);
+  const nextIndex = index + direction;
+  if (index < 0 || nextIndex < 0 || nextIndex >= ids.length) return ids;
+  const next = [...ids];
+  const [item] = next.splice(index, 1);
+  next.splice(nextIndex, 0, item);
+  return next;
+}
+
+function brandingMeta(asset: BrandingAsset) {
+  const size = formatImageFileSize(asset.size);
+  const dimensions = asset.imageWidth > 0 && asset.imageHeight > 0 ? `${asset.imageWidth} x ${asset.imageHeight}` : "";
+  return [dimensions, size].filter(Boolean).join(" · ") || (asset.source === "builtin" ? "系统默认资源" : "自定义资源");
+}
+
+function BrandingUploadButton({
+  type,
+  label,
+  disabled,
+  onUpload
+}: {
+  type: BrandingAssetType;
+  label: string;
+  disabled?: boolean;
+  onUpload: (type: BrandingAssetType, file: File) => void;
+}) {
+  return (
+    <label className={cx("upload-btn", "branding-upload-button", disabled && "disabled")}>
+      <Upload size={16} />
+      {label}
+      <input
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/avif"
+        disabled={disabled}
+        onChange={(event) => {
+          const input = event.currentTarget;
+          const file = input.files?.[0] ?? null;
+          input.value = "";
+          if (file) onUpload(type, file);
+        }}
+      />
+    </label>
+  );
+}
+
+function BrandingAssetCard({
+  asset,
+  selected,
+  order,
+  actions,
+  onRename,
+  onDelete
+}: {
+  asset: BrandingAsset;
+  selected?: boolean;
+  order?: number;
+  actions: ReactNode;
+  onRename: (asset: BrandingAsset) => void;
+  onDelete: (asset: BrandingAsset) => void;
+}) {
+  return (
+    <article className={cx("branding-asset-card", selected && "selected")}>
+      <div className="branding-asset-preview">
+        {asset.url ? <img src={asset.url} alt={asset.name} /> : <ImageIcon size={28} />}
+        {selected ? <span className="branding-selected-badge">{order ? `第 ${order} 张` : "当前使用"}</span> : null}
+      </div>
+      <div className="branding-asset-body">
+        <div className="branding-asset-title">
+          <strong>{asset.name}</strong>
+          <span>{asset.source === "builtin" ? "系统默认" : "自定义"}</span>
+        </div>
+        <small>{brandingMeta(asset)}</small>
+      </div>
+      <div className="branding-asset-actions">
+        {actions}
+        <button className="icon-btn" type="button" aria-label="重命名资源" onClick={() => onRename(asset)}>
+          <Pencil size={15} />
+        </button>
+        <button
+          className="icon-btn danger-icon"
+          type="button"
+          aria-label="删除资源"
+          disabled={asset.source === "builtin"}
+          onClick={() => onDelete(asset)}
+        >
+          <Trash2 size={15} />
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function BrandingSettingsPanel() {
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
+  const query = useQuery({ queryKey: ["config-branding"], queryFn: configApi.branding });
+  const [form, setForm] = useState<BrandingSettings>(emptyBrandingSettings());
+  const [renameTarget, setRenameTarget] = useState<BrandingAsset | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<BrandingAsset | null>(null);
+  const assets = query.data?.assets ?? [];
+
+  const refreshBrandingQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ["config-branding"] });
+    queryClient.invalidateQueries({ queryKey: ["branding"] });
+  };
+
+  const save = useMutation({
+    mutationFn: () => configApi.saveBranding(normalizeBrandingSettings(form)),
+    onSuccess: (data) => {
+      setForm(normalizeBrandingSettings(data.settings));
+      showToast("品牌设置已保存");
+      refreshBrandingQueries();
+    }
+  });
+  const reset = useMutation({
+    mutationFn: configApi.resetBranding,
+    onSuccess: (data) => {
+      setForm(normalizeBrandingSettings(data.settings));
+      showToast("已恢复系统默认品牌");
+      refreshBrandingQueries();
+    }
+  });
+  const upload = useMutation({
+    mutationFn: ({ type, file }: { type: BrandingAssetType; file: File }) => {
+      const formData = new FormData();
+      formData.set("type", type);
+      formData.set("file", file);
+      return configApi.uploadBrandingAsset(formData);
+    },
+    onSuccess: (data) => {
+      setForm(normalizeBrandingSettings(data.settings));
+      showToast("品牌图片已上传");
+      refreshBrandingQueries();
+    }
+  });
+  const updateAsset = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Partial<Pick<BrandingAsset, "name" | "enabled" | "sortOrder">> }) =>
+      configApi.updateBrandingAsset(id, patch),
+    onSuccess: (data) => {
+      setForm(normalizeBrandingSettings(data.settings));
+      setRenameTarget(null);
+      showToast("品牌资源已更新");
+      refreshBrandingQueries();
+    }
+  });
+  const deleteAsset = useMutation({
+    mutationFn: (id: string) => configApi.deleteBrandingAsset(id),
+    onSuccess: (data) => {
+      setForm(normalizeBrandingSettings(data.settings));
+      setDeleteTarget(null);
+      showToast("品牌资源已删除");
+      refreshBrandingQueries();
+    }
+  });
+
+  useEffect(() => {
+    if (query.data?.settings) setForm(normalizeBrandingSettings(query.data.settings));
+  }, [query.data?.settings]);
+
+  const patch = (value: Partial<BrandingSettings>) => setForm((current) => ({ ...current, ...value }));
+  const uploadDisabled = upload.isPending || save.isPending || reset.isPending;
+  const activeLogo = brandingAssetById(assets, form.activeLogoAssetId);
+  const activeFavicon = brandingAssetById(assets, form.activeFaviconAssetId);
+  const lightTitle = brandingAssetById(assets, form.activeLoginTitleLightAssetId);
+  const darkTitle = brandingAssetById(assets, form.activeLoginTitleDarkAssetId);
+  const firstLightBackground = form.loginBackgroundLightAssetIds.map((id) => brandingAssetById(assets, id)).find(Boolean);
+  const firstDarkBackground = form.loginBackgroundDarkAssetIds.map((id) => brandingAssetById(assets, id)).find(Boolean);
+
+  function handleUpload(type: BrandingAssetType, file: File) {
+    upload.mutate({ type, file });
+  }
+
+  function toggleBackground(type: "light" | "dark", assetId: string) {
+    const key = type === "light" ? "loginBackgroundLightAssetIds" : "loginBackgroundDarkAssetIds";
+    const current = form[key];
+    const selected = current.includes(assetId);
+    if (selected && current.length <= 1) {
+      showToast("至少保留一张登录背景", "error");
+      return;
+    }
+    patch({ [key]: selected ? current.filter((id) => id !== assetId) : [...current, assetId] } as Partial<BrandingSettings>);
+  }
+
+  function moveBackground(type: "light" | "dark", assetId: string, direction: -1 | 1) {
+    const key = type === "light" ? "loginBackgroundLightAssetIds" : "loginBackgroundDarkAssetIds";
+    patch({ [key]: moveBrandingId(form[key], assetId, direction) } as Partial<BrandingSettings>);
+  }
+
+  function renderLogoCards(type: "logo" | "favicon") {
+    const activeId = type === "logo" ? form.activeLogoAssetId : form.activeFaviconAssetId;
+    const label = type === "logo" ? "设为 Logo" : "设为图标";
+    const assetsForType = type === "favicon"
+      ? uniqueBrandingAssetsByUrl([...brandingAssetsFor(assets, "favicon"), ...brandingAssetsFor(assets, "logo")], activeId)
+      : brandingAssetsFor(assets, "logo");
+    return (
+      <div className="branding-asset-grid">
+        {assetsForType.map((asset) => (
+          <BrandingAssetCard
+            asset={asset}
+            key={`${type}-${asset.id}`}
+            selected={asset.id === activeId}
+            actions={
+              <button
+                className="secondary-btn compact"
+                type="button"
+                disabled={asset.id === activeId}
+                onClick={() => patch(type === "logo" ? { activeLogoAssetId: asset.id } : { activeFaviconAssetId: asset.id })}
+              >
+                <Check size={14} />
+                {label}
+              </button>
+            }
+            onRename={setRenameTarget}
+            onDelete={setDeleteTarget}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  function renderTitleCards() {
+    return (
+      <div className="branding-asset-grid">
+        {brandingAssetsFor(assets, "login_title").map((asset) => {
+          const selectedLight = asset.id === form.activeLoginTitleLightAssetId;
+          const selectedDark = asset.id === form.activeLoginTitleDarkAssetId;
+          return (
+            <BrandingAssetCard
+              asset={asset}
+              key={asset.id}
+              selected={selectedLight || selectedDark}
+              actions={
+                <>
+                  <button
+                    className="secondary-btn compact"
+                    type="button"
+                    disabled={selectedLight}
+                    onClick={() => patch({ activeLoginTitleLightAssetId: asset.id })}
+                  >
+                    浅色标题
+                  </button>
+                  <button
+                    className="secondary-btn compact"
+                    type="button"
+                    disabled={selectedDark}
+                    onClick={() => patch({ activeLoginTitleDarkAssetId: asset.id })}
+                  >
+                    暗色标题
+                  </button>
+                </>
+              }
+              onRename={setRenameTarget}
+              onDelete={setDeleteTarget}
+            />
+          );
+        })}
+      </div>
+    );
+  }
+
+  function renderBackgroundCards(type: "light" | "dark") {
+    const assetType: BrandingAssetType = type === "light" ? "login_background_light" : "login_background_dark";
+    const selectedIds = type === "light" ? form.loginBackgroundLightAssetIds : form.loginBackgroundDarkAssetIds;
+    return (
+      <div className="branding-asset-grid branding-background-grid">
+        {brandingAssetsFor(assets, assetType).map((asset) => {
+          const order = selectedIds.indexOf(asset.id) + 1;
+          return (
+            <BrandingAssetCard
+              asset={asset}
+              key={asset.id}
+              selected={order > 0}
+              order={order > 0 ? order : undefined}
+              actions={
+                <>
+                  <button
+                    className={cx("secondary-btn compact", order > 0 && "active")}
+                    type="button"
+                    onClick={() => toggleBackground(type, asset.id)}
+                  >
+                    {order > 0 ? "移出轮播" : "参与轮播"}
+                  </button>
+                  <button
+                    className="icon-btn"
+                    type="button"
+                    aria-label="向前排序"
+                    disabled={order <= 1}
+                    onClick={() => moveBackground(type, asset.id, -1)}
+                  >
+                    <ArrowUp size={15} />
+                  </button>
+                  <button
+                    className="icon-btn"
+                    type="button"
+                    aria-label="向后排序"
+                    disabled={order <= 0 || order >= selectedIds.length}
+                    onClick={() => moveBackground(type, asset.id, 1)}
+                  >
+                    <ArrowDown size={15} />
+                  </button>
+                </>
+              }
+              onRename={setRenameTarget}
+              onDelete={setDeleteTarget}
+            />
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <section className="config-card branding-settings-card">
+      <ConfigHeader title="品牌设置" desc="配置全站统一的站点名称、Logo、登录页标题图和登录背景；系统默认资源会保留为可选项。" />
+      {query.isLoading ? <div className="settings-empty">品牌配置加载中...</div> : null}
+      <div className="branding-top-grid">
+        <div className="branding-section">
+          <h2>基础信息</h2>
+          <div className="provider-form branding-basic-form">
+            <label>
+              站点名称
+              <input value={form.siteName} maxLength={40} onChange={(event) => patch({ siteName: event.target.value })} />
+            </label>
+            <div className="row-actions">
+              <button className="primary-btn" type="button" onClick={() => save.mutate()} disabled={save.isPending}>
+                <Save size={16} />
+                保存品牌设置
+              </button>
+              <button className="secondary-btn" type="button" onClick={() => reset.mutate()} disabled={reset.isPending || save.isPending}>
+                <RotateCcw size={16} />
+                恢复默认
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="branding-preview-panel">
+          <h2>实际预览</h2>
+          <div className="branding-preview-shell">
+            <div className="branding-preview-sidebar">
+              {activeLogo?.url ? <img src={activeLogo.url} alt={form.siteName} /> : <ProjectLogo alt={form.siteName} />}
+              <span>{form.siteName}</span>
+            </div>
+            <div className="branding-preview-login" style={{ backgroundImage: firstLightBackground?.url ? `url("${firstLightBackground.url}")` : undefined }}>
+              {lightTitle?.url ? <img src={lightTitle.url} alt={form.siteName} /> : null}
+            </div>
+            <div className="branding-preview-login dark" style={{ backgroundImage: firstDarkBackground?.url ? `url("${firstDarkBackground.url}")` : undefined }}>
+              {darkTitle?.url ? <img src={darkTitle.url} alt={form.siteName} /> : null}
+            </div>
+          </div>
+          <small>当前图标：{activeFavicon?.name || "默认浏览器图标"}</small>
+        </div>
+      </div>
+
+      <div className="branding-section">
+        <div className="branding-section-head">
+          <div>
+            <h2>Logo</h2>
+            <p>用于工作台侧栏、配置中心和空白页品牌标识。建议上传透明 PNG 或 WebP。</p>
+          </div>
+          <BrandingUploadButton type="logo" label="上传 Logo" disabled={uploadDisabled} onUpload={handleUpload} />
+        </div>
+        {renderLogoCards("logo")}
+      </div>
+
+      <div className="branding-section">
+        <div className="branding-section-head">
+          <div>
+            <h2>浏览器图标</h2>
+            <p>可复用 Logo，也可以单独上传小尺寸图标。</p>
+          </div>
+          <BrandingUploadButton type="favicon" label="上传图标" disabled={uploadDisabled} onUpload={handleUpload} />
+        </div>
+        {renderLogoCards("favicon")}
+      </div>
+
+      <div className="branding-section">
+        <div className="branding-section-head">
+          <div>
+            <h2>登录标题图</h2>
+            <p>登录页左侧品牌标题图，可分别设置浅色和暗色主题。</p>
+          </div>
+          <BrandingUploadButton type="login_title" label="上传标题图" disabled={uploadDisabled} onUpload={handleUpload} />
+        </div>
+        {renderTitleCards()}
+      </div>
+
+      <div className="branding-section">
+        <div className="branding-section-head">
+          <div>
+            <h2>浅色登录背景</h2>
+            <p>勾选多张后登录页自动轮播，可用箭头调整显示顺序。</p>
+          </div>
+          <BrandingUploadButton type="login_background_light" label="上传浅色背景" disabled={uploadDisabled} onUpload={handleUpload} />
+        </div>
+        {renderBackgroundCards("light")}
+      </div>
+
+      <div className="branding-section">
+        <div className="branding-section-head">
+          <div>
+            <h2>暗色登录背景</h2>
+            <p>暗色主题下使用的登录背景池，默认保留当前暗色背景图。</p>
+          </div>
+          <BrandingUploadButton type="login_background_dark" label="上传暗色背景" disabled={uploadDisabled} onUpload={handleUpload} />
+        </div>
+        {renderBackgroundCards("dark")}
+      </div>
+
+      {save.error ? <div className="form-error">{save.error.message}</div> : null}
+      {reset.error ? <div className="form-error">{reset.error.message}</div> : null}
+      {upload.error ? <div className="form-error">{upload.error.message}</div> : null}
+      {updateAsset.error ? <div className="form-error">{updateAsset.error.message}</div> : null}
+      {deleteAsset.error ? <div className="form-error">{deleteAsset.error.message}</div> : null}
+
+      <PromptDialog
+        open={Boolean(renameTarget)}
+        title="重命名品牌资源"
+        label="资源名称"
+        defaultValue={renameTarget?.name ?? ""}
+        confirmText="保存名称"
+        onSubmit={(name) => {
+          if (!renameTarget) return;
+          updateAsset.mutate({ id: renameTarget.id, patch: { name } });
+        }}
+        onCancel={() => setRenameTarget(null)}
+      />
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="删除品牌资源"
+        description={deleteTarget ? `确定删除“${deleteTarget.name}”？系统默认资源不能删除，正在使用的资源需要先切换。` : ""}
+        confirmText="删除"
+        destructive
+        onConfirm={() => {
+          if (deleteTarget) deleteAsset.mutate(deleteTarget.id);
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </section>
   );
 }

@@ -70,6 +70,15 @@ export function secureAssetPath(userId: string, assetId: string) {
   ].join("/");
 }
 
+export function secureBrandingAssetPath(assetId: string) {
+  return [
+    "files",
+    "secure",
+    "branding",
+    `${sanitizeSegment(assetId, "branding")}.gimg`
+  ].join("/");
+}
+
 export function secureUserAvatarPath(userId: string) {
   return [
     "files",

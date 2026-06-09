@@ -1,4 +1,7 @@
 import type {
+  BrandingAsset,
+  BrandingDefaults,
+  BrandingSettings,
   DebugSettings,
   ConfigStatistics,
   GlobalSwitchSetting,
@@ -55,6 +58,12 @@ type ChangelogPayload = {
 
 type ConfigAssetReviewStatus = "pending" | "approved" | "rejected" | "all";
 type ConfigCaseReviewStatus = "pending" | "approved" | "rejected" | "all";
+
+export type ConfigBrandingResult = {
+  settings: BrandingSettings;
+  assets: BrandingAsset[];
+  defaults: BrandingDefaults;
+};
 
 export type ConfigAssetReviewItem = {
   id: string;
@@ -137,6 +146,28 @@ export const configApi = {
       method: "PUT",
       body: JSON.stringify({ enabled })
     }),
+  branding: () => request<ConfigBrandingResult>("/api/config/branding"),
+  saveBranding: (settings: BrandingSettings) =>
+    request<ConfigBrandingResult>("/api/config/branding", {
+      method: "PUT",
+      body: JSON.stringify(settings)
+    }),
+  resetBranding: () =>
+    request<ConfigBrandingResult>("/api/config/branding/reset", {
+      method: "POST"
+    }),
+  uploadBrandingAsset: (form: FormData) =>
+    request<ConfigBrandingResult>("/api/config/branding/assets", {
+      method: "POST",
+      body: form
+    }),
+  updateBrandingAsset: (id: string, patch: Partial<Pick<BrandingAsset, "name" | "enabled" | "sortOrder">>) =>
+    request<ConfigBrandingResult>(`/api/config/branding/assets/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch)
+    }),
+  deleteBrandingAsset: (id: string) =>
+    request<ConfigBrandingResult>(`/api/config/branding/assets/${encodeURIComponent(id)}`, { method: "DELETE" }),
   registrationSettings: () => request<{ settings: RegistrationSettings }>("/api/config/registration-settings"),
   saveRegistrationSettings: (settings: Pick<RegistrationSettings, "enabled">) =>
     request<{ settings: RegistrationSettings }>("/api/config/registration-settings", {

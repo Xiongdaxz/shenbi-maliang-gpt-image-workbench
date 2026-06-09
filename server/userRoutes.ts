@@ -5,7 +5,7 @@ import { APP_COOKIE, AUTO_PROVIDER_ID, CONFIG_COOKIE, SESSION_MAX_AGE } from "./
 import { appDb, configDb, getAll, getOne, run } from "./db";
 import { audit } from "./auditLog";
 import { defaultTeamId } from "./categories";
-import { buildLoginAssets, loginAssetFiles } from "./loginAssets";
+import { publicBranding } from "./branding";
 import { enabledProvidersForCurrentMode } from "./providerRuntime";
 import { imageOriginPromptsByImageIds, imageReferencesByImageIds, publicUser, toProvider } from "./serializers";
 import { imageGenerationSettings } from "./settingsStore";
@@ -321,8 +321,8 @@ function requireSelfRegistration(c: Context) {
 
 export function registerUserRoutes(api: Hono) {
 api.get("/login-assets", async (c) => {
-  const files = await loginAssetFiles();
-  return c.json(buildLoginAssets(files));
+  const branding = await publicBranding();
+  return c.json(branding.loginAssets);
 });
 
 api.get("/auth/registration-status", (c) => {

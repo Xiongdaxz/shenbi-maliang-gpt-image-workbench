@@ -7,6 +7,7 @@ import type {
   ImageEditSuggestion,
   ImageGenerationMode,
   ImageJob,
+  LoginAssets,
   Message,
   PromptReferenceLink,
   PromptTemplate,
@@ -17,6 +18,7 @@ import type {
   PromptTemplateResult,
   PromptTemplateRules,
   PromptTemplateComponent,
+  PublicBranding,
   ProviderConfig,
   SearchHistoryItem,
   SearchHistoryScope,
@@ -29,8 +31,7 @@ import { ApiError, request } from "./client";
 import type { AppearanceMode } from "../lib/appearance";
 import type { PromptTemplateOptimizeStyle } from "../lib/promptOptimizeStyles";
 export type { PromptTemplateOptimizeStyle } from "../lib/promptOptimizeStyles";
-
-type LoginTheme = "light" | "dark";
+export type { LoginAssets, PublicBranding } from "../types";
 
 export type PageInfo = {
   limit: number;
@@ -65,12 +66,6 @@ export type AssetCounts = {
 export type ImageCounts = {
   all: number;
   favorite: number;
-};
-
-export type LoginAssets = {
-  backgrounds: Record<LoginTheme, string[]>;
-  titles: Record<LoginTheme, string>;
-  titleFallbacks: string[];
 };
 
 export type GenerateImagePayload = {
@@ -518,6 +513,7 @@ async function translatePromptTemplateStream(
 
 export const api = {
   me: () => request<{ user: User | null }>("/api/auth/me"),
+  branding: () => request<PublicBranding>("/api/branding"),
   loginAssets: () => request<LoginAssets>("/api/login-assets"),
   registrationStatus: () => request<{ enabled: boolean }>("/api/auth/registration-status"),
   login: (account: string, password: string) =>

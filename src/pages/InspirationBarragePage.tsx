@@ -95,16 +95,16 @@ export function InspirationBarragePage() {
     queryKey: ["starter-copies", "today"],
     queryFn: api.starterCopiesToday
   });
-  const loginAssets = useQuery({
-    queryKey: ["login-assets"],
-    queryFn: api.loginAssets
+  const branding = useQuery({
+    queryKey: ["branding"],
+    queryFn: api.branding
   });
   const loginBackgrounds = useMemo(() => {
-    const assets = normalizeLoginAssets(loginAssets.data ?? DEFAULT_LOGIN_ASSETS);
+    const assets = normalizeLoginAssets(branding.data?.loginAssets ?? DEFAULT_LOGIN_ASSETS);
     const sameThemeBackgrounds = loginBackgroundsFor(assets, loginTheme);
     const otherThemeBackgrounds = loginBackgroundsFor(assets, loginTheme === "light" ? "dark" : "light");
     return Array.from(new Set([...sameThemeBackgrounds, ...otherThemeBackgrounds].filter(Boolean)));
-  }, [loginAssets.data, loginTheme]);
+  }, [branding.data, loginTheme]);
   const copies = useMemo(() => normalizeCopies(dailyCopies.data?.copies ?? []), [dailyCopies.data?.copies]);
   const barrageLanes = useMemo(() => buildBarrageLanes(copies, speed), [copies, speed]);
 

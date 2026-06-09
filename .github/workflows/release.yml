@@ -49,7 +49,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.release.tag_name || inputs.tag_name || github.ref }}
 
@@ -127,7 +127,7 @@ jobs:
           Compress-Archive -Path "release/shenbi-maliang" -DestinationPath "release/${{ matrix.archive }}" -Force
 
       - name: Upload portable artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.archive }}
           path: release/${{ matrix.archive }}
@@ -139,7 +139,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.release.tag_name || inputs.tag_name || github.ref }}
 
@@ -229,7 +229,7 @@ jobs:
           Compress-Archive -Path "release/shenbi-maliang-source" -DestinationPath "release/shenbi-maliang-source-run.zip" -Force
 
       - name: Upload source artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: shenbi-maliang-source-run.zip
           path: release/shenbi-maliang-source-run.zip
@@ -245,12 +245,12 @@ jobs:
 
     steps:
       - name: Download release artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: release-assets
 
       - name: Upload assets to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event.release.tag_name || inputs.tag_name || github.ref_name }}
           generate_release_notes: true

@@ -33,6 +33,59 @@ export type Team = {
   updatedAt: string;
 };
 
+export type LoginTheme = "light" | "dark";
+
+export type LoginAssets = {
+  backgrounds: Record<LoginTheme, string[]>;
+  titles: Record<LoginTheme, string>;
+  titleFallbacks: string[];
+};
+
+export type BrandingAssetType =
+  | "logo"
+  | "favicon"
+  | "login_title"
+  | "login_background_light"
+  | "login_background_dark";
+
+export type BrandingAssetSource = "builtin" | "uploaded";
+
+export type BrandingAsset = {
+  id: string;
+  type: BrandingAssetType;
+  source: BrandingAssetSource;
+  name: string;
+  url: string;
+  mimeType: string;
+  size: number;
+  imageWidth: number;
+  imageHeight: number;
+  enabled: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BrandingSettings = {
+  siteName: string;
+  activeLogoAssetId: string;
+  activeFaviconAssetId: string;
+  activeLoginTitleLightAssetId: string;
+  activeLoginTitleDarkAssetId: string;
+  loginBackgroundLightAssetIds: string[];
+  loginBackgroundDarkAssetIds: string[];
+  updatedAt: string;
+};
+
+export type BrandingDefaults = Omit<BrandingSettings, "siteName" | "updatedAt">;
+
+export type PublicBranding = {
+  siteName: string;
+  logoUrl: string;
+  faviconUrl: string;
+  loginAssets: LoginAssets;
+};
+
 export type ProviderConfig = {
   id: string;
   name: string;

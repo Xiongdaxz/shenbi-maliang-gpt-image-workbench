@@ -41,6 +41,44 @@ export type SmsSettings = {
   updatedAt: string;
 };
 
+export type BrandingAssetType =
+  | "logo"
+  | "favicon"
+  | "login_title"
+  | "login_background_light"
+  | "login_background_dark";
+
+export type BrandingAssetSource = "builtin" | "uploaded";
+
+export type BrandingAssetRow = {
+  id: string;
+  type: BrandingAssetType | string;
+  source: BrandingAssetSource | string;
+  name: string;
+  path: string;
+  url: string;
+  mime_type: string;
+  size: number;
+  image_width: number;
+  image_height: number;
+  enabled: number;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BrandingSettingsRow = {
+  id: string;
+  site_name: string;
+  active_logo_asset_id: string;
+  active_favicon_asset_id: string;
+  active_login_title_light_asset_id: string;
+  active_login_title_dark_asset_id: string;
+  login_background_light_ids_json: string;
+  login_background_dark_ids_json: string;
+  updated_at: string;
+};
+
 export type SearchHistoryRow = {
   id: string;
   user_id: string;

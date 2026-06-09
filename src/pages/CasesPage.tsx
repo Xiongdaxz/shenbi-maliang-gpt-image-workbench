@@ -183,6 +183,7 @@ export function CasesPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const setDraftPrompt = useWorkbench((state) => state.setDraftPrompt);
+  const resetNewChatComposer = useWorkbench((state) => state.resetNewChatComposer);
   const setEditImage = useWorkbench((state) => state.setEditImage);
   const setSelectedCaseMaterial = useWorkbench((state) => state.setSelectedCaseMaterial);
   const setMaterialPickerOpen = useWorkbench((state) => state.setMaterialPickerOpen);
@@ -394,6 +395,7 @@ export function CasesPage() {
   );
   const { jumpToScrollEdge, scrollJump } = useScrollJump({ syncKey: caseScrollJumpKey });
   const useCasePrompt = (item: GalleryCaseItem) => {
+    resetNewChatComposer();
     setDraftPrompt(item.prompt, { caseItemId: item.groupId || item.id, prompt: item.prompt });
     navigate("/");
   };
