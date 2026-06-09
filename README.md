@@ -50,9 +50,11 @@ bun run dev:web
 
 1. 打开 `http://127.0.0.1:8787/config`。
 2. 按页面提示初始化后台管理密码。
-3. 在后台配置图片 Provider，例如 OpenAI 兼容接口、CPA 代理、ChatGPT Web 或私有图片接口。
-4. 创建普通用户账号，或按你的部署方式开放用户注册。
-5. 回到前台工作台，用普通用户账号登录后开始生图和编辑图片。
+3. 在“图片通道 / 账号池”中配置图片 Provider，例如 OpenAI 兼容接口、CPA 代理、ChatGPT Web 或私有图片接口。
+4. 如果使用 CPA 账号池，在“CPA 同步”中填写同步地址和访问凭据，开启同步并先手动同步一次，让后台拉取账号、额度和可用状态。
+5. 在“模型配置”中配置文本模型，用于提示词优化、标题生成、每日灵感文案和安全审核等后台能力。推荐优先使用 `DeepSeek`；轻量文本任务也可以使用 `v4Flash`。
+6. 创建普通用户账号，或按你的部署方式开放用户注册。
+7. 回到前台工作台，用普通用户账号登录后开始生图和编辑图片。
 
 ## 🖌️ 前台功能
 
@@ -108,14 +110,14 @@ data/     本地运行数据目录，启动后自动生成
 
 | 类型 | 平台/架构 | 包名 | 格式 | 启动方式 |
 | --- | --- | --- | --- | --- |
-| 便携运行包 | Windows x64 | `shenbi-maliang-vX.Y.Z-windows-x64-portable.zip` | zip + exe | 解压后进入 `shenbi-maliang` 目录，双击 `ShenbiMaliang.exe` |
-| 便携运行包 | Windows ARM64 | `shenbi-maliang-vX.Y.Z-windows-arm64-portable.zip` | zip + exe | 适合 Windows ARM 设备，解压后进入 `shenbi-maliang` 目录，双击 `ShenbiMaliang.exe` |
-| 便携运行包 | Linux x64 | `shenbi-maliang-vX.Y.Z-linux-x64-portable.zip` | zip + 可执行文件 | 解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
-| 便携运行包 | macOS Intel | `shenbi-maliang-vX.Y.Z-macos-x64-portable.zip` | zip + 可执行文件 | 解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
-| 便携运行包 | macOS Apple Silicon | `shenbi-maliang-vX.Y.Z-macos-arm64-portable.zip` | zip + 可执行文件 | 解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
-| 源码运行包 | Windows / Linux / macOS | `shenbi-maliang-vX.Y.Z-source-run.zip` | zip + 源码 | Windows 执行 `start-update.bat`；Linux/macOS 执行 `bash ./start.sh` |
+| 便携运行包 | Windows x64 | `shenbi-maliang-X.Y.Z-windows-x64-portable.zip` | zip + exe | 解压后进入 `shenbi-maliang` 目录，双击 `ShenbiMaliang.exe` |
+| 便携运行包 | Windows ARM64 | `shenbi-maliang-X.Y.Z-windows-arm64-portable.zip` | zip + exe | 适合 Windows ARM 设备，解压后进入 `shenbi-maliang` 目录，双击 `ShenbiMaliang.exe` |
+| 便携运行包 | Linux x64 | `shenbi-maliang-X.Y.Z-linux-x64-portable.zip` | zip + 可执行文件 | 解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
+| 便携运行包 | macOS Intel | `shenbi-maliang-X.Y.Z-macos-x64-portable.zip` | zip + 可执行文件 | 解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
+| 便携运行包 | macOS Apple Silicon | `shenbi-maliang-X.Y.Z-macos-arm64-portable.zip` | zip + 可执行文件 | 解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
+| 源码运行包 | Windows / Linux / macOS | `shenbi-maliang-X.Y.Z-source-run.zip` | zip + 源码 | Windows 执行 `start-update.bat`；Linux/macOS 执行 `bash ./start.sh` |
 
-`shenbi-maliang-vX.Y.Z-source-run.zip` 不包含 exe、`node_modules` 和构建产物，也可以手动执行 `bun install --frozen-lockfile`、`bun run build`、`bun run start`。GitHub Release 页面还会自动提供原始 `Source code (zip)` 和 `Source code (tar.gz)`；如果要查看完整仓库历史，建议直接 `git clone`。运行数据会自动创建到 `data/`，升级前请先备份 `data/`。
+`shenbi-maliang-X.Y.Z-source-run.zip` 不包含 exe、`node_modules` 和构建产物，也可以手动执行 `bun install --frozen-lockfile`、`bun run build`、`bun run start`。GitHub Release 页面还会自动提供原始 `Source code (zip)` 和 `Source code (tar.gz)`；如果要查看完整仓库历史，建议直接 `git clone`。运行数据会自动创建到 `data/`，升级前请先备份 `data/`。
 
 ## 🙏 鸣谢
 

@@ -136,14 +136,15 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $tagName = "${{ github.event.release.tag_name || inputs.tag_name || github.ref_name }}"
-          $archive = "shenbi-maliang-$tagName-${{ matrix.archive_suffix }}.zip"
+          $releaseVersion = $tagName -replace '^v', ''
+          $archive = "shenbi-maliang-$releaseVersion-${{ matrix.archive_suffix }}.zip"
           Compress-Archive -Path "release/shenbi-maliang" -DestinationPath "release/$archive" -Force
 
       - name: Upload portable artifact
         uses: actions/upload-artifact@v7
         with:
-          name: shenbi-maliang-${{ github.event.release.tag_name || inputs.tag_name || github.ref_name }}-${{ matrix.archive_suffix }}.zip
-          path: release/shenbi-maliang-${{ github.event.release.tag_name || inputs.tag_name || github.ref_name }}-${{ matrix.archive_suffix }}.zip
+          name: ${{ matrix.name }}-portable
+          path: release/shenbi-maliang-*-${{ matrix.archive_suffix }}.zip
           if-no-files-found: error
 
   source:
@@ -240,13 +241,14 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $tagName = "${{ github.event.release.tag_name || inputs.tag_name || github.ref_name }}"
-          Compress-Archive -Path "release/shenbi-maliang-source" -DestinationPath "release/shenbi-maliang-$tagName-source-run.zip" -Force
+          $releaseVersion = $tagName -replace '^v', ''
+          Compress-Archive -Path "release/shenbi-maliang-source" -DestinationPath "release/shenbi-maliang-$releaseVersion-source-run.zip" -Force
 
       - name: Upload source artifact
         uses: actions/upload-artifact@v7
         with:
-          name: shenbi-maliang-${{ github.event.release.tag_name || inputs.tag_name || github.ref_name }}-source-run.zip
-          path: release/shenbi-maliang-${{ github.event.release.tag_name || inputs.tag_name || github.ref_name }}-source-run.zip
+          name: source-run
+          path: release/shenbi-maliang-*-source-run.zip
           if-no-files-found: error
 
   publish:
@@ -314,9 +316,9 @@ jobs:
           tag_name: ${{ github.event.release.tag_name || inputs.tag_name || github.ref_name }}
           body_path: release-notes.md
           files: |
-            release-assets/shenbi-maliang-${{ github.event.release.tag_name || inputs.tag_name || github.ref_name }}-windows-x64-portable.zip
-            release-assets/shenbi-maliang-${{ github.event.release.tag_name || inputs.tag_name || github.ref_name }}-windows-arm64-portable.zip
-            release-assets/shenbi-maliang-${{ github.event.release.tag_name || inputs.tag_name || github.ref_name }}-linux-x64-portable.zip
-            release-assets/shenbi-maliang-${{ github.event.release.tag_name || inputs.tag_name || github.ref_name }}-macos-x64-portable.zip
-            release-assets/shenbi-maliang-${{ github.event.release.tag_name || inputs.tag_name || github.ref_name }}-macos-arm64-portable.zip
-            release-assets/shenbi-maliang-${{ github.event.release.tag_name || inputs.tag_name || github.ref_name }}-source-run.zip
+            release-assets/shenbi-maliang-*-windows-x64-portable.zip
+            release-assets/shenbi-maliang-*-windows-arm64-portable.zip
+            release-assets/shenbi-maliang-*-linux-x64-portable.zip
+            release-assets/shenbi-maliang-*-macos-x64-portable.zip
+            release-assets/shenbi-maliang-*-macos-arm64-portable.zip
+            release-assets/shenbi-maliang-*-source-run.zip
