@@ -73,13 +73,13 @@ E:\maliang\runtime\bun\bun.exe
 建议把项目放到固定目录，例如：
 
 ```text
-D:\ideaxxz\gpt-image
+D:\apps\shenbi-maliang
 ```
 
 进入项目目录：
 
 ```powershell
-cd D:\ideaxxz\gpt-image
+cd D:\apps\shenbi-maliang
 ```
 
 生产部署至少需要这些内容：
@@ -96,7 +96,6 @@ cd D:\ideaxxz\gpt-image
 - `postcss.config.js`
 - `data/`，如果是迁移已有数据
 
-`repo-src-full/` 是参考代码，不是生产运行必需目录。
 
 ## 3. 安装依赖
 
@@ -244,7 +243,7 @@ netstat -ano | findstr :8787
 适合临时使用：
 
 ```powershell
-cd D:\ideaxxz\gpt-image
+cd D:\apps\shenbi-maliang
 bun run start
 ```
 
@@ -280,7 +279,7 @@ bun run restart
 先准备日志目录：
 
 ```powershell
-cd D:\ideaxxz\gpt-image
+cd D:\apps\shenbi-maliang
 New-Item -ItemType Directory -Force logs
 ```
 
@@ -302,7 +301,7 @@ taskschd.msc
 - 添加参数：
 
 ```text
-/c "cd /d D:\ideaxxz\gpt-image && set PORT=8787 && bun server/index.ts >> logs\server.log 2>&1"
+/c "cd /d D:\apps\shenbi-maliang && set PORT=8787 && bun server/index.ts >> logs\server.log 2>&1"
 ```
 
 保存后可以右键任务，选择“运行”测试。
@@ -310,7 +309,7 @@ taskschd.msc
 日志位置：
 
 ```text
-D:\ideaxxz\gpt-image\logs\server.log
+D:\apps\shenbi-maliang\logs\server.log
 ```
 
 如果项目目录或端口不同，任务参数里的路径和 `PORT` 要同步修改。
@@ -341,7 +340,7 @@ Get-Command bun
 
 ```powershell
 New-Item -ItemType Directory -Force D:\backup
-Compress-Archive -Path D:\ideaxxz\gpt-image\data -DestinationPath D:\backup\gpt-image-data-$(Get-Date -Format yyyyMMdd-HHmmss).zip
+Compress-Archive -Path D:\apps\shenbi-maliang\data -DestinationPath D:\backup\gpt-image-data-$(Get-Date -Format yyyyMMdd-HHmmss).zip
 ```
 
 升级或迁移前，先停服务，再备份 `data/`。
@@ -361,7 +360,7 @@ Compress-Archive -Path D:\ideaxxz\gpt-image\data -DestinationPath D:\backup\gpt-
 最简单方式：
 
 ```powershell
-cd D:\ideaxxz\gpt-image
+cd D:\apps\shenbi-maliang
 .\start-update.bat
 ```
 
@@ -407,7 +406,6 @@ cd D:\ideaxxz\gpt-image
 - `data/files/assets/`：素材库文件。
 - `node_modules/`：依赖目录，优先让脚本通过 `bun install` 处理。
 - `runtime/`：本地运行时目录，例如 `runtime/bun/bun.exe`，只有需要更新内置 Bun 时才覆盖。
-- `repo-src-full/`：只读参考项目，不参与部署更新。
 - `tmp/`、日志文件、`tsconfig.tsbuildinfo`：临时或缓存内容，不需要更新。
 - `.env`、`.env.*`：本机环境变量文件，如果目标机器有自己的配置，不要覆盖。
 
@@ -426,7 +424,7 @@ runtime\bun\bun.exe
 如果需要先备份数据，再手动更新：
 
 ```powershell
-cd D:\ideaxxz\gpt-image
+cd D:\apps\shenbi-maliang
 
 # 备份数据
 New-Item -ItemType Directory -Force D:\backup
@@ -511,7 +509,7 @@ http://127.0.0.1:8787/api/health
 首次部署：
 
 ```powershell
-cd D:\ideaxxz\gpt-image
+cd D:\apps\shenbi-maliang
 .\start-update.bat
 ```
 
@@ -524,7 +522,7 @@ Invoke-RestMethod http://127.0.0.1:8787/api/health
 日常更新：
 
 ```powershell
-cd D:\ideaxxz\gpt-image
+cd D:\apps\shenbi-maliang
 New-Item -ItemType Directory -Force D:\backup
 Compress-Archive -Path .\data -DestinationPath D:\backup\gpt-image-data-$(Get-Date -Format yyyyMMdd-HHmmss).zip
 .\start-update.bat

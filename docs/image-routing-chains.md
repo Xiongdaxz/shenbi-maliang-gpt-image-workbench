@@ -161,7 +161,7 @@ ChatGPT 官网渠道不是 OpenAI 兼容接口。`route_mode` 不决定它的真
 
 ## 参考项目：ChatGpt-Image-Studio
 
-参考路径：`tmp/refs/ChatGpt-Image-Studio-src/ChatGpt-Image-Studio-main/`。该项目只作为参考，不修改。
+该项目仅作为接口设计参考。
 
 ### 对外接口
 
@@ -193,7 +193,7 @@ ChatGPT 官网渠道不是 OpenAI 兼容接口。`route_mode` 不决定它的真
 
 ## 参考项目：chatgpt2api
 
-参考路径：`tmp/refs/chatgpt2api-src/chatgpt2api-main/`。该项目只作为参考，不修改。
+该项目仅作为接口设计参考。
 
 ### 对外接口
 
@@ -225,7 +225,7 @@ ChatGPT 官网渠道不是 OpenAI 兼容接口。`route_mode` 不决定它的真
 
 ## 参考项目：CLIProxyAPI
 
-参考路径：`tmp/refs/CLIProxyAPI-main/`。该项目只作为参考，不修改。
+该项目仅作为接口设计参考。
 
 ### 对外接口
 
