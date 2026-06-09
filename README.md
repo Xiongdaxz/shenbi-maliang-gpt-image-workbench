@@ -108,14 +108,14 @@ data/     本地运行数据目录，启动后自动生成
 
 | 类型 | 平台/架构 | 包名 | 格式 | 启动方式 |
 | --- | --- | --- | --- | --- |
-| 便携运行包 | Windows x64 | `01-shenbi-maliang-windows-x64-portable.zip` | zip + exe | 解压后进入 `shenbi-maliang` 目录，双击 `ShenbiMaliang.exe` |
-| 便携运行包 | Windows ARM64 | `02-shenbi-maliang-windows-arm64-portable.zip` | zip + exe | 适合 Windows ARM 设备，解压后进入 `shenbi-maliang` 目录，双击 `ShenbiMaliang.exe` |
-| 便携运行包 | Linux x64 | `03-shenbi-maliang-linux-x64-portable.zip` | zip + 可执行文件 | 解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
-| 便携运行包 | macOS Intel | `04-shenbi-maliang-macos-x64-portable.zip` | zip + 可执行文件 | 解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
-| 便携运行包 | macOS Apple Silicon | `05-shenbi-maliang-macos-arm64-portable.zip` | zip + 可执行文件 | 解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
-| 源码运行包 | Windows / Linux / macOS | `06-shenbi-maliang-source-run.zip` | zip + 源码 | Windows 执行 `start-update.bat`；Linux/macOS 执行 `bash ./start.sh` |
+| 便携运行包 | Windows x64 | `shenbi-maliang-vX.Y.Z-windows-x64-portable.zip` | zip + exe | 解压后进入 `shenbi-maliang` 目录，双击 `ShenbiMaliang.exe` |
+| 便携运行包 | Windows ARM64 | `shenbi-maliang-vX.Y.Z-windows-arm64-portable.zip` | zip + exe | 适合 Windows ARM 设备，解压后进入 `shenbi-maliang` 目录，双击 `ShenbiMaliang.exe` |
+| 便携运行包 | Linux x64 | `shenbi-maliang-vX.Y.Z-linux-x64-portable.zip` | zip + 可执行文件 | 解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
+| 便携运行包 | macOS Intel | `shenbi-maliang-vX.Y.Z-macos-x64-portable.zip` | zip + 可执行文件 | 解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
+| 便携运行包 | macOS Apple Silicon | `shenbi-maliang-vX.Y.Z-macos-arm64-portable.zip` | zip + 可执行文件 | 解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
+| 源码运行包 | Windows / Linux / macOS | `shenbi-maliang-vX.Y.Z-source-run.zip` | zip + 源码 | Windows 执行 `start-update.bat`；Linux/macOS 执行 `bash ./start.sh` |
 
-`06-shenbi-maliang-source-run.zip` 不包含 exe、`node_modules` 和构建产物，也可以手动执行 `bun install --frozen-lockfile`、`bun run build`、`bun run start`。GitHub Release 页面还会自动提供原始 `Source code (zip)` 和 `Source code (tar.gz)`；如果要查看完整仓库历史，建议直接 `git clone`。运行数据会自动创建到 `data/`，升级前请先备份 `data/`。
+`shenbi-maliang-vX.Y.Z-source-run.zip` 不包含 exe、`node_modules` 和构建产物，也可以手动执行 `bun install --frozen-lockfile`、`bun run build`、`bun run start`。GitHub Release 页面还会自动提供原始 `Source code (zip)` 和 `Source code (tar.gz)`；如果要查看完整仓库历史，建议直接 `git clone`。运行数据会自动创建到 `data/`，升级前请先备份 `data/`。
 
 ## 🙏 鸣谢
 
