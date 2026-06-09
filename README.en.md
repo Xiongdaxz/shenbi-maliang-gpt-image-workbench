@@ -4,21 +4,28 @@
 
 Shenbi Maliang GPT Image Workbench is an AI image generation and image editing workbench designed for private team deployments.
 
-## Highlights
+## ✨ Highlights
 
-- User workspace design and conversational interaction inspired by ChatGPT Web.
-- Separate user workspace and admin console: users create, admins configure and maintain.
-- Unified management for image providers, team accounts, assets, cases, and prompt templates.
-- Supports OpenAI-compatible APIs, CPA proxies, ChatGPT Web routes, and private image endpoints.
-- Local-first runtime data, suitable for internal team use, private deployment, and customization.
+- 🖼️ AI image generation and editing workbench for real team workflows.
+- 💬 User workspace design and conversational interaction inspired by ChatGPT Web.
+- 🧭 Separate user workspace and admin console: users create, admins configure and maintain.
+- 🧩 Unified management for image providers, team accounts, assets, cases, and prompt templates.
+- 🔌 Supports OpenAI-compatible APIs, CPA proxies, ChatGPT Web routes, and private image endpoints.
+- 🔐 Local-first runtime data, suitable for internal team use, private deployment, and customization.
 
-## Online Preview
+## 🎬 Demo Video
+
+- Demo video: coming soon.
+- Suggested walkthrough: portable package startup, user image generation and editing, asset/case management, provider and account-pool configuration.
+- Suggested screenshot location: `docs/images/`, so README can reference them later.
+
+## 🧭 Online Preview
 
 - GitHub Pages: <https://xiongdaxz.github.io/shenbi-maliang-gpt-image-workbench/>
 
 The online URL is a static frontend preview for checking the interface and product style. Login, admin configuration, image generation, and file storage require a local backend deployment.
 
-## Quick Start
+## 🚀 Quick Start
 
 ```bash
 bun install
@@ -39,7 +46,7 @@ bun run dev:api
 bun run dev:web
 ```
 
-## First Run
+## 🧑‍💻 First Run
 
 1. Open `http://127.0.0.1:8787/config`.
 2. Initialize the admin password.
@@ -47,34 +54,34 @@ bun run dev:web
 4. Create user accounts, or enable registration according to your deployment needs.
 5. Return to the user workspace, sign in with a user account, and start generating or editing images.
 
-## User Workspace
+## 🖌️ User Workspace
 
 The user workspace is for image creation and asset management:
 
-- Conversational text-to-image generation.
-- Continue editing from existing images.
-- Upload local images as references.
-- Choose reference assets from the asset library.
-- View chat history and generated images.
-- Favorite, download, preview, and manage generated images.
-- Add selected images to inspiration cases.
-- Use prompt templates to generate structured prompts.
-- Manage personal and shared assets.
+- 💬 Conversational text-to-image generation.
+- 🪄 Continue editing from existing images.
+- 🖼️ Upload local images as references.
+- 🗂️ Choose reference assets from the asset library.
+- 🕘 View chat history and generated images.
+- ⭐ Favorite, download, preview, and manage generated images.
+- 💡 Add selected images to inspiration cases.
+- 🧱 Use prompt templates to generate structured prompts.
+- 👥 Manage personal and shared assets.
 
-## Admin Console
+## ⚙️ Admin Console
 
 The admin console is available at `/config` and is for administrators and deployment maintainers:
 
-- Manage users, teams, and account status.
-- Configure image providers, models, sizes, qualities, routing modes, and retry settings.
-- Manage CPA, ChatGPT Web, API, and other image channels.
-- Manage account pools, quota refresh, and request logs.
-- Configure proxy, email, SMS, registration, and password reset settings.
-- Manage inspiration cases, shared asset review, and branding assets.
-- View admin audit logs, image request logs, and model request logs.
-- Adjust global switches and selected runtime settings.
+- 👤 Manage users, teams, and account status.
+- 🎛️ Configure image providers, models, sizes, qualities, routing modes, and retry settings.
+- 🔀 Manage CPA, ChatGPT Web, API, and other image channels.
+- 🧮 Manage account pools, quota refresh, and request logs.
+- 📮 Configure proxy, email, SMS, registration, and password reset settings.
+- 🧰 Manage inspiration cases, shared asset review, and branding assets.
+- 📊 View admin audit logs, image request logs, and model request logs.
+- 🕹️ Adjust global switches and selected runtime settings.
 
-## Runtime Data
+## 💾 Runtime Data
 
 The app creates a local `data/` directory:
 
@@ -84,7 +91,7 @@ The app creates a local `data/` directory:
 
 When migrating or backing up the app, back up the entire `data/` directory.
 
-## Project Structure
+## 🗃️ Project Structure
 
 ```text
 server/   Backend APIs, image routing, database initialization, file service
@@ -95,7 +102,7 @@ docs/     Routing, database, and project documentation
 data/     Local runtime data directory, created automatically
 ```
 
-## Release Packages
+## 📦 Release Packages
 
 Official versions provide portable archives in GitHub Releases:
 
@@ -103,9 +110,9 @@ Official versions provide portable archives in GitHub Releases:
 - `shenbi-maliang-linux-x64-portable.zip`: unzip, open the `shenbi-maliang` directory, then run `chmod +x ./shenbi-maliang && ./shenbi-maliang`.
 - `shenbi-maliang-macos-arm64-portable.zip` / `shenbi-maliang-macos-x64-portable.zip`: download the archive for your CPU architecture, unzip it, open the `shenbi-maliang` directory, then run `chmod +x ./shenbi-maliang && ./shenbi-maliang`.
 
-Portable packages create `data/` next to the executable. Back up `data/` before upgrading.
+GitHub Releases also provide `Source code (zip)` and `Source code (tar.gz)` automatically for developers who want the source package or customization. Portable packages create `data/` next to the executable. Back up `data/` before upgrading.
 
-## Acknowledgements
+## 🙏 Acknowledgements
 
 This project references the following open-source projects for image API compatibility, ChatGPT Web image routing, and CPA/Responses routing design:
 
@@ -113,6 +120,6 @@ This project references the following open-source projects for image API compati
 - [chatgpt2api](https://github.com/basketikun/chatgpt2api)
 - [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI)
 
-## License
+## 📄 License
 
 MIT. See [LICENSE](LICENSE).
