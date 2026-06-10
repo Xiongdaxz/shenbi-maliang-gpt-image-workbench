@@ -41,6 +41,11 @@ jobs:
             target: ""
             executable: shenbi-maliang
             archive_suffix: linux-x64-portable
+          - name: linux-arm64
+            os: ubuntu-24.04-arm
+            target: ""
+            executable: shenbi-maliang
+            archive_suffix: linux-arm64-portable
           - name: macos-x64
             os: macos-15-intel
             target: ""
@@ -319,6 +324,7 @@ jobs:
             release-assets/shenbi-maliang-*-windows-x64-portable.zip
             release-assets/shenbi-maliang-*-windows-arm64-portable.zip
             release-assets/shenbi-maliang-*-linux-x64-portable.zip
+            release-assets/shenbi-maliang-*-linux-arm64-portable.zip
             release-assets/shenbi-maliang-*-macos-x64-portable.zip
             release-assets/shenbi-maliang-*-macos-arm64-portable.zip
             release-assets/shenbi-maliang-*-source-run.zip

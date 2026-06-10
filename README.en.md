@@ -113,6 +113,7 @@ Official versions provide the following packages in GitHub Releases:
 | Portable runtime | Windows x64 | `shenbi-maliang-X.Y.Z-windows-x64-portable.zip` | zip + exe | Unzip, open the `shenbi-maliang` directory, and double-click `ShenbiMaliang.exe` |
 | Portable runtime | Windows ARM64 | `shenbi-maliang-X.Y.Z-windows-arm64-portable.zip` | zip + exe | For Windows ARM devices. Unzip, open the `shenbi-maliang` directory, and double-click `ShenbiMaliang.exe` |
 | Portable runtime | Linux x64 | `shenbi-maliang-X.Y.Z-linux-x64-portable.zip` | zip + executable | Unzip, open the `shenbi-maliang` directory, then run `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
+| Portable runtime | Linux ARM64 | `shenbi-maliang-X.Y.Z-linux-arm64-portable.zip` | zip + executable | For ARM64/aarch64 servers, NAS devices, or development boards. Unzip, open the `shenbi-maliang` directory, then run `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
 | Portable runtime | macOS Intel | `shenbi-maliang-X.Y.Z-macos-x64-portable.zip` | zip + executable | Unzip, open the `shenbi-maliang` directory, then run `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
 | Portable runtime | macOS Apple Silicon | `shenbi-maliang-X.Y.Z-macos-arm64-portable.zip` | zip + executable | Unzip, open the `shenbi-maliang` directory, then run `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
 | Source run package | Windows / Linux / macOS | `shenbi-maliang-X.Y.Z-source-run.zip` | zip + source | Run `start-update.bat` on Windows, or `bash ./start.sh` on Linux/macOS |

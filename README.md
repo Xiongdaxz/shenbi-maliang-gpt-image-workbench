@@ -113,6 +113,7 @@ data/     本地运行数据目录，启动后自动生成
 | 便携运行包 | Windows x64 | `shenbi-maliang-X.Y.Z-windows-x64-portable.zip` | zip + exe | 解压后进入 `shenbi-maliang` 目录，双击 `ShenbiMaliang.exe` |
 | 便携运行包 | Windows ARM64 | `shenbi-maliang-X.Y.Z-windows-arm64-portable.zip` | zip + exe | 适合 Windows ARM 设备，解压后进入 `shenbi-maliang` 目录，双击 `ShenbiMaliang.exe` |
 | 便携运行包 | Linux x64 | `shenbi-maliang-X.Y.Z-linux-x64-portable.zip` | zip + 可执行文件 | 解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
+| 便携运行包 | Linux ARM64 | `shenbi-maliang-X.Y.Z-linux-arm64-portable.zip` | zip + 可执行文件 | 适合 ARM64/aarch64 服务器、NAS 或开发板，解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
 | 便携运行包 | macOS Intel | `shenbi-maliang-X.Y.Z-macos-x64-portable.zip` | zip + 可执行文件 | 解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
 | 便携运行包 | macOS Apple Silicon | `shenbi-maliang-X.Y.Z-macos-arm64-portable.zip` | zip + 可执行文件 | 解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
 | 源码运行包 | Windows / Linux / macOS | `shenbi-maliang-X.Y.Z-source-run.zip` | zip + 源码 | Windows 执行 `start-update.bat`；Linux/macOS 执行 `bash ./start.sh` |
