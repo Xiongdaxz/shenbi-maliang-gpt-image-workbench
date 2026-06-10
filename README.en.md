@@ -160,4 +160,4 @@ MIT. See [LICENSE](LICENSE).
 
 ## 🤝 Community Support
 
-- [LINUX DO](https://linux.do/) community: https://linux.do/
+- [LINUX DO](https://linux.do/) community

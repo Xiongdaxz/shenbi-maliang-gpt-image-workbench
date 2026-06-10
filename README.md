@@ -160,4 +160,4 @@ MIT。详见 [LICENSE](LICENSE)。
 
 ## 🤝 社区支持
 
-- [LINUX DO](https://linux.do/) 社区：https://linux.do/
+- [LINUX DO](https://linux.do/) 社区
