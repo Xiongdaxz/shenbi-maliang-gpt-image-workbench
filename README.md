@@ -15,9 +15,9 @@
 
 ## 🎬 项目演示
 
-<video src="docs/images/demo-video.mp4" controls width="100%"></video>
+[![点击观看项目演示视频](docs/images/demo-chat-edit.png)](docs/images/demo-video.mp4)
 
-[无法播放时，点击查看演示视频](docs/images/demo-video.mp4)
+[点击观看项目演示视频](docs/images/demo-video.mp4)
 
 | 前台创作与续改 | 局部涂抹编辑 |
 | --- | --- |
