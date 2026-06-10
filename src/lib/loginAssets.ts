@@ -51,11 +51,11 @@ export const LOGIN_BACKGROUND_FADE_MS = 900;
 export const LOGIN_BACKGROUND_PRELOAD_STEP_MS = 45;
 
 export function readLoginThemePreference(): LoginTheme {
-  if (typeof window === "undefined") return "light";
+  if (typeof window === "undefined") return "dark";
   try {
-    return window.localStorage.getItem(LOGIN_THEME_STORAGE_KEY) === "dark" ? "dark" : "light";
+    return window.localStorage.getItem(LOGIN_THEME_STORAGE_KEY) === "light" ? "light" : "dark";
   } catch {
-    return "light";
+    return "dark";
   }
 }
 

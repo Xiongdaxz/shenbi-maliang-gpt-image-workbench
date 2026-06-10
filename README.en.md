@@ -46,13 +46,15 @@ bun run dev:api
 bun run dev:web
 ```
 
-## 🧑‍💻 First Run
+## 🧑‍💻 First Use
+
+For first-time setup, the CPA route is recommended because it is simple to configure and works well with account-pool and quota synchronization.
 
 1. Open `http://127.0.0.1:8787/config`.
 2. Initialize the admin password.
-3. Configure an image provider under image channels / account pool, such as an OpenAI-compatible API, CPA proxy, ChatGPT Web route, or private image endpoint.
+3. The CPA channel is recommended because it is simple to configure and quick to connect. You can also use an OpenAI-compatible API, ChatGPT Web route, or private image endpoint if needed.
 4. If you use a CPA account pool, configure the CPA sync URL and credentials, enable sync, and run one manual sync first so accounts, quotas, and availability are imported.
-5. Configure text models in the model settings section. These models power prompt optimization, title generation, daily inspiration copy, safety review, and other assistant-side features. Recommended options: `DeepSeek` first, or `v4Flash` for lightweight text tasks.
+5. Configure text models in the model settings section. These models power prompt optimization, title generation, daily inspiration copy, safety review, and other assistant-side features. Recommended model: `deepseek-v4-flash`.
 6. Create user accounts, or enable registration according to your deployment needs.
 7. Return to the user workspace, sign in with a user account, and start generating or editing images.
 
@@ -61,7 +63,7 @@ bun run dev:web
 The user workspace is for image creation and asset management:
 
 - 💬 Conversational text-to-image generation.
-- 🪄 Continue editing from existing images.
+- ✏️ Continue editing from existing images.
 - 🖼️ Upload local images as references.
 - 🗂️ Choose reference assets from the asset library.
 - 🕘 View chat history and generated images.

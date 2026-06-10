@@ -1744,14 +1744,32 @@ td.compact-actions button:last-child {
 
 .provider-dialog {
   width: min(920px, 100%);
+  max-height: min(92vh, 820px);
+  max-height: min(92dvh, 820px);
 }
 
 .provider-dialog-form {
+  min-height: 0;
+  align-content: start;
   margin-bottom: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 4px;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .provider-dialog-form .wide {
   grid-column: 1 / -1;
+}
+
+.provider-dialog-form .row-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin: 4px -4px 0 0;
+  padding: 12px 4px 2px 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0), var(--app-surface-raised, #fff) 28%);
 }
 
 .prompt-optimizer-model-row,

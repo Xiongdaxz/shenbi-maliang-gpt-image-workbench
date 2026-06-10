@@ -29,7 +29,7 @@ function tableExists(db: Database, table: string) {
 
 function globalSwitchDefaultFromLegacy(type: GlobalSwitchType) {
   if (type === "self_registration" && tableExists(configDb, "registration_settings")) {
-    return getOne<{ enabled: number }>(configDb, "select enabled from registration_settings where id = ? limit 1", "default")?.enabled ?? 1;
+    return getOne<{ enabled: number }>(configDb, "select enabled from registration_settings where id = ? limit 1", "default")?.enabled ?? 0;
   }
   if (type === "asset_review" || type === "case_review") return DEFAULT_GLOBAL_SWITCH_ENABLED[type] ? 1 : 0;
   if (type === "starter_copy_generation" && tableExists(configDb, "starter_copy_settings")) {

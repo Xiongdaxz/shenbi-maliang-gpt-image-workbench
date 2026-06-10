@@ -498,7 +498,7 @@
 
 | 类型 | 默认值 | 说明 |
 | --- | --- | --- |
-| `self_registration` | 开启 | 自助注册；优先迁移旧 `registration_settings.enabled`，关闭后 C 端注册验证码和注册提交接口会被后端拦截 |
+| `self_registration` | 关闭 | 自助注册；优先迁移旧 `registration_settings.enabled`，关闭后 C 端注册验证码和注册提交接口会被后端拦截 |
 | `asset_review` | 开启 | 素材共享审核；关闭后新共享素材直接公开 |
 | `case_review` | 开启 | 灵感空间审核；关闭后新提交灵感直接公开 |
 | `starter_copy_generation` | 开启 | 每日灵感文案生成；迁移 `starter_copy_settings.enabled` |

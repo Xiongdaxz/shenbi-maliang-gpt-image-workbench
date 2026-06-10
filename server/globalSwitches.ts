@@ -23,7 +23,7 @@ type GlobalSwitchRow = {
 };
 
 export const DEFAULT_GLOBAL_SWITCH_ENABLED: Record<GlobalSwitchType, boolean> = {
-  self_registration: true,
+  self_registration: false,
   asset_review: true,
   case_review: true,
   starter_copy_generation: true,

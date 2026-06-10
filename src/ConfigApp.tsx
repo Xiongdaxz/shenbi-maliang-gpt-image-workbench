@@ -1525,7 +1525,7 @@ function AccountSearchPanel() {
     queryKey: ["config-registration-settings"],
     queryFn: configApi.registrationSettings
   });
-  const registrationEnabled = registrationSettings.data?.settings.enabled ?? true;
+  const registrationEnabled = registrationSettings.data?.settings.enabled ?? false;
   const teams = useQuery({ queryKey: ["config-teams"], queryFn: configApi.teams });
   const users = useQuery({
     queryKey: ["config-users", { keyword, teamFilter, statusFilter }],
@@ -3481,6 +3481,7 @@ function ProviderDialog({
   const isChatgptWeb = form.channel === "chatgpt_web";
   const isApi = form.channel === "api";
   const isCpa = form.channel === "cpa";
+  const usesProviderApiKey = isApi || isCpa;
 
   function patch(patchValue: Partial<ProviderConfig>) {
     setForm((value) => ({ ...value, ...patchValue }));
@@ -3560,19 +3561,19 @@ function ProviderDialog({
               />
             </div>
           </div>
-          {isApi ? (
+          {usesProviderApiKey ? (
             <label>
               API Key 环境变量
               <input value={form.apiKeyEnv} onChange={(event) => patch({ apiKeyEnv: event.target.value })} />
             </label>
           ) : null}
-          {isApi ? (
-            <label className="wide">
+          {usesProviderApiKey ? (
+            <label>
               API Key
               <input
                 value={form.apiKeyValue}
                 onChange={(event) => patch({ apiKeyValue: event.target.value })}
-                placeholder="优先建议使用环境变量"
+                placeholder={isCpa ? "CPA Bearer Key，可留空" : "优先建议使用环境变量"}
               />
             </label>
           ) : null}
