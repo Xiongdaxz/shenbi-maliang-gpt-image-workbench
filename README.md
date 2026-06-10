@@ -15,9 +15,9 @@
 
 ## 🎬 项目演示
 
-[![点击观看项目演示视频](docs/images/demo-chat-edit.png)](docs/images/demo-video.mp4)
+[![点击观看项目演示视频](docs/images/demo-chat-edit.png)](https://github.com/Xiongdaxz/shenbi-maliang-gpt-image-workbench/releases/latest/download/demo-video.mp4)
 
-[点击观看项目演示视频](docs/images/demo-video.mp4)
+[点击观看项目演示视频](https://github.com/Xiongdaxz/shenbi-maliang-gpt-image-workbench/releases/latest/download/demo-video.mp4)
 
 | 前台创作与续改 | 局部涂抹编辑 |
 | --- | --- |
@@ -157,3 +157,7 @@ data/     本地运行数据目录，启动后自动生成
 ## 📄 许可证
 
 MIT。详见 [LICENSE](LICENSE)。
+
+## 🤝 社区支持
+
+- [LINUX DO](https://linux.do/) 社区：https://linux.do/

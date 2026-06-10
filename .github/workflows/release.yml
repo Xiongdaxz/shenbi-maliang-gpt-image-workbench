@@ -331,3 +331,4 @@ jobs:
             release-assets/shenbi-maliang-*-macos-x64-portable.zip
             release-assets/shenbi-maliang-*-macos-arm64-portable.zip
             release-assets/shenbi-maliang-*-source-run.zip
+            docs/images/demo-video.mp4
