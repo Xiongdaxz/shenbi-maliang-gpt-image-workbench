@@ -313,6 +313,9 @@ jobs:
           while ($section.Count -gt 0 -and [string]::IsNullOrWhiteSpace($section[-1])) {
             $section = @($section[0..($section.Count - 2)])
           }
+          if ($section.Count -gt 0) {
+            $section[0] = "## Changelog"
+          }
           $section | Set-Content -Encoding UTF8 -Path "release-notes.md"
 
       - name: Upload assets to GitHub Release
