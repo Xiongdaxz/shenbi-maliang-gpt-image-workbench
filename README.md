@@ -15,15 +15,25 @@
 
 ## 🎬 项目演示
 
-- 演示视频：录制完成后补充。
-- 视频建议展示：便携包启动、前台图片生成与编辑、素材/案例管理、后台 Provider 和账号池配置。
-- 截图素材建议放在 `docs/images/`，README 后续可以直接引用。
+<video src="docs/images/demo-video.mp4" controls width="100%"></video>
 
-## 🧭 在线预览
+[无法播放时，点击查看演示视频](docs/images/demo-video.mp4)
 
-- GitHub Pages: <https://xiongdaxz.github.io/shenbi-maliang-gpt-image-workbench/>
+| 前台创作与续改 | 局部涂抹编辑 |
+| --- | --- |
+| ![前台创作与续改](docs/images/demo-chat-edit.png) | ![局部涂抹编辑](docs/images/demo-mask-edit.png) |
 
-在线地址是静态前端预览，用于查看界面和项目风格；登录、后台配置、图片生成、文件存储等完整功能需要按下面步骤本地部署后使用。
+| 灵感空间 | 素材库 |
+| --- | --- |
+| ![灵感空间](docs/images/demo-inspiration.png) | ![素材库](docs/images/demo-assets.png) |
+
+| 我的图片 | 个人设置 |
+| --- | --- |
+| ![我的图片](docs/images/demo-gallery.png) | ![个人设置](docs/images/demo-settings.png) |
+
+| 后台品牌设置 |
+| --- |
+| ![后台品牌设置](docs/images/demo-admin-branding.png) |
 
 ## 🚀 快速启动
 
