@@ -1,5 +1,5 @@
 import { RefreshCw } from "lucide-react";
-import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { memo, type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { cx } from "../lib/cx";
 
 type RenderingMode = "generation" | "edit";
@@ -204,12 +204,28 @@ const getDotStyle = (dot: (typeof RENDERING_DOTS)[number], focusState: Rendering
   };
 };
 
-export function RenderingMessage({ mode }: { mode: RenderingMode }) {
+const applyDotStyle = (element: HTMLSpanElement | null, style: RenderingDotStyle) => {
+  if (!element) return;
+  element.style.width = `${style.width}px`;
+  element.style.height = `${style.height}px`;
+  element.style.opacity = String(style.opacity);
+  element.style.transform = String(style.transform ?? "");
+  element.style.setProperty("--dot-breath-delay", style["--dot-breath-delay"]);
+  element.style.setProperty("--dot-breath-low", style["--dot-breath-low"]);
+  element.style.setProperty("--dot-breath-mid", style["--dot-breath-mid"]);
+  element.style.setProperty("--dot-breath-peak", style["--dot-breath-peak"]);
+  element.style.setProperty("--dot-breath-duration", style["--dot-breath-duration"]);
+  element.style.setProperty("--dot-fill", style["--dot-fill"]);
+};
+
+export const RenderingMessage = memo(function RenderingMessage({ mode }: { mode: RenderingMode }) {
   const titles = mode === "edit" ? EDIT_LOADING_TITLES : GENERATION_LOADING_TITLES;
+  const initialFocusState = useMemo(createInitialFocusState, [mode]);
   const [renderSeed] = useState(() => Math.floor(Math.random() * 100000));
   const [titleIndex, setTitleIndex] = useState(0);
   const [titleSettled, setTitleSettled] = useState(true);
-  const [focusState, setFocusState] = useState<RenderingFocusState>(createInitialFocusState);
+  const dotStyles = useMemo(() => RENDERING_DOTS.map((dot) => getDotStyle(dot, initialFocusState)), [initialFocusState]);
+  const dotRefs = useRef<Array<HTMLSpanElement | null>>([]);
   const focusMotionRef = useRef<{
     current: RenderingFocusState;
     target: RenderingFocusState;
@@ -266,7 +282,12 @@ export function RenderingMessage({ mode }: { mode: RenderingMode }) {
         b: now + randomInteger(3800, 6200)
       }
     };
-    setFocusState(initial);
+
+    const paint = (state: RenderingFocusState) => {
+      for (const dot of RENDERING_DOTS) {
+        applyDotStyle(dotRefs.current[dot.id] ?? null, getDotStyle(dot, state));
+      }
+    };
 
     const updateSpot = (
       current: RenderingFocusSpot,
@@ -337,18 +358,20 @@ export function RenderingMessage({ mode }: { mode: RenderingMode }) {
       if (bReachedTarget) {
         motion.retargetAt.b = now + randomInteger(3800, 6200);
       }
-      if (now - motion.lastPaintAt > 20) {
+      if (now - motion.lastPaintAt > 33) {
         motion.lastPaintAt = now;
-        setFocusState(motion.current);
+        paint(motion.current);
       }
       animationFrame = window.requestAnimationFrame(tick);
     };
+
+    paint(initial);
     animationFrame = window.requestAnimationFrame(tick);
     return () => {
       mounted = false;
       window.cancelAnimationFrame(animationFrame);
     };
-  }, []);
+  }, [mode]);
 
   return (
     <article className="message assistant-message rendering-message" aria-live="polite">
@@ -358,15 +381,21 @@ export function RenderingMessage({ mode }: { mode: RenderingMode }) {
       <div className={`rendering-card rendering-card-variant-${variant}`}>
         <div className="rendering-dot-field" aria-hidden="true">
           <div className="rendering-dot-layer rendering-dot-layer-focus">
-            {RENDERING_DOTS.map((dot) => (
-              <span key={dot.id} style={getDotStyle(dot, focusState)} />
+            {RENDERING_DOTS.map((dot, index) => (
+              <span
+                key={dot.id}
+                ref={(element) => {
+                  dotRefs.current[index] = element;
+                }}
+                style={dotStyles[index]}
+              />
             ))}
           </div>
         </div>
       </div>
     </article>
   );
-}
+});
 
 export function RenderingErrorMessage({
   mode,

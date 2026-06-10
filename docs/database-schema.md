@@ -141,6 +141,8 @@
 | `metadata` | JSON 元数据 |
 | `created_at` | 创建时间 |
 
+相关索引：`messages_session_user_time_idx` 支撑会话消息按创建时间读取；`messages_session_user_role_idx` 支撑用户消息元数据读取。
+
 ### image_jobs
 
 图片生成或编辑任务。
@@ -164,6 +166,8 @@
 | `max_auto_retries` | 创建或最近一次执行任务时使用的后台自动重试次数快照 |
 | `succeeded_on_retry` | 最终是否由自动重试或手动重试后成功，`0` 否、`1` 是 |
 | `created_at` / `updated_at` | 创建和更新时间 |
+
+相关索引：`image_jobs_session_user_status_time_idx` 支撑对话页和侧边栏按会话、用户、状态轮询任务。
 
 ### images
 

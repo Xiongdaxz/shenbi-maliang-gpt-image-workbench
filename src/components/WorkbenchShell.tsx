@@ -15,9 +15,10 @@ import { ImagesPage } from "../pages/ImagesPage";
 import { InspirationBarragePage } from "../pages/InspirationBarragePage";
 import { PromptTemplateEditorPage, PromptTemplatesPage } from "../pages/PromptTemplatesPage";
 import { useWorkbench } from "../store/workbench";
-import type { ChatSession, User, UserPreferences } from "../types";
+import type { ChatSession, ImageJob, User, UserPreferences } from "../types";
 import { ConfirmDialog, useToast } from "../ui";
 import { useInfinitePageLoader } from "../hooks/useInfinitePageLoader";
+import { useImageJobEvents, type ImageJobEventPayload } from "../hooks/useImageJobEvents";
 import { ProjectLogo } from "./ProjectLogo";
 import { SearchChatModal } from "./SearchChatModal";
 import { ArchivedChatsDialog } from "./settings/ArchivedChatsDialog";
@@ -189,13 +190,13 @@ export function WorkbenchShell({ user }: { user: User }) {
   const userCardVisible = userCardOpen || userCardClosing;
   const sessions = useInfiniteQuery({
     queryKey: ["sessions", "active"],
-    queryFn: ({ pageParam }) => api.sessions({ limit: SIDEBAR_SESSION_PAGE_SIZE, offset: Number(pageParam) }),
+    queryFn: ({ pageParam, signal }) => api.sessions({ limit: SIDEBAR_SESSION_PAGE_SIZE, offset: Number(pageParam) }, { signal }),
     initialPageParam: 0,
     getNextPageParam: (lastPage) => (lastPage.pageInfo.hasMore ? lastPage.pageInfo.offset + lastPage.pageInfo.limit : undefined)
   });
   const archivedSessions = useQuery({
     queryKey: ["sessions", "archived"],
-    queryFn: () => api.sessions({ archived: true }),
+    queryFn: ({ signal }) => api.sessions({ archived: true }, { signal }),
     enabled: settingsOpen || archivedChatsOpen
   });
   const avatarSource = user.username?.trim() || user.account?.trim() || "U";
@@ -677,10 +678,6 @@ export function WorkbenchShell({ user }: { user: User }) {
   const archivedChatSessions = archivedSessions.data?.sessions ?? [];
   const archivedSessionTotal = archivedSessions.data?.pageInfo?.total ?? archivedChatSessions.length;
   const activeSessionRunKey = activeSessions.map((session) => `${session.id}:${session.runningImageJobCount}`).join("|");
-  const runningSessionIds = Object.entries(sessionGenerationStates)
-    .filter(([, status]) => status.state === "running")
-    .map(([sessionId]) => sessionId);
-  const runningSessionIdsKey = runningSessionIds.join("|");
   const sessionListSentinelRef = useInfinitePageLoader({
     fetchNextPage: () => sessions.fetchNextPage(),
     hasNextPage: Boolean(sessions.hasNextPage),
@@ -703,55 +700,64 @@ export function WorkbenchShell({ user }: { user: User }) {
     }
   }, [activeChatSessionId, clearSessionGenerationStatus, sessionGenerationStates]);
 
-  useEffect(() => {
-    if (runningSessionIds.length === 0) return;
-    let cancelled = false;
-    const checkRunningSessions = async () => {
-      await Promise.all(
-        runningSessionIds.map(async (sessionId) => {
-          try {
-            const result = await api.sessionImageJobs(sessionId, "all");
-            if (cancelled) return;
-            const jobs = result.jobs;
-            if (jobs.some((job) => job.status === "running")) return;
-            const startedAt = sessionGenerationStates[sessionId]?.updatedAt ?? 0;
-            if (jobs.length === 0) {
-              if (startedAt > 0 && Date.now() - startedAt > 30000) clearSessionGenerationStatus(sessionId);
-              return;
-            }
-            const relevantJobs = jobs.filter((job) => {
-              const createdAt = Date.parse(job.createdAt);
-              const updatedAt = Date.parse(job.updatedAt);
-              return Math.max(createdAt || 0, updatedAt || 0) >= startedAt - 5000;
-            });
-            if (relevantJobs.length === 0) return;
-            if (relevantJobs.some((job) => job.status === "succeeded")) {
-              markSessionGenerationCompleted(sessionId);
-              queryClient.invalidateQueries({ queryKey: ["sessions"] });
-              return;
-            }
-            if (relevantJobs.every((job) => job.status === "failed")) {
-              clearSessionGenerationStatus(sessionId);
-            }
-          } catch {
-            // Keep the sidebar indicator optimistic; the next poll can recover.
-          }
-        })
-      );
-    };
-    void checkRunningSessions();
-    const interval = window.setInterval(() => void checkRunningSessions(), 1200);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
+  const refreshSessionsFromJobEvents = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["sessions"] });
+  }, [queryClient]);
+
+  const updateSessionImageJobFromEvent = useCallback((payload: ImageJobEventPayload) => {
+    let updated = false;
+    queryClient.setQueryData<{ jobs: ImageJob[] }>(["session-image-jobs", payload.sessionId], (current) => {
+      if (!current) return current;
+      const jobs = current.jobs.map((job) => {
+        if (job.id !== payload.jobId) return job;
+        updated = true;
+        const type = payload.type === "generation" || payload.type === "edit" ? payload.type : job.type;
+        return {
+          ...job,
+          type,
+          status: payload.status,
+          resultImageId: payload.resultImageId !== undefined ? payload.resultImageId : job.resultImageId,
+          error: payload.error !== undefined ? payload.error : job.error,
+          updatedAt: payload.updatedAt
+        };
+      });
+      return updated ? { ...current, jobs } : current;
+    });
+    return updated;
+  }, [queryClient]);
+
+  const handleImageJobEvent = useCallback((payload: ImageJobEventPayload) => {
+    const sessionId = payload.sessionId.trim();
+    if (!sessionId) return;
+    if (payload.status === "running") {
+      markSessionGenerationRunning(sessionId);
+    } else if (payload.status === "succeeded") {
+      markSessionGenerationCompleted(sessionId);
+    } else {
+      clearSessionGenerationStatus(sessionId);
+    }
+    queryClient.invalidateQueries({ queryKey: ["sessions"] });
+    const updatedJobCache = updateSessionImageJobFromEvent(payload);
+    if (!updatedJobCache) {
+      queryClient.invalidateQueries({ queryKey: ["session-image-jobs", sessionId] });
+    }
+    if (payload.status !== "running") {
+      queryClient.invalidateQueries({ queryKey: ["messages", sessionId] });
+      queryClient.invalidateQueries({ queryKey: ["images"] });
+      queryClient.invalidateQueries({ queryKey: ["cases"] });
+    }
   }, [
     clearSessionGenerationStatus,
     markSessionGenerationCompleted,
+    markSessionGenerationRunning,
     queryClient,
-    runningSessionIdsKey,
-    sessionGenerationStates
+    updateSessionImageJobFromEvent
   ]);
+
+  useImageJobEvents({
+    onConnected: refreshSessionsFromJobEvents,
+    onJob: handleImageJobEvent
+  });
 
   useEffect(() => {
     const isTypingTarget = (target: EventTarget | null) => {

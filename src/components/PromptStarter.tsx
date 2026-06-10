@@ -5,28 +5,32 @@ import { Link } from "react-router-dom";
 import { api } from "../api";
 import { cx } from "../lib/cx";
 import { visibleCaseStyleNames } from "../lib/caseMaterials";
+import { defaultCaseItems } from "../lib/defaultCases";
 import { getTimeGreeting } from "../lib/timeGreeting";
 import type { CaseCategory, User } from "../types";
 import { ProjectLogo } from "./ProjectLogo";
 
 const STARTER_HEADLINE_IDEAS = [
-  "期待今天的灵感碰撞！",
-  "不如生成一张表情包？",
-  "做一张电影感肖像吧",
-  "来一张高级感海报？",
-  "设计一个品牌 Logo 吧",
-  "做一份旅游攻略长图吧",
-  "做一套电商商品图？",
-  "来一张国潮头像吧",
-  "生成一张宠物写真？",
-  "做一张节日祝福卡吧",
-  "设计一张活动邀请函？",
-  "生成一张餐厅菜单海报吧",
-  "来一组社媒封面图？",
-  "做一张产品发布海报吧",
-  "生成一张壁纸主视觉？",
-  "画一页儿童绘本插画吧",
-  "来一张赛博城市海报？"
+  "给新品首发一点高级感。",
+  "把汇报封面做得更有气场。",
+  "让商品主图更像精品广告。",
+  "把卖点变成一张清晰海报。",
+  "给客户拜访做张专业配图。",
+  "让活动邀请函更有期待感。",
+  "把会议主题做成视觉主图。",
+  "给招聘海报加一点亲和力。",
+  "把流程说明画得更好懂。",
+  "做一张适合发小红书的封面。",
+  "把旅行路线变成收藏长图。",
+  "给宠物拍一组温暖写真。",
+  "把今天的菜品拍出食欲感。",
+  "给家居空间换个高级氛围。",
+  "画一个适合睡前读的绘本场景。",
+  "让节日祝福卡更像精心准备。",
+  "给头像换成电影感光影。",
+  "把品牌 Logo 放进真实样机。",
+  "做一张适合手机锁屏的壁纸。",
+  "把社群活动做得更想参加。"
 ];
 
 type StarterCaseItem = CaseCategory["items"][number];
@@ -79,6 +83,14 @@ function pickStarterCaseImages(caseCategories: CaseCategory[]): StarterCaseItem[
   return selected;
 }
 
+function fillStarterCaseImages(caseCategories: CaseCategory[], includeDefaultCases: boolean): StarterCaseItem[] {
+  const selected = pickStarterCaseImages(caseCategories);
+  if (!includeDefaultCases || selected.length >= STARTER_CASE_IMAGE_LIMIT) return selected;
+  const selectedIds = new Set(selected.map((item) => item.groupId || item.id));
+  const fallbackItems = shuffleCopy(defaultCaseItems()).filter((item) => !selectedIds.has(item.groupId || item.id));
+  return [...selected, ...fallbackItems.slice(0, STARTER_CASE_IMAGE_LIMIT - selected.length)];
+}
+
 function starterCasePoolCount(caseCategories: CaseCategory[]) {
   const groupIds = new Set<string>();
   for (const category of caseCategories) {
@@ -118,12 +130,14 @@ function handleStarterTagWheel(event: ReactWheelEvent<HTMLDivElement>) {
 
 export function PromptStarter({
   caseCategories,
+  caseCategoriesLoaded = false,
   onOpenIntro,
   onUseHeadlinePrompt,
   user,
   onPickPrompt
 }: {
   caseCategories: CaseCategory[];
+  caseCategoriesLoaded?: boolean;
   onOpenIntro?: () => void;
   onUseHeadlinePrompt?: (prompt: string) => void;
   user: User;
@@ -167,10 +181,12 @@ export function PromptStarter({
   const headline = `${headlineParts.prefix}${headlineParts.idea}`;
   const headlinePrefixChars = useMemo(() => Array.from(headlineParts.prefix), [headlineParts.prefix]);
   const headlineIdeaChars = useMemo(() => Array.from(headlineParts.idea), [headlineParts.idea]);
+  const realCasePoolCount = useMemo(() => starterCasePoolCount(caseCategories), [caseCategories]);
+  const includeDefaultCases = caseCategoriesLoaded && realCasePoolCount < STARTER_CASE_IMAGE_LIMIT;
   const caseImages = useMemo(() => {
-    return pickStarterCaseImages(caseCategories);
-  }, [caseBatchSeed, caseCategories]);
-  const casePoolCount = useMemo(() => starterCasePoolCount(caseCategories), [caseCategories]);
+    return fillStarterCaseImages(caseCategories, includeDefaultCases);
+  }, [caseBatchSeed, caseCategories, includeDefaultCases]);
+  const casePoolCount = includeDefaultCases ? STARTER_CASE_IMAGE_LIMIT : realCasePoolCount;
   const caseImageIds = useMemo(() => caseImages.map((item) => item.id).join("\u0000"), [caseImages]);
   const caseScrollRef = useRef<HTMLDivElement | null>(null);
   const logoMotionFrameRef = useRef<number | null>(null);

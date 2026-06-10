@@ -24,6 +24,7 @@ import { MAIN_CHAT_BRANCH_ID, buildChatRenderState, isServerEchoOfPending } from
 import { cx } from "../lib/cx";
 import { type AssetUploadMode } from "../lib/assets";
 import { APP_INTRO_SLIDES } from "../lib/featureIntroSlides";
+import { isDefaultCaseItemId } from "../lib/defaultCases";
 import { requestSizeFromSelection, type SizeOption } from "../lib/imageOptions";
 import { normalizePromptOptimizeStyle } from "../lib/promptOptimizeStyles";
 import { getTimeGreeting } from "../lib/timeGreeting";
@@ -282,7 +283,7 @@ export function ChatPage({ user }: { user: User }) {
     enabled: Boolean(sessionId),
     refetchInterval: (query) => {
       const data = query.state.data as { jobs: ImageJob[] } | undefined;
-      return data?.jobs.some((job) => job.status === "running") ? 1200 : false;
+      return data?.jobs.some((job) => job.status === "running") ? 120000 : false;
     }
   });
 
@@ -434,16 +435,30 @@ export function ChatPage({ user }: { user: User }) {
     },
     onSuccess: (result, request) => {
       const completedSessionId = submitSessionByRequestRef.current.get(request.clientRequestId) ?? result.sessionId;
+      const returnedJob = result.job ?? null;
+      const jobStillRunning = returnedJob?.status === "running";
       submitSessionByRequestRef.current.delete(request.clientRequestId);
       if (request.pendingScope === NEW_SESSION_PENDING_SCOPE) appIntroGuide.markSeen();
       removeSubmittingScopes([request.pendingScope, completedSessionId]);
       clearPendingForScopes([request.pendingScope, completedSessionId]);
-      markSessionGenerationCompleted(completedSessionId);
+      if (returnedJob) {
+        queryClient.setQueryData<{ jobs: ImageJob[] }>(["session-image-jobs", completedSessionId], (current) => {
+          const jobs = current?.jobs ?? [];
+          return { jobs: [returnedJob, ...jobs.filter((job) => job.id !== returnedJob.id)] };
+        });
+      }
+      if (jobStillRunning) {
+        markSessionGenerationRunning(completedSessionId);
+      } else {
+        markSessionGenerationCompleted(completedSessionId);
+      }
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
-      queryClient.invalidateQueries({ queryKey: ["cases"] });
-      queryClient.invalidateQueries({ queryKey: ["images"] });
       queryClient.invalidateQueries({ queryKey: ["messages", completedSessionId] });
       queryClient.invalidateQueries({ queryKey: ["session-image-jobs", completedSessionId] });
+      if (!jobStillRunning) {
+        queryClient.invalidateQueries({ queryKey: ["cases"] });
+        queryClient.invalidateQueries({ queryKey: ["images"] });
+      }
       const currentRouteScope = sessionId ?? NEW_SESSION_PENDING_SCOPE;
       if (currentRouteScope === request.pendingScope || currentRouteScope === completedSessionId) {
         navigate(`/chat/${completedSessionId}`);
@@ -497,11 +512,24 @@ export function ChatPage({ user }: { user: User }) {
     onSuccess: (result) => {
       const completedSessionId = result.sessionId || sessionId;
       if (!completedSessionId) return;
-      markSessionGenerationCompleted(completedSessionId);
+      const returnedJob = result.job ?? null;
+      if (returnedJob) {
+        queryClient.setQueryData<{ jobs: ImageJob[] }>(["session-image-jobs", completedSessionId], (current) => {
+          const jobs = current?.jobs ?? [];
+          return { jobs: [returnedJob, ...jobs.filter((job) => job.id !== returnedJob.id)] };
+        });
+      }
+      if (returnedJob?.status === "running") {
+        markSessionGenerationRunning(completedSessionId);
+      } else {
+        markSessionGenerationCompleted(completedSessionId);
+      }
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
-      queryClient.invalidateQueries({ queryKey: ["images"] });
-      queryClient.invalidateQueries({ queryKey: ["messages", completedSessionId] });
       queryClient.invalidateQueries({ queryKey: ["session-image-jobs", completedSessionId] });
+      if (returnedJob?.status !== "running") {
+        queryClient.invalidateQueries({ queryKey: ["images"] });
+        queryClient.invalidateQueries({ queryKey: ["messages", completedSessionId] });
+      }
     },
     onError: (error) => {
       const message = submitErrorMessage(error, "重试失败");
@@ -560,7 +588,8 @@ export function ChatPage({ user }: { user: User }) {
   };
   const { handleComposerPaste } = useComposerPasteAsset({ selectedAssets, setSelectedAssets, showToast });
   const pickCasePrompt = (item: Pick<CaseCategory["items"][number], "id" | "groupId" | "prompt">) => {
-    setDraftPrompt(item.prompt, { caseItemId: item.groupId || item.id, prompt: item.prompt });
+    const caseItemId = item.groupId || item.id;
+    setDraftPrompt(item.prompt, caseItemId && !isDefaultCaseItemId(caseItemId) ? { caseItemId, prompt: item.prompt } : null);
   };
   const useStarterHeadlinePrompt = useCallback((prompt: string) => {
     if (sessionId) return;
@@ -1189,8 +1218,12 @@ export function ChatPage({ user }: { user: User }) {
     showStarter,
     visiblePendingMessageId: visiblePendingUserMessage?.id
   });
+  const handleRunningImageJobsSettled = useCallback(() => {
+    if (sessionId) clearSessionGenerationStatus(sessionId);
+  }, [clearSessionGenerationStatus, sessionId]);
 
   useRunningImageJobRefresh({
+    onRunningJobsSettled: handleRunningImageJobsSettled,
     queryClient,
     runningJobCount: runningImageJobs.length,
     sessionId
@@ -1226,6 +1259,7 @@ export function ChatPage({ user }: { user: User }) {
         {showStarter ? (
           <PromptStarter
             caseCategories={cases.data?.categories ?? []}
+            caseCategoriesLoaded={cases.isSuccess}
             user={user}
             onOpenIntro={() => setChatIntroOpen(true)}
             onUseHeadlinePrompt={useStarterHeadlinePrompt}

@@ -19,7 +19,7 @@ export function SearchChatModal({ sessions, onClose }: { sessions: ChatSession[]
   const searchKeyword = keyword.trim();
   const searchSessions = useQuery({
     queryKey: ["sessions", "search", searchKeyword],
-    queryFn: () => api.sessions({ keyword: searchKeyword, limit: SEARCH_CHAT_RESULT_LIMIT }),
+    queryFn: ({ signal }) => api.sessions({ keyword: searchKeyword, limit: SEARCH_CHAT_RESULT_LIMIT }, { signal }),
     enabled: Boolean(searchKeyword)
   });
   const filteredSessions = useMemo(() => {

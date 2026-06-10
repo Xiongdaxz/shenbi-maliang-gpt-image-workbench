@@ -6,6 +6,7 @@ import { AUTO_PROVIDER_ID, requestImageCount, requestImageSize, resolveImageResu
 import { recordCasePromptUsage } from "./caseUsage";
 import { appDb, getAll, getOne, run } from "./db";
 import { fileToDataUrl, saveProviderImageResults, snapshotImageReferences, type ImageReferenceSnapshotInput } from "./imageFiles";
+import { emitImageJobEvent, type ImageJobEventStatus } from "./imageJobEvents";
 import { ensureImageEditSuggestionsForImageWithTone } from "./imageEditSuggestions";
 import { saveImageEditMaskDebugArtifacts } from "./imageEditDebug";
 import { imageEditMaskSnapshotDataUrl, normalizeImageEditMaskDataUrl, saveImageEditMaskSnapshot } from "./imageMasks";
@@ -38,6 +39,27 @@ function providerPrompt(prompt: string, imageCount: number) {
 
 function providerImageContextValues(context: ProviderImageContext) {
   return [context.fileId, context.genId, context.conversationId, context.parentMessageId, context.sourceAccountId];
+}
+
+function emitJobStatus(
+  userId: string,
+  sessionId: string | null | undefined,
+  jobId: string,
+  status: ImageJobEventStatus,
+  type?: string,
+  details: { resultImageId?: string | null; error?: string | null } = {}
+) {
+  const normalizedSessionId = String(sessionId ?? "").trim();
+  if (!normalizedSessionId) return;
+  emitImageJobEvent(userId, {
+    jobId,
+    sessionId: normalizedSessionId,
+    status,
+    type,
+    ...(details.resultImageId !== undefined ? { resultImageId: details.resultImageId } : {}),
+    ...(details.error !== undefined ? { error: details.error } : {}),
+    updatedAt: now()
+  });
 }
 
 async function applyImageFieldSuggestions(imageIds: string[], prompt?: string) {
@@ -707,6 +729,7 @@ api.post("/images/generate", async (c) => {
     timestamp,
     timestamp
   );
+  emitJobStatus(user.id, sessionId, jobId, "running", "generation");
   recordCasePromptUsage({
     caseItemId,
     submittedPrompt: prompt,
@@ -791,6 +814,7 @@ api.post("/images/generate", async (c) => {
         now(),
         jobId
       );
+      emitJobStatus(user.id, sessionId, jobId, "succeeded", "generation", { resultImageId: savedImageIds[0] ?? null });
       return savedImageIds;
     } catch (error) {
       const message = error instanceof Error ? error.message : "生成失败";
@@ -805,45 +829,26 @@ api.post("/images/generate", async (c) => {
         now(),
         jobId
       );
+      emitJobStatus(user.id, sessionId, jobId, "failed", "generation", { error: message });
       throw error;
     }
   };
 
-  try {
-    const savedImageIds = await runGenerationJob();
-    const job = getOne<ReturnType<typeof serializeJob> & {
-      id: string;
-      type: string;
-      status: string;
-      prompt: string;
-      provider_id: string;
-      error: string | null;
-      result_image_id: string | null;
-      created_at: string;
-      updated_at: string;
-    }>(appDb, "select * from image_jobs where id = ?", jobId);
-    const imageRows = savedImageIds.length
-      ? getAll<ImageRow>(
-          appDb,
-          `select * from images where id in (${savedImageIds.map(() => "?").join(", ")}) order by created_at asc, rowid asc`,
-          ...savedImageIds
-        )
-      : [];
-    const referenceMap = imageReferencesByImageIds(imageRows.map((image) => image.id));
-    const publicImages = publicImagesWithReferences(imageRows, referenceMap);
-    return c.json({ sessionId, job: job ? serializeJob(job) : null, image: publicImages[0] ?? null, images: publicImages });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败";
-    run(
-      appDb,
-      "update image_jobs set status = ?, error = ?, updated_at = ? where id = ?",
-      "failed",
-      message,
-      now(),
-      jobId
-    );
-    return c.json({ sessionId, jobId, error: message }, 502);
-  }
+  const job = getOne<{
+    id: string;
+    type: string;
+    status: string;
+    prompt: string;
+    provider_id: string;
+    error: string | null;
+    result_image_id: string | null;
+    created_at: string;
+    updated_at: string;
+  }>(appDb, "select * from image_jobs where id = ?", jobId);
+  void runGenerationJob().catch((error) => {
+    console.warn("图片生成后台任务失败", error);
+  });
+  return c.json({ sessionId, job: job ? serializeJob(job) : null, image: null, images: [] }, 202);
 });
 
 api.post("/images/edit", async (c) => {
@@ -1083,6 +1088,7 @@ api.post("/images/edit", async (c) => {
     timestamp,
     timestamp
   );
+  emitJobStatus(user.id, sessionId, jobId, "running", "edit");
   recordCasePromptUsage({
     caseItemId,
     submittedPrompt: prompt,
@@ -1091,6 +1097,19 @@ api.post("/images/edit", async (c) => {
     requestType: "edit"
   });
 
+  const runningJob = getOne<{
+    id: string;
+    type: string;
+    status: string;
+    prompt: string;
+    provider_id: string;
+    error: string | null;
+    result_image_id: string | null;
+    created_at: string;
+    updated_at: string;
+  }>(appDb, "select * from image_jobs where id = ?", jobId);
+
+  const runEditJob = async () => {
   let responseJson: unknown = null;
   try {
     const result = await saveProviderImagesWithRetry({
@@ -1172,27 +1191,8 @@ api.post("/images/edit", async (c) => {
       now(),
       jobId
     );
-    const imageRows = savedImages.length
-      ? getAll<ImageRow>(
-          appDb,
-          `select * from images where id in (${savedImages.map(() => "?").join(", ")}) order by created_at asc, rowid asc`,
-          ...savedImages.map((image) => image.id)
-        )
-      : [];
-    const job = getOne<{
-      id: string;
-      type: string;
-      status: string;
-      prompt: string;
-      provider_id: string;
-      error: string | null;
-      result_image_id: string | null;
-      created_at: string;
-      updated_at: string;
-    }>(appDb, "select * from image_jobs where id = ?", jobId);
-    const referenceMap = imageReferencesByImageIds(imageRows.map((image) => image.id));
-    const publicImages = publicImagesWithReferences(imageRows, referenceMap);
-    return c.json({ sessionId, job: job ? serializeJob(job) : null, image: publicImages[0] ?? null, images: publicImages });
+    emitJobStatus(user.id, sessionId, jobId, "succeeded", "edit", { resultImageId });
+    return;
   } catch (error) {
     const message = error instanceof Error ? error.message : "编辑失败";
     const responseJsonText = responseJson === null ? null : providerResponseSnapshot(responseJson);
@@ -1208,8 +1208,15 @@ api.post("/images/edit", async (c) => {
       now(),
       jobId
     );
-    return c.json({ sessionId, jobId, error: message }, 502);
+    emitJobStatus(user.id, sessionId, jobId, "failed", "edit", { error: message });
+    return;
   }
+  };
+
+  void runEditJob().catch((error) => {
+    console.warn("图片编辑后台任务失败", error);
+  });
+  return c.json({ sessionId, job: runningJob ? serializeJob(runningJob) : null, image: null, images: [] }, 202);
 });
 
 api.post("/image-jobs/:id/retry", async (c) => {
@@ -1238,6 +1245,7 @@ api.post("/image-jobs/:id/retry", async (c) => {
   }>(appDb, "select * from image_jobs where id = ? and user_id = ?", jobId, user.id);
   if (!job) return c.json({ error: "任务不存在" }, 404);
   if (!job.session_id) return c.json({ error: "任务缺少对话信息，无法重试" }, 400);
+  const retrySessionId = job.session_id;
   if (job.status === "running") return c.json({ error: "任务正在处理中" }, 409);
   if (job.status !== "failed") return c.json({ error: "只有失败的任务可以重试" }, 400);
 
@@ -1255,7 +1263,7 @@ api.post("/image-jobs/:id/retry", async (c) => {
   }
   const provider = providers[0];
 
-  const messageMetadata = jobUserMessageMetadata(user.id, job.session_id, job.id);
+  const messageMetadata = jobUserMessageMetadata(user.id, retrySessionId, job.id);
   const revisionMetadata = requestRevisionMetadata(messageMetadata);
   const branchMetadata = requestBranchMetadata(messageMetadata);
   const size = String(requestPayload.size ?? "");
@@ -1274,7 +1282,10 @@ api.post("/image-jobs/:id/retry", async (c) => {
     now(),
     job.id
   );
+  emitJobStatus(user.id, retrySessionId, job.id, "running", job.type);
 
+  const runningJob = getOne<typeof job>(appDb, "select * from image_jobs where id = ?", job.id);
+  const runRetryJob = async () => {
   try {
     if (job.type === "generation") {
       const savedImageIds: string[] = [];
@@ -1283,7 +1294,7 @@ api.post("/image-jobs/:id/retry", async (c) => {
         mode: "generation",
         requestPayload,
         userId: user.id,
-        sessionId: job.session_id,
+        sessionId: retrySessionId,
         jobId: job.id,
         retryCount: maxAutoRetries
       });
@@ -1301,7 +1312,7 @@ api.post("/image-jobs/:id/retry", async (c) => {
           ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           saved.id,
           user.id,
-          job.session_id,
+          retrySessionId,
           job.id,
           saved.file.path,
           job.prompt,
@@ -1320,7 +1331,7 @@ api.post("/image-jobs/:id/retry", async (c) => {
           createdAt
         );
         savedImageIds.push(saved.id);
-        insertMessage(user.id, job.session_id, "assistant", "已生成图片", saved.id, {
+        insertMessage(user.id, retrySessionId, "assistant", "已生成图片", saved.id, {
           mode: "generation",
           jobId: job.id,
           n: imageCount,
@@ -1350,22 +1361,8 @@ api.post("/image-jobs/:id/retry", async (c) => {
         now(),
         job.id
       );
-      const imageRows = savedImageIds.length
-        ? getAll<ImageRow>(
-            appDb,
-            `select * from images where id in (${savedImageIds.map(() => "?").join(", ")}) order by created_at asc, rowid asc`,
-            ...savedImageIds
-          )
-        : [];
-      const updatedJob = getOne<typeof job>(appDb, "select * from image_jobs where id = ?", job.id);
-      const referenceMap = imageReferencesByImageIds(imageRows.map((image) => image.id));
-      const publicImages = publicImagesWithReferences(imageRows, referenceMap);
-      return c.json({
-        sessionId: job.session_id,
-        job: updatedJob ? serializeJob({ ...updatedJob, ...branchMetadata }) : null,
-        image: publicImages[0] ?? null,
-        images: publicImages
-      });
+      emitJobStatus(user.id, retrySessionId, job.id, "succeeded", "generation", { resultImageId: savedImageIds[0] ?? null });
+      return;
     }
 
     const sourceIds = retrySourceIds(job.source_image_ids);
@@ -1413,7 +1410,7 @@ api.post("/image-jobs/:id/retry", async (c) => {
       mode: "edit",
       requestPayload: retryPayload,
       userId: user.id,
-      sessionId: job.session_id,
+      sessionId: retrySessionId,
       jobId: job.id,
       retryCount: maxAutoRetries
     });
@@ -1430,7 +1427,7 @@ api.post("/image-jobs/:id/retry", async (c) => {
         ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         saved.id,
         user.id,
-        job.session_id,
+        retrySessionId,
         job.id,
         saved.file.path,
         job.prompt,
@@ -1449,11 +1446,11 @@ api.post("/image-jobs/:id/retry", async (c) => {
         createdAt
       );
       try {
-        await snapshotImageReferences(user.id, job.session_id, saved.id, imageReferenceSources);
+        await snapshotImageReferences(user.id, retrySessionId, saved.id, imageReferenceSources);
       } catch (error) {
         console.warn("图片素材引用快照保存失败", error);
       }
-      insertMessage(user.id, job.session_id, "assistant", "已完成图片编辑", saved.id, {
+      insertMessage(user.id, retrySessionId, "assistant", "已完成图片编辑", saved.id, {
         mode: "edit",
         jobId: job.id,
         parentImageId: primarySourceImage?.id ?? null,
@@ -1481,22 +1478,8 @@ api.post("/image-jobs/:id/retry", async (c) => {
       now(),
       job.id
     );
-    const imageRows = savedImages.length
-      ? getAll<ImageRow>(
-          appDb,
-          `select * from images where id in (${savedImages.map(() => "?").join(", ")}) order by created_at asc, rowid asc`,
-          ...savedImages.map((image) => image.id)
-        )
-      : [];
-    const updatedJob = getOne<typeof job>(appDb, "select * from image_jobs where id = ?", job.id);
-    const referenceMap = imageReferencesByImageIds(imageRows.map((image) => image.id));
-    const publicImages = publicImagesWithReferences(imageRows, referenceMap);
-    return c.json({
-      sessionId: job.session_id,
-      job: updatedJob ? serializeJob({ ...updatedJob, ...branchMetadata }) : null,
-      image: publicImages[0] ?? null,
-      images: publicImages
-    });
+    emitJobStatus(user.id, retrySessionId, job.id, "succeeded", "edit", { resultImageId });
+    return;
   } catch (error) {
     const message = errorMessage(error, job.type === "edit" ? "编辑失败" : "生成失败");
     const failedAutoRetryCount = previousAutoRetryCount + autoRetryCountFromError(error, 0);
@@ -1511,8 +1494,20 @@ api.post("/image-jobs/:id/retry", async (c) => {
       now(),
       job.id
     );
-    return c.json({ sessionId: job.session_id, jobId: job.id, error: message }, 502);
+    emitJobStatus(user.id, retrySessionId, job.id, "failed", job.type, { error: message });
+    return;
   }
+  };
+
+  void runRetryJob().catch((error) => {
+    console.warn("图片任务后台重试失败", error);
+  });
+  return c.json({
+    sessionId: retrySessionId,
+    job: runningJob ? serializeJob({ ...runningJob, ...branchMetadata }) : null,
+    image: null,
+    images: []
+  }, 202);
 });
 
 api.get("/image-jobs/:id", async (c) => {

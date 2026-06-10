@@ -9,6 +9,7 @@ import { publicBranding } from "./branding";
 import { enabledProvidersForCurrentMode } from "./providerRuntime";
 import { imageOriginPromptsByImageIds, imageReferencesByImageIds, publicUser, toProvider } from "./serializers";
 import { imageGenerationSettings } from "./settingsStore";
+import { streamImageJobEvents } from "./imageJobEvents";
 import { saveUserPreferences } from "./userPreferences";
 import { deleteStoredFilesIfUnreferenced, secureUserAvatarPath, writeEncryptedFile } from "./secureFiles";
 import type { UserRow } from "./types";
@@ -925,5 +926,11 @@ api.get("/sessions/:id/image-jobs", async (c) => {
     });
   }
   return c.json({ jobs: rows.map((row) => serializeJob({ ...row, ...(branchMetadataByJobId.get(row.id) ?? {}) })) });
+});
+
+api.get("/image-jobs/events", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return c.json({ error: "未登录" }, 401);
+  return streamImageJobEvents(user.id);
 });
 }

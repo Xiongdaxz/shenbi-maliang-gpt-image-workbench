@@ -33,14 +33,40 @@ function responseErrorMessage(data: unknown, fallback: string) {
   return fallback;
 }
 
-export async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
+function mergeAbortSignals(signals: Array<AbortSignal | null | undefined>) {
+  const activeSignals = signals.filter((signal): signal is AbortSignal => Boolean(signal));
+  if (activeSignals.length === 1) return { signal: activeSignals[0], cleanup: () => undefined };
+
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+  const abort = () => controller.abort();
+  for (const signal of activeSignals) {
+    if (signal.aborted) {
+      abort();
+      break;
+    }
+    signal.addEventListener("abort", abort, { once: true });
+  }
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      for (const signal of activeSignals) signal.removeEventListener("abort", abort);
+    }
+  };
+}
+
+export async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
+  const timeoutController = new AbortController();
+  const { signal, cleanup } = mergeAbortSignals([init.signal, timeoutController.signal]);
+  let timedOut = false;
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    timeoutController.abort();
+  }, API_REQUEST_TIMEOUT_MS);
   try {
     const response = await fetch(url, {
       credentials: "include",
       ...init,
-      signal: controller.signal,
+      signal,
       headers: {
         ...(init.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
         ...(init.headers ?? {})
@@ -55,9 +81,10 @@ export async function request<T>(url: string, init: RequestInit = {}): Promise<T
     if (typeof data === "string") throw new ApiError("接口返回数据格式不正确", response.status || 500);
     return data as T;
   } catch (error) {
-    if (controller.signal.aborted) throw new ApiError("请求超时，请重新生成", 408);
+    if (timedOut) throw new ApiError("请求超时，请重新生成", 408);
     throw error;
   } finally {
     clearTimeout(timeoutId);
+    cleanup();
   }
 }

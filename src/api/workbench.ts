@@ -597,14 +597,15 @@ export const api = {
   providers: () => request<{ providers: ProviderConfig[]; imageMode: ImageGenerationMode }>("/api/providers"),
   starterCopiesToday: () => request<StarterDailyCopy>("/api/starter-copies/today"),
   changelog: () => request<{ entries: ChangelogEntry[] }>("/api/changelog"),
-  sessions: (params?: SessionQuery) =>
+  sessions: (params?: SessionQuery, init?: RequestInit) =>
     request<PagedResponse<{ sessions: ChatSession[] }>>(
       `/api/sessions${queryString({
         archived: params?.archived ? 1 : undefined,
         limit: params?.limit,
         offset: params?.offset,
         keyword: params?.keyword
-      })}`
+      })}`,
+      init
     ),
   createSession: (payload?: { prompt?: string; title?: string }) =>
     request<{ session: ChatSession }>("/api/sessions", {
@@ -637,10 +638,10 @@ export const api = {
     request<{ ok: boolean; deleted: number }>("/api/sessions", {
       method: "DELETE"
     }),
-  messages: (sessionId: string) =>
-    request<{ messages: Message[] }>(`/api/sessions/${sessionId}/messages`),
-  sessionImageJobs: (sessionId: string, status = "running") =>
-    request<{ jobs: ImageJob[] }>(`/api/sessions/${sessionId}/image-jobs?status=${encodeURIComponent(status)}`),
+  messages: (sessionId: string, init?: RequestInit) =>
+    request<{ messages: Message[] }>(`/api/sessions/${sessionId}/messages`, init),
+  sessionImageJobs: (sessionId: string, status = "running", init?: RequestInit) =>
+    request<{ jobs: ImageJob[] }>(`/api/sessions/${sessionId}/image-jobs?status=${encodeURIComponent(status)}`, init),
   retryImageJob: (jobId: string) =>
     request<{ sessionId: string; job: ImageJob | null; image: WorkImage | null; images?: WorkImage[]; error?: string }>(
       `/api/image-jobs/${jobId}/retry`,
@@ -806,12 +807,12 @@ export const api = {
       `/api/images/${encodeURIComponent(imageId)}/edit-suggestions`
     ),
   generate: (payload: GenerateImagePayload) =>
-    request<{ sessionId: string; image: WorkImage | null; images?: WorkImage[]; error?: string }>("/api/images/generate", {
+    request<{ sessionId: string; job: ImageJob | null; image: WorkImage | null; images?: WorkImage[]; error?: string }>("/api/images/generate", {
       method: "POST",
       body: JSON.stringify(payload)
     }),
   edit: (payload: EditImagePayload) =>
-    request<{ sessionId: string; image: WorkImage | null; images?: WorkImage[]; error?: string }>("/api/images/edit", {
+    request<{ sessionId: string; job: ImageJob | null; image: WorkImage | null; images?: WorkImage[]; error?: string }>("/api/images/edit", {
       method: "POST",
       body: JSON.stringify(payload)
     }),

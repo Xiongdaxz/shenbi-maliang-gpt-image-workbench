@@ -598,6 +598,8 @@ export function initAppDb() {
       foreign key (user_id) references users(id)
     )
   `);
+  appDb.run("create index if not exists messages_session_user_time_idx on messages(session_id, user_id, created_at)");
+  appDb.run("create index if not exists messages_session_user_role_idx on messages(session_id, user_id, role)");
 
   appDb.run(`
     create table if not exists image_jobs (
@@ -622,6 +624,7 @@ export function initAppDb() {
       foreign key (user_id) references users(id)
     )
   `);
+  appDb.run("create index if not exists image_jobs_session_user_status_time_idx on image_jobs(session_id, user_id, status, created_at)");
   for (const [column, definition] of [
     ["auto_retry_count", "integer not null default 0"],
     ["manual_retry_count", "integer not null default 0"],
