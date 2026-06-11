@@ -15,9 +15,9 @@
 
 ## 🎬 项目演示
 
-[![观看项目演示视频](docs/images/demo-chat-edit.png)](https://pl.dogevideo.com/vcloud/hls/m3u8/4404833.m3u8?tm=1781083795&vtype=5&uid=15287&sign=46cc0d6bdc086cebebda0c5dea2af0a6&icp=0&durlimit=0&server=s6&vkey=78E595&token=abe8c9a026062fae02d0773e6d296bb0&oi=3078672595&ext=.m3u8)
+[![观看项目演示视频](docs/images/demo-chat-edit.png)](https://streamable.com/agj6rf)
 
-[观看项目演示视频](https://pl.dogevideo.com/vcloud/hls/m3u8/4404833.m3u8?tm=1781083795&vtype=5&uid=15287&sign=46cc0d6bdc086cebebda0c5dea2af0a6&icp=0&durlimit=0&server=s6&vkey=78E595&token=abe8c9a026062fae02d0773e6d296bb0&oi=3078672595&ext=.m3u8)
+[观看项目演示视频](https://streamable.com/agj6rf)
 
 [下载项目演示视频](https://github.com/Xiongdaxz/shenbi-maliang-gpt-image-workbench/releases/latest/download/demo-video.mp4)
 
