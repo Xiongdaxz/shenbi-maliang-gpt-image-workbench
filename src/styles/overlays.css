@@ -580,6 +580,10 @@
   pointer-events: none;
 }
 
+[data-rendering-motion-paused="true"] .rendering-card::after {
+  animation-play-state: paused;
+}
+
 .rendering-error-message {
   gap: 10px;
 }
@@ -719,17 +723,19 @@
   will-change: opacity, transform;
 }
 
+[data-rendering-motion-paused="true"] .rendering-dot-layer span {
+  transition: none;
+  will-change: auto;
+}
+
 .rendering-dot-layer span::before {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
   background: var(--dot-fill, #747472);
-  transform: scale(var(--dot-breath-low, 0.42));
+  transform: scale(0.82);
   transform-origin: center;
-  animation: renderingDotLifeBreath var(--dot-breath-duration, 2600ms) infinite cubic-bezier(0.3, 0.8, 0.14, 1);
-  animation-delay: var(--dot-breath-delay, 0ms);
-  will-change: transform;
 }
 
 .rendering-dot-layer-focus {
@@ -760,22 +766,6 @@
   44%,
   100% {
     transform: translateX(120%);
-  }
-}
-
-@keyframes renderingDotLifeBreath {
-  0%,
-  100% {
-    transform: scale(var(--dot-breath-low, 0.42));
-  }
-  36% {
-    transform: scale(var(--dot-breath-mid, 0.68));
-  }
-  62% {
-    transform: scale(var(--dot-breath-peak, 1.06));
-  }
-  82% {
-    transform: scale(var(--dot-breath-mid, 0.68));
   }
 }
 

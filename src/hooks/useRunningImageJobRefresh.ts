@@ -10,19 +10,26 @@ type UseRunningImageJobRefreshOptions = {
 
 export function useRunningImageJobRefresh({ onRunningJobsSettled, queryClient, runningJobCount, sessionId }: UseRunningImageJobRefreshOptions) {
   const hadRunningJobsRef = useRef(false);
+  const currentSessionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    const normalizedSessionId = sessionId?.trim() || null;
+    if (currentSessionIdRef.current !== normalizedSessionId) {
+      currentSessionIdRef.current = normalizedSessionId;
+      hadRunningJobsRef.current = runningJobCount > 0;
+      return;
+    }
     if (runningJobCount > 0) {
       hadRunningJobsRef.current = true;
       return;
     }
-    if (!hadRunningJobsRef.current || !sessionId) {
+    if (!hadRunningJobsRef.current || !normalizedSessionId) {
       return;
     }
     hadRunningJobsRef.current = false;
     onRunningJobsSettled?.();
-    queryClient.invalidateQueries({ queryKey: ["sessions"] });
+    queryClient.invalidateQueries({ queryKey: ["sessions"] }, { cancelRefetch: false });
     queryClient.invalidateQueries({ queryKey: ["images"] });
-    queryClient.invalidateQueries({ queryKey: ["messages", sessionId] });
+    queryClient.invalidateQueries({ queryKey: ["messages", normalizedSessionId] });
   }, [onRunningJobsSettled, queryClient, runningJobCount, sessionId]);
 }

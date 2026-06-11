@@ -186,10 +186,6 @@
     padding-bottom: 2px;
   }
 
-  .image-editor-body {
-    grid-template-columns: 70px minmax(0, 1fr);
-  }
-
   .image-editor-rail {
     width: 70px;
   }
@@ -518,13 +514,12 @@
     align-items: stretch;
   }
 
-  .image-editor-body {
-    grid-template-columns: 1fr;
-  }
-
   .image-editor-rail {
-    grid-row: 2;
+    top: auto;
+    right: 0;
+    bottom: 82px;
     width: 100%;
+    height: 70px;
     flex-direction: row;
     align-items: center;
     justify-content: flex-start;

@@ -44,6 +44,8 @@ import { useToast } from "../ui";
 type SessionPage = Awaited<ReturnType<typeof api.sessions>>;
 type ActiveSessionPages = InfiniteData<SessionPage, number>;
 
+const SIDEBAR_SESSION_PAGE_SIZE = 30;
+
 type AssetModalTarget =
   | { type: "image"; item: WorkImage }
   | { type: "case"; item: CaseMaterialItem };
@@ -312,34 +314,59 @@ export function ChatPage({ user }: { user: User }) {
     }
   }, [handlePromptInputOptimizeStyleChange]);
 
-  const upsertSessionSummary = (session: ChatSession) => {
+  const refreshSessionsNonCancel = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["sessions"] }, { cancelRefetch: false });
+  }, [queryClient]);
+
+  const scheduleSessionTitleRefresh = useCallback(() => {
+    const delays = [1600, 5000, 15000];
+    for (const delay of delays) {
+      window.setTimeout(refreshSessionsNonCancel, delay);
+    }
+  }, [refreshSessionsNonCancel]);
+
+  const navigateToSessionIfNeeded = useCallback((nextSessionId: string) => {
+    const nextPath = `/chat/${nextSessionId}`;
+    if (window.location.pathname !== nextPath) navigate(nextPath);
+  }, [navigate]);
+
+  const upsertSessionSummary = useCallback((session: ChatSession) => {
     queryClient.setQueryData<{ sessions: ChatSession[] }>(["sessions"], (current) => {
       const sessions = current?.sessions ?? [];
       return { sessions: [session, ...sessions.filter((item) => item.id !== session.id)] };
     });
     queryClient.setQueryData<ActiveSessionPages>(["sessions", "active"], (current) => {
-      if (!current) return current;
-      const [firstPage, ...restPages] = current.pages;
-      if (!firstPage) return current;
-      const existingSessions = current.pages.flatMap((page) => page.sessions);
+      const firstPage = current?.pages[0] ?? {
+        sessions: [],
+        pageInfo: {
+          limit: SIDEBAR_SESSION_PAGE_SIZE,
+          offset: 0,
+          total: 0,
+          hasMore: false
+        }
+      };
+      const restPages = current?.pages.slice(1) ?? [];
+      const existingSessions = current?.pages.flatMap((page) => page.sessions) ?? [];
       const wasPresent = existingSessions.some((item) => item.id === session.id);
+      const nextTotal = wasPresent ? firstPage.pageInfo.total : firstPage.pageInfo.total + 1;
       return {
-        ...current,
+        ...(current ?? {}),
         pages: [
           {
             ...firstPage,
             sessions: [session, ...firstPage.sessions.filter((item) => item.id !== session.id)].slice(0, firstPage.pageInfo.limit),
-            pageInfo: { ...firstPage.pageInfo, total: wasPresent ? firstPage.pageInfo.total : firstPage.pageInfo.total + 1 }
+            pageInfo: { ...firstPage.pageInfo, total: nextTotal, hasMore: firstPage.pageInfo.hasMore || nextTotal > firstPage.pageInfo.limit }
           },
           ...restPages.map((page) => ({
             ...page,
             sessions: page.sessions.filter((item) => item.id !== session.id),
             pageInfo: { ...page.pageInfo, total: wasPresent ? page.pageInfo.total : page.pageInfo.total + 1 }
           }))
-        ]
+        ],
+        pageParams: current?.pageParams ?? [0]
       };
     });
-  };
+  }, [queryClient]);
 
   const setPendingScope = (scope: string | null) => {
     pendingSubmitScopeRef.current = scope;
@@ -384,8 +411,8 @@ export function ChatPage({ user }: { user: User }) {
     if (pendingSubmitScopeRef.current === request.pendingScope) setPendingScope(result.session.id);
     upsertSessionSummary(result.session);
     markSessionGenerationRunning(result.session.id);
-    queryClient.invalidateQueries({ queryKey: ["sessions"] });
-    navigate(`/chat/${result.session.id}`);
+    scheduleSessionTitleRefresh();
+    navigateToSessionIfNeeded(result.session.id);
     return result.session.id;
   };
 
@@ -452,7 +479,7 @@ export function ChatPage({ user }: { user: User }) {
       } else {
         markSessionGenerationCompleted(completedSessionId);
       }
-      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      refreshSessionsNonCancel();
       queryClient.invalidateQueries({ queryKey: ["messages", completedSessionId] });
       queryClient.invalidateQueries({ queryKey: ["session-image-jobs", completedSessionId] });
       if (!jobStillRunning) {
@@ -461,7 +488,7 @@ export function ChatPage({ user }: { user: User }) {
       }
       const currentRouteScope = sessionId ?? NEW_SESSION_PENDING_SCOPE;
       if (currentRouteScope === request.pendingScope || currentRouteScope === completedSessionId) {
-        navigate(`/chat/${completedSessionId}`);
+        navigateToSessionIfNeeded(completedSessionId);
       }
     },
     onError: (err, request) => {
@@ -471,11 +498,11 @@ export function ChatPage({ user }: { user: User }) {
       clearPendingForScopes([request.pendingScope, failedSessionId ?? ""]);
       if (failedSessionId) clearSessionGenerationStatus(failedSessionId);
       if (failedSessionId) {
-        queryClient.invalidateQueries({ queryKey: ["sessions"] });
+        refreshSessionsNonCancel();
         if (request.caseItemId) queryClient.invalidateQueries({ queryKey: ["cases"] });
         queryClient.invalidateQueries({ queryKey: ["messages", failedSessionId] });
         queryClient.invalidateQueries({ queryKey: ["session-image-jobs", failedSessionId] });
-        if ((sessionId ?? NEW_SESSION_PENDING_SCOPE) === request.pendingScope) navigate(`/chat/${failedSessionId}`);
+        if ((sessionId ?? NEW_SESSION_PENDING_SCOPE) === request.pendingScope) navigateToSessionIfNeeded(failedSessionId);
       }
       const currentRouteScope = sessionId ?? NEW_SESSION_PENDING_SCOPE;
       const message = submitErrorMessage(err);
@@ -524,7 +551,7 @@ export function ChatPage({ user }: { user: User }) {
       } else {
         markSessionGenerationCompleted(completedSessionId);
       }
-      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      refreshSessionsNonCancel();
       queryClient.invalidateQueries({ queryKey: ["session-image-jobs", completedSessionId] });
       if (returnedJob?.status !== "running") {
         queryClient.invalidateQueries({ queryKey: ["images"] });
@@ -542,7 +569,7 @@ export function ChatPage({ user }: { user: User }) {
       }
       if (!sessionId) return;
       clearSessionGenerationStatus(sessionId);
-      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      refreshSessionsNonCancel();
       queryClient.invalidateQueries({ queryKey: ["messages", sessionId] });
       queryClient.invalidateQueries({ queryKey: ["session-image-jobs", sessionId] });
     }

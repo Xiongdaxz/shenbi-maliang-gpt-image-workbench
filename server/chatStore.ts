@@ -2,7 +2,7 @@ import { IMAGE_JOB_RUNNING_TIMEOUT_MS, IMAGE_JOB_TIMEOUT_ERROR } from "./constan
 import { appDb, getAll, getOne, run } from "./db";
 import { deleteImageDerivativesForSources, imageDerivativePathsForSources } from "./imageDerivatives";
 import { messageSourceReferencesByMessageMetadata, publicMessageSourceReference } from "./messageSourceReferences";
-import { generatePromptSummaryTitle } from "./promptTitle";
+import { fallbackTitleFromPrompt, generatePromptSummaryTitle } from "./promptTitle";
 import { deleteStoredFilesIfUnreferenced } from "./secureFiles";
 import { assetUrlFromAssetId, imageUrlFromImageId } from "./serializers";
 import { localTimestamp, makeId, normalizeIdList, now, parseJsonArray, safeJson, visibleAssetSql } from "./utils";
@@ -35,14 +35,41 @@ export function expireStaleImageJobs(userId: string, sessionId?: string) {
   );
 }
 
+const DEFAULT_CHAT_TITLE = "新的图像对话";
+
+export function immediateChatTitleFromPrompt(prompt: string, fallbackTitle = DEFAULT_CHAT_TITLE) {
+  const normalizedPrompt = prompt.trim();
+  return normalizedPrompt ? fallbackTitleFromPrompt(normalizedPrompt, fallbackTitle, null) || fallbackTitle : fallbackTitle;
+}
+
 export function generateChatTitleFromPrompt(prompt: string) {
   return generatePromptSummaryTitle(prompt, {
-    fallbackTitle: "新的图像对话",
+    fallbackTitle: DEFAULT_CHAT_TITLE,
     logLabel: "对话标题自动生成失败",
     logSource: "chat-title",
     maxLength: null,
     systemPrompt: "你是对话标题整理助手。请把用户的生图或图片编辑提示词精简成一个中文对话标题，让用户一眼知道这段对话要生成或修改什么内容。标题应概括画面主题、类型、用途或场景，保持简短清晰；英文产品名不要截断。只输出标题，不要引号、标点、说明或 Markdown。"
   });
+}
+
+export function refreshChatTitleInBackground(userId: string, sessionId: string, prompt: string, currentTitle: string) {
+  if (!prompt.trim()) return;
+  void generateChatTitleFromPrompt(prompt)
+    .then((title) => {
+      const nextTitle = title.trim();
+      if (!nextTitle || nextTitle === currentTitle) return;
+      run(
+        appDb,
+        "update sessions set title = ? where id = ? and user_id = ? and title = ? and deleted_at is null",
+        nextTitle,
+        sessionId,
+        userId,
+        currentTitle
+      );
+    })
+    .catch((error) => {
+      console.warn("对话标题后台更新失败", error);
+    });
 }
 
 export function ownedSession(userId: string, sessionId: string | null | undefined) {
@@ -78,7 +105,7 @@ export async function ensureChatSession(userId: string, sessionId: string | null
   if (existing) return existing.id;
   const id = makeId("chat");
   const timestamp = now();
-  const title = await generateChatTitleFromPrompt(prompt);
+  const title = immediateChatTitleFromPrompt(prompt);
   run(
     appDb,
     "insert into sessions (id, user_id, title, created_at, updated_at) values (?, ?, ?, ?, ?)",
@@ -88,6 +115,7 @@ export async function ensureChatSession(userId: string, sessionId: string | null
     timestamp,
     timestamp
   );
+  refreshChatTitleInBackground(userId, id, prompt, title);
   return id;
 }
 

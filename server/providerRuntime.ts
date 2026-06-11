@@ -1548,6 +1548,15 @@ function shouldFallbackToResponses(provider: ProviderRow, hasMask: boolean, erro
 
   const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
   return (
+    message.includes("socket connection was closed unexpectedly") ||
+    message.includes("socket hang up") ||
+    message.includes("connection closed") ||
+    message.includes("connection reset") ||
+    message.includes("connection terminated") ||
+    message.includes("econnreset") ||
+    message.includes("und_err_socket") ||
+    (message.includes("auth_unavailable") && message.includes("no auth available")) ||
+    (message.includes("auth_not_found") && message.includes("no auth available")) ||
     message.includes("stream disconnected before completion") ||
     message.includes("upstream did not return image output") ||
     message.includes("invalid sse data json")

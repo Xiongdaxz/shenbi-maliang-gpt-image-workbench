@@ -1,6 +1,7 @@
 import { RefreshCw } from "lucide-react";
 import { memo, type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { cx } from "../lib/cx";
+import { RENDERING_MOTION_PAUSE_EVENT, getRenderingMotionPauseUntil } from "../lib/renderingMotion";
 
 type RenderingMode = "generation" | "edit";
 
@@ -27,6 +28,8 @@ const EDIT_LOADING_TITLES = [
 ];
 
 const RENDERING_DOT_COUNT = 15;
+const RENDERING_PAINT_INTERVAL_MS = 66;
+const RENDERING_DOT_IDLE_SCALE = 0.86;
 const RENDERING_DOT_CENTER = (RENDERING_DOT_COUNT - 1) / 2;
 const RENDERING_DOTS = Array.from({ length: RENDERING_DOT_COUNT * RENDERING_DOT_COUNT }, (_, index) => {
   const row = Math.floor(index / RENDERING_DOT_COUNT);
@@ -65,11 +68,6 @@ type RenderingFocusState = {
 };
 
 type RenderingDotStyle = CSSProperties & {
-  "--dot-breath-delay": string;
-  "--dot-breath-low": string;
-  "--dot-breath-mid": string;
-  "--dot-breath-peak": string;
-  "--dot-breath-duration": string;
   "--dot-fill": string;
 };
 
@@ -174,32 +172,22 @@ const getFocusWave = (dot: (typeof RENDERING_DOTS)[number], focus: RenderingFocu
 const getDotStyle = (dot: (typeof RENDERING_DOTS)[number], focusState: RenderingFocusState): RenderingDotStyle => {
   const waveA = getFocusWave(dot, focusState.a);
   const waveB = getFocusWave(dot, focusState.b);
-  const dominant = waveA.value >= waveB.value ? { ...waveA, phaseDelay: 120 } : { ...waveB, phaseDelay: 520 };
   const focusCircle = Math.min(1, waveA.mask + waveB.mask);
   const centerBulge = addWithOverlapLift(waveA.center, waveB.center);
   const circularRim = addWithOverlapLift(waveA.rim, waveB.rim) * focusCircle;
   const focusEnergy = addWithOverlapLift(waveA.value, waveB.value);
   const motionEnergy = addWithOverlapLift(waveA.speed * waveA.mask, waveB.speed * waveB.mask);
-  const focused = focusCircle > 0.08;
-  const softMask = Math.pow(focusCircle, 1.28);
-  const activeScale = Math.min(3.12, 0.74 + centerBulge * 0.24 + focusEnergy * 0.08 + motionEnergy * 0.74);
-  const scale = 0.4 + (activeScale - 0.4) * softMask + circularRim * 0.03;
+  const mergeMask = smoothStep((Math.min(waveA.mask, waveB.mask) - 0.18) / 0.82);
+  const mergeCore = smoothStep((Math.min(waveA.center, waveB.center) - 0.04) / 0.96);
+  const scale = RENDERING_DOT_IDLE_SCALE + mergeMask * 0.92 + mergeCore * 0.36;
   const activeOpacity = 0.44 + focusCircle * 0.08 + Math.min(1.6, centerBulge) * 0.14 + motionEnergy * 0.1;
   const opacity = Math.min(0.96, activeOpacity * Math.pow(focusCircle, 1.22));
-  const innerDotScale = focused ? 0.82 + Math.min(1.8, motionEnergy) * 0.1 : 0.72;
-  const baseDelay = Math.round((7 - dot.ring) * 92);
-  const breathDelay = focused ? dominant.phaseDelay : baseDelay;
   const tone = Math.round(188 - Math.min(1, focusEnergy * 0.48 + motionEnergy * 0.42 + circularRim * 0.1) * 38);
   return {
     width: dot.size,
     height: dot.size,
     opacity,
     transform: `scale(${scale})`,
-    "--dot-breath-delay": `-${breathDelay}ms`,
-    "--dot-breath-low": `${innerDotScale}`,
-    "--dot-breath-mid": `${innerDotScale}`,
-    "--dot-breath-peak": `${innerDotScale}`,
-    "--dot-breath-duration": "2600ms",
     "--dot-fill": `rgb(var(--rendering-dot-rgb, ${tone}, ${tone}, ${tone}))`
   };
 };
@@ -210,11 +198,6 @@ const applyDotStyle = (element: HTMLSpanElement | null, style: RenderingDotStyle
   element.style.height = `${style.height}px`;
   element.style.opacity = String(style.opacity);
   element.style.transform = String(style.transform ?? "");
-  element.style.setProperty("--dot-breath-delay", style["--dot-breath-delay"]);
-  element.style.setProperty("--dot-breath-low", style["--dot-breath-low"]);
-  element.style.setProperty("--dot-breath-mid", style["--dot-breath-mid"]);
-  element.style.setProperty("--dot-breath-peak", style["--dot-breath-peak"]);
-  element.style.setProperty("--dot-breath-duration", style["--dot-breath-duration"]);
   element.style.setProperty("--dot-fill", style["--dot-fill"]);
 };
 
@@ -226,6 +209,7 @@ export const RenderingMessage = memo(function RenderingMessage({ mode }: { mode:
   const [titleSettled, setTitleSettled] = useState(true);
   const dotStyles = useMemo(() => RENDERING_DOTS.map((dot) => getDotStyle(dot, initialFocusState)), [initialFocusState]);
   const dotRefs = useRef<Array<HTMLSpanElement | null>>([]);
+  const motionPauseUntilRef = useRef(getRenderingMotionPauseUntil());
   const focusMotionRef = useRef<{
     current: RenderingFocusState;
     target: RenderingFocusState;
@@ -237,6 +221,16 @@ export const RenderingMessage = memo(function RenderingMessage({ mode }: { mode:
     };
   } | null>(null);
   const variant = renderSeed % 3;
+
+  useEffect(() => {
+    const handleMotionPause = (event: Event) => {
+      const detail = (event as CustomEvent<{ until?: number }>).detail;
+      const until = typeof detail?.until === "number" ? detail.until : performance.now() + 800;
+      motionPauseUntilRef.current = Math.max(motionPauseUntilRef.current, until);
+    };
+    window.addEventListener(RENDERING_MOTION_PAUSE_EVENT, handleMotionPause);
+    return () => window.removeEventListener(RENDERING_MOTION_PAUSE_EVENT, handleMotionPause);
+  }, []);
 
   useEffect(() => {
     setTitleIndex(0);
@@ -328,6 +322,11 @@ export const RenderingMessage = memo(function RenderingMessage({ mode }: { mode:
     const tick = (now: number) => {
       const motion = focusMotionRef.current;
       if (!mounted || !motion) return;
+      if (now < motionPauseUntilRef.current) {
+        motion.lastFrameAt = now;
+        animationFrame = window.requestAnimationFrame(tick);
+        return;
+      }
       const deltaMs = Math.min(80, Math.max(16, now - motion.lastFrameAt));
       motion.lastFrameAt = now;
       if (now >= motion.retargetAt.a) {
@@ -358,7 +357,7 @@ export const RenderingMessage = memo(function RenderingMessage({ mode }: { mode:
       if (bReachedTarget) {
         motion.retargetAt.b = now + randomInteger(3800, 6200);
       }
-      if (now - motion.lastPaintAt > 33) {
+      if (now - motion.lastPaintAt > RENDERING_PAINT_INTERVAL_MS) {
         motion.lastPaintAt = now;
         paint(motion.current);
       }

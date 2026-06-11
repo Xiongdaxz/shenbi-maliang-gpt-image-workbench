@@ -317,24 +317,23 @@
 }
 
 .image-editor-body {
+  position: relative;
   min-height: 0;
   min-width: 0;
-  display: grid;
-  grid-template-columns: 104px minmax(0, 1fr);
+  height: 100%;
+  display: block;
   background: transparent;
-}
-
-.image-editor-shell.selecting .image-editor-body {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.image-editor-shell.single-image .image-editor-body {
-  grid-template-columns: minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .image-editor-rail {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 104px;
   min-height: 0;
-  height: 100%;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -459,9 +458,12 @@
 }
 
 .image-editor-stage {
-  position: relative;
+  position: absolute;
+  inset: 0;
   min-width: 0;
   min-height: 0;
+  width: 100%;
+  height: 100%;
   display: block;
   overflow: hidden;
   padding: 0;

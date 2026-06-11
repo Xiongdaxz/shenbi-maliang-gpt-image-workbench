@@ -8,6 +8,7 @@ import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "reac
 import { api } from "../api";
 import type { AppearanceMode } from "../lib/appearance";
 import { cx } from "../lib/cx";
+import { pauseRenderingMotion } from "../lib/renderingMotion";
 import { AssetsPage } from "../pages/AssetsPage";
 import { CasesPage } from "../pages/CasesPage";
 import { ChatPage } from "../pages/ChatPage";
@@ -210,6 +211,7 @@ export function WorkbenchShell({ user }: { user: User }) {
   );
   const activeChatSessionId = location.pathname.match(/^\/chat\/([^/]+)/)?.[1] ?? null;
   const openCurrentOrNewChat = useCallback(() => {
+    pauseRenderingMotion();
     setMobileMenuOpen(false);
     if (location.pathname === "/") {
       resetNewChatComposer();
@@ -678,6 +680,8 @@ export function WorkbenchShell({ user }: { user: User }) {
   const archivedChatSessions = archivedSessions.data?.sessions ?? [];
   const archivedSessionTotal = archivedSessions.data?.pageInfo?.total ?? archivedChatSessions.length;
   const activeSessionRunKey = activeSessions.map((session) => `${session.id}:${session.runningImageJobCount}`).join("|");
+  const hasActiveSessionCache = Boolean(sessions.data?.pages.length);
+  const showInitialSessionSkeleton = sessions.isLoading && !hasActiveSessionCache;
   const sessionListSentinelRef = useInfinitePageLoader({
     fetchNextPage: () => sessions.fetchNextPage(),
     hasNextPage: Boolean(sessions.hasNextPage),
@@ -700,9 +704,18 @@ export function WorkbenchShell({ user }: { user: User }) {
     }
   }, [activeChatSessionId, clearSessionGenerationStatus, sessionGenerationStates]);
 
-  const refreshSessionsFromJobEvents = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["sessions"] });
+  const refreshSessionsNonCancel = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["sessions"] }, { cancelRefetch: false });
   }, [queryClient]);
+
+  const pauseRenderingBeforeChatNavigation = useCallback((nextSessionId: string) => {
+    if (nextSessionId === activeChatSessionId) return;
+    pauseRenderingMotion();
+  }, [activeChatSessionId]);
+
+  const pauseRenderingBeforeRouteNavigation = useCallback(() => {
+    pauseRenderingMotion();
+  }, []);
 
   const updateSessionImageJobFromEvent = useCallback((payload: ImageJobEventPayload) => {
     let updated = false;
@@ -736,7 +749,7 @@ export function WorkbenchShell({ user }: { user: User }) {
     } else {
       clearSessionGenerationStatus(sessionId);
     }
-    queryClient.invalidateQueries({ queryKey: ["sessions"] });
+    refreshSessionsNonCancel();
     const updatedJobCache = updateSessionImageJobFromEvent(payload);
     if (!updatedJobCache) {
       queryClient.invalidateQueries({ queryKey: ["session-image-jobs", sessionId] });
@@ -751,11 +764,12 @@ export function WorkbenchShell({ user }: { user: User }) {
     markSessionGenerationCompleted,
     markSessionGenerationRunning,
     queryClient,
+    refreshSessionsNonCancel,
     updateSessionImageJobFromEvent
   ]);
 
   useImageJobEvents({
-    onConnected: refreshSessionsFromJobEvents,
+    onConnected: refreshSessionsNonCancel,
     onJob: handleImageJobEvent
   });
 
@@ -828,7 +842,11 @@ export function WorkbenchShell({ user }: { user: User }) {
                 end
                 className={({ isActive }) => cx("nav-item", "nav-item-with-shortcut-tip", isActive && "active")}
                 aria-label="新对话"
-                onClick={openCurrentOrNewChat}
+                onPointerDown={pauseRenderingBeforeRouteNavigation}
+                onClick={() => {
+                  pauseRenderingBeforeRouteNavigation();
+                  openCurrentOrNewChat();
+                }}
               >
                 <MessageCirclePlus size={18} />
                 <span>新对话</span>
@@ -857,19 +875,47 @@ export function WorkbenchShell({ user }: { user: User }) {
           </div>
           <div className="sidebar-scroll">
             <nav className="main-nav" onClick={() => setMobileMenuOpen(false)}>
-              <NavLink to="/cases" className={({ isActive }) => cx("nav-item", isActive && "active")} aria-label="灵感空间" data-sidebar-tip="灵感空间">
+              <NavLink
+                to="/cases"
+                className={({ isActive }) => cx("nav-item", isActive && "active")}
+                aria-label="灵感空间"
+                data-sidebar-tip="灵感空间"
+                onPointerDown={pauseRenderingBeforeRouteNavigation}
+                onClick={pauseRenderingBeforeRouteNavigation}
+              >
                 <Lightbulb size={18} />
                 <span>灵感空间</span>
               </NavLink>
-              <NavLink to="/assets" className={({ isActive }) => cx("nav-item", isActive && "active")} aria-label="素材库" data-sidebar-tip="素材库">
+              <NavLink
+                to="/assets"
+                className={({ isActive }) => cx("nav-item", isActive && "active")}
+                aria-label="素材库"
+                data-sidebar-tip="素材库"
+                onPointerDown={pauseRenderingBeforeRouteNavigation}
+                onClick={pauseRenderingBeforeRouteNavigation}
+              >
                 <FolderOpen size={18} />
                 <span>素材库</span>
               </NavLink>
-              <NavLink to="/images" className={({ isActive }) => cx("nav-item", isActive && "active")} aria-label="我的图片" data-sidebar-tip="我的图片">
+              <NavLink
+                to="/images"
+                className={({ isActive }) => cx("nav-item", isActive && "active")}
+                aria-label="我的图片"
+                data-sidebar-tip="我的图片"
+                onPointerDown={pauseRenderingBeforeRouteNavigation}
+                onClick={pauseRenderingBeforeRouteNavigation}
+              >
                 <Images size={18} />
                 <span>我的图片</span>
               </NavLink>
-              <NavLink to="/prompt-templates" className={({ isActive }) => cx("nav-item", isActive && "active")} aria-label="创作提示词" data-sidebar-tip="创作提示词">
+              <NavLink
+                to="/prompt-templates"
+                className={({ isActive }) => cx("nav-item", isActive && "active")}
+                aria-label="创作提示词"
+                data-sidebar-tip="创作提示词"
+                onPointerDown={pauseRenderingBeforeRouteNavigation}
+                onClick={pauseRenderingBeforeRouteNavigation}
+              >
                 <Sparkles size={18} />
                 <span>创作提示词</span>
               </NavLink>
@@ -890,7 +936,7 @@ export function WorkbenchShell({ user }: { user: User }) {
             <div className="recent-section">
               <div className="recent-title">最近</div>
               <div className="recent-list">
-                {sessions.isLoading
+                {showInitialSessionSkeleton
                   ? Array.from({ length: 8 }).map((_, index) => <div className="recent-skeleton-row" key={`session-skeleton-${index}`} />)
                   : null}
                 {activeSessions.map((session) => {
@@ -914,7 +960,9 @@ export function WorkbenchShell({ user }: { user: User }) {
                         to={`/chat/${session.id}`}
                         title={session.title}
                         className={({ isActive }) => cx("recent-item", isActive && "active")}
+                        onPointerDown={() => pauseRenderingBeforeChatNavigation(session.id)}
                         onClick={() => {
+                          pauseRenderingBeforeChatNavigation(session.id);
                           setMobileMenuOpen(false);
                           setOpenSessionMenuId(null);
                           if (rawGenerationState === "completed") clearSessionGenerationStatus(session.id);
@@ -945,7 +993,7 @@ export function WorkbenchShell({ user }: { user: User }) {
                     </div>
                   );
                 })}
-                {!sessions.isLoading && sessions.hasNextPage ? <div className="recent-load-sentinel" ref={sessionListSentinelRef} /> : null}
+                {!showInitialSessionSkeleton && sessions.hasNextPage ? <div className="recent-load-sentinel" ref={sessionListSentinelRef} /> : null}
                 {sessions.isFetchingNextPage
                   ? Array.from({ length: 4 }).map((_, index) => <div className="recent-skeleton-row compact" key={`session-next-skeleton-${index}`} />)
                   : null}
@@ -1031,8 +1079,8 @@ export function WorkbenchShell({ user }: { user: User }) {
             >
               <header>最近聊天</header>
               <div className="collapsed-recent-card-list">
-                {sessions.isLoading ? <div className="collapsed-recent-empty">加载中...</div> : null}
-                {!sessions.isLoading && collapsedRecentSessions.length === 0 ? (
+                {showInitialSessionSkeleton ? <div className="collapsed-recent-empty">加载中...</div> : null}
+                {!showInitialSessionSkeleton && collapsedRecentSessions.length === 0 ? (
                   <div className="collapsed-recent-empty">暂无聊天</div>
                 ) : null}
                 {collapsedRecentSessions.map((session) => {
@@ -1043,7 +1091,9 @@ export function WorkbenchShell({ user }: { user: User }) {
                       to={`/chat/${session.id}`}
                       title={session.title}
                       className={cx("collapsed-recent-card-link", isCurrentSession && "active")}
+                      onPointerDown={() => pauseRenderingBeforeChatNavigation(session.id)}
                       onClick={() => {
+                        pauseRenderingBeforeChatNavigation(session.id);
                         closeCollapsedRecent();
                         setMobileMenuOpen(false);
                         setOpenSessionMenuId(null);

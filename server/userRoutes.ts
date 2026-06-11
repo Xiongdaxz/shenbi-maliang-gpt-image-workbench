@@ -28,8 +28,9 @@ import {
   deleteAllSessionRecords,
   deleteSessionRecords,
   expireStaleImageJobs,
-  generateChatTitleFromPrompt,
+  immediateChatTitleFromPrompt,
   ownedSession,
+  refreshChatTitleInBackground,
   renameSession,
   serializeJob,
   serializeMessage,
@@ -748,7 +749,7 @@ api.post("/sessions", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const prompt = String(body.prompt ?? "").trim();
   const fallbackTitle = String(body.title ?? "新的图像对话").trim() || "新的图像对话";
-  const title = prompt ? await generateChatTitleFromPrompt(prompt) : fallbackTitle;
+  const title = prompt ? immediateChatTitleFromPrompt(prompt, fallbackTitle) : fallbackTitle;
   const id = makeId("chat");
   const timestamp = now();
   run(
@@ -760,6 +761,7 @@ api.post("/sessions", async (c) => {
     timestamp,
     timestamp
   );
+  refreshChatTitleInBackground(user.id, id, prompt, title);
   return c.json({ session: { id, title, archivedAt: null, runningImageJobCount: 0, createdAt: timestamp, updatedAt: timestamp } });
 });
 
