@@ -19,7 +19,7 @@ Shenbi Maliang GPT Image Workbench is an AI image generation and image editing w
 
 [Watch the project demo video](https://streamable.com/agj6rf)
 
-[Download the project demo video](https://github.com/Xiongdaxz/shenbi-maliang-gpt-image-workbench/releases/latest/download/demo-video.mp4)
+[Download the project demo video](https://github.com/Xiongdaxz/shenbi-maliang-gpt-image-workbench/releases/download/v0.1.30/demo-video.mp4)
 
 | User generation and editing | Mask-based image editing |
 | --- | --- |

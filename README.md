@@ -19,7 +19,7 @@
 
 [观看项目演示视频](https://streamable.com/agj6rf)
 
-[下载项目演示视频](https://github.com/Xiongdaxz/shenbi-maliang-gpt-image-workbench/releases/latest/download/demo-video.mp4)
+[下载项目演示视频](https://github.com/Xiongdaxz/shenbi-maliang-gpt-image-workbench/releases/download/v0.1.30/demo-video.mp4)
 
 | 前台创作与续改 | 局部涂抹编辑 |
 | --- | --- |

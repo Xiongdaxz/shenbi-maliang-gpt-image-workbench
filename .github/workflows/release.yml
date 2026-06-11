@@ -175,6 +175,10 @@ jobs:
               Copy-Item -Path $directory -Destination $packageRoot -Recurse -Force
             }
           }
+          $demoVideoPath = Join-Path $packageRoot "docs/images/demo-video.mp4"
+          if (Test-Path $demoVideoPath) {
+            Remove-Item -LiteralPath $demoVideoPath -Force
+          }
 
           $files = @(
             "package.json",
@@ -331,4 +335,3 @@ jobs:
             release-assets/shenbi-maliang-*-macos-x64-portable.zip
             release-assets/shenbi-maliang-*-macos-arm64-portable.zip
             release-assets/shenbi-maliang-*-source-run.zip
-            docs/images/demo-video.mp4
