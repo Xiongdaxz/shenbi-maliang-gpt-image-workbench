@@ -15,9 +15,9 @@
 
 ## 🎬 项目演示
 
-[![观看项目演示视频](docs/images/demo-chat-edit.png)](https://streamable.com/agj6rf)
+[![观看项目演示视频](docs/images/demo-chat-edit.png)](https://streamable.com/igquyu)
 
-[观看项目演示视频](https://streamable.com/agj6rf)
+[观看项目演示视频](https://streamable.com/igquyu)
 
 [下载项目演示视频](https://github.com/Xiongdaxz/shenbi-maliang-gpt-image-workbench/releases/download/v0.1.30/demo-video.mp4)
 

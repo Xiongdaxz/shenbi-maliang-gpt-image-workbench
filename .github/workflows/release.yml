@@ -92,7 +92,8 @@ jobs:
             $buildArgs += @(
               "--windows-title=Shenbi Maliang",
               "--windows-description=Shenbi Maliang GPT Image Workbench",
-              "--windows-publisher=Xiongdaxz"
+              "--windows-publisher=Xiongdaxz",
+              "--windows-icon=public/app-icon.ico"
             )
           }
           & bun @buildArgs
