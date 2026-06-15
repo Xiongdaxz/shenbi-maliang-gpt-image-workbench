@@ -6,9 +6,11 @@ import { api } from "../../api";
 import { cx } from "../../lib/cx";
 import { useAppearanceMode } from "../../hooks/useAppearanceMode";
 import type { AppearanceMode } from "../../lib/appearance";
+import { sanitizePromptOptimizeStyleGroups } from "../../lib/promptOptimizeStyles";
 import type { EditSuggestionTone, User, UserPreferences } from "../../types";
 import { useToast } from "../../ui";
 import { MarkdownView } from "../MarkdownView";
+import { PromptOptimizeStyleSettingsDialog } from "../PromptOptimizeStyleSettingsDialog";
 
 type SettingsSectionId = "general" | "personalization" | "account" | "data" | "changelog";
 
@@ -50,6 +52,7 @@ type AppSettingsDialogProps = {
   archiveAllPending?: boolean;
   deleteAllPending?: boolean;
   deleteAccountPending?: boolean;
+  preferencesSaving?: boolean;
   onClose: () => void;
   onChangePassword: () => void;
   onEditProfile: () => void;
@@ -69,6 +72,7 @@ export function AppSettingsDialog({
   archiveAllPending,
   deleteAllPending,
   deleteAccountPending,
+  preferencesSaving,
   onClose,
   onChangePassword,
   onEditProfile,
@@ -80,6 +84,7 @@ export function AppSettingsDialog({
   onDeleteAllChats
 }: AppSettingsDialogProps) {
   const [activeSection, setActiveSection] = useState<SettingsSectionId>("general");
+  const [promptStyleSettingsOpen, setPromptStyleSettingsOpen] = useState(false);
   const { mode: appearanceMode, setMode: setAppearanceMode } = useAppearanceMode();
   const { showToast } = useToast();
   const changelog = useQuery({
@@ -98,8 +103,14 @@ export function AppSettingsDialog({
   const latestEntry = entries[0];
   const avatarSource = user.username?.trim() || user.account?.trim() || "U";
   const avatarText = avatarSource.slice(0, 1).toUpperCase();
-  const preferences = user.preferences ?? { editSuggestionsEnabled: true, editSuggestionTone: "default" as const };
+  const preferences = {
+    editSuggestionsEnabled: user.preferences?.editSuggestionsEnabled ?? true,
+    editSuggestionTone: user.preferences?.editSuggestionTone ?? "default" as const,
+    promptOptimizeStyleGroups: sanitizePromptOptimizeStyleGroups(user.preferences?.promptOptimizeStyleGroups)
+  };
   const toneDisabled = !preferences.editSuggestionsEnabled;
+  const promptStyleGroupCount = preferences.promptOptimizeStyleGroups.length;
+  const promptSubStyleCount = preferences.promptOptimizeStyleGroups.reduce((total, group) => total + (group.children?.length ?? 0), 0);
 
   return (
     <div
@@ -186,40 +197,54 @@ export function AppSettingsDialog({
                   </span>
                 </button>
               </div>
-              <div className="settings-row settings-preference-tone-row">
+              {preferences.editSuggestionsEnabled ? (
+                <div className="settings-row settings-preference-tone-row">
+                  <div>
+                    <strong>建议倾向</strong>
+                    <span>影响新生成的续改建议内容，默认就是当前效果</span>
+                  </div>
+                  <div className={cx("settings-tone-options", toneDisabled && "disabled")} role="radiogroup" aria-label="续改建议倾向">
+                    {editSuggestionToneOptions.map((option) => {
+                      const active = option.value === preferences.editSuggestionTone;
+                      return (
+                        <button
+                          key={option.value}
+                          className={cx("settings-tone-option", active && "active")}
+                          type="button"
+                          role="radio"
+                          aria-checked={active}
+                          disabled={toneDisabled}
+                          onClick={() => {
+                            if (toneDisabled || active) return;
+                            onPreferencesChange({ editSuggestionTone: option.value });
+                          }}
+                        >
+                          <span className="settings-tone-option-head">
+                            <strong>{option.label}</strong>
+                            {active ? (
+                              <span className="settings-tone-check" aria-hidden="true">
+                                <Check size={14} strokeWidth={2.5} />
+                              </span>
+                            ) : null}
+                          </span>
+                          <span>{option.description}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+              <div className="settings-row settings-prompt-styles-entry">
                 <div>
-                  <strong>建议倾向</strong>
-                  <span>影响新生成的续改建议内容，默认就是当前效果</span>
+                  <strong>AI 优化风格</strong>
+                  <span>
+                    {promptStyleGroupCount} 个主风格，{promptSubStyleCount} 个子风格；可设置排序、显示状态和专属优化指令
+                  </span>
                 </div>
-                <div className={cx("settings-tone-options", toneDisabled && "disabled")} role="radiogroup" aria-label="续改建议倾向">
-                  {editSuggestionToneOptions.map((option) => {
-                    const active = option.value === preferences.editSuggestionTone;
-                    return (
-                      <button
-                        key={option.value}
-                        className={cx("settings-tone-option", active && "active")}
-                        type="button"
-                        role="radio"
-                        aria-checked={active}
-                        disabled={toneDisabled}
-                        onClick={() => {
-                          if (toneDisabled || active) return;
-                          onPreferencesChange({ editSuggestionTone: option.value });
-                        }}
-                      >
-                        <span className="settings-tone-option-head">
-                          <strong>{option.label}</strong>
-                          {active ? (
-                            <span className="settings-tone-check" aria-hidden="true">
-                              <Check size={14} strokeWidth={2.5} />
-                            </span>
-                          ) : null}
-                        </span>
-                        <span>{option.description}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                <button className="secondary-btn" type="button" onClick={() => setPromptStyleSettingsOpen(true)}>
+                  <Settings size={15} />
+                  管理风格
+                </button>
               </div>
             </div>
           ) : activeSection === "account" ? (
@@ -342,6 +367,16 @@ export function AppSettingsDialog({
           )}
         </div>
       </section>
+      <PromptOptimizeStyleSettingsDialog
+        open={promptStyleSettingsOpen}
+        groups={preferences.promptOptimizeStyleGroups}
+        saving={preferencesSaving}
+        onClose={() => setPromptStyleSettingsOpen(false)}
+        onSave={(nextGroups) => {
+          onPreferencesChange({ promptOptimizeStyleGroups: nextGroups });
+          setPromptStyleSettingsOpen(false);
+        }}
+      />
     </div>
   );
 }

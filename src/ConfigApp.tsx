@@ -47,6 +47,8 @@ import type {
   ConfigStatistics,
   DebugSettings,
   ImageAccount,
+  ImageAccountImportPreviewItem,
+  ImageAccountImportSource,
   ImageGenerationMode,
   GlobalSwitchType,
   ModelRequestLog,
@@ -2598,6 +2600,99 @@ function emptyImageAccountForm(): Partial<ImageAccount> {
   };
 }
 
+function formatJsonTextareaValue(value: string | null | undefined) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  try {
+    return JSON.stringify(JSON.parse(text), null, 2);
+  } catch {
+    return text;
+  }
+}
+
+function parseJsonTextareaValue(value: string | null | undefined): unknown | null {
+  const text = String(value ?? "").trim();
+  if (!text || (!text.startsWith("{") && !text.startsWith("["))) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function firstStringFromJsonValue(source: unknown, keys: string[], depth = 0): string {
+  if (!source || depth > 8) return "";
+  if (typeof source === "string") {
+    const parsed = parseJsonTextareaValue(source);
+    return parsed ? firstStringFromJsonValue(parsed, keys, depth + 1) : "";
+  }
+  if (Array.isArray(source)) {
+    for (const item of source) {
+      const found = firstStringFromJsonValue(item, keys, depth + 1);
+      if (found) return found;
+    }
+    return "";
+  }
+  if (typeof source !== "object") return "";
+  const record = source as Record<string, unknown>;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  for (const value of Object.values(record)) {
+    const found = firstStringFromJsonValue(value, keys, depth + 1);
+    if (found) return found;
+  }
+  return "";
+}
+
+function jsonFileName(value: string) {
+  const text = value.trim();
+  if (!text) return "";
+  return text.split(/[\\/]/).pop()?.trim() ?? text;
+}
+
+function extractAccountJsonMeta(value: string | null | undefined) {
+  const parsed = parseJsonTextareaValue(value);
+  if (!parsed) {
+    return { accessToken: "", email: "", accountType: "", accountId: "", remoteName: "", displayName: "" };
+  }
+  const remoteName =
+    firstStringFromJsonValue(parsed, ["remote_name", "remoteName", "name", "file_name", "fileName"]) ||
+    jsonFileName(firstStringFromJsonValue(parsed, ["path"]));
+  const email = firstStringFromJsonValue(parsed, ["email", "account_email", "accountEmail", "username", "account"]);
+  const accountType = firstStringFromJsonValue(parsed, ["account_type", "accountType", "type", "plan_type", "planType", "chatgpt_plan_type", "chatgptPlanType"]);
+  const accountId = firstStringFromJsonValue(parsed, ["account_id", "accountId", "chatgpt_account_id", "chatgptAccountId"]);
+  return {
+    accessToken: firstStringFromJsonValue(parsed, ["access_token", "accessToken", "token"]),
+    email,
+    accountType,
+    accountId,
+    remoteName,
+    displayName: firstStringFromJsonValue(parsed, ["label", "display_name", "displayName"]) || email || remoteName || accountId
+  };
+}
+
+function applyAccountJsonMeta(form: Partial<ImageAccount>, authJson: string) {
+  const meta = extractAccountJsonMeta(authJson);
+  const currentName = String(form.name ?? "").trim();
+  const currentEmail = String(form.email ?? "").trim();
+  const nextName =
+    !currentName || currentName === currentEmail || currentName === "图片账号"
+      ? meta.displayName || currentName
+      : currentName;
+  return {
+    ...form,
+    authJson,
+    ...(meta.accessToken ? { accessToken: meta.accessToken } : {}),
+    ...(meta.email ? { email: meta.email } : {}),
+    ...(meta.accountType ? { accountType: meta.accountType } : {}),
+    ...(meta.remoteName ? { remoteName: meta.remoteName } : {}),
+    ...(nextName ? { name: nextName } : {})
+  };
+}
+
 function imageAccountFormFromAccount(account?: ImageAccount): Partial<ImageAccount> {
   if (!account) return emptyImageAccountForm();
   return {
@@ -2611,8 +2706,8 @@ function imageAccountFormFromAccount(account?: ImageAccount): Partial<ImageAccou
     usedQuota: account.usedQuota,
     priority: account.priority,
     accessToken: account.accessToken,
-    authJson: account.authJson,
-    authInfoJson: account.authInfoJson,
+    authJson: formatJsonTextareaValue(account.authJson),
+    authInfoJson: formatJsonTextareaValue(account.authInfoJson),
     note: account.note
   };
 }
@@ -2843,7 +2938,13 @@ function ImageAccountDialog({
             <textarea
               rows={5}
               value={form.authJson ?? ""}
-              onChange={(event) => setForm({ ...form, authJson: event.target.value })}
+              onChange={(event) => setForm((current) => applyAccountJsonMeta(current, event.target.value))}
+              onBlur={() =>
+                setForm((current) => {
+                  const formatted = formatJsonTextareaValue(current.authJson);
+                  return applyAccountJsonMeta(current, formatted);
+                })
+              }
               placeholder="可粘贴完整授权 JSON，系统会尽量提取邮箱、类型和令牌"
             />
           </label>
@@ -2853,6 +2954,7 @@ function ImageAccountDialog({
               rows={4}
               value={form.authInfoJson ?? ""}
               onChange={(event) => setForm({ ...form, authInfoJson: event.target.value })}
+              onBlur={() => setForm((current) => ({ ...current, authInfoJson: formatJsonTextareaValue(current.authInfoJson) }))}
               placeholder="CPA 同步的 id_token / 账号认证信息"
             />
           </label>
@@ -2880,6 +2982,237 @@ function ImageAccountDialog({
   );
 }
 
+function importActionLabel(item: ImageAccountImportPreviewItem) {
+  if (item.status === "error") return "跳过";
+  if (item.action === "update") return "更新";
+  if (item.action === "create") return "新增";
+  return "跳过";
+}
+
+function importStatusLabel(item: ImageAccountImportPreviewItem) {
+  if (item.status === "error") return item.error || "不可导入";
+  if (item.duplicateName) return `${item.duplicateReason}：${item.duplicateName}`;
+  return "可导入";
+}
+
+function importSourceKey(items: ImageAccountImportSource[], channelId: string) {
+  return JSON.stringify({
+    channelId,
+    items: items.map((item) => ({
+      id: item.id ?? "",
+      name: item.name ?? "",
+      content: item.content ?? "",
+      value: item.value ?? null
+    }))
+  });
+}
+
+function ImageAccountBulkImportDialog({
+  providers,
+  onClose,
+  onImported
+}: {
+  providers: ProviderConfig[];
+  onClose: () => void;
+  onImported: (result: { message: string; appendedToProvider: boolean }) => void;
+}) {
+  const [channelId, setChannelId] = useState("");
+  const [pasteContent, setPasteContent] = useState("");
+  const [fileSources, setFileSources] = useState<ImageAccountImportSource[]>([]);
+  const [fileError, setFileError] = useState("");
+  const [previewItems, setPreviewItems] = useState<ImageAccountImportPreviewItem[]>([]);
+  const [previewKey, setPreviewKey] = useState("");
+  const sources = useMemo<ImageAccountImportSource[]>(() => {
+    const items = [...fileSources];
+    if (pasteContent.trim()) items.push({ id: "pasted-content", name: "粘贴内容", content: pasteContent });
+    return items;
+  }, [fileSources, pasteContent]);
+  const sourcesKey = useMemo(() => importSourceKey(sources, channelId), [sources, channelId]);
+  const readyItems = previewItems.filter((item) => item.status === "ready");
+  const dirtyPreview = previewItems.length > 0 && previewKey !== sourcesKey;
+  const selectedProvider = providers.find((provider) => provider.id === channelId);
+  const preview = useMutation({
+    mutationFn: (payload: { items: ImageAccountImportSource[]; channelId: string; sourceKey: string }) =>
+      configApi.previewImageAccountImport({ items: payload.items, channelId: payload.channelId }),
+    onSuccess: (result, payload) => {
+      setPreviewItems(result.items);
+      setPreviewKey(payload.sourceKey);
+    }
+  });
+  const confirmImport = useMutation({
+    mutationFn: () =>
+      configApi.importImageAccounts({
+        items: sources,
+        channelId,
+        rowIds: readyItems.map((item) => item.rowId)
+      }),
+    onSuccess: (result) => {
+      onImported(result);
+    }
+  });
+
+  useEffect(() => {
+    if (sources.length === 0) {
+      setPreviewItems([]);
+      setPreviewKey("");
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      preview.mutate({ items: sources, channelId, sourceKey: sourcesKey });
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [sourcesKey]);
+
+  async function handleFiles(files: FileList | null) {
+    const selectedFiles = Array.from(files ?? []);
+    setFileError("");
+    setPreviewItems([]);
+    setPreviewKey("");
+    if (selectedFiles.length === 0) return;
+    try {
+      const nextSources = await Promise.all(
+        selectedFiles.map(async (file) => ({
+          id: `${file.name}-${file.size}-${file.lastModified}`,
+          name: file.name,
+          content: await file.text()
+        }))
+      );
+      setFileSources(nextSources);
+    } catch (error) {
+      setFileError(error instanceof Error ? error.message : "文件读取失败");
+    }
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <section className="case-modal image-account-import-modal">
+        <header>
+          <h3>批量导入图片账号</h3>
+          <button onClick={onClose}>关闭</button>
+        </header>
+        <div className="provider-form image-account-import-form">
+          <div className="image-account-import-layout">
+            <div className="import-options-panel">
+              <label>
+                绑定渠道
+                <CustomSelect
+                  value={channelId}
+                  onChange={(value) => {
+                    setChannelId(value);
+                    setPreviewItems([]);
+                    setPreviewKey("");
+                  }}
+                  options={[
+                    { value: "", label: "不绑定渠道" },
+                    ...providers.map((provider) => ({ value: provider.id, label: `${provider.name} · ${provider.channel}` }))
+                  ]}
+                />
+                {selectedProvider?.channel === "chatgpt_web" ? (
+                  <small>导入成功后会自动加入该 ChatGPT Web 渠道的号池选择。</small>
+                ) : null}
+              </label>
+              <label className="image-account-file-input">
+                上传 JSON
+                <input
+                  type="file"
+                  accept=".json,application/json,text/json,text/plain"
+                  multiple
+                  onChange={(event) => {
+                    void handleFiles(event.target.files);
+                    event.currentTarget.value = "";
+                  }}
+                />
+                <small>{fileSources.length > 0 ? `已选择 ${fileSources.length} 个文件，已自动解析` : "支持选择多个 .json 文件"}</small>
+              </label>
+              <label>
+                粘贴 JSON
+                <textarea
+                  rows={9}
+                  value={pasteContent}
+                  onChange={(event) => {
+                    setPasteContent(event.target.value);
+                    setPreviewItems([]);
+                    setPreviewKey("");
+                  }}
+                  placeholder="支持单个 JSON、JSON 数组、{ files: [...] } 或一行一个 JSON"
+                />
+              </label>
+              <div className="row-actions image-account-import-actions">
+                <button className="secondary-btn" type="button" onClick={onClose}>
+                  取消
+                </button>
+                <button
+                  className="primary-btn"
+                  type="button"
+                  onClick={() => confirmImport.mutate()}
+                  disabled={confirmImport.isPending || preview.isPending || dirtyPreview || readyItems.length === 0}
+                >
+                  <Save size={16} />
+                  {confirmImport.isPending ? "导入中" : "确认导入"}
+                </button>
+              </div>
+              {fileError ? <div className="form-error">{fileError}</div> : null}
+              {preview.error ? <div className="form-error">{preview.error.message}</div> : null}
+              {confirmImport.error ? <div className="form-error">{confirmImport.error.message}</div> : null}
+            </div>
+            <div className="import-preview-panel">
+              <div className="import-preview-header">
+                <strong>导入预览</strong>
+                <span>{preview.isPending || dirtyPreview ? "自动解析中" : readyItems.length > 0 ? `${readyItems.length} 个可导入` : "等待输入"}</span>
+              </div>
+              {previewItems.length > 0 ? (
+                <div className="import-preview">
+                  <div className="import-preview-summary">
+                    <span>总计 {previewItems.length}</span>
+                    <span>新增 {previewItems.filter((item) => item.action === "create").length}</span>
+                    <span>更新 {previewItems.filter((item) => item.action === "update").length}</span>
+                    <span>跳过 {previewItems.filter((item) => item.status === "error").length}</span>
+                  </div>
+                  <div className="table-wrap import-preview-table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>来源</th>
+                          <th>账号</th>
+                          <th>套餐</th>
+                          <th>Account ID</th>
+                          <th>Token</th>
+                          <th>动作</th>
+                          <th>状态</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {previewItems.map((item) => (
+                          <tr key={item.rowId} className={item.status === "error" ? "import-row-error" : undefined}>
+                            <td>{item.sourceName}</td>
+                            <td>
+                              <strong>{item.name || "-"}</strong>
+                              <small>{item.email || item.remoteName || "-"}</small>
+                            </td>
+                            <td>{item.accountType || "-"}</td>
+                            <td className="mono-cell">{item.accountId || "-"}</td>
+                            <td>{item.hasAccessToken ? item.tokenPreview || "已识别" : "缺少"}</td>
+                            <td>{importActionLabel(item)}</td>
+                            <td>{importStatusLabel(item)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <div className="import-preview-empty">
+                  {sources.length === 0 ? "上传文件或粘贴 JSON 后会自动解析。" : "正在准备预览..."}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function ImageAccountPoolPanel() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
@@ -2887,7 +3220,15 @@ function ImageAccountPoolPanel() {
   const accounts = useQuery({ queryKey: ["config-image-accounts"], queryFn: configApi.imageAccounts });
   const providers = useQuery({ queryKey: ["config-providers"], queryFn: configApi.providers });
   const [dialog, setDialog] = useState<{ mode: "create" | "edit"; account?: ImageAccount } | null>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<ImageAccount | null>(null);
+  const loadAccountForEdit = useMutation({
+    mutationFn: (accountId: string) => configApi.imageAccount(accountId),
+    onSuccess: (result) => {
+      if (result.account) setDialog({ mode: "edit", account: result.account });
+    },
+    onError: (error) => showToast(error instanceof Error ? error.message : "账号详情读取失败", "error")
+  });
   const save = useMutation({
     mutationFn: ({
       mode,
@@ -2944,6 +3285,10 @@ function ImageAccountPoolPanel() {
         <button className="secondary-btn" onClick={() => refreshUsage.mutate(undefined)} disabled={refreshUsage.isPending}>
           <RefreshCw className={refreshUsage.isPending ? "spin-icon" : undefined} size={16} />
           全部刷新额度
+        </button>
+        <button className="secondary-btn" onClick={() => setImportDialogOpen(true)}>
+          <Upload size={16} />
+          批量导入
         </button>
         <button className="primary-btn" onClick={() => setDialog({ mode: "create" })}>
           <Plus size={16} />
@@ -3006,11 +3351,12 @@ function ImageAccountPoolPanel() {
                     </button>
                     <button
                       className="account-action-icon secondary-btn"
-                      onClick={() => setDialog({ mode: "edit", account })}
+                      onClick={() => loadAccountForEdit.mutate(account.id)}
+                      disabled={loadAccountForEdit.isPending}
                       aria-label="编辑账号"
-                      title="编辑账号"
+                      title={loadAccountForEdit.isPending ? "读取账号详情中" : "编辑账号"}
                     >
-                      <Pencil size={15} />
+                      <Pencil className={loadAccountForEdit.isPending && loadAccountForEdit.variables === account.id ? "spin-icon" : undefined} size={15} />
                     </button>
                     <button
                       className="account-action-icon danger-btn"
@@ -3047,6 +3393,19 @@ function ImageAccountPoolPanel() {
               payload
             })
           }
+        />
+      ) : null}
+      {importDialogOpen ? (
+        <ImageAccountBulkImportDialog
+          providers={providers.data?.providers ?? []}
+          onClose={() => setImportDialogOpen(false)}
+          onImported={(result) => {
+            setImportDialogOpen(false);
+            showToast(result.appendedToProvider ? `${result.message}，已加入官网渠道号池` : result.message);
+            queryClient.invalidateQueries({ queryKey: ["config-image-accounts"] });
+            queryClient.invalidateQueries({ queryKey: ["config-providers"] });
+            queryClient.invalidateQueries({ queryKey: ["providers"] });
+          }}
         />
       ) : null}
       <ConfirmDialog
@@ -4534,14 +4893,14 @@ function SmsSettingsPanel() {
 function emptyStarterCopySettings(): StarterCopySettings {
   return {
     enabled: true,
-    copyCount: 20,
+    copyCount: 50,
     updatedAt: ""
   };
 }
 
 function normalizeStarterCopyCount(value: unknown) {
   const count = Number(value);
-  if (!Number.isFinite(count)) return 20;
+  if (!Number.isFinite(count)) return 50;
   return Math.max(0, Math.min(100, Math.trunc(count)));
 }
 
@@ -4634,7 +4993,7 @@ function StarterCopySettingsPanel() {
         </label>
         <div className="prompt-optimizer-protocol">
           <Bot size={17} />
-          <span>可设置 0-100 条，默认生成 20 条；文案覆盖海报、商品图、UI 设计、销售物料、人事招聘、业务展业、汇报封面、日常社交、生日祝福、旅行宠物、美食家居和 Logo 等创作方向。</span>
+          <span>可设置 0-100 条，默认生成 50 条；文案覆盖海报、商品图、UI 设计、销售物料、人事招聘、业务展业、汇报封面、日常社交、生日祝福、旅行宠物、美食家居和 Logo 等创作方向。</span>
         </div>
         <div className="row-actions">
           <button className="primary-btn" type="button" onClick={() => save.mutate()} disabled={save.isPending}>
@@ -5799,7 +6158,8 @@ function CpaPanel() {
 }
 
 function requestStatusLabel(item: ProviderRequestLog) {
-  if (!item.success) return "失败";
+  const status = item.statusCode == null ? "" : ` ${item.statusCode}`;
+  if (!item.success) return `失败${status}`;
   return item.statusCode ? `${item.statusCode}` : "成功";
 }
 
@@ -6036,6 +6396,12 @@ function RequestLogsPanel() {
                   <td className="endpoint-cell">
                     <span>{item.endpoint}</span>
                     {item.error ? <small>{item.error}</small> : null}
+                    {item.responseSnapshot ? (
+                      <details className="request-response-snapshot">
+                        <summary>响应快照</summary>
+                        <pre>{item.responseSnapshot}</pre>
+                      </details>
+                    ) : null}
                   </td>
                 </tr>
               );

@@ -54,6 +54,7 @@
 | `user_id` | 用户 ID，主键 |
 | `edit_suggestions_enabled` | 对话页图片续改建议开关，`0` 关闭、`1` 开启 |
 | `edit_suggestion_tone` | 图片续改建议倾向：`default` 默认均衡、`practical` 实用优化、`creative` 创意扩展、`detail` 细节修复 |
+| `prompt_optimize_styles_json` | 用户自定义 AI 优化风格 JSON，保存主风格、子风格、排序、显示状态和自定义优化指令；为空时使用系统默认风格 |
 | `updated_at` | 更新时间 |
 
 ### user_auth_sessions
@@ -710,7 +711,9 @@
 | `codex_credits_balance` / `codex_credits_unlimited` | Credits 额度；`codex_credits_unlimited` 为 `0` 否、`1` 是 |
 | `codex_usage_windows` / `codex_usage_updated_at` / `codex_usage_error` | 额度详情 |
 | `priority` | 使用优先级 |
-| `access_token` / `auth_json` / `auth_info_json` | 授权信息 |
+| `access_token` | 账号访问令牌；ChatGPT Web 号池调用和 Codex 额度刷新优先使用该字段 |
+| `auth_json` | 原始账号授权 JSON；本地单个/批量导入和 CPA 同步都会保留可解析的授权载荷，运行时可从中兜底提取 `access_token`、邮箱、套餐、账号 ID、Cookie |
+| `auth_info_json` | 附加认证信息 JSON，主要保存 CPA 同步或导入记录里的 `id_token`、账号类型等补充信息；只生图时可为空，运行时仅在 `access_token` / `auth_json` 没有 token 时兜底解析 |
 | `note` | 备注 |
 | `sync_status` | 同步来源状态：`local` 本地创建、`synced` CPA 同步；历史或异常值按原样保留 |
 | `last_refreshed_at` | 最近刷新时间 |
@@ -788,6 +791,7 @@ CPA 同步执行记录。
 | `duration_ms` | 耗时 |
 | `success` | 是否成功，`0` 否、`1` 是 |
 | `error` | 错误信息 |
+| `response_snapshot` | 图片请求 HTTP 成功但后处理失败时保存的脱敏响应快照，图片 base64 会被占位文本替换 |
 | `created_at` | 创建时间 |
 
 ### model_request_logs

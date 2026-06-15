@@ -101,7 +101,12 @@ import type { LucideIcon } from "lucide-react";
 import { api, type PromptTemplateOptimizeStyle } from "../../api";
 import { PromptOptimizeStyleSelect } from "../PromptOptimizeStyleSelect";
 import { cx } from "../../lib/cx";
-import { normalizePromptOptimizeStyle, promptOptimizeStyleOptions } from "../../lib/promptOptimizeStyles";
+import {
+  normalizePromptOptimizeStyle,
+  promptOptimizeStyleGroups,
+  promptOptimizeStyleOption,
+  type PromptOptimizeStyleGroup
+} from "../../lib/promptOptimizeStyles";
 import type { ComposerPromptResultKey, ComposerPromptTemplatePanelDraft } from "../../store/workbench";
 import {
   buildBasePrompt,
@@ -439,7 +444,10 @@ export function PromptTemplateComposerPanel({
   onPromptStreamingChange,
   optimizeControlHost,
   optimizeStyle: controlledOptimizeStyle,
+  promptOptimizeCustomInstruction = "",
+  promptOptimizeStyleGroups: userPromptOptimizeStyleGroups = promptOptimizeStyleGroups,
   onOptimizeStyleChange,
+  onPromptOptimizeCustomInstructionChange,
   onOptimizeControlVisibleChange,
   initialDraft,
   onDraftChange
@@ -453,7 +461,10 @@ export function PromptTemplateComposerPanel({
   onPromptStreamingChange?: (streaming: boolean) => void;
   optimizeControlHost?: HTMLElement | null;
   optimizeStyle?: PromptTemplateOptimizeStyle;
+  promptOptimizeCustomInstruction?: string;
+  promptOptimizeStyleGroups?: PromptOptimizeStyleGroup[];
   onOptimizeStyleChange?: (value: PromptTemplateOptimizeStyle) => void;
+  onPromptOptimizeCustomInstructionChange?: (value: string) => void;
   onOptimizeControlVisibleChange?: (visible: boolean) => void;
   initialDraft?: ComposerPromptTemplatePanelDraft | null;
   onDraftChange?: (draft: ComposerPromptTemplatePanelDraft) => void;
@@ -473,6 +484,7 @@ export function PromptTemplateComposerPanel({
   const [internalOptimizeStyle, setInternalOptimizeStyle] = useState<PromptTemplateOptimizeStyle>(
     initialDraftRef.current?.optimizeStyle ?? "standard"
   );
+  const [optimizeCustomInstruction, setOptimizeCustomInstruction] = useState(promptOptimizeCustomInstruction);
   const [activeResult, setActiveResult] = useState<PromptTemplateResult | null>(initialDraftRef.current?.activeResult ?? null);
   const [optimizedSignature, setOptimizedSignature] = useState(initialDraftRef.current?.optimizedSignature ?? "");
   const [streamingOptimizedPromptZh, setStreamingOptimizedPromptZh] = useState("");
@@ -487,7 +499,17 @@ export function PromptTemplateComposerPanel({
   const dismissedSyncedAssetIdsRef = useRef<Set<string>>(new Set());
   const keywordInputRef = useRef<HTMLInputElement | null>(null);
   const keywordComposingRef = useRef(false);
-  const optimizeStyle = controlledOptimizeStyle ?? internalOptimizeStyle;
+  const promptStyleGroups = userPromptOptimizeStyleGroups;
+  const optimizeStyle = normalizePromptOptimizeStyle(controlledOptimizeStyle ?? internalOptimizeStyle, promptStyleGroups);
+
+  function updateOptimizeCustomInstruction(value: string) {
+    setOptimizeCustomInstruction(value);
+    onPromptOptimizeCustomInstructionChange?.(value);
+  }
+
+  useEffect(() => {
+    setOptimizeCustomInstruction(promptOptimizeCustomInstruction);
+  }, [promptOptimizeCustomInstruction]);
 
   const templatesQuery = useQuery({
     queryKey: ["prompt-templates", "composer", keyword],
@@ -563,7 +585,13 @@ export function PromptTemplateComposerPanel({
       const nextOptimizeStyle = requestStyle ?? optimizeStyle;
       return api.optimizePromptTemplateStream(
         selectedTemplate!.id,
-        { language: "zh", formValues, basePrompt, optimizeStyle: nextOptimizeStyle },
+        {
+          language: "zh",
+          formValues,
+          basePrompt,
+          optimizeStyle: nextOptimizeStyle,
+          customInstruction: optimizeCustomInstruction
+        },
         {
           onDelta: (chunk) => {
             if (chunk.language === "en") {
@@ -623,7 +651,8 @@ export function PromptTemplateComposerPanel({
     dismissedSyncedAssetIdsRef.current.clear();
     setFormValues(shouldRestoreDraft && draft ? mergePromptTemplateFormValues(selectedTemplate, draft.formValues) : initialPromptTemplateFormValues(selectedTemplate));
     const nextOptimizeStyle = normalizePromptOptimizeStyle(
-      shouldRestoreDraft && draft ? draft.optimizeStyle : selectedTemplate.optimizeStyle
+      shouldRestoreDraft && draft ? draft.optimizeStyle : selectedTemplate.optimizeStyle,
+      promptStyleGroups
     );
     setInternalOptimizeStyle(nextOptimizeStyle);
     onOptimizeStyleChange?.(nextOptimizeStyle);
@@ -636,7 +665,7 @@ export function PromptTemplateComposerPanel({
     autoSelectedAiResultRef.current = "";
     if (shouldRestoreDraft && draft) setCollapsed(draft.collapsed);
     if (shouldRestoreDraft) restoredInitialDraftRef.current = true;
-  }, [onOptimizeStyleChange, selectedTemplate?.id]);
+  }, [onOptimizeStyleChange, promptStyleGroups, selectedTemplate?.id]);
 
   useEffect(() => {
     if (!selectedTemplate || !selectedId) return;
@@ -779,7 +808,7 @@ export function PromptTemplateComposerPanel({
           ? aiEnPrompt
           : baseZhPrompt;
   const optimizeActionLabel = optimize.isPending ? "优化中" : activeResult ? "重新优化" : "AI 优化";
-  const optimizeStyleOption = promptOptimizeStyleOptions.find((option) => option.value === optimizeStyle) ?? promptOptimizeStyleOptions[0];
+  const optimizeStyleOption = promptOptimizeStyleOption(optimizeStyle, promptStyleGroups);
   const headerStatus = resultStale ? "AI 结果需要重新优化" : optimize.isPending ? "AI 优化中" : "";
 
   useEffect(() => {
@@ -869,7 +898,7 @@ export function PromptTemplateComposerPanel({
   }
 
   function updateOptimizeStyle(value: string) {
-    const nextOptimizeStyle = normalizePromptOptimizeStyle(value);
+    const nextOptimizeStyle = normalizePromptOptimizeStyle(value, promptStyleGroups);
     const shouldAutoOptimize = nextOptimizeStyle !== optimizeStyle && Boolean(basePrompt.trim()) && !optimize.isPending;
     setInternalOptimizeStyle(nextOptimizeStyle);
     onOptimizeStyleChange?.(nextOptimizeStyle);
@@ -906,12 +935,17 @@ export function PromptTemplateComposerPanel({
         <PromptOptimizeStyleSelect
           value={optimizeStyle}
           onChange={updateOptimizeStyle}
+          groups={promptStyleGroups}
+          customInstruction={optimizeCustomInstruction}
+          onCustomInstructionChange={updateOptimizeCustomInstruction}
+          onCustomInstructionSubmit={() => optimize.mutate(undefined)}
+          customInstructionSubmitDisabled={optimize.isPending || !basePrompt.trim()}
+          customInstructionSubmitPending={optimize.isPending}
           disabled={optimize.isPending}
           className="composer-prompt-template-style-select"
           menuClassName="composer-prompt-template-style-menu"
           menuPlacement="top"
           menuWidth={260}
-          submenuWidth={260}
         />
       </span>
     </div>

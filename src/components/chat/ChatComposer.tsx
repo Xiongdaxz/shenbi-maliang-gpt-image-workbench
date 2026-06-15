@@ -11,7 +11,8 @@ import {
   isPromptOptimizeSeriesStyle,
   normalizePromptOptimizeStyle,
   promptOptimizeStyleDefaultPrompt,
-  promptOptimizeStyleOptions
+  promptOptimizeStyleOption,
+  type PromptOptimizeStyleGroup
 } from "../../lib/promptOptimizeStyles";
 import type { QualityOption, SizeOption } from "../../lib/imageOptions";
 import type { ComposerPromptTemplateDraft, ComposerPromptTemplatePanelDraft } from "../../store/workbench";
@@ -45,6 +46,8 @@ type ChatComposerProps = {
   previews: ChatComposerPreview[];
   imageCount: number;
   promptInputOptimizeStyle: PromptTemplateOptimizeStyle;
+  promptOptimizeCustomInstruction?: string;
+  promptOptimizeStyleGroups: PromptOptimizeStyleGroup[];
   promptTemplateDraft?: ComposerPromptTemplateDraft | null;
   quality: string;
   qualityOptions: QualityOption[];
@@ -65,6 +68,7 @@ type ChatComposerProps = {
   onOpenCasePicker: () => void;
   onToggleMaterialPicker: () => void;
   onPromptInputOptimizeStyleChange?: (value: PromptTemplateOptimizeStyle) => void;
+  onPromptOptimizeCustomInstructionChange?: (value: string) => void;
   onPromptTemplateDraftChange?: (draft: ComposerPromptTemplateDraft | null) => void;
   draftCaseUsage?: { caseItemId: string; prompt: string } | null;
 };
@@ -123,6 +127,8 @@ export function ChatComposer({
   previews,
   imageCount,
   promptInputOptimizeStyle,
+  promptOptimizeCustomInstruction = "",
+  promptOptimizeStyleGroups,
   promptTemplateDraft,
   quality,
   qualityOptions,
@@ -143,6 +149,7 @@ export function ChatComposer({
   onOpenCasePicker,
   onToggleMaterialPicker,
   onPromptInputOptimizeStyleChange,
+  onPromptOptimizeCustomInstructionChange,
   onPromptTemplateDraftChange,
   draftCaseUsage
 }: ChatComposerProps) {
@@ -160,6 +167,7 @@ export function ChatComposer({
   const [promptTemplateOptimizeControlVisible, setPromptTemplateOptimizeControlVisible] = useState(false);
   const [promptInputOptimizePending, setPromptInputOptimizePending] = useState(false);
   const [promptInputOptimizeStreaming, setPromptInputOptimizeStreaming] = useState(false);
+  const [promptInputCustomInstruction, setPromptInputCustomInstruction] = useState(promptOptimizeCustomInstruction);
   const [promptBeforeInputOptimize, setPromptBeforeInputOptimize] = useState("");
   const [promptTemplateCollapseSignal, setPromptTemplateCollapseSignal] = useState(0);
   const { showToast } = useToast();
@@ -178,7 +186,7 @@ export function ChatComposer({
   const lastDraftCaseUsageKeyRef = useRef(draftCaseUsageKey);
   const promptOptimizationLoading = promptTemplateLoading || promptInputOptimizePending;
   const promptTextareaLoading = (promptTemplateLoading && !promptTemplateStreaming) || (promptInputOptimizePending && !promptInputOptimizeStreaming);
-  const optimizeStyleOption = promptOptimizeStyleOptions.find((option) => option.value === promptInputOptimizeStyle) ?? promptOptimizeStyleOptions[0];
+  const optimizeStyleOption = promptOptimizeStyleOption(promptInputOptimizeStyle, promptOptimizeStyleGroups);
   const hasDraftPrompt = Boolean(draftPrompt.trim());
   const visibleEditSuggestions = editSuggestions.slice(0, 3);
   const showEditSuggestions = editSuggestionsLoading || visibleEditSuggestions.length > 0;
@@ -288,6 +296,15 @@ export function ChatComposer({
     promptOptimizedDraftRef.current = "";
     setPromptBeforeInputOptimize("");
   }
+
+  function updatePromptOptimizeCustomInstruction(value: string) {
+    setPromptInputCustomInstruction(value);
+    onPromptOptimizeCustomInstructionChange?.(value);
+  }
+
+  useEffect(() => {
+    setPromptInputCustomInstruction(promptOptimizeCustomInstruction);
+  }, [promptOptimizeCustomInstruction]);
 
   useLayoutEffect(() => {
     if (!promptBeforeInputOptimize || promptInputOptimizePending) return;
@@ -442,7 +459,7 @@ export function ChatComposer({
     stopPromptTemplateTyping();
     resetInputOptimizationState();
     if (!value.trim() && promptInputOptimizeStyle !== "standard") {
-      if (isPromptOptimizeSeriesStyle(promptInputOptimizeStyle) && imageCount !== 1) onImageCountChange(1);
+      if (isPromptOptimizeSeriesStyle(promptInputOptimizeStyle, promptOptimizeStyleGroups) && imageCount !== 1) onImageCountChange(1);
       onPromptInputOptimizeStyleChange?.("standard");
     }
     const trigger = slashTriggerRef.current;
@@ -500,7 +517,12 @@ export function ChatComposer({
     try {
       let streamedPrompt = "";
       const data = await api.optimizePromptTextStream(
-        { prompt: sourcePrompt, optimizeStyle: nextOptimizeStyle, imageCount: optimizeImageCount },
+        {
+          prompt: sourcePrompt,
+          optimizeStyle: nextOptimizeStyle,
+          imageCount: optimizeImageCount,
+          customInstruction: promptInputCustomInstruction
+        },
         {
           onDelta: (chunk) => {
             streamedPrompt = chunk.reset ? chunk.delta : `${streamedPrompt}${chunk.delta}`;
@@ -570,15 +592,15 @@ export function ChatComposer({
   }
 
   function updatePromptOptimizeStyle(value: string) {
-    const nextOptimizeStyle = normalizePromptOptimizeStyle(value);
+    const nextOptimizeStyle = normalizePromptOptimizeStyle(value, promptOptimizeStyleGroups);
     const currentDraftPrompt = textareaRef.current?.value ?? draftPrompt;
     const sourcePrompt = currentPromptOptimizeSource().trim();
-    const currentDefaultPrompt = promptOptimizeStyleDefaultPrompt(promptInputOptimizeStyle).trim();
+    const currentDefaultPrompt = promptOptimizeStyleDefaultPrompt(promptInputOptimizeStyle, promptOptimizeStyleGroups).trim();
     const isUneditedStyleDefaultPrompt = currentDraftPrompt.trim() === currentDefaultPrompt;
     const styleChanged = nextOptimizeStyle !== promptInputOptimizeStyle;
     const shouldApplySeriesDefaultCount = styleChanged
-      && isPromptOptimizeSeriesStyle(nextOptimizeStyle)
-      && !isPromptOptimizeSeriesStyle(promptInputOptimizeStyle)
+      && isPromptOptimizeSeriesStyle(nextOptimizeStyle, promptOptimizeStyleGroups)
+      && !isPromptOptimizeSeriesStyle(promptInputOptimizeStyle, promptOptimizeStyleGroups)
       && imageCount === 1;
     const nextImageCount = shouldApplySeriesDefaultCount ? 4 : imageCount;
     const shouldAutoOptimize = Boolean(sourcePrompt)
@@ -594,7 +616,7 @@ export function ChatComposer({
     if (shouldApplyDefaultPrompt) {
       stopPromptTemplateTyping();
       resetInputOptimizationState();
-      onDraftPromptChange(promptOptimizeStyleDefaultPrompt(nextOptimizeStyle));
+      onDraftPromptChange(promptOptimizeStyleDefaultPrompt(nextOptimizeStyle, promptOptimizeStyleGroups));
       window.setTimeout(() => textareaRef.current?.focus(), 0);
       return;
     }
@@ -624,6 +646,9 @@ export function ChatComposer({
           onPromptStreamingChange={setPromptTemplateStreaming}
           optimizeControlHost={promptTemplateActionSlot}
           onOptimizeControlVisibleChange={setPromptTemplateOptimizeControlVisible}
+          promptOptimizeCustomInstruction={promptInputCustomInstruction}
+          promptOptimizeStyleGroups={promptOptimizeStyleGroups}
+          onPromptOptimizeCustomInstructionChange={updatePromptOptimizeCustomInstruction}
           initialDraft={promptTemplateDraft?.panel ?? promptTemplatePanelDraftRef.current}
           onDraftChange={handlePromptTemplateDraftChange}
         />
@@ -808,12 +833,17 @@ export function ChatComposer({
                     <PromptOptimizeStyleSelect
                       value={promptInputOptimizeStyle}
                       onChange={updatePromptOptimizeStyle}
+                      groups={promptOptimizeStyleGroups}
+                      customInstruction={promptInputCustomInstruction}
+                      onCustomInstructionChange={updatePromptOptimizeCustomInstruction}
+                      onCustomInstructionSubmit={() => optimizeCurrentPrompt()}
+                      customInstructionSubmitDisabled={promptInputOptimizePending || !draftPrompt.trim()}
+                      customInstructionSubmitPending={promptInputOptimizePending}
                       disabled={promptInputOptimizePending}
                       className="composer-prompt-template-style-select"
                       menuClassName="composer-prompt-template-style-menu"
                       menuPlacement="top"
                       menuWidth={260}
-                      submenuWidth={260}
                     />
                   </span>
                 </div>

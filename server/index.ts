@@ -1225,14 +1225,520 @@ api.post("/config/image-accounts/:id/refresh-usage", async (c) => {
   return c.json(result);
 });
 
+api.get("/config/image-accounts/:id", (c) => {
+  const blocked = requireConfig(c);
+  if (blocked) return blocked;
+  const accountId = c.req.param("id");
+  const existing = getOne<ImageAccountRow>(configDb, "select * from image_accounts where id = ?", accountId);
+  if (!existing) return c.json({ error: "图片账号不存在" }, 404);
+  return c.json({ account: toImageAccount(existing, true) });
+});
+
+type ImageAccountImportSource = {
+  id?: string;
+  name?: string;
+  content?: string;
+  value?: unknown;
+};
+
+type ParsedImageAccountImport = {
+  rowId: string;
+  sourceName: string;
+  rawValue: unknown;
+  authJson: string;
+  authInfoJson: string;
+  accessToken: string;
+  email: string;
+  accountType: string;
+  accountId: string;
+  remoteName: string;
+  displayName: string;
+  error: string;
+};
+
+type ImageAccountImportPreviewItem = {
+  rowId: string;
+  sourceName: string;
+  name: string;
+  email: string;
+  accountType: string;
+  accountId: string;
+  remoteName: string;
+  hasAccessToken: boolean;
+  tokenPreview: string;
+  duplicateAccountId: string;
+  duplicateName: string;
+  duplicateReason: string;
+  action: "create" | "update" | "skip";
+  status: "ready" | "error";
+  error: string;
+};
+
+function importRecordValue(source: unknown, key: string) {
+  if (!source || typeof source !== "object") return undefined;
+  return (source as Record<string, unknown>)[key];
+}
+
+function parseEmbeddedJson(value: unknown) {
+  if (value && typeof value === "object") return value;
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed || (!trimmed.startsWith("{") && !trimmed.startsWith("["))) return null;
+  return safeJson(trimmed, null);
+}
+
+function firstImportString(source: unknown, keys: string[], depth = 0): string {
+  if (!source || depth > 8) return "";
+  if (typeof source === "string") {
+    const parsed = parseEmbeddedJson(source);
+    return parsed ? firstImportString(parsed, keys, depth + 1) : "";
+  }
+  if (Array.isArray(source)) {
+    for (const item of source) {
+      const found = firstImportString(item, keys, depth + 1);
+      if (found) return found;
+    }
+    return "";
+  }
+  if (typeof source !== "object") return "";
+  const record = source as Record<string, unknown>;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  for (const value of Object.values(record)) {
+    if (value && typeof value === "object") {
+      const found = firstImportString(value, keys, depth + 1);
+      if (found) return found;
+    }
+    if (typeof value === "string") {
+      const parsed = parseEmbeddedJson(value);
+      if (parsed) {
+        const found = firstImportString(parsed, keys, depth + 1);
+        if (found) return found;
+      }
+    }
+  }
+  return "";
+}
+
+function importJsonString(value: unknown) {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    const parsed = parseEmbeddedJson(trimmed);
+    return parsed ? JSON.stringify(parsed) : trimmed;
+  }
+  if (value && typeof value === "object") return JSON.stringify(value);
+  return "";
+}
+
+function importFileName(value: unknown) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  const name = text.split(/[\\/]/).pop() ?? text;
+  return name.trim();
+}
+
+function imageAccountImportAuthInfo(source: unknown, meta: { email: string; accountType: string; accountId: string }) {
+  if (!source || typeof source !== "object") return "";
+  const idToken = importRecordValue(source, "id_token") ?? importRecordValue(source, "idToken");
+  const provider = firstImportString(source, ["provider"]);
+  const authIndex = firstImportString(source, ["auth_index", "authIndex"]);
+  const info: Record<string, unknown> = {
+    account: firstImportString(source, ["account"]) || meta.email,
+    email: meta.email,
+    account_type: meta.accountType,
+    account_id: meta.accountId,
+    provider: provider || undefined,
+    auth_index: authIndex || undefined,
+    id_token: idToken || undefined
+  };
+  const compact = Object.fromEntries(Object.entries(info).filter(([, value]) => value !== "" && value !== undefined));
+  return Object.keys(compact).length > 0 ? JSON.stringify(compact) : "";
+}
+
+function imageAccountImportMeta(source: unknown) {
+  const authJsonValue =
+    importRecordValue(source, "auth_json") ??
+    importRecordValue(source, "authJson") ??
+    importRecordValue(source, "authorization_json") ??
+    importRecordValue(source, "authorizationJson");
+  const authInfoJsonValue =
+    importRecordValue(source, "auth_info_json") ??
+    importRecordValue(source, "authInfoJson") ??
+    importRecordValue(source, "auth_info") ??
+    importRecordValue(source, "authInfo");
+  const sources = [source, parseEmbeddedJson(authJsonValue), parseEmbeddedJson(authInfoJsonValue)].filter(Boolean);
+  const accessToken = firstImportString(sources, ["access_token", "accessToken", "token"]);
+  const email = firstImportString(sources, ["email", "account_email", "accountEmail", "username", "account"]);
+  const accountType = firstImportString(sources, ["account_type", "accountType", "type", "plan_type", "planType", "chatgpt_plan_type", "chatgptPlanType"]);
+  const accountId = firstImportString(sources, ["account_id", "accountId", "chatgpt_account_id", "chatgptAccountId"]);
+  const rawRemoteName =
+    firstImportString(source, ["remote_name", "remoteName", "name", "file_name", "fileName"]) ||
+    importFileName(firstImportString(source, ["path"]));
+  const authJson = importJsonString(authJsonValue) || importJsonString(source);
+  const authInfoJson = importJsonString(authInfoJsonValue) || imageAccountImportAuthInfo(source, { email, accountType, accountId });
+  const displayName = firstImportString(source, ["label", "display_name", "displayName"]) || email || rawRemoteName || accountId;
+  return {
+    accessToken,
+    email,
+    accountType,
+    accountId,
+    remoteName: importFileName(rawRemoteName),
+    authJson,
+    authInfoJson,
+    displayName
+  };
+}
+
+function collectImageAccountImportValues(value: unknown, sourceName: string, output: Array<{ sourceName: string; value: unknown }>) {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => collectImageAccountImportValues(item, `${sourceName} #${index + 1}`, output));
+    return;
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of ["files", "accounts", "items", "data"]) {
+      if (Array.isArray(record[key])) {
+        collectImageAccountImportValues(record[key], sourceName, output);
+        return;
+      }
+    }
+  }
+  output.push({ sourceName, value });
+}
+
+function parseImageAccountImportText(text: string, sourceName: string, output: Array<{ sourceName: string; value: unknown }>, errors: string[]) {
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  try {
+    collectImageAccountImportValues(JSON.parse(trimmed), sourceName, output);
+    return;
+  } catch {
+    // Try JSONL / newline-delimited JSON below.
+  }
+  const lines = trimmed.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  let parsedLines = 0;
+  for (const [index, line] of lines.entries()) {
+    try {
+      collectImageAccountImportValues(JSON.parse(line), `${sourceName} 行 ${index + 1}`, output);
+      parsedLines += 1;
+    } catch {
+      errors.push(`${sourceName} 行 ${index + 1} 不是有效 JSON`);
+    }
+  }
+  if (parsedLines === 0 && errors.length === lines.length) {
+    errors.splice(errors.length - lines.length, lines.length, `${sourceName} 不是有效 JSON`);
+  }
+}
+
+function normalizeImageAccountImportSources(value: unknown): ImageAccountImportSource[] {
+  if (Array.isArray(value)) {
+    return value.map((item, index) => {
+      if (item && typeof item === "object" && ("content" in item || "value" in item || "name" in item)) {
+        return item as ImageAccountImportSource;
+      }
+      return { name: `输入 ${index + 1}`, value: item };
+    });
+  }
+  if (typeof value === "string") return [{ name: "粘贴内容", content: value }];
+  if (value && typeof value === "object") return [{ name: "输入 1", value }];
+  return [];
+}
+
+function parseImageAccountImportSources(rawItems: unknown): ParsedImageAccountImport[] {
+  const sources = normalizeImageAccountImportSources(rawItems);
+  const values: Array<{ sourceName: string; value: unknown }> = [];
+  const parseErrors: string[] = [];
+  for (const [index, source] of sources.entries()) {
+    const sourceName = String(source.name ?? source.id ?? `输入 ${index + 1}`).trim() || `输入 ${index + 1}`;
+    if (typeof source.content === "string") {
+      parseImageAccountImportText(source.content, sourceName, values, parseErrors);
+    } else if (source.value !== undefined) {
+      collectImageAccountImportValues(source.value, sourceName, values);
+    } else {
+      collectImageAccountImportValues(source, sourceName, values);
+    }
+  }
+  const parsed = values.map(({ sourceName, value }, index) => {
+    const meta = imageAccountImportMeta(value);
+    const sourceRemoteName =
+      sourceName !== "粘贴内容" && !/^输入 \d+/.test(sourceName) ? sourceName : "";
+    const remoteName = meta.remoteName || sourceRemoteName;
+    return {
+      rowId: `row-${index + 1}`,
+      sourceName,
+      rawValue: value,
+      authJson: meta.authJson,
+      authInfoJson: meta.authInfoJson,
+      accessToken: meta.accessToken,
+      email: meta.email,
+      accountType: meta.accountType,
+      accountId: meta.accountId,
+      remoteName,
+      displayName: meta.displayName || remoteName,
+      error: meta.accessToken ? "" : "缺少 Access Token"
+    };
+  });
+  for (const [index, error] of parseErrors.entries()) {
+    parsed.push({
+      rowId: `error-${index + 1}`,
+      sourceName: "解析错误",
+      rawValue: null,
+      authJson: "",
+      authInfoJson: "",
+      accessToken: "",
+      email: "",
+      accountType: "",
+      accountId: "",
+      remoteName: "",
+      displayName: "",
+      error
+    });
+  }
+  return parsed;
+}
+
+function importAccountDescriptor(row: ImageAccountRow) {
+  const authMeta = row.auth_json ? extractAuthJsonMeta(row.auth_json) : { accountId: "" };
+  const infoMeta = row.auth_info_json ? extractAuthJsonMeta(row.auth_info_json) : { accountId: "" };
+  return {
+    id: row.id,
+    name: row.name ?? "",
+    remoteName: row.remote_name ?? "",
+    email: row.email ?? "",
+    accountId: authMeta.accountId || infoMeta.accountId || ""
+  };
+}
+
+function lowerKey(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function findImportDuplicate(
+  item: ParsedImageAccountImport,
+  descriptors: ReturnType<typeof importAccountDescriptor>[]
+) {
+  if (item.accountId) {
+    const match = descriptors.find((row) => lowerKey(row.accountId) === lowerKey(item.accountId));
+    if (match) return { account: match, reason: "账号 ID 相同" };
+  }
+  if (item.email) {
+    const match = descriptors.find((row) => lowerKey(row.email) === lowerKey(item.email));
+    if (match) return { account: match, reason: "邮箱相同" };
+  }
+  const remoteKey = lowerKey(item.remoteName || item.displayName);
+  if (remoteKey) {
+    const match = descriptors.find((row) => lowerKey(row.remoteName) === remoteKey || lowerKey(row.name) === remoteKey);
+    if (match) return { account: match, reason: "名称相同" };
+  }
+  return null;
+}
+
+function tokenPreview(token: string) {
+  const trimmed = token.trim();
+  if (!trimmed) return "";
+  if (trimmed.length <= 12) return `${trimmed.slice(0, 2)}****${trimmed.slice(-2)}`;
+  return `${trimmed.slice(0, 6)}****${trimmed.slice(-4)}`;
+}
+
+function buildImageAccountImportPreview(items: ParsedImageAccountImport[]) {
+  const descriptors = getAll<ImageAccountRow>(configDb, "select * from image_accounts").map(importAccountDescriptor);
+  const seen = new Map<string, string>();
+  return items.map((item): ImageAccountImportPreviewItem => {
+    const duplicateKey =
+      item.accountId ? `account:${lowerKey(item.accountId)}` :
+      item.email ? `email:${lowerKey(item.email)}` :
+      item.remoteName || item.displayName ? `name:${lowerKey(item.remoteName || item.displayName)}` :
+      "";
+    const batchDuplicate = !item.error && duplicateKey ? seen.get(duplicateKey) : "";
+    if (!item.error && duplicateKey && !batchDuplicate) seen.set(duplicateKey, item.rowId);
+    const duplicate = item.error ? null : findImportDuplicate(item, descriptors);
+    const error = item.error || (batchDuplicate ? "批量内容中存在重复账号" : "");
+    return {
+      rowId: item.rowId,
+      sourceName: item.sourceName,
+      name: item.displayName || item.email || item.remoteName || "图片账号",
+      email: item.email,
+      accountType: item.accountType,
+      accountId: item.accountId,
+      remoteName: item.remoteName,
+      hasAccessToken: Boolean(item.accessToken),
+      tokenPreview: tokenPreview(item.accessToken),
+      duplicateAccountId: duplicate?.account.id ?? "",
+      duplicateName: duplicate?.account.name ?? "",
+      duplicateReason: duplicate?.reason ?? "",
+      action: error ? "skip" : duplicate ? "update" : "create",
+      status: error ? "error" : "ready",
+      error
+    };
+  });
+}
+
+function compactImportSummary(items: ImageAccountImportPreviewItem[]) {
+  return {
+    total: items.length,
+    ready: items.filter((item) => item.status === "ready").length,
+    create: items.filter((item) => item.action === "create").length,
+    update: items.filter((item) => item.action === "update").length,
+    skipped: items.filter((item) => item.status === "error").length
+  };
+}
+
+function appendImportedAccountsToChatGptProvider(channelId: string, accountIds: string[], timestamp: string) {
+  if (accountIds.length === 0) return false;
+  const provider = channelId
+    ? getOne<ProviderRow>(configDb, "select * from provider_configs where id = ?", channelId)
+    : null;
+  if (!provider || normalizeProviderChannel(provider.channel || inferChannelFromType(provider.type)) !== "chatgpt_web") {
+    return false;
+  }
+  const nextIds = Array.from(new Set([...normalizeIdList(provider.web_account_ids), ...accountIds]));
+  run(configDb, "update provider_configs set web_account_ids = ?, updated_at = ? where id = ?", JSON.stringify(nextIds), timestamp, provider.id);
+  return true;
+}
+
+function upsertImportedImageAccount(item: ParsedImageAccountImport, channelId: string, timestamp: string) {
+  const descriptors = getAll<ImageAccountRow>(configDb, "select * from image_accounts").map(importAccountDescriptor);
+  const duplicate = findImportDuplicate(item, descriptors);
+  const existing = duplicate
+    ? getOne<ImageAccountRow>(configDb, "select * from image_accounts where id = ?", duplicate.account.id)
+    : null;
+  const name = item.displayName || item.email || item.remoteName || existing?.name || "图片账号";
+  const remoteName = item.remoteName || existing?.remote_name || null;
+  const email = item.email || existing?.email || "";
+  const accountType = item.accountType || existing?.account_type || "";
+  const nextChannelId = channelId || existing?.channel_id || null;
+  if (existing) {
+    run(
+      configDb,
+      `update image_accounts set
+        name = ?, remote_name = ?, channel_id = ?, email = ?, account_type = ?,
+        access_token = ?, auth_json = ?, auth_info_json = ?, sync_status = ?, updated_at = ?
+       where id = ?`,
+      name,
+      remoteName,
+      nextChannelId,
+      email,
+      accountType,
+      item.accessToken,
+      item.authJson,
+      item.authInfoJson || existing.auth_info_json || "",
+      "local",
+      timestamp,
+      existing.id
+    );
+    return { action: "updated" as const, accountId: existing.id };
+  }
+  const id = makeId("acct");
+  run(
+    configDb,
+    `insert into image_accounts (
+      id, name, remote_name, channel_id, email, account_type, status, quota, used_quota,
+      priority, access_token, auth_json, auth_info_json, note, sync_status, last_refreshed_at,
+      created_at, updated_at
+    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    id,
+    name,
+    remoteName,
+    nextChannelId,
+    email,
+    accountType,
+    "normal",
+    0,
+    0,
+    0,
+    item.accessToken,
+    item.authJson,
+    item.authInfoJson,
+    "",
+    "local",
+    "",
+    timestamp,
+    timestamp
+  );
+  return { action: "created" as const, accountId: id };
+}
+
+function imageAccountFormAuthMeta(authJson: string, authInfoJson: string) {
+  const authMeta = authJson ? extractAuthJsonMeta(authJson) : { accessToken: "", email: "", accountType: "", accountId: "", cookies: "" };
+  const infoMeta = authInfoJson ? extractAuthJsonMeta(authInfoJson) : { accessToken: "", email: "", accountType: "", accountId: "", cookies: "" };
+  return {
+    accessToken: authMeta.accessToken || infoMeta.accessToken || "",
+    email: authMeta.email || infoMeta.email || "",
+    accountType: authMeta.accountType || infoMeta.accountType || "",
+    accountId: authMeta.accountId || infoMeta.accountId || "",
+    cookies: authMeta.cookies || infoMeta.cookies || ""
+  };
+}
+
+api.post("/config/image-accounts/import-preview", async (c) => {
+  const blocked = requireConfig(c);
+  if (blocked) return blocked;
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = parseImageAccountImportSources((body as Record<string, unknown>).items);
+  const items = buildImageAccountImportPreview(parsed);
+  return c.json({ items, summary: compactImportSummary(items) });
+});
+
+api.post("/config/image-accounts/import", async (c) => {
+  const blocked = requireConfig(c);
+  if (blocked) return blocked;
+  const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+  const channelId = String(body.channelId ?? "").trim();
+  const confirmedRowIds = new Set(
+    Array.isArray(body.rowIds) ? body.rowIds.map((value) => String(value)) : []
+  );
+  const parsed = parseImageAccountImportSources(body.items);
+  const preview = buildImageAccountImportPreview(parsed);
+  const readyRowIds = new Set(
+    preview
+      .filter((item) => item.status === "ready" && (confirmedRowIds.size === 0 || confirmedRowIds.has(item.rowId)))
+      .map((item) => item.rowId)
+  );
+  const timestamp = now();
+  let created = 0;
+  let updated = 0;
+  let skipped = preview.filter((item) => item.status === "error").length;
+  let failed = 0;
+  const importedAccountIds: string[] = [];
+  for (const item of parsed) {
+    if (!readyRowIds.has(item.rowId)) continue;
+    try {
+      const result = upsertImportedImageAccount(item, channelId, timestamp);
+      importedAccountIds.push(result.accountId);
+      if (result.action === "created") created += 1;
+      else updated += 1;
+    } catch {
+      failed += 1;
+    }
+  }
+  if (confirmedRowIds.size > 0) {
+    skipped += preview.filter((item) => item.status === "ready" && !confirmedRowIds.has(item.rowId)).length;
+  }
+  const appendedToProvider = appendImportedAccountsToChatGptProvider(channelId, importedAccountIds, timestamp);
+  const result = {
+    ok: failed === 0,
+    created,
+    updated,
+    skipped,
+    failed,
+    appendedToProvider,
+    message: `导入完成：新增 ${created} 个，更新 ${updated} 个，跳过 ${skipped} 个，失败 ${failed} 个`
+  };
+  audit("image_account.import", { created, updated, skipped, failed, channelId, appendedToProvider });
+  return c.json(result);
+});
+
 api.post("/config/image-accounts", async (c) => {
   const blocked = requireConfig(c);
   if (blocked) return blocked;
   const body = await c.req.json().catch(() => ({}));
   const authJson = String(body.authJson ?? "").trim();
-  const meta = authJson ? extractAuthJsonMeta(authJson) : { accessToken: "", email: "", accountType: "" };
-  const accessToken = String(body.accessToken ?? meta.accessToken ?? "").trim();
   const authInfoJson = String(body.authInfoJson ?? "").trim();
+  const meta = imageAccountFormAuthMeta(authJson, authInfoJson);
+  const accessToken = String(body.accessToken ?? meta.accessToken ?? "").trim();
   const email = String(body.email ?? meta.email ?? "").trim();
   const accountType = String(body.accountType ?? meta.accountType ?? "").trim();
   const name = String(body.name ?? email ?? "").trim() || "图片账号";
@@ -1280,7 +1786,7 @@ api.patch("/config/image-accounts/:id", async (c) => {
   const authJson = rawAuthJson.includes("****") ? existing.auth_json ?? "" : rawAuthJson.trim();
   const rawAuthInfoJson = typeof body.authInfoJson === "string" ? body.authInfoJson : existing.auth_info_json ?? "";
   const authInfoJson = rawAuthInfoJson.includes("****") ? existing.auth_info_json ?? "" : rawAuthInfoJson.trim();
-  const meta = authJson ? extractAuthJsonMeta(authJson) : { accessToken: "", email: "", accountType: "" };
+  const meta = imageAccountFormAuthMeta(authJson, authInfoJson);
   const rawToken = typeof body.accessToken === "string" ? body.accessToken : existing.access_token ?? "";
   const accessToken = rawToken.includes("****") ? existing.access_token ?? "" : rawToken.trim() || meta.accessToken;
   const email = String(body.email ?? existing.email ?? meta.email ?? "").trim() || meta.email;
@@ -2418,6 +2924,7 @@ api.get("/config/request-logs", (c) => {
         durationMs: log.duration_ms,
         success: Boolean(log.success),
         error: log.error ?? "",
+        responseSnapshot: log.response_snapshot ?? "",
         createdAt: log.created_at
       };
     })

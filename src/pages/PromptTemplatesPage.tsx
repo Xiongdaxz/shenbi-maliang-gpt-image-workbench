@@ -116,7 +116,11 @@ import { PromptOptimizeStyleSelect } from "../components/PromptOptimizeStyleSele
 import { SearchHistoryInput } from "../components/SearchHistoryInput";
 import { copyTextToClipboard } from "../lib/clipboard";
 import { cx } from "../lib/cx";
-import { normalizePromptOptimizeStyle, promptOptimizeStyleOptions } from "../lib/promptOptimizeStyles";
+import {
+  normalizePromptOptimizeStyle,
+  promptOptimizeStyleOption,
+  sanitizePromptOptimizeStyleGroups
+} from "../lib/promptOptimizeStyles";
 import {
   buildBasePrompt,
   duplicatePromptTemplateComponent,
@@ -893,7 +897,7 @@ function payloadFromTemplate(template: PromptTemplate): PromptTemplatePayload {
     description: template.description,
     category: template.category,
     icon: template.icon,
-    optimizeStyle: normalizePromptOptimizeStyle(template.optimizeStyle ?? ""),
+    optimizeStyle: String(template.optimizeStyle ?? "").trim() || "standard",
     components: sortedPromptTemplateComponents(template.components).map((component, index) => ({
       ...component,
       sortOrder: (index + 1) * 10,
@@ -1021,6 +1025,7 @@ export function PromptTemplatesPage() {
   const setDraftPrompt = useWorkbench((state) => state.setDraftPrompt);
   const resetNewChatComposer = useWorkbench((state) => state.resetNewChatComposer);
   const setSelectedAssets = useWorkbench((state) => state.setSelectedAssets);
+  const me = useQuery({ queryKey: ["me"], queryFn: api.me });
   const [scope, setScope] = useState<TemplateScope>(() => normalizeScope(searchParams.get("scope")));
   const [keyword, setKeyword] = useState(() => searchParams.get("keyword") ?? "");
   const [selectedId, setSelectedId] = useState(() => searchParams.get("template") ?? "");
@@ -1038,6 +1043,7 @@ export function PromptTemplatesPage() {
   const [streamingOptimizedPromptZh, setStreamingOptimizedPromptZh] = useState("");
   const [streamingOptimizedPromptEn, setStreamingOptimizedPromptEn] = useState("");
   const [streamingBasePromptEn, setStreamingBasePromptEn] = useState("");
+  const [optimizeCustomInstruction, setOptimizeCustomInstruction] = useState("");
   const [promptDialog, setPromptDialog] = useState<PromptDialogState>(null);
   const [deleteTarget, setDeleteTarget] = useState<PromptTemplate | null>(null);
   const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
@@ -1054,6 +1060,7 @@ export function PromptTemplatesPage() {
   const skipNextFormDraftSaveRef = useRef("");
   const formDraftTouchedRef = useRef(false);
   const formDraftSaveTimerRef = useRef<number | null>(null);
+  const promptOptimizeCustomInstructionSaveTimerRef = useRef<number | null>(null);
   const autoBaseTranslationKeyRef = useRef("");
   const autoSwitchAiToEnglishRef = useRef(false);
 
@@ -1064,6 +1071,28 @@ export function PromptTemplatesPage() {
   const templates = templatesQuery.data?.templates ?? [];
   const templateCounts = templatesQuery.data?.counts ?? { all: 0, mine: 0, shared: 0 };
   const selectedTemplate = templates.find((template) => template.id === selectedId) ?? templates[0] ?? null;
+  const promptOptimizeStyleGroups = useMemo(
+    () => sanitizePromptOptimizeStyleGroups(me.data?.user?.preferences?.promptOptimizeStyleGroups),
+    [me.data?.user?.preferences?.promptOptimizeStyleGroups]
+  );
+  const savedPromptOptimizeCustomInstruction = me.data?.user?.preferences?.promptOptimizeCustomInstruction ?? "";
+  const savePromptOptimizeCustomInstruction = useMutation({
+    mutationFn: (value: string) => api.saveUserPreferences({ promptOptimizeCustomInstruction: value }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["me"], { user: data.user });
+    }
+  });
+
+  function updateOptimizeCustomInstruction(value: string) {
+    setOptimizeCustomInstruction(value);
+    if (promptOptimizeCustomInstructionSaveTimerRef.current) {
+      window.clearTimeout(promptOptimizeCustomInstructionSaveTimerRef.current);
+    }
+    promptOptimizeCustomInstructionSaveTimerRef.current = window.setTimeout(() => {
+      promptOptimizeCustomInstructionSaveTimerRef.current = null;
+      savePromptOptimizeCustomInstruction.mutate(value);
+    }, 500);
+  }
 
   const formDraftQuery = useQuery({
     queryKey: ["prompt-template-form-draft", selectedTemplate?.id],
@@ -1072,8 +1101,12 @@ export function PromptTemplatesPage() {
   });
 
   useEffect(() => {
-    setOptimizeStyle(normalizePromptOptimizeStyle(selectedTemplate?.optimizeStyle ?? ""));
-  }, [selectedTemplate?.id, selectedTemplate?.optimizeStyle]);
+    setOptimizeStyle(normalizePromptOptimizeStyle(selectedTemplate?.optimizeStyle ?? "", promptOptimizeStyleGroups));
+  }, [promptOptimizeStyleGroups, selectedTemplate?.id, selectedTemplate?.optimizeStyle]);
+
+  useEffect(() => {
+    setOptimizeCustomInstruction(savedPromptOptimizeCustomInstruction);
+  }, [savedPromptOptimizeCustomInstruction]);
 
   const historyQuery = useInfiniteQuery({
     queryKey: ["prompt-template-results", selectedTemplate?.id],
@@ -1244,7 +1277,7 @@ export function PromptTemplatesPage() {
     mutationFn: ({ templateId, nextOptimizeStyle }: { templateId: string; nextOptimizeStyle: PromptTemplateOptimizeStyle }) =>
       api.updatePromptTemplateOptimizeStyle(templateId, nextOptimizeStyle),
     onSuccess: (data, variables) => {
-      const savedStyle = normalizePromptOptimizeStyle(data.template?.optimizeStyle ?? variables.nextOptimizeStyle);
+      const savedStyle = normalizePromptOptimizeStyle(data.template?.optimizeStyle ?? variables.nextOptimizeStyle, promptOptimizeStyleGroups);
       setOptimizeStyle(savedStyle);
       queryClient.setQueriesData({ queryKey: ["prompt-templates"] }, (current: unknown) => {
         if (!current || typeof current !== "object") return current;
@@ -1260,10 +1293,22 @@ export function PromptTemplatesPage() {
     onError: (error) => showToast(error instanceof Error ? error.message : "优化风格保存失败", "error")
   });
   const optimize = useMutation({
-    mutationFn: (payload: { templateId: string; signature: string; basePrompt: string; optimizeStyle: PromptTemplateOptimizeStyle }) =>
+    mutationFn: (payload: {
+      templateId: string;
+      signature: string;
+      basePrompt: string;
+      optimizeStyle: PromptTemplateOptimizeStyle;
+      customInstruction?: string;
+    }) =>
       api.optimizePromptTemplateStream(
         payload.templateId,
-        { language: "zh", formValues, basePrompt: payload.basePrompt, optimizeStyle: payload.optimizeStyle },
+        {
+          language: "zh",
+          formValues,
+          basePrompt: payload.basePrompt,
+          optimizeStyle: payload.optimizeStyle,
+          customInstruction: payload.customInstruction
+        },
         {
           onDelta: (chunk) => {
             if (chunk.language === "en") {
@@ -1448,7 +1493,7 @@ export function PromptTemplatesPage() {
   const basePromptActionText = basePromptContent || (baseDisplayLanguage === "zh" ? basePrompt : "");
   const baseNegativePrompt = baseDisplayLanguage === "zh" ? templateManualNegativePrompt : (basePromptTranslating ? "" : savedBaseNegativePromptEn);
   const basePromptWithNegative = promptWithNegative(basePromptActionText, baseNegativePrompt, baseDisplayLanguage);
-  const optimizeStyleOption = promptOptimizeStyleOptions.find((option) => option.value === optimizeStyle) ?? promptOptimizeStyleOptions[0];
+  const optimizeStyleOption = promptOptimizeStyleOption(optimizeStyle, promptOptimizeStyleGroups);
   const optimizeActionLabel = optimize.isPending ? "优化中" : activeResult ? "重新优化" : "AI 优化";
   const baseTranslateActionLabel = translateBasePrompt.isPending
     ? "翻译中"
@@ -1590,7 +1635,7 @@ export function PromptTemplatesPage() {
   }
 
   function selectOptimizeStyle(value: string) {
-    const nextStyle = normalizePromptOptimizeStyle(value);
+    const nextStyle = normalizePromptOptimizeStyle(value, promptOptimizeStyleGroups);
     const shouldAutoOptimize = nextStyle !== optimizeStyle
       && Boolean(template?.id)
       && Boolean(basePrompt.trim())
@@ -1601,7 +1646,7 @@ export function PromptTemplatesPage() {
       saveOptimizeStyle.mutate({ templateId: template.id, nextOptimizeStyle: nextStyle });
     }
     if (shouldAutoOptimize && template) {
-      optimize.mutate({ templateId: template.id, signature, basePrompt, optimizeStyle: nextStyle });
+      optimize.mutate({ templateId: template.id, signature, basePrompt, optimizeStyle: nextStyle, customInstruction: optimizeCustomInstruction });
     }
   }
 
@@ -2036,7 +2081,13 @@ export function PromptTemplatesPage() {
                   <button
                     className="secondary-btn icon-only-btn prompt-optimize-submit"
                     type="button"
-                    onClick={() => optimize.mutate({ templateId: template.id, signature, basePrompt, optimizeStyle })}
+                    onClick={() => optimize.mutate({
+                      templateId: template.id,
+                      signature,
+                      basePrompt,
+                      optimizeStyle,
+                      customInstruction: optimizeCustomInstruction
+                    })}
                     disabled={Boolean(usingPromptTarget) || optimize.isPending || !basePrompt.trim()}
                     aria-label={`${optimizeActionLabel}，${optimizeStyleOption.label}风格`}
                     title={`${optimizeActionLabel}，${optimizeStyleOption.label}风格`}
@@ -2046,11 +2097,22 @@ export function PromptTemplatesPage() {
                   <PromptOptimizeStyleSelect
                     value={optimizeStyle}
                     onChange={selectOptimizeStyle}
+                    groups={promptOptimizeStyleGroups}
+                    customInstruction={optimizeCustomInstruction}
+                    onCustomInstructionChange={updateOptimizeCustomInstruction}
+                    onCustomInstructionSubmit={() => optimize.mutate({
+                      templateId: template.id,
+                      signature,
+                      basePrompt,
+                      optimizeStyle,
+                      customInstruction: optimizeCustomInstruction
+                    })}
+                    customInstructionSubmitDisabled={Boolean(usingPromptTarget) || optimize.isPending || !basePrompt.trim()}
+                    customInstructionSubmitPending={optimize.isPending}
                     disabled={Boolean(usingPromptTarget) || optimize.isPending || saveOptimizeStyle.isPending}
                     className="prompt-optimize-style-select"
                     menuClassName="prompt-optimize-style-menu"
                     menuWidth={260}
-                    submenuWidth={260}
                   />
                 </div>
               </div>

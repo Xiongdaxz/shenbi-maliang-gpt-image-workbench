@@ -57,6 +57,41 @@ export function logProviderRequest(input: {
   );
 }
 
+export function markProviderRequestPostProcessFailure(input: {
+  provider: RuntimeProviderRow;
+  operation: "generation" | "edit";
+  jobId?: string;
+  attemptNo?: number;
+  error: string;
+  responseSnapshot?: string;
+}) {
+  const jobId = String(input.jobId ?? "").trim();
+  if (!jobId) return;
+  const attemptNo = Math.max(1, Math.trunc(Number(input.attemptNo ?? 1)) || 1);
+  const row = configDb
+    .query(
+      `select id
+       from provider_request_logs
+       where job_id = ?
+         and provider_id = ?
+         and operation = ?
+         and attempt_no = ?
+         and success = 1
+       order by created_at desc
+       limit 1`
+    )
+    .get(jobId, input.provider.id, input.operation, attemptNo) as { id: string } | null;
+  if (!row) return;
+  const message = input.error.trim() || "图片请求后处理失败";
+  run(
+    configDb,
+    "update provider_request_logs set success = 0, error = ?, response_snapshot = ? where id = ?",
+    `HTTP 成功，但图片后处理失败：${message}`,
+    input.responseSnapshot ?? "",
+    row.id
+  );
+}
+
 function modelRequestError(value: unknown) {
   const message = value instanceof Error ? value.message : String(value ?? "");
   const normalized = message.replace(/\s+/g, " ").trim();

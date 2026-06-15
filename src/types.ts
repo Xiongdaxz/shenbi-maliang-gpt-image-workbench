@@ -1,11 +1,13 @@
 import type { AppearanceMode } from "./lib/appearance";
-import type { PromptTemplateOptimizeStyle } from "./lib/promptOptimizeStyles";
+import type { PromptOptimizeStyleGroup, PromptTemplateOptimizeStyle } from "./lib/promptOptimizeStyles";
 
 export type EditSuggestionTone = "default" | "practical" | "creative" | "detail";
 
 export type UserPreferences = {
   editSuggestionsEnabled: boolean;
   editSuggestionTone: EditSuggestionTone;
+  promptOptimizeStyleGroups: PromptOptimizeStyleGroup[];
+  promptOptimizeCustomInstruction: string;
 };
 
 export type User = {
@@ -311,6 +313,49 @@ export type ImageAccount = {
   updatedAt: string;
 };
 
+export type ImageAccountImportSource = {
+  id?: string;
+  name?: string;
+  content?: string;
+  value?: unknown;
+};
+
+export type ImageAccountImportPreviewItem = {
+  rowId: string;
+  sourceName: string;
+  name: string;
+  email: string;
+  accountType: string;
+  accountId: string;
+  remoteName: string;
+  hasAccessToken: boolean;
+  tokenPreview: string;
+  duplicateAccountId: string;
+  duplicateName: string;
+  duplicateReason: string;
+  action: "create" | "update" | "skip";
+  status: "ready" | "error";
+  error: string;
+};
+
+export type ImageAccountImportSummary = {
+  total: number;
+  ready: number;
+  create: number;
+  update: number;
+  skipped: number;
+};
+
+export type ImageAccountImportResult = {
+  ok: boolean;
+  created: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  appendedToProvider: boolean;
+  message: string;
+};
+
 export type ProviderRequestLog = {
   id: string;
   providerId: string;
@@ -333,6 +378,7 @@ export type ProviderRequestLog = {
   durationMs: number;
   success: boolean;
   error: string;
+  responseSnapshot: string;
   createdAt: string;
 };
 

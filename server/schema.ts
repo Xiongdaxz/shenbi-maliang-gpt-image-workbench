@@ -480,6 +480,8 @@ export function initAppDb() {
       user_id text primary key,
       edit_suggestions_enabled integer not null default 1,
       edit_suggestion_tone text not null default 'default',
+      prompt_optimize_styles_json text not null default '',
+      prompt_optimize_custom_instruction text not null default '',
       updated_at text not null,
       foreign key (user_id) references users(id)
     )
@@ -489,6 +491,12 @@ export function initAppDb() {
   }
   if (!tableColumnExists(appDb, "user_preferences", "edit_suggestion_tone")) {
     appDb.run("alter table user_preferences add column edit_suggestion_tone text not null default 'default'");
+  }
+  if (!tableColumnExists(appDb, "user_preferences", "prompt_optimize_styles_json")) {
+    appDb.run("alter table user_preferences add column prompt_optimize_styles_json text not null default ''");
+  }
+  if (!tableColumnExists(appDb, "user_preferences", "prompt_optimize_custom_instruction")) {
+    appDb.run("alter table user_preferences add column prompt_optimize_custom_instruction text not null default ''");
   }
   run(
     appDb,
@@ -1638,19 +1646,20 @@ export function initConfigDb() {
     create table if not exists starter_copy_settings (
       id text primary key,
       enabled integer not null default 1,
-      copy_count integer not null default 20,
+      copy_count integer not null default 50,
       updated_at text not null
     )
   `);
   if (!tableColumnExists(configDb, "starter_copy_settings", "copy_count")) {
-    configDb.run("alter table starter_copy_settings add column copy_count integer not null default 20");
+    configDb.run("alter table starter_copy_settings add column copy_count integer not null default 50");
   }
+  run(configDb, "update starter_copy_settings set copy_count = 50 where id = ? and copy_count = 20", "default");
   run(
     configDb,
     "insert or ignore into starter_copy_settings (id, enabled, copy_count, updated_at) values (?, ?, ?, ?)",
     "default",
     1,
-    20,
+    50,
     promptOptimizerTimestamp
   );
 
@@ -1975,6 +1984,7 @@ export function initConfigDb() {
       duration_ms integer not null,
       success integer not null,
       error text,
+      response_snapshot text not null default '',
       created_at text not null
     )
   `);
@@ -1988,7 +1998,8 @@ export function initConfigDb() {
     ["job_id", "text not null default ''"],
     ["attempt_no", "integer not null default 1"],
     ["max_attempts", "integer not null default 1"],
-    ["is_retry", "integer not null default 0"]
+    ["is_retry", "integer not null default 0"],
+    ["response_snapshot", "text not null default ''"]
   ] as const) {
     if (!tableColumnExists(configDb, "provider_request_logs", column)) {
       configDb.run(`alter table provider_request_logs add column ${column} ${definition}`);

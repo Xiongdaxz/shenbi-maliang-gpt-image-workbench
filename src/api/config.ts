@@ -7,6 +7,10 @@ import type {
   GlobalSwitchSetting,
   GlobalSwitchType,
   ImageAccount,
+  ImageAccountImportPreviewItem,
+  ImageAccountImportResult,
+  ImageAccountImportSource,
+  ImageAccountImportSummary,
   ChangelogEntry,
   ImageGenerationMode,
   ModelRequestLog,
@@ -308,6 +312,8 @@ export const configApi = {
       };
       accounts: ImageAccount[];
     }>("/api/config/image-accounts"),
+  imageAccount: (id: string) =>
+    request<{ account: ImageAccount | null }>(`/api/config/image-accounts/${encodeURIComponent(id)}`),
   refreshImageAccountUsage: (id?: string) =>
     request<{ ok: boolean; updated: number; failed: number; skipped: number; message: string }>(
       id
@@ -319,6 +325,16 @@ export const configApi = {
     request<{ account: ImageAccount | null }>("/api/config/image-accounts", {
       method: "POST",
       body: JSON.stringify(account)
+    }),
+  previewImageAccountImport: (payload: { items: ImageAccountImportSource[]; channelId?: string }) =>
+    request<{ items: ImageAccountImportPreviewItem[]; summary: ImageAccountImportSummary }>("/api/config/image-accounts/import-preview", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
+  importImageAccounts: (payload: { items: ImageAccountImportSource[]; channelId?: string; rowIds?: string[] }) =>
+    request<ImageAccountImportResult>("/api/config/image-accounts/import", {
+      method: "POST",
+      body: JSON.stringify(payload)
     }),
   updateImageAccount: (id: string, account: Partial<ImageAccount>) =>
     request<{ account: ImageAccount | null }>(`/api/config/image-accounts/${id}`, {

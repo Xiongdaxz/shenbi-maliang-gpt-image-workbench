@@ -52,6 +52,33 @@ function looksLikeBase64Image(value: string) {
   );
 }
 
+function normalizeImageMimeType(value: unknown) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!normalized) return "";
+  if (normalized === "png" || normalized === "image/png") return "image/png";
+  if (normalized === "jpg" || normalized === "jpeg" || normalized === "image/jpg" || normalized === "image/jpeg") return "image/jpeg";
+  if (normalized === "webp" || normalized === "image/webp") return "image/webp";
+  if (normalized === "avif" || normalized === "image/avif") return "image/avif";
+  return normalized.startsWith("image/") ? normalized : "";
+}
+
+function mimeTypeFromImageBuffer(buffer: Buffer) {
+  if (buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+    return "image/png";
+  }
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP") {
+    return "image/webp";
+  }
+  return "";
+}
+
+function imageMimeTypeFromRecord(source: Record<string, unknown>) {
+  return normalizeImageMimeType(source.mime_type ?? source.mimeType ?? source.output_format ?? source.outputFormat);
+}
+
 function findBase64Images(source: unknown): string[] {
   if (typeof source === "string") {
     return looksLikeBase64Image(source) ? [source] : [];
@@ -81,10 +108,11 @@ function findBase64Image(source: unknown): string | null {
   return findBase64Images(source)[0] ?? null;
 }
 
-async function saveBase64Image(base64: string, imageId: string, userId: string, sessionId: string | null): Promise<SavedImageFile> {
-  const mimeType = base64.match(/^data:(image\/[a-z0-9.+-]+);base64,/i)?.[1] ?? "image/png";
+async function saveBase64Image(base64: string, imageId: string, userId: string, sessionId: string | null, mimeTypeHint = ""): Promise<SavedImageFile> {
+  const dataUrlMimeType = normalizeImageMimeType(base64.match(/^data:(image\/[a-z0-9.+-]+);base64,/i)?.[1]);
   const clean = base64.replace(/^data:image\/[a-z0-9.+-]+;base64,/i, "");
   const buffer = Buffer.from(clean, "base64");
+  const mimeType = dataUrlMimeType || normalizeImageMimeType(mimeTypeHint) || mimeTypeFromImageBuffer(buffer) || "image/png";
   const dimensions = readImageDimensions(buffer);
   const relativePath = secureImagePath(userId, sessionId, imageId);
   await writeEncryptedFile(relativePath, buffer);
@@ -165,36 +193,38 @@ function providerImageContextFromRecord(source: Record<string, unknown>): Provid
 type ProviderImageResultItem = {
   value: string;
   kind: "base64" | "url";
+  mimeType: string;
   context: ProviderImageContext;
 };
 
-function structuredImageItemFromRecord(source: Record<string, unknown>): ProviderImageResultItem | null {
+function structuredImageItemFromRecord(source: Record<string, unknown>, mimeTypeHint = ""): ProviderImageResultItem | null {
   for (const key of ["b64_json", "base64", "image_base64", "image", "result"]) {
     const value = stringField(source, key);
     if (value && looksLikeBase64Image(value)) {
-      return { value, kind: "base64", context: providerImageContextFromRecord(source) };
+      return { value, kind: "base64", mimeType: imageMimeTypeFromRecord(source) || mimeTypeHint, context: providerImageContextFromRecord(source) };
     }
   }
   for (const key of ["url", "image_url"]) {
     const value = stringField(source, key);
     if (value && looksLikeImageUrl(value)) {
-      return { value, kind: "url", context: providerImageContextFromRecord(source) };
+      return { value, kind: "url", mimeType: imageMimeTypeFromRecord(source) || mimeTypeHint, context: providerImageContextFromRecord(source) };
     }
   }
   return null;
 }
 
-function findStructuredImageItems(source: unknown): ProviderImageResultItem[] {
+function findStructuredImageItems(source: unknown, mimeTypeHint = ""): ProviderImageResultItem[] {
   if (Array.isArray(source)) {
-    return source.flatMap((item) => findStructuredImageItems(item));
+    return source.flatMap((item) => findStructuredImageItems(item, mimeTypeHint));
   }
   if (!source || typeof source !== "object") return [];
   const record = source as Record<string, unknown>;
+  const nextMimeTypeHint = imageMimeTypeFromRecord(record) || mimeTypeHint;
   const found: ProviderImageResultItem[] = [];
-  const direct = structuredImageItemFromRecord(record);
+  const direct = structuredImageItemFromRecord(record, nextMimeTypeHint);
   if (direct) found.push(direct);
   for (const value of Object.values(record)) {
-    found.push(...findStructuredImageItems(value));
+    found.push(...findStructuredImageItems(value, nextMimeTypeHint));
   }
   return found;
 }
@@ -236,8 +266,9 @@ export async function saveProviderImageResult(
   userId: string,
   sessionId: string | null
 ): Promise<SavedImageFile> {
+  const responseMimeType = responseJson && typeof responseJson === "object" ? imageMimeTypeFromRecord(responseJson as Record<string, unknown>) : "";
   const base64 = extractByPath(responseJson, provider.response_image_path) ?? findBase64Image(responseJson);
-  if (base64) return saveBase64Image(base64, imageId, userId, sessionId);
+  if (base64) return saveBase64Image(base64, imageId, userId, sessionId, responseMimeType);
   const imageUrl = findImageUrl(responseJson);
   if (imageUrl) return saveImageUrl(provider, imageUrl, imageId, userId, sessionId);
   throw new Error("图片接口返回中没有找到图片数据");
@@ -270,13 +301,14 @@ export async function saveProviderImageResults(
   userId: string,
   sessionId: string | null
 ): Promise<Array<{ id: string; file: SavedImageFile; providerContext: ProviderImageContext }>> {
+  const responseMimeType = responseJson && typeof responseJson === "object" ? imageMimeTypeFromRecord(responseJson as Record<string, unknown>) : "";
   const imageItems = uniqueImageItems(findStructuredImageItems(responseJson));
   if (imageItems.length > 0) {
     const saved: Array<{ id: string; file: SavedImageFile; providerContext: ProviderImageContext }> = [];
     for (const item of imageItems) {
       const id = makeImageId();
       const file = item.kind === "base64"
-        ? await saveBase64Image(item.value, id, userId, sessionId)
+        ? await saveBase64Image(item.value, id, userId, sessionId, item.mimeType || responseMimeType)
         : await saveImageUrl(provider, item.value, id, userId, sessionId);
       saved.push({ id, file, providerContext: item.context });
     }
@@ -291,7 +323,7 @@ export async function saveProviderImageResults(
     const saved: Array<{ id: string; file: SavedImageFile; providerContext: ProviderImageContext }> = [];
     for (const base64 of base64Values) {
       const id = makeImageId();
-      saved.push({ id, file: await saveBase64Image(base64, id, userId, sessionId), providerContext: providerImageContextFromRecord({}) });
+      saved.push({ id, file: await saveBase64Image(base64, id, userId, sessionId, responseMimeType), providerContext: providerImageContextFromRecord({}) });
     }
     return saved;
   }

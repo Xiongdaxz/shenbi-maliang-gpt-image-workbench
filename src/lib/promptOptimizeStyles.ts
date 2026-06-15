@@ -1,4 +1,28 @@
-export const promptOptimizeStyleGroups = [
+export type PromptTemplateOptimizeStyle = string;
+
+export type PromptOptimizeStyleItem = {
+  value: string;
+  label: string;
+  description: string;
+  prompt?: string;
+  visible?: boolean;
+};
+
+export type PromptOptimizeStyleGroup = PromptOptimizeStyleItem & {
+  children?: PromptOptimizeStyleItem[];
+};
+
+export type PromptOptimizeStyleOption = {
+  value: PromptTemplateOptimizeStyle;
+  label: string;
+  description: string;
+  prompt: string;
+  visible: boolean;
+  parentValue?: PromptTemplateOptimizeStyle;
+  parentLabel?: string;
+};
+
+export const defaultPromptOptimizeStyleGroups: PromptOptimizeStyleGroup[] = [
   { value: "standard", label: "标准", description: "结构清晰，适合通用生图。" },
   {
     value: "realistic",
@@ -117,77 +141,194 @@ export const promptOptimizeStyleGroups = [
       { value: "creative:fantasy-world", label: "奇幻世界观", description: "架空世界、异世界构建。" }
     ]
   }
-] as const;
+];
 
-type PromptOptimizeStyleGroup = typeof promptOptimizeStyleGroups[number];
-type PromptOptimizeStyleChild<T> = T extends { readonly children: readonly (infer Child)[] } ? Child : never;
+export const promptOptimizeStyleGroups = defaultPromptOptimizeStyleGroups;
 
-export type PromptTemplateOptimizeStyle =
-  | PromptOptimizeStyleGroup["value"]
-  | PromptOptimizeStyleChild<PromptOptimizeStyleGroup>["value"];
+function normalizedText(value: unknown, fallback = "", maxLength = 300) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return fallback;
+  return Array.from(text).slice(0, maxLength).join("");
+}
 
-export type PromptOptimizeStyleOption = {
-  value: PromptTemplateOptimizeStyle;
-  label: string;
-  description: string;
-  parentValue?: PromptTemplateOptimizeStyle;
-  parentLabel?: string;
-};
+function normalizedPrompt(value: unknown, maxLength = 1200) {
+  const text = String(value ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  if (!text) return "";
+  return Array.from(text).slice(0, maxLength).join("");
+}
 
-export const promptOptimizeStyleOptions: PromptOptimizeStyleOption[] = promptOptimizeStyleGroups.flatMap((group) => {
-  const parentOption: PromptOptimizeStyleOption = {
-    value: group.value,
-    label: group.label,
-    description: group.description
+function cloneStyleItem(item: PromptOptimizeStyleItem): PromptOptimizeStyleItem {
+  return {
+    value: item.value,
+    label: item.label,
+    description: item.description,
+    ...(item.prompt ? { prompt: item.prompt } : {}),
+    ...(item.visible === false ? { visible: false } : {})
   };
-  const childOptions = "children" in group
-    ? group.children.map((child) => ({
-        value: child.value,
-        label: child.label,
-        description: child.description,
-        parentValue: group.value,
-        parentLabel: group.label
-      }))
-    : [];
-  return [parentOption, ...childOptions];
-});
+}
 
-const promptOptimizeStyleValueSet = new Set(promptOptimizeStyleOptions.map((option) => option.value));
+export function cloneDefaultPromptOptimizeStyleGroups(): PromptOptimizeStyleGroup[] {
+  return defaultPromptOptimizeStyleGroups.map((group) => ({
+    ...cloneStyleItem(group),
+    ...(group.children ? { children: group.children.map(cloneStyleItem) } : {})
+  }));
+}
 
-export function normalizePromptOptimizeStyle(value: string | null | undefined): PromptTemplateOptimizeStyle {
+export function createPromptOptimizeStyleValue(parentValue?: string) {
+  const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  return parentValue ? `${parentValue}:custom-${suffix}` : `custom:${suffix}`;
+}
+
+export function sanitizePromptOptimizeStyleGroups(value: unknown): PromptOptimizeStyleGroup[] {
+  if (!Array.isArray(value)) return cloneDefaultPromptOptimizeStyleGroups();
+  const usedValues = new Set<string>();
+  const groups: PromptOptimizeStyleGroup[] = [];
+  const normalizeValue = (rawValue: unknown, fallbackPrefix: string) => {
+    const base = normalizedText(rawValue, `${fallbackPrefix}:${usedValues.size + 1}`, 96).replace(/\s/g, "-");
+    let next = base;
+    let index = 2;
+    while (usedValues.has(next)) {
+      next = `${base}-${index}`;
+      index += 1;
+    }
+    usedValues.add(next);
+    return next;
+  };
+  for (const rawGroup of value.slice(0, 32)) {
+    if (!rawGroup || typeof rawGroup !== "object") continue;
+    const record = rawGroup as Record<string, unknown>;
+    const label = normalizedText(record.label, "", 40);
+    if (!label) continue;
+    const group: PromptOptimizeStyleGroup = {
+      value: normalizeValue(record.value, "custom"),
+      label,
+      description: normalizedText(record.description, "自定义优化方向。", 120),
+      prompt: normalizedPrompt(record.prompt),
+      visible: record.visible === false ? false : true
+    };
+    const rawChildren = Array.isArray(record.children) ? record.children : [];
+    const children: PromptOptimizeStyleItem[] = [];
+    for (const rawChild of rawChildren.slice(0, 48)) {
+      if (!rawChild || typeof rawChild !== "object") continue;
+      const childRecord = rawChild as Record<string, unknown>;
+      const childLabel = normalizedText(childRecord.label, "", 40);
+      if (!childLabel) continue;
+      children.push({
+        value: normalizeValue(childRecord.value, group.value),
+        label: childLabel,
+        description: normalizedText(childRecord.description, "自定义子风格。", 120),
+        prompt: normalizedPrompt(childRecord.prompt),
+        visible: childRecord.visible === false ? false : true
+      });
+    }
+    if (children.length > 0) group.children = children;
+    groups.push(group);
+  }
+  return groups;
+}
+
+export function visiblePromptOptimizeStyleGroups(groups: PromptOptimizeStyleGroup[] = promptOptimizeStyleGroups) {
+  return sanitizePromptOptimizeStyleGroups(groups)
+    .filter((group) => group.visible !== false)
+    .map((group) => ({
+      ...group,
+      children: (group.children ?? []).filter((child) => child.visible !== false)
+    }));
+}
+
+export function promptOptimizeStyleGroupsToOptions(
+  groups: PromptOptimizeStyleGroup[] = promptOptimizeStyleGroups,
+  includeHidden = false
+): PromptOptimizeStyleOption[] {
+  const source = includeHidden ? sanitizePromptOptimizeStyleGroups(groups) : visiblePromptOptimizeStyleGroups(groups);
+  return source.flatMap((group) => {
+    const parentOption: PromptOptimizeStyleOption = {
+      value: group.value,
+      label: group.label,
+      description: group.description,
+      prompt: group.prompt ?? "",
+      visible: group.visible !== false
+    };
+    const childOptions = (group.children ?? []).map((child) => ({
+      value: child.value,
+      label: child.label,
+      description: child.description,
+      prompt: child.prompt ?? "",
+      visible: child.visible !== false,
+      parentValue: group.value,
+      parentLabel: group.label
+    }));
+    return [parentOption, ...childOptions];
+  });
+}
+
+export const promptOptimizeStyleOptions: PromptOptimizeStyleOption[] = promptOptimizeStyleGroupsToOptions(promptOptimizeStyleGroups);
+
+function fallbackPromptOptimizeStyle(groups: PromptOptimizeStyleGroup[]) {
+  const options = promptOptimizeStyleGroupsToOptions(groups);
+  return options.find((option) => option.value === "standard")?.value ?? options[0]?.value ?? "standard";
+}
+
+export function normalizePromptOptimizeStyle(
+  value: string | null | undefined,
+  groups: PromptOptimizeStyleGroup[] = promptOptimizeStyleGroups
+): PromptTemplateOptimizeStyle {
   const text = String(value ?? "").trim();
-  return promptOptimizeStyleValueSet.has(text as PromptTemplateOptimizeStyle) ? (text as PromptTemplateOptimizeStyle) : "standard";
+  if (text && promptOptimizeStyleGroupsToOptions(groups).some((option) => option.value === text)) return text;
+  return fallbackPromptOptimizeStyle(groups);
 }
 
-export function isPromptOptimizeSeriesStyle(value: string | null | undefined) {
-  const normalized = normalizePromptOptimizeStyle(value);
-  return normalized === "series" || normalized.startsWith("series:");
+export function promptOptimizeStyleOption(
+  value: string | null | undefined,
+  groups: PromptOptimizeStyleGroup[] = promptOptimizeStyleGroups,
+  includeHidden = false
+) {
+  const normalized = includeHidden
+    ? String(value ?? "").trim()
+    : normalizePromptOptimizeStyle(value, groups);
+  return promptOptimizeStyleGroupsToOptions(groups, includeHidden).find((option) => option.value === normalized)
+    ?? promptOptimizeStyleGroupsToOptions(groups)[0]
+    ?? promptOptimizeStyleOptions[0];
 }
 
-export function promptOptimizeStyleOption(value: string | null | undefined) {
-  const normalized = normalizePromptOptimizeStyle(value);
-  return promptOptimizeStyleOptions.find((option) => option.value === normalized) ?? promptOptimizeStyleOptions[0];
+export function promptOptimizeStyleFullLabel(
+  value: string | null | undefined,
+  groups: PromptOptimizeStyleGroup[] = promptOptimizeStyleGroups
+) {
+  const option = promptOptimizeStyleOption(value, groups, true);
+  return option?.parentLabel ? `${option.parentLabel} / ${option.label}` : option?.label ?? "标准";
 }
 
-export function promptOptimizeStyleFullLabel(value: string | null | undefined) {
-  const option = promptOptimizeStyleOption(value);
-  return option.parentLabel ? `${option.parentLabel} / ${option.label}` : option.label;
+export function isPromptOptimizeSeriesStyle(
+  value: string | null | undefined,
+  groups: PromptOptimizeStyleGroup[] = promptOptimizeStyleGroups
+) {
+  const normalized = normalizePromptOptimizeStyle(value, groups);
+  const option = promptOptimizeStyleOption(normalized, groups, true);
+  return normalized === "series" || option?.parentValue === "series" || normalized.startsWith("series:");
 }
 
-export function promptOptimizeStyleDefaultPrompt(value: string | null | undefined) {
-  const option = promptOptimizeStyleOption(value);
-  const description = option.description.replace(/[。.]$/, "");
-  const styleName = option.parentLabel ? `${option.parentLabel} / ${option.label}` : option.label;
-  if (option.value === "composition") {
+export function promptOptimizeStyleDefaultPrompt(
+  value: string | null | undefined,
+  groups: PromptOptimizeStyleGroup[] = promptOptimizeStyleGroups
+) {
+  const option = promptOptimizeStyleOption(value, groups, true);
+  const description = (option?.description || "结构清晰，适合通用生图。").replace(/[。.]$/, "");
+  const customPrompt = option?.prompt?.trim();
+  const styleName = option?.parentLabel ? `${option.parentLabel} / ${option.label}` : option?.label ?? "标准";
+  if (customPrompt) {
+    return `请生成一张符合${styleName}方向的高质量图片，${customPrompt.replace(/[。.]$/, "")}，主体明确，构图完整，画面有层次，细节清晰。`;
+  }
+  if (option?.value === "composition") {
     return `请生成一张构图优化的高质量图片，${description}，根据提示词类型自动选择三分法、中心对称、引导线、框中框、留白、前景层次等合适构图手法，主体明确，视觉层级清晰，画面有层次，细节清晰。`;
   }
-  if (option.parentValue === "composition") {
+  if (option?.parentValue === "composition") {
     return `请生成一张采用${option.label}构图的高质量图片，${description}，主体明确，视觉层级清晰，画面有层次，细节清晰。`;
   }
-  if (option.value === "series") {
+  if (option?.value === "series") {
     return `请生成一套组图，${description}，保持同一主体、配色、光线、构图语言和视觉调性一致，每张图用途不同，适合连续生成。`;
   }
-  if (option.parentValue === "series") {
+  if (option?.parentValue === "series") {
     return `请生成一组${option.label}组图，${description}，保持同一主体、配色、光线、构图语言和视觉调性一致，每张图用途不同，适合连续生成。`;
   }
   return `请生成一张${styleName}风格的高质量图片，${description}，主体明确，构图完整，画面有层次，细节清晰。`;

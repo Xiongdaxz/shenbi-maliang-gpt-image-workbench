@@ -457,43 +457,43 @@ html[data-appearance="dark"] .rendering-dot-field::after {
 }
 
 html[data-appearance="maliang"] .rendering-card {
-  --rendering-dot-rgb: 125, 95, 43;
+  --rendering-dot-rgb: 201, 100, 66;
   background:
-    radial-gradient(circle at 24% 18%, rgba(255, 253, 248, 0.66), transparent 38%),
-    radial-gradient(circle at 82% 84%, rgba(156, 123, 58, 0.14), transparent 42%),
+    radial-gradient(circle at 24% 18%, rgba(250, 249, 245, 0.66), transparent 38%),
+    radial-gradient(circle at 82% 84%, rgba(201, 100, 66, 0.14), transparent 42%),
     var(--app-preview-bg);
   box-shadow:
-    inset 0 1px 0 rgba(255, 253, 248, 0.56),
-    0 18px 44px rgba(87, 74, 56, 0.14);
+    inset 0 1px 0 rgba(250, 249, 245, 0.56),
+    0 18px 44px rgba(67, 52, 43, 0.14);
 }
 
 html[data-appearance="maliang"] .rendering-card::before {
   background:
-    radial-gradient(circle at 50% 50%, rgba(255, 253, 248, 0.28), transparent 42%),
-    radial-gradient(circle at 86% 86%, rgba(156, 123, 58, 0.12), transparent 44%);
+    radial-gradient(circle at 50% 50%, rgba(250, 249, 245, 0.28), transparent 42%),
+    radial-gradient(circle at 86% 86%, rgba(201, 100, 66, 0.12), transparent 44%);
 }
 
 html[data-appearance="maliang"] .rendering-card::after {
   background: linear-gradient(
     108deg,
     transparent 28%,
-    rgba(156, 123, 58, 0.06) 39%,
-    rgba(255, 253, 248, 0.82) 48%,
-    rgba(255, 248, 234, 0.52) 52%,
-    rgba(156, 123, 58, 0.06) 62%,
+    rgba(201, 100, 66, 0.06) 39%,
+    rgba(250, 249, 245, 0.82) 48%,
+    rgba(255, 250, 244, 0.52) 52%,
+    rgba(201, 100, 66, 0.06) 62%,
     transparent 74%
   );
   opacity: 0.52;
 }
 
 html[data-appearance="maliang"] .rendering-dot-field::before {
-  background: radial-gradient(circle at 50% 50%, transparent 0 84%, rgba(234, 223, 205, 0.08) 94%, rgba(234, 223, 205, 0.22) 100%);
+  background: radial-gradient(circle at 50% 50%, transparent 0 84%, rgba(236, 232, 221, 0.08) 94%, rgba(236, 232, 221, 0.22) 100%);
 }
 
 html[data-appearance="maliang"] .rendering-dot-field::after {
   background:
-    linear-gradient(90deg, rgba(234, 223, 205, 0.78) 0, rgba(234, 223, 205, 0.34) 8%, transparent 15%, transparent 85%, rgba(234, 223, 205, 0.34) 92%, rgba(234, 223, 205, 0.78) 100%),
-    linear-gradient(180deg, rgba(234, 223, 205, 0.78) 0, rgba(234, 223, 205, 0.34) 8%, transparent 15%, transparent 85%, rgba(234, 223, 205, 0.34) 92%, rgba(234, 223, 205, 0.78) 100%);
+    linear-gradient(90deg, rgba(236, 232, 221, 0.78) 0, rgba(236, 232, 221, 0.34) 8%, transparent 15%, transparent 85%, rgba(236, 232, 221, 0.34) 92%, rgba(236, 232, 221, 0.78) 100%),
+    linear-gradient(180deg, rgba(236, 232, 221, 0.78) 0, rgba(236, 232, 221, 0.34) 8%, transparent 15%, transparent 85%, rgba(236, 232, 221, 0.34) 92%, rgba(236, 232, 221, 0.78) 100%);
 }
 
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .starter-title-text,
@@ -974,22 +974,22 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .mobile-menu-btn 
 }
 
 html[data-appearance="maliang"] .asset-card-tags-wrap.has-overflow::after {
-  background: linear-gradient(90deg, rgba(255, 253, 248, 0), var(--app-card-bg) 78%);
+  background: linear-gradient(90deg, rgba(250, 249, 245, 0), var(--app-card-bg) 78%);
 }
 
 html[data-appearance="maliang"] .library-filter-row::before {
-  background: rgba(245, 240, 230, 0.74);
+  background: rgba(245, 244, 237, 0.78);
 }
 
 html[data-appearance="maliang"] .composer {
-  box-shadow: 0 14px 44px rgba(87, 74, 56, 0.16);
+  box-shadow: 0 14px 44px rgba(67, 52, 43, 0.14);
 }
 
 html[data-appearance="maliang"] .composer-textarea-skeleton span,
 html[data-appearance="maliang"] .recent-skeleton-row::before,
 html[data-appearance="maliang"] .image-load-skeleton {
   background:
-    linear-gradient(90deg, transparent, rgba(156, 123, 58, 0.16), transparent),
+    linear-gradient(90deg, transparent, rgba(201, 100, 66, 0.14), transparent),
     var(--app-preview-bg);
   background-size: 220% 100%;
 }
@@ -1000,10 +1000,10 @@ html[data-appearance="maliang"] .case-multi-image-badge,
 html[data-appearance="maliang"] .case-preview-close,
 html[data-appearance="maliang"] .case-reference-lightbox-close,
 html[data-appearance="maliang"] .case-reference-lightbox-download {
-  border-color: rgba(156, 123, 58, 0.28);
-  background: rgba(255, 253, 248, 0.86);
+  border-color: rgba(120, 94, 78, 0.26);
+  background: rgba(250, 249, 245, 0.88);
   color: var(--app-text);
-  box-shadow: 0 12px 30px rgba(87, 74, 56, 0.18);
+  box-shadow: 0 12px 30px rgba(67, 52, 43, 0.16);
 }
 
 html[data-appearance="maliang"] .case-action-icon:hover:not(:disabled),
@@ -1011,8 +1011,8 @@ html[data-appearance="maliang"] .case-action-icon.case-favorite-btn.active:hover
 html[data-appearance="maliang"] .case-preview-close:hover,
 html[data-appearance="maliang"] .case-reference-lightbox-close:hover,
 html[data-appearance="maliang"] .case-reference-lightbox-download:hover {
-  border-color: rgba(156, 123, 58, 0.42);
-  background: rgba(255, 253, 248, 0.98);
+  border-color: rgba(201, 100, 66, 0.42);
+  background: rgba(250, 249, 245, 0.98);
   color: var(--app-text);
 }
 
@@ -1033,20 +1033,20 @@ html[data-appearance="maliang"] .case-action-icon.case-favorite-btn.active:hover
 }
 
 html[data-appearance="maliang"] .case-preview-backdrop.fullscreen {
-  background: rgba(50, 39, 23, 0.34);
+  background: rgba(43, 33, 28, 0.34);
 }
 
 html[data-appearance="maliang"] .case-preview-navigator {
-  border-color: rgba(156, 123, 58, 0.24);
-  background: rgba(255, 253, 248, 0.72);
-  box-shadow: 0 14px 34px rgba(87, 74, 56, 0.18);
+  border-color: rgba(120, 94, 78, 0.24);
+  background: rgba(250, 249, 245, 0.76);
+  box-shadow: 0 14px 34px rgba(67, 52, 43, 0.16);
 }
 
 html[data-appearance="maliang"] .case-preview-toolbar {
-  border-color: rgba(156, 123, 58, 0.24);
-  background: rgba(255, 253, 248, 0.88);
+  border-color: rgba(120, 94, 78, 0.24);
+  background: rgba(250, 249, 245, 0.90);
   color: var(--app-muted);
-  box-shadow: 0 -16px 42px rgba(87, 74, 56, 0.18);
+  box-shadow: 0 -16px 42px rgba(67, 52, 43, 0.16);
 }
 
 html[data-appearance="maliang"] .case-preview-info h3,
@@ -1061,7 +1061,7 @@ html[data-appearance="maliang"] .case-preview-info-meta {
 }
 
 html[data-appearance="maliang"] .case-preview-info-meta span + span {
-  border-left-color: rgba(156, 123, 58, 0.26);
+  border-left-color: rgba(120, 94, 78, 0.24);
 }
 
 html[data-appearance="maliang"] .case-preview-description:focus-visible .case-preview-description-text {
@@ -1069,35 +1069,35 @@ html[data-appearance="maliang"] .case-preview-description:focus-visible .case-pr
 }
 
 html[data-appearance="maliang"] .case-preview-description-popover {
-  border-color: rgba(156, 123, 58, 0.30);
-  background: rgba(255, 253, 248, 0.98);
+  border-color: rgba(120, 94, 78, 0.28);
+  background: rgba(250, 249, 245, 0.98);
   color: var(--app-text);
-  box-shadow: 0 18px 54px rgba(87, 74, 56, 0.18);
+  box-shadow: 0 18px 54px rgba(67, 52, 43, 0.16);
 }
 
 html[data-appearance="maliang"] .case-preview-divider {
-  background: rgba(156, 123, 58, 0.22);
+  background: rgba(201, 100, 66, 0.20);
 }
 
 html[data-appearance="maliang"] .case-preview-transform-tools {
-  border-color: rgba(156, 123, 58, 0.24);
-  background: rgba(255, 253, 248, 0.64);
+  border-color: rgba(120, 94, 78, 0.22);
+  background: rgba(250, 249, 245, 0.68);
 }
 
 html[data-appearance="maliang"] .case-preview-tool,
 html[data-appearance="maliang"] .case-preview-actions .secondary-btn,
 html[data-appearance="maliang"] .case-preview-actions .danger-btn {
-  border-color: rgba(156, 123, 58, 0.34);
-  background: rgba(255, 253, 248, 0.82);
+  border-color: rgba(120, 94, 78, 0.30);
+  background: rgba(250, 249, 245, 0.84);
   color: var(--app-text);
-  box-shadow: 0 10px 26px rgba(87, 74, 56, 0.14);
+  box-shadow: 0 10px 26px rgba(67, 52, 43, 0.13);
 }
 
 html[data-appearance="maliang"] .case-preview-tool:hover:not(:disabled),
 html[data-appearance="maliang"] .case-preview-actions .secondary-btn:hover,
 html[data-appearance="maliang"] .case-preview-actions .danger-btn:hover {
-  border-color: rgba(156, 123, 58, 0.46);
-  background: rgba(255, 253, 248, 0.98);
+  border-color: rgba(201, 100, 66, 0.46);
+  background: rgba(250, 249, 245, 0.98);
   color: var(--app-text);
 }
 
@@ -1334,14 +1334,14 @@ html[data-appearance="dark"] .prompt-diff-switch.active {
 }
 
 html[data-appearance="maliang"] .prompt-diff-switch.active {
-  border-color: #9a793f;
-  background: #6f5121;
+  border-color: #c96442;
+  background: #c96442;
   color: #fff;
   font-weight: 800;
-  text-shadow: 0 1px 1px rgba(31, 24, 12, 0.28);
+  text-shadow: 0 1px 1px rgba(43, 33, 28, 0.22);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.16),
-    0 0 0 3px rgba(125, 95, 43, 0.2);
+    0 0 0 3px rgba(201, 100, 66, 0.20);
 }
 
 html[data-appearance="dark"] .prompt-diff-switch.active:hover {
@@ -1351,8 +1351,8 @@ html[data-appearance="dark"] .prompt-diff-switch.active:hover {
 }
 
 html[data-appearance="maliang"] .prompt-diff-switch.active:hover {
-  border-color: #a98545;
-  background: #7d5f2b;
+  border-color: #b85536;
+  background: #b85536;
   color: #fff;
 }
 
@@ -1374,9 +1374,9 @@ html[data-appearance="dark"] .result-block-diff-mark {
 }
 
 html[data-appearance="maliang"] .result-block-diff-mark {
-  background: rgba(125, 95, 43, 0.22);
+  background: rgba(201, 100, 66, 0.18);
   color: var(--app-text);
-  box-shadow: inset 0 0 0 1px rgba(125, 95, 43, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(201, 100, 66, 0.22);
 }
 
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .result-block-negative,
@@ -1387,7 +1387,7 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-section
 html[data-appearance="maliang"] .prompt-template-skeleton,
 html[data-appearance="maliang"] .result-skeleton span {
   background:
-    linear-gradient(90deg, transparent, rgba(156, 123, 58, 0.16), transparent),
+    linear-gradient(90deg, transparent, rgba(201, 100, 66, 0.14), transparent),
     var(--app-preview-bg);
   background-size: 220% 100%;
 }

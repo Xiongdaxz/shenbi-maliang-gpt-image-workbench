@@ -1010,6 +1010,18 @@ function responsesInputImages(payload: Record<string, unknown>) {
     .filter(Boolean);
 }
 
+function imageModelBaseName(model: unknown) {
+  const normalized = String(model ?? "").trim().toLowerCase();
+  if (!normalized) return "";
+  const slashIndex = normalized.lastIndexOf("/");
+  return slashIndex >= 0 ? normalized.slice(slashIndex + 1) : normalized;
+}
+
+function isGptImage2Family(model: unknown) {
+  const base = imageModelBaseName(model);
+  return base === "gpt-image-2" || base === "codex-gpt-image-2" || base.startsWith("gpt-image-2-");
+}
+
 function buildResponsesPayload(
   provider: ProviderRow,
   mode: "generation" | "edit",
@@ -1034,11 +1046,12 @@ function buildResponsesPayload(
     type: "image_generation",
     action: mode === "edit" ? "edit" : "generate",
     model: provider.model || "gpt-image-2",
-    output_format: "png"
+    output_format: String(payload.output_format ?? "").trim() || "png"
   };
   if (payload.size) tool.size = String(payload.size);
   if (payload.quality) tool.quality = String(payload.quality);
   if (payload.background) tool.background = String(payload.background);
+  if (mode === "edit" && payload.input_fidelity) tool.input_fidelity = String(payload.input_fidelity);
   if (mode === "edit" && typeof payload.mask === "string" && payload.mask.trim()) {
     tool.input_image_mask = {
       image_url: payload.mask.trim()
@@ -1270,6 +1283,9 @@ function buildImageEditForm(payload: Record<string, unknown>) {
   if (payload.size) form.set("size", String(payload.size));
   if (payload.quality) form.set("quality", String(payload.quality));
   if (payload.n) form.set("n", String(payload.n));
+  if (payload.background) form.set("background", String(payload.background));
+  if (payload.output_format) form.set("output_format", String(payload.output_format));
+  if (payload.input_fidelity) form.set("input_fidelity", String(payload.input_fidelity));
   if (payload.response_format) form.set("response_format", String(payload.response_format));
   images.forEach((imageUrl, index) => {
     form.append("image", fileFromDataUrl(imageUrl, `image-${index + 1}.png`));
@@ -2900,6 +2916,9 @@ function payloadForProvider(provider: RuntimeProviderRow, payload: Record<string
     ...payload,
     model: String(provider.model || "").trim() || DEFAULT_IMAGE_MODEL
   };
+  if (isGptImage2Family(nextPayload.model)) {
+    delete nextPayload.input_fidelity;
+  }
   if (shouldRequestOpenAiCompatibleBase64(provider)) {
     nextPayload.response_format = "b64_json";
   } else {

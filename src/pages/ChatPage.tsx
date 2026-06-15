@@ -26,7 +26,7 @@ import { type AssetUploadMode } from "../lib/assets";
 import { APP_INTRO_SLIDES } from "../lib/featureIntroSlides";
 import { isDefaultCaseItemId } from "../lib/defaultCases";
 import { requestSizeFromSelection, type SizeOption } from "../lib/imageOptions";
-import { normalizePromptOptimizeStyle } from "../lib/promptOptimizeStyles";
+import { normalizePromptOptimizeStyle, sanitizePromptOptimizeStyleGroups } from "../lib/promptOptimizeStyles";
 import { getTimeGreeting } from "../lib/timeGreeting";
 import { workImageFromMessage } from "../lib/workImages";
 import { useComposerPasteAsset } from "../hooks/useComposerPasteAsset";
@@ -259,6 +259,7 @@ export function ChatPage({ user }: { user: User }) {
   const [activeBranchId, setActiveBranchId] = useState<string | null>(null);
   const [starterPromptOptimizeRequest, setStarterPromptOptimizeRequest] = useState<{ id: number; prompt: string } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const promptOptimizeCustomInstructionSaveTimerRef = useRef<number | null>(null);
   const pendingSubmitScopeRef = useRef<string | null>(null);
   const starterPromptOptimizeRequestIdRef = useRef(0);
   const submitSessionByRequestRef = useRef(new Map<string, string>());
@@ -269,6 +270,27 @@ export function ChatPage({ user }: { user: User }) {
   const guideGreeting = getTimeGreeting();
   const editSuggestionsEnabled = user.preferences?.editSuggestionsEnabled !== false;
   const editSuggestionTone = user.preferences?.editSuggestionTone ?? "default";
+  const promptOptimizeStyleGroups = useMemo(
+    () => sanitizePromptOptimizeStyleGroups(user.preferences?.promptOptimizeStyleGroups),
+    [user.preferences?.promptOptimizeStyleGroups]
+  );
+  const promptOptimizeCustomInstruction = user.preferences?.promptOptimizeCustomInstruction ?? "";
+
+  const savePromptOptimizeCustomInstruction = useMutation({
+    mutationFn: (value: string) => api.saveUserPreferences({ promptOptimizeCustomInstruction: value }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["me"], { user: data.user });
+    }
+  });
+  const schedulePromptOptimizeCustomInstructionSave = useCallback((value: string) => {
+    if (promptOptimizeCustomInstructionSaveTimerRef.current) {
+      window.clearTimeout(promptOptimizeCustomInstructionSaveTimerRef.current);
+    }
+    promptOptimizeCustomInstructionSaveTimerRef.current = window.setTimeout(() => {
+      promptOptimizeCustomInstructionSaveTimerRef.current = null;
+      savePromptOptimizeCustomInstruction.mutate(value);
+    }, 500);
+  }, [savePromptOptimizeCustomInstruction]);
 
   const providers = useQuery({ queryKey: ["providers"], queryFn: api.providers });
   const assets = useQuery({ queryKey: ["assets"], queryFn: () => api.assets() });
@@ -296,7 +318,10 @@ export function ChatPage({ user }: { user: User }) {
   const composerInstanceKey = sessionId ? composerScopeKey : `${COMPOSER_NEW_DRAFT_SCOPE_KEY}:${newChatResetKey}`;
   const currentComposerDraft = composerDrafts[composerScopeKey] ?? null;
   const currentPromptTemplateDraft = composerDrafts[composerScopeKey]?.promptTemplate ?? null;
-  const currentPromptInputOptimizeStyle = currentComposerDraft?.promptInputOptimizeStyle ?? initialPromptInputOptimizeStyleFromBrowser();
+  const currentPromptInputOptimizeStyle = normalizePromptOptimizeStyle(
+    currentComposerDraft?.promptInputOptimizeStyle ?? initialPromptInputOptimizeStyleFromBrowser(),
+    promptOptimizeStyleGroups
+  );
   const restoringComposerDraftScopeRef = useRef<string | null>(null);
   const hasRestoredComposerScopeRef = useRef(false);
   const handlePromptTemplateDraftChange = useCallback((promptTemplate: ComposerSessionDraft["promptTemplate"]) => {
@@ -1408,6 +1433,8 @@ export function ChatPage({ user }: { user: User }) {
         previews={composerPreviews}
         imageCount={imageCount}
         promptInputOptimizeStyle={currentPromptInputOptimizeStyle}
+        promptOptimizeCustomInstruction={promptOptimizeCustomInstruction}
+        promptOptimizeStyleGroups={promptOptimizeStyleGroups}
         promptTemplateDraft={currentPromptTemplateDraft}
         quality={quality}
         qualityOptions={qualityOptions}
@@ -1430,6 +1457,7 @@ export function ChatPage({ user }: { user: User }) {
           setCasePickerOpen(true);
         }}
         onPromptInputOptimizeStyleChange={handlePromptInputOptimizeStyleChange}
+        onPromptOptimizeCustomInstructionChange={schedulePromptOptimizeCustomInstructionSave}
         onPromptTemplateDraftChange={handlePromptTemplateDraftChange}
         onToggleMaterialPicker={() => setMaterialPickerOpen(!materialPickerOpen)}
       />

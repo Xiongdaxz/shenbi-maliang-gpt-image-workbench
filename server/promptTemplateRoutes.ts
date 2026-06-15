@@ -18,6 +18,12 @@ import {
 import type { AssetRow } from "./types";
 import { readStoredFile } from "./secureFiles";
 import { mimeTypeFromPath } from "./imageFiles";
+import { userPreferences } from "./userPreferences";
+import {
+  promptOptimizeStyleGroupsToOptions,
+  promptOptimizeStyleOption as preferencePromptOptimizeStyleOption,
+  type PromptOptimizeStyleGroup
+} from "../src/lib/promptOptimizeStyles";
 
 type PromptTemplateVisibility = "private" | "shared";
 type ModelRequestLogContext = {
@@ -199,9 +205,10 @@ function asJsonObject(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-function normalizePromptOptimizeStyle(value: unknown): PromptOptimizeStyle {
+function normalizePromptOptimizeStyle(value: unknown, styleGroups?: PromptOptimizeStyleGroup[]): PromptOptimizeStyle {
   const text = String(value ?? "").trim();
   if (promptOptimizeStyleValues.has(text)) return text;
+  if (styleGroups && promptOptimizeStyleGroupsToOptions(styleGroups, true).some((option) => option.value === text)) return text;
   return "standard";
 }
 
@@ -213,13 +220,20 @@ function normalizePromptOptimizeImageCount(value: unknown) {
   return Math.min(integer, 10);
 }
 
-function parentPromptOptimizeStyle(optimizeStyle: PromptOptimizeStyle) {
-  const normalizedStyle = normalizePromptOptimizeStyle(optimizeStyle);
-  return promptOptimizeSubStyleParents[normalizedStyle] ?? normalizedStyle;
+function normalizePromptOptimizeCustomInstruction(value: unknown) {
+  const text = String(value ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  if (!text) return "";
+  return Array.from(text).slice(0, 500).join("");
 }
 
-function seriesPromptImageCountContext(optimizeStyle: PromptOptimizeStyle, imageCount?: number) {
-  if (parentPromptOptimizeStyle(optimizeStyle) !== "series") return null;
+function parentPromptOptimizeStyle(optimizeStyle: PromptOptimizeStyle, styleGroups?: PromptOptimizeStyleGroup[]) {
+  const normalizedStyle = normalizePromptOptimizeStyle(optimizeStyle, styleGroups);
+  const preferenceOption = styleGroups ? preferencePromptOptimizeStyleOption(normalizedStyle, styleGroups, true) : null;
+  return promptOptimizeSubStyleParents[normalizedStyle] ?? preferenceOption?.parentValue ?? normalizedStyle;
+}
+
+function seriesPromptImageCountContext(optimizeStyle: PromptOptimizeStyle, imageCount?: number, styleGroups?: PromptOptimizeStyleGroup[]) {
+  if (parentPromptOptimizeStyle(optimizeStyle, styleGroups) !== "series") return null;
   const normalizedCount = normalizePromptOptimizeImageCount(imageCount);
   const requestedImageCount = normalizedCount && normalizedCount > 1 ? normalizedCount : null;
   const planCount = requestedImageCount ?? 4;
@@ -230,8 +244,8 @@ function seriesPromptImageCountContext(optimizeStyle: PromptOptimizeStyle, image
   };
 }
 
-function seriesPromptImageCountInstructions(optimizeStyle: PromptOptimizeStyle, imageCount?: number) {
-  const context = seriesPromptImageCountContext(optimizeStyle, imageCount);
+function seriesPromptImageCountInstructions(optimizeStyle: PromptOptimizeStyle, imageCount?: number, styleGroups?: PromptOptimizeStyleGroup[]) {
+  const context = seriesPromptImageCountContext(optimizeStyle, imageCount, styleGroups);
   if (!context) return [];
   if (context.requestedImageCount) {
     return [
@@ -277,7 +291,7 @@ function localizedTextRecord(value: unknown) {
   return result;
 }
 
-function publicPromptTemplate(row: PromptTemplateRow, currentUserId: string) {
+function publicPromptTemplate(row: PromptTemplateRow, currentUserId: string, styleGroups?: PromptOptimizeStyleGroup[]) {
   const visibility = visibilityOf(row.visibility);
   const isOwner = Boolean(row.user_id && row.user_id === currentUserId);
   return {
@@ -289,7 +303,7 @@ function publicPromptTemplate(row: PromptTemplateRow, currentUserId: string) {
     description: row.description,
     category: row.category,
     icon: row.icon || "Sparkles",
-    optimizeStyle: normalizePromptOptimizeStyle(row.optimize_style),
+    optimizeStyle: normalizePromptOptimizeStyle(row.optimize_style, styleGroups),
     components: asJsonArray(safeJson(row.components_json, [])),
     rules: asJsonObject(safeJson(row.rules_json, {})),
     output: asJsonObject(safeJson(row.output_json, {})),
@@ -406,15 +420,15 @@ function visiblePromptTemplateForUser(id: string, userId: string) {
 }
 
 function snapshotFromRow(row: PromptTemplateRow, userId: string) {
-  return publicPromptTemplate(row, userId);
+  return publicPromptTemplate(row, userId, userPreferences(userId).promptOptimizeStyleGroups);
 }
 
-function normalizeTemplatePayload(body: Record<string, unknown>, fallback?: PromptTemplateRow) {
+function normalizeTemplatePayload(body: Record<string, unknown>, fallback?: PromptTemplateRow, styleGroups?: PromptOptimizeStyleGroup[]) {
   const name = String(body.name ?? fallback?.name ?? "").trim();
   const description = String(body.description ?? fallback?.description ?? "").trim();
   const category = String(body.category ?? fallback?.category ?? "").trim();
   const icon = String(body.icon ?? fallback?.icon ?? "Sparkles").trim() || "Sparkles";
-  const optimizeStyle = normalizePromptOptimizeStyle(body.optimizeStyle ?? fallback?.optimize_style);
+  const optimizeStyle = normalizePromptOptimizeStyle(body.optimizeStyle ?? fallback?.optimize_style, styleGroups);
   const components = asJsonArray(body.components ?? safeJson(fallback?.components_json, []));
   const rules = asJsonObject(body.rules ?? safeJson(fallback?.rules_json, {}));
   const output = asJsonObject(body.output ?? safeJson(fallback?.output_json, {}));
@@ -1646,13 +1660,12 @@ const promptOptimizeSubStyleConfigs: Record<string, PromptOptimizeStyleConfig> =
   }
 };
 
-function resolvedPromptOptimizeStyleConfig(optimizeStyle: PromptOptimizeStyle) {
-  const normalizedStyle = normalizePromptOptimizeStyle(optimizeStyle);
-  const parentStyle = parentPromptOptimizeStyle(normalizedStyle);
+function resolvedPromptOptimizeStyleConfig(optimizeStyle: PromptOptimizeStyle, styleGroups?: PromptOptimizeStyleGroup[]) {
+  const normalizedStyle = normalizePromptOptimizeStyle(optimizeStyle, styleGroups);
+  const parentStyle = parentPromptOptimizeStyle(normalizedStyle, styleGroups);
   const parentConfig = promptOptimizeStyleConfigs[parentStyle] ?? promptOptimizeStyleConfigs.standard;
   const subConfig = promptOptimizeSubStyleConfigs[normalizedStyle];
-  if (!subConfig) return parentConfig;
-  return {
+  const baseConfig = !subConfig ? parentConfig : {
     label: `${parentConfig.label} / ${subConfig.label}`,
     temperature: subConfig.temperature ?? parentConfig.temperature,
     instructions: [
@@ -1664,6 +1677,35 @@ function resolvedPromptOptimizeStyleConfig(optimizeStyle: PromptOptimizeStyle) {
       ...subConfig.rules,
       parentStyle,
       subStyleLabel: subConfig.label
+    }
+  };
+  const preferenceOption = styleGroups ? preferencePromptOptimizeStyleOption(normalizedStyle, styleGroups, true) : null;
+  const preferenceParent = preferenceOption?.parentValue && styleGroups
+    ? preferencePromptOptimizeStyleOption(preferenceOption.parentValue, styleGroups, true)
+    : null;
+  const preferenceInstructions = [
+    preferenceParent?.prompt?.trim() ? `用户自定义主风格方向：${preferenceParent.prompt.trim()}` : "",
+    preferenceOption?.prompt?.trim() ? `用户自定义优化方向：${preferenceOption.prompt.trim()}` : ""
+  ].filter(Boolean);
+  if (!preferenceOption && preferenceInstructions.length === 0) return baseConfig;
+  if (preferenceInstructions.length === 0 && promptOptimizeStyleValues.has(normalizedStyle)) return baseConfig;
+  const label = preferenceOption
+    ? (preferenceOption.parentLabel ? `${preferenceOption.parentLabel} / ${preferenceOption.label}` : preferenceOption.label)
+    : baseConfig.label;
+  const description = preferenceOption?.description?.trim() ?? "";
+  return {
+    ...baseConfig,
+    label,
+    instructions: [
+      ...baseConfig.instructions,
+      description ? `用户风格说明：${description}` : "",
+      ...preferenceInstructions
+    ].filter(Boolean),
+    rules: {
+      ...baseConfig.rules,
+      userCustomStyle: true,
+      userCustomStyleValue: normalizedStyle,
+      userCustomStyleDescription: description
     }
   };
 }
@@ -1880,6 +1922,8 @@ async function optimizePlainPromptWithProvider({
   provider,
   prompt,
   optimizeStyle = "standard",
+  styleGroups,
+  customInstruction = "",
   imageCount,
   onPreview,
   logContext
@@ -1887,12 +1931,15 @@ async function optimizePlainPromptWithProvider({
   provider: PromptOptimizerProviderRow;
   prompt: string;
   optimizeStyle?: PromptOptimizeStyle;
+  styleGroups?: PromptOptimizeStyleGroup[];
+  customInstruction?: string;
   imageCount?: number;
   onPreview?: (delta: PromptStreamDelta) => void;
   logContext: ModelRequestLogContext;
 }) {
-  const styleConfig = resolvedPromptOptimizeStyleConfig(optimizeStyle);
-  const seriesImageContext = seriesPromptImageCountContext(optimizeStyle, imageCount);
+  const styleConfig = resolvedPromptOptimizeStyleConfig(optimizeStyle, styleGroups);
+  const seriesImageContext = seriesPromptImageCountContext(optimizeStyle, imageCount, styleGroups);
+  const temporaryInstruction = normalizePromptOptimizeCustomInstruction(customInstruction);
   const promptLanguage = promptLanguageFromText(prompt);
   const previewState = { text: "" };
   const outputLanguage = promptLanguage === "zh" ? "中文" : "English";
@@ -1922,8 +1969,10 @@ async function optimizePlainPromptWithProvider({
           "优化后的提示词不能和原文一模一样；不要原样返回。",
           `当前优化风格：${styleConfig.label}。`,
           ...styleConfig.instructions,
-          ...seriesPromptImageCountInstructions(optimizeStyle, imageCount)
-        ].join("\n")
+          temporaryInstruction ? `用户自定义优化方向：${temporaryInstruction}` : "",
+          temporaryInstruction ? "自定义优化方向优先级高于所选风格，但仍必须保留用户原始主体、用途和硬性约束。" : "",
+          ...seriesPromptImageCountInstructions(optimizeStyle, imageCount, styleGroups)
+        ].filter(Boolean).join("\n")
       },
       {
         role: "user",
@@ -1936,6 +1985,7 @@ async function optimizePlainPromptWithProvider({
               rules: styleConfig.rules
             },
             imageSeriesContext: seriesImageContext,
+            customInstruction: temporaryInstruction,
             outputRules: {
               plainTextOnly: true,
               preserveUserIntent: true,
@@ -2256,6 +2306,8 @@ async function optimizePromptWithProvider({
   basePrompt,
   negativeEnabled,
   optimizeStyle = "standard",
+  styleGroups,
+  customInstruction = "",
   manualNegativePrompt = "",
   onPreview,
   logContext
@@ -2266,14 +2318,17 @@ async function optimizePromptWithProvider({
   basePrompt: string;
   negativeEnabled: boolean;
   optimizeStyle?: PromptOptimizeStyle;
+  styleGroups?: PromptOptimizeStyleGroup[];
+  customInstruction?: string;
   manualNegativePrompt?: string;
   onPreview?: (delta: PromptStreamDelta) => void;
   logContext: ModelRequestLogBaseContext;
 }) {
   const fixedNegativePrompt = manualNegativePrompt.trim();
   const aiNegativeEnabled = negativeEnabled && !fixedNegativePrompt;
-  const styleConfig = resolvedPromptOptimizeStyleConfig(optimizeStyle);
-  const seriesImageContext = seriesPromptImageCountContext(optimizeStyle);
+  const styleConfig = resolvedPromptOptimizeStyleConfig(optimizeStyle, styleGroups);
+  const seriesImageContext = seriesPromptImageCountContext(optimizeStyle, undefined, styleGroups);
+  const temporaryInstruction = normalizePromptOptimizeCustomInstruction(customInstruction);
   const optimizePreviewState = { text: "" };
   const optimizedContent = await requestPromptModelText({
     provider,
@@ -2294,7 +2349,9 @@ async function optimizePromptWithProvider({
           "如果字段是素材或文件上传，只能优化备注描述；不要改写、翻译、编造文件名、图片尺寸和文件大小。",
           `当前优化风格：${styleConfig.label}。`,
           ...styleConfig.instructions,
-          ...seriesPromptImageCountInstructions(optimizeStyle),
+          temporaryInstruction ? `用户自定义优化方向：${temporaryInstruction}` : "",
+          temporaryInstruction ? "自定义优化方向优先级高于所选风格，但仍必须保留表单原始主体、用途、字段结构和硬性约束。" : "",
+          ...seriesPromptImageCountInstructions(optimizeStyle, undefined, styleGroups),
           aiNegativeEnabled
             ? `如果需要反向提示词，在中文正向提示词后另起一行输出 ${NEGATIVE_PROMPT_SEPARATOR}，再输出中文反向提示词。`
             : "不要输出反向提示词，不要输出分隔线。"
@@ -2315,6 +2372,7 @@ async function optimizePromptWithProvider({
               rules: styleConfig.rules
             },
             imageSeriesContext: seriesImageContext,
+            customInstruction: temporaryInstruction,
             basePrompt,
             formValues,
             lockedStructure: {
@@ -2445,6 +2503,8 @@ function streamPromptTemplateOptimizeResponse({
   basePrompt,
   negativeEnabled,
   optimizeStyle,
+  styleGroups,
+  customInstruction = "",
   manualNegativePrompt = "",
   source = "prompt-template"
 }: {
@@ -2457,6 +2517,8 @@ function streamPromptTemplateOptimizeResponse({
   basePrompt: string;
   negativeEnabled: boolean;
   optimizeStyle: PromptOptimizeStyle;
+  styleGroups?: PromptOptimizeStyleGroup[];
+  customInstruction?: string;
   manualNegativePrompt?: string;
   source?: string;
 }) {
@@ -2476,6 +2538,8 @@ function streamPromptTemplateOptimizeResponse({
           basePrompt,
           negativeEnabled,
           optimizeStyle,
+          styleGroups,
+          customInstruction,
           manualNegativePrompt,
           onPreview: (delta) => sendFrame(controller, "delta", delta),
           logContext: { userId, jobId: row.id, source }
@@ -2515,6 +2579,8 @@ function streamPlainPromptOptimizeResponse({
   provider,
   prompt,
   optimizeStyle,
+  styleGroups,
+  customInstruction = "",
   imageCount,
   userId = "",
   source = "prompt-optimizer"
@@ -2522,6 +2588,8 @@ function streamPlainPromptOptimizeResponse({
   provider: PromptOptimizerProviderRow;
   prompt: string;
   optimizeStyle: PromptOptimizeStyle;
+  styleGroups?: PromptOptimizeStyleGroup[];
+  customInstruction?: string;
   imageCount?: number;
   userId?: string;
   source?: string;
@@ -2539,6 +2607,8 @@ function streamPlainPromptOptimizeResponse({
           provider,
           prompt,
           optimizeStyle,
+          styleGroups,
+          customInstruction,
           imageCount,
           onPreview: (delta) => sendFrame(controller, "delta", delta),
           logContext: { purpose: "prompt.optimize", userId, source }
@@ -3351,9 +3421,10 @@ async function promptTemplateExportHtmlResponse(c: Context, options: PromptTempl
   if (!user) return c.json({ error: "未登录" }, 401);
   const row = visibleTemplate(String(c.req.param("id") ?? ""), user.id);
   if (!row) return c.json({ error: "表单不存在" }, 404);
+  const styleGroups = userPreferences(user.id).promptOptimizeStyleGroups;
   const aiOptimizeEnabled = exportAiEnabled(options.aiOptimizeEnabled, c.req.query("ai") !== "0");
   const exportExpiresDays = normalizePromptTemplateExportExpiresDays(options.expiresDays ?? c.req.query("expiresDays"));
-  const template = publicPromptTemplate(row, user.id);
+  const template = publicPromptTemplate(row, user.id, styleGroups);
   const requestedResultId = String(options.resultId ?? "").trim();
   const latestResultRow = requestedResultId
     ? getOne<PromptTemplateResultRow>(
@@ -3445,8 +3516,9 @@ export function registerPromptTemplateRoutes(api: Hono) {
       user.id,
       ...presetOrderParams
     );
+    const styleGroups = userPreferences(user.id).promptOptimizeStyleGroups;
     return c.json({
-      templates: rows.map((row) => publicPromptTemplate(row, user.id)),
+      templates: rows.map((row) => publicPromptTemplate(row, user.id, styleGroups)),
       counts: {
         all: Number(countsRow?.all_count ?? 0),
         mine: Number(countsRow?.mine_count ?? 0),
@@ -3459,7 +3531,8 @@ export function registerPromptTemplateRoutes(api: Hono) {
     const user = await requireUser(c);
     if (!user) return c.json({ error: "未登录" }, 401);
     const body = await c.req.json().catch(() => ({}));
-    const payload = normalizeTemplatePayload(body as Record<string, unknown>);
+    const styleGroups = userPreferences(user.id).promptOptimizeStyleGroups;
+    const payload = normalizeTemplatePayload(body as Record<string, unknown>, undefined, styleGroups);
     if (!payload.name) return c.json({ error: "请填写表单名称" }, 400);
     const id = makeId("prompttpl");
     const timestamp = now();
@@ -3484,13 +3557,14 @@ export function registerPromptTemplateRoutes(api: Hono) {
       timestamp
     );
     const row = visibleTemplate(id, user.id);
-    return c.json({ template: row ? publicPromptTemplate(row, user.id) : null });
+    return c.json({ template: row ? publicPromptTemplate(row, user.id, styleGroups) : null });
   });
 
   api.post("/prompt-templates/defaults/restore", async (c) => {
     const user = await requireUser(c);
     if (!user) return c.json({ error: "未登录" }, 401);
     const createdIds = restoreDefaultPromptTemplatesForUser(user.id);
+    const styleGroups = userPreferences(user.id).promptOptimizeStyleGroups;
     const presetOrderSql = promptTemplatePresetOrderSql();
     const presetOrderParams = promptTemplatePresetOrderParams();
     const rows = createdIds.length > 0
@@ -3508,7 +3582,7 @@ export function registerPromptTemplateRoutes(api: Hono) {
       )
       : [];
     return c.json({
-      templates: rows.map((row) => publicPromptTemplate(row, user.id)),
+      templates: rows.map((row) => publicPromptTemplate(row, user.id, styleGroups)),
       created: createdIds.length
     });
   });
@@ -3525,16 +3599,20 @@ export function registerPromptTemplateRoutes(api: Hono) {
       "select * from prompt_optimizer_providers where enabled = 1 order by sort_order asc, created_at asc limit 1"
     );
     if (!provider) return c.json({ error: "请先在配置页启用提示词优化模型" }, 400);
-    const optimizeStyle = normalizePromptOptimizeStyle(record.optimizeStyle);
+    const styleGroups = userPreferences(user.id).promptOptimizeStyleGroups;
+    const optimizeStyle = normalizePromptOptimizeStyle(record.optimizeStyle, styleGroups);
+    const customInstruction = normalizePromptOptimizeCustomInstruction(record.customInstruction ?? record.optimizeDirection);
     const imageCount = normalizePromptOptimizeImageCount(record.imageCount ?? record.n);
     if (provider.stream_enabled) {
-      return streamPlainPromptOptimizeResponse({ provider, prompt, optimizeStyle, imageCount, userId: user.id });
+      return streamPlainPromptOptimizeResponse({ provider, prompt, optimizeStyle, styleGroups, customInstruction, imageCount, userId: user.id });
     }
     try {
       const optimized = await optimizePlainPromptWithProvider({
         provider,
         prompt,
         optimizeStyle,
+        styleGroups,
+        customInstruction,
         imageCount,
         logContext: { purpose: "prompt.optimize", userId: user.id, source: "prompt-optimizer" }
       });
@@ -3550,7 +3628,8 @@ export function registerPromptTemplateRoutes(api: Hono) {
     const checked = ownedEditableTemplate(c.req.param("id"), user.id);
     if (!checked.row) return c.json({ error: checked.error }, checked.status as 403 | 404);
     const body = await c.req.json().catch(() => ({}));
-    const payload = normalizeTemplatePayload(body as Record<string, unknown>, checked.row);
+    const styleGroups = userPreferences(user.id).promptOptimizeStyleGroups;
+    const payload = normalizeTemplatePayload(body as Record<string, unknown>, checked.row, styleGroups);
     if (!payload.name) return c.json({ error: "请填写表单名称" }, 400);
     run(
       appDb,
@@ -3571,7 +3650,7 @@ export function registerPromptTemplateRoutes(api: Hono) {
       user.id
     );
     const row = visibleTemplate(checked.row.id, user.id);
-    return c.json({ template: row ? publicPromptTemplate(row, user.id) : null });
+    return c.json({ template: row ? publicPromptTemplate(row, user.id, styleGroups) : null });
   });
 
   api.delete("/prompt-templates/:id", async (c) => {
@@ -3592,6 +3671,7 @@ export function registerPromptTemplateRoutes(api: Hono) {
     if (!user) return c.json({ error: "未登录" }, 401);
     const source = visibleTemplate(c.req.param("id"), user.id);
     if (!source) return c.json({ error: "表单不存在" }, 404);
+    const styleGroups = userPreferences(user.id).promptOptimizeStyleGroups;
     const id = makeId("prompttpl");
     const timestamp = now();
     run(
@@ -3607,7 +3687,7 @@ export function registerPromptTemplateRoutes(api: Hono) {
       source.description,
       source.category,
       source.icon,
-      normalizePromptOptimizeStyle(source.optimize_style),
+      normalizePromptOptimizeStyle(source.optimize_style, styleGroups),
       source.components_json,
       source.rules_json,
       source.output_json,
@@ -3615,7 +3695,7 @@ export function registerPromptTemplateRoutes(api: Hono) {
       timestamp
     );
     const row = visibleTemplate(id, user.id);
-    return c.json({ template: row ? publicPromptTemplate(row, user.id) : null });
+    return c.json({ template: row ? publicPromptTemplate(row, user.id, styleGroups) : null });
   });
 
   api.put("/prompt-templates/:id/share", async (c) => {
@@ -3634,7 +3714,7 @@ export function registerPromptTemplateRoutes(api: Hono) {
       user.id
     );
     const row = visibleTemplate(checked.row.id, user.id);
-    return c.json({ template: row ? publicPromptTemplate(row, user.id) : null });
+    return c.json({ template: row ? publicPromptTemplate(row, user.id, userPreferences(user.id).promptOptimizeStyleGroups) : null });
   });
 
   api.put("/prompt-templates/:id/optimize-style", async (c) => {
@@ -3643,7 +3723,8 @@ export function registerPromptTemplateRoutes(api: Hono) {
     const checked = ownedEditableTemplate(c.req.param("id"), user.id);
     if (!checked.row) return c.json({ error: checked.error }, checked.status as 403 | 404);
     const body = await c.req.json().catch(() => ({}));
-    const optimizeStyle = normalizePromptOptimizeStyle((body as Record<string, unknown>).optimizeStyle);
+    const styleGroups = userPreferences(user.id).promptOptimizeStyleGroups;
+    const optimizeStyle = normalizePromptOptimizeStyle((body as Record<string, unknown>).optimizeStyle, styleGroups);
     run(
       appDb,
       "update prompt_templates set optimize_style = ?, updated_at = ? where id = ? and user_id = ?",
@@ -3653,7 +3734,7 @@ export function registerPromptTemplateRoutes(api: Hono) {
       user.id
     );
     const row = visibleTemplate(checked.row.id, user.id);
-    return c.json({ template: row ? publicPromptTemplate(row, user.id) : null });
+    return c.json({ template: row ? publicPromptTemplate(row, user.id, styleGroups) : null });
   });
 
   api.get("/prompt-templates/:id/form-draft", async (c) => {
@@ -3829,12 +3910,14 @@ export function registerPromptTemplateRoutes(api: Hono) {
       "select * from prompt_optimizer_providers where enabled = 1 order by sort_order asc, created_at asc limit 1"
     );
     if (!provider) return exportJsonResponse({ error: "请先在配置页启用提示词优化模型" }, 400);
-    const template = publicPromptTemplate(row, access.userId);
+    const styleGroups = userPreferences(access.userId).promptOptimizeStyleGroups;
+    const template = publicPromptTemplate(row, access.userId, styleGroups);
     const output = template.output as Record<string, unknown>;
     const manualNegativePrompt = templateManualNegativePrompt(template);
     const negativeEnabled = Boolean(output.negativeEnabled) && !manualNegativePrompt;
     const formValues = record.formValues ?? {};
-    const optimizeStyle = normalizePromptOptimizeStyle(record.optimizeStyle);
+    const optimizeStyle = normalizePromptOptimizeStyle(record.optimizeStyle, styleGroups);
+    const customInstruction = normalizePromptOptimizeCustomInstruction(record.customInstruction ?? record.optimizeDirection);
     if (provider.stream_enabled) {
       return withExportCors(streamPromptTemplateOptimizeResponse({
         row,
@@ -3846,6 +3929,8 @@ export function registerPromptTemplateRoutes(api: Hono) {
         basePrompt,
         negativeEnabled,
         optimizeStyle,
+        styleGroups,
+        customInstruction,
         manualNegativePrompt,
         source: "prompt-template-export"
       }));
@@ -3859,6 +3944,8 @@ export function registerPromptTemplateRoutes(api: Hono) {
         basePrompt,
         negativeEnabled,
         optimizeStyle,
+        styleGroups,
+        customInstruction,
         manualNegativePrompt,
         logContext: { userId: access.userId, jobId: row.id, source: "prompt-template-export" }
       });
@@ -3927,12 +4014,14 @@ export function registerPromptTemplateRoutes(api: Hono) {
       "select * from prompt_optimizer_providers where enabled = 1 order by sort_order asc, created_at asc limit 1"
     );
     if (!provider) return c.json({ error: "请先在配置页启用提示词优化模型" }, 400);
-    const template = publicPromptTemplate(row, user.id);
+    const styleGroups = userPreferences(user.id).promptOptimizeStyleGroups;
+    const template = publicPromptTemplate(row, user.id, styleGroups);
     const output = template.output as Record<string, unknown>;
     const manualNegativePrompt = templateManualNegativePrompt(template);
     const negativeEnabled = Boolean(output.negativeEnabled) && !manualNegativePrompt;
     const formValues = record.formValues ?? {};
-    const optimizeStyle = normalizePromptOptimizeStyle(record.optimizeStyle);
+    const optimizeStyle = normalizePromptOptimizeStyle(record.optimizeStyle, styleGroups);
+    const customInstruction = normalizePromptOptimizeCustomInstruction(record.customInstruction ?? record.optimizeDirection);
     if (provider.stream_enabled) {
       return streamPromptTemplateOptimizeResponse({
         row,
@@ -3944,6 +4033,8 @@ export function registerPromptTemplateRoutes(api: Hono) {
         basePrompt,
         negativeEnabled,
         optimizeStyle,
+        styleGroups,
+        customInstruction,
         manualNegativePrompt,
         source: "prompt-template"
       });
@@ -3957,6 +4048,8 @@ export function registerPromptTemplateRoutes(api: Hono) {
         basePrompt,
         negativeEnabled,
         optimizeStyle,
+        styleGroups,
+        customInstruction,
         manualNegativePrompt,
         logContext: { userId: user.id, jobId: row.id, source: "prompt-template" }
       });

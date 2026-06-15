@@ -55,6 +55,9 @@ function validateProfileUsername(value: string) {
 }
 
 function userPreferencesToast(preferences: Partial<UserPreferences>) {
+  if (preferences.promptOptimizeStyleGroups) {
+    return "AI 优化风格已保存";
+  }
   if (typeof preferences.editSuggestionsEnabled === "boolean") {
     return preferences.editSuggestionsEnabled ? "续改建议已开启" : "续改建议已关闭";
   }
@@ -1144,6 +1147,7 @@ export function WorkbenchShell({ user }: { user: User }) {
         archiveAllPending={archiveAllChats.isPending}
         deleteAllPending={deleteAllChats.isPending}
         deleteAccountPending={deleteAccount.isPending}
+        preferencesSaving={saveUserPreferences.isPending}
         onClose={() => setSettingsOpen(false)}
         onChangePassword={openPasswordDialog}
         onEditProfile={openEditProfileDialog}

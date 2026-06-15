@@ -75,6 +75,9 @@ export type GenerateImagePayload = {
   size?: string;
   quality?: string;
   n?: number;
+  background?: "auto" | "opaque" | "transparent";
+  outputFormat?: "png" | "webp";
+  output_format?: "png" | "webp";
   caseItemId?: string;
   revisionRootId?: string;
   editedMessageId?: string;
@@ -91,6 +94,8 @@ export type EditImagePayload = GenerateImagePayload & {
   sourceReferenceIds?: string[];
   referenceAssetId?: string;
   maskDataUrl?: string;
+  inputFidelity?: "low" | "high";
+  input_fidelity?: "low" | "high";
   hideReference?: boolean;
 };
 
@@ -149,11 +154,13 @@ export type PromptTemplateOptimizePayload = {
   formValues: PromptTemplateFormValues;
   basePrompt: string;
   optimizeStyle?: PromptTemplateOptimizeStyle;
+  customInstruction?: string;
 };
 export type PromptTextOptimizePayload = {
   prompt: string;
   optimizeStyle?: PromptTemplateOptimizeStyle;
   imageCount?: number;
+  customInstruction?: string;
 };
 export type PromptTextOptimizeResponse = {
   prompt: string;

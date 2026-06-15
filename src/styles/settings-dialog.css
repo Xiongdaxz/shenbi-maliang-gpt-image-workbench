@@ -11,7 +11,7 @@
 }
 
 .settings-modal {
-  width: min(760px, calc(100vw - 34px));
+  width: min(920px, calc(100vw - 34px));
   height: min(600px, calc(100vh - 34px));
   min-height: 420px;
   overflow: hidden;
@@ -372,6 +372,15 @@
   font-size: 12px;
   line-height: 17px;
   white-space: normal;
+}
+
+.settings-prompt-styles-entry {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.settings-prompt-styles-entry .secondary-btn {
+  min-height: 34px;
+  padding: 8px 12px;
 }
 
 .settings-row > .settings-account-main {
@@ -878,7 +887,8 @@
   .settings-row,
   .settings-account-row,
   .settings-appearance-row,
-  .settings-preference-row {
+  .settings-preference-row,
+  .settings-prompt-styles-entry {
     grid-template-columns: 1fr;
     justify-items: stretch;
   }

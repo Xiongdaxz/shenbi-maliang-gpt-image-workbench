@@ -166,6 +166,8 @@ export type UserPreferencesRow = {
   user_id: string;
   edit_suggestions_enabled: number;
   edit_suggestion_tone: string;
+  prompt_optimize_styles_json: string;
+  prompt_optimize_custom_instruction: string;
   updated_at: string;
 };
 
@@ -313,6 +315,7 @@ export type ProviderRequestLogRow = {
   duration_ms: number;
   success: number;
   error: string | null;
+  response_snapshot: string;
   created_at: string;
 };
 

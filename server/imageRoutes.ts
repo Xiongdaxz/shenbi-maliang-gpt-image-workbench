@@ -26,6 +26,7 @@ import type { ImageReferenceSourceAsset, ImageRow, ProviderImageContext, Provide
 import { userPreferences } from "./userPreferences";
 import { inferChannelFromType, makeId, normalizeIdList, normalizeProviderChannel, now, safeJson, visibleAssetSql } from "./utils";
 import { requireUser } from "./auth";
+import { markProviderRequestPostProcessFailure } from "./auditLog";
 import { deleteImageRecords, ensureChatSession, expireStaleImageJobs, insertMessage, serializeJob } from "./chatStore";
 
 function providerPrompt(prompt: string, imageCount: number) {
@@ -35,6 +36,57 @@ function providerPrompt(prompt: string, imageCount: number) {
     "",
     `数量由接口参数 n=${imageCount} 控制。请把每个结果都生成成一张独立完整的单图，不要在单张图片中做四宫格、拼贴、分屏或多张图片排版。`
   ].join("\n");
+}
+
+type ImageBackgroundOption = "auto" | "opaque" | "transparent";
+type ImageOutputFormatOption = "png" | "webp";
+type ImageInputFidelityOption = "low" | "high";
+
+function requestOptionText(body: Record<string, unknown>, ...fields: string[]) {
+  for (const field of fields) {
+    const value = body[field];
+    if (value !== undefined && value !== null) return String(value).trim();
+  }
+  return "";
+}
+
+function normalizedImageRequestOptions(body: Record<string, unknown>, includeInputFidelity = false) {
+  const background = requestOptionText(body, "background").toLowerCase();
+  const outputFormat = requestOptionText(body, "outputFormat", "output_format").toLowerCase();
+  const inputFidelity = requestOptionText(body, "inputFidelity", "input_fidelity").toLowerCase();
+  const payload: {
+    background?: ImageBackgroundOption;
+    output_format?: ImageOutputFormatOption;
+    input_fidelity?: ImageInputFidelityOption;
+  } = {};
+
+  if (background) {
+    if (background !== "auto" && background !== "opaque" && background !== "transparent") {
+      return { error: "background 仅支持 auto、opaque 或 transparent", payload };
+    }
+    payload.background = background;
+  }
+
+  if (outputFormat) {
+    if (outputFormat !== "png" && outputFormat !== "webp") {
+      return { error: "透明背景输出格式仅支持 png 或 webp", payload };
+    }
+    if (background !== "transparent") {
+      return { error: "outputFormat 目前仅支持 background=transparent 时使用", payload };
+    }
+    payload.output_format = outputFormat;
+  } else if (background === "transparent") {
+    payload.output_format = "png";
+  }
+
+  if (includeInputFidelity && inputFidelity) {
+    if (inputFidelity !== "low" && inputFidelity !== "high") {
+      return { error: "inputFidelity 仅支持 low 或 high", payload };
+    }
+    payload.input_fidelity = inputFidelity;
+  }
+
+  return { error: "", payload };
 }
 
 function providerImageContextValues(context: ProviderImageContext) {
@@ -318,7 +370,20 @@ async function saveProviderImagesWithRetry({
         isRetry: attempt > 1
       });
       onResponseJson?.(responseJson);
-      const savedImages = await saveProviderImageResults(responseJson, provider, () => makeId("img"), userId, sessionId);
+      let savedImages: Awaited<ReturnType<typeof saveProviderImageResults>>;
+      try {
+        savedImages = await saveProviderImageResults(responseJson, provider, () => makeId("img"), userId, sessionId);
+      } catch (error) {
+        markProviderRequestPostProcessFailure({
+          provider,
+          operation: mode,
+          jobId,
+          attemptNo: attempt,
+          error: errorMessage(error, `${imageOperationLabel(mode)}失败`),
+          responseSnapshot: providerResponseSnapshot(responseJson)
+        });
+        throw error;
+      }
       return { provider, responseJson, savedImages, attemptNo: attempt, retryCount, maxAttempts };
     } catch (error) {
       if (attempt < maxAttempts) {
@@ -684,6 +749,8 @@ api.post("/images/generate", async (c) => {
   const size = requestImageSize(body.size);
   const quality = String(body.quality ?? provider.default_quality);
   const imageCount = requestImageCount(body.n ?? body.imageCount);
+  const imageOptions = normalizedImageRequestOptions(body);
+  if (imageOptions.error) return c.json({ error: imageOptions.error }, 400);
   const sessionId = await ensureChatSession(user.id, String(body.sessionId ?? "") || null, prompt);
   const webConversationContext = branchForkMessageId
     ? providerConversationContextFromMessage(user.id, sessionId, branchForkMessageId, "branch") ?? { placement: "branch" }
@@ -695,6 +762,7 @@ api.post("/images/generate", async (c) => {
     size,
     quality,
     n: imageCount,
+    ...imageOptions.payload,
     ...(webConversationContext ? { webConversationContext } : {})
   };
   const maxAutoRetries = resolveImageResultRetryCount(imageGenerationSettings().resultRetryCount);
@@ -903,6 +971,8 @@ api.post("/images/edit", async (c) => {
   const size = requestImageSize(body.size);
   const quality = String(body.quality ?? provider.default_quality);
   const imageCount = requestImageCount(body.n ?? body.imageCount);
+  const imageOptions = normalizedImageRequestOptions(body, true);
+  if (imageOptions.error) return c.json({ error: imageOptions.error }, 400);
   const sourceImages = sourceImageIds.map((id) =>
     getOne<ImageRow>(appDb, "select * from images where id = ? and user_id = ?", id, user.id)
   );
@@ -972,6 +1042,7 @@ api.post("/images/edit", async (c) => {
     quality,
     n: imageCount,
     images: imageUrls.map((image_url) => ({ image_url })),
+    ...imageOptions.payload,
     ...(maskDataUrl ? { mask: maskDataUrl } : {}),
     ...(sourceReference ? { sourceReference } : {}),
     ...(webConversationContext ? { webConversationContext } : {})

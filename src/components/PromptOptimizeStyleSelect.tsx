@@ -1,18 +1,26 @@
-import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, ChevronRight } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, RotateCw, WandSparkles } from "lucide-react";
 import { cx } from "../lib/cx";
 import {
   normalizePromptOptimizeStyle,
   promptOptimizeStyleFullLabel,
   promptOptimizeStyleGroups,
   promptOptimizeStyleOption,
+  visiblePromptOptimizeStyleGroups,
+  type PromptOptimizeStyleGroup,
   type PromptTemplateOptimizeStyle
 } from "../lib/promptOptimizeStyles";
 
 type PromptOptimizeStyleSelectProps = {
   value: PromptTemplateOptimizeStyle;
   onChange: (value: PromptTemplateOptimizeStyle) => void;
+  groups?: PromptOptimizeStyleGroup[];
+  customInstruction?: string;
+  onCustomInstructionChange?: (value: string) => void;
+  onCustomInstructionSubmit?: () => void;
+  customInstructionSubmitDisabled?: boolean;
+  customInstructionSubmitPending?: boolean;
   disabled?: boolean;
   className?: string;
   menuClassName?: string;
@@ -24,15 +32,21 @@ type PromptOptimizeStyleSelectProps = {
 export function PromptOptimizeStyleSelect({
   value,
   onChange,
+  groups = promptOptimizeStyleGroups,
+  customInstruction = "",
+  onCustomInstructionChange,
+  onCustomInstructionSubmit,
+  customInstructionSubmitDisabled,
+  customInstructionSubmitPending,
   disabled,
   className,
   menuClassName,
-  menuPlacement = "bottom",
+  menuPlacement = "top",
   menuWidth = 260,
   submenuWidth = 260
 }: PromptOptimizeStyleSelectProps) {
   const [open, setOpen] = useState(false);
-  const [activeGroup, setActiveGroup] = useState("");
+  const [activeGroup, setActiveGroup] = useState<string | null>(null);
   const [menuStyle, setMenuStyle] = useState(() => ({
     top: -10000,
     left: -10000,
@@ -42,19 +56,22 @@ export function PromptOptimizeStyleSelect({
   const [submenuOffsets, setSubmenuOffsets] = useState<Record<string, number>>({});
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const customInstructionRef = useRef<HTMLTextAreaElement | null>(null);
   const labelId = useId();
-  const normalizedValue = normalizePromptOptimizeStyle(value);
-  const selected = promptOptimizeStyleOption(normalizedValue);
+  const styleGroups = useMemo(() => visiblePromptOptimizeStyleGroups(groups), [groups]);
+  const hasStyleGroups = styleGroups.length > 0;
+  const normalizedValue = hasStyleGroups ? normalizePromptOptimizeStyle(value, styleGroups) : "";
+  const selected = hasStyleGroups
+    ? promptOptimizeStyleOption(normalizedValue, styleGroups)
+    : { label: "自定义", description: "自定义优化方向", value: "", prompt: "", visible: true };
 
   function childrenForGroup(groupValue: string) {
-    const group = promptOptimizeStyleGroups.find((item) => item.value === groupValue);
-    return group && "children" in group ? group.children : [];
+    const group = styleGroups.find((item) => item.value === groupValue);
+    return group?.children ?? [];
   }
 
   function selectedChildGroupValue() {
-    const group = promptOptimizeStyleGroups.find((item) => (
-      "children" in item && item.children.some((child) => child.value === normalizedValue)
-    ));
+    const group = styleGroups.find((item) => item.children?.some((child) => child.value === normalizedValue));
     return group?.value ?? "";
   }
 
@@ -78,7 +95,7 @@ export function PromptOptimizeStyleSelect({
   }
 
   function updateVisibleSubmenuOffset() {
-    const groupValue = activeGroup || selectedChildGroupValue();
+    const groupValue = activeGroup === null ? selectedChildGroupValue() : activeGroup;
     if (!groupValue) return;
     const children = childrenForGroup(groupValue);
     const row = rowForGroup(groupValue);
@@ -91,54 +108,76 @@ export function PromptOptimizeStyleSelect({
     setActiveGroup(groupValue);
   }
 
-  useEffect(() => {
-    if (!open) return;
-    function updatePosition() {
-      const rect = wrapRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const width = Math.max(rect.width, Number(menuWidth ?? 0));
-      const maxLeft = Math.max(12, window.innerWidth - width - 12);
-      const left = Math.min(Math.max(12, rect.left), maxLeft);
-      const menuHeight = menuRef.current?.offsetHeight ?? 0;
-      const minTop = 12;
-      const maxTop = Math.max(minTop, window.innerHeight - menuHeight - 12);
-      const preferredTop = menuPlacement === "top" ? rect.top - menuHeight - 6 : rect.bottom + 6;
-      const top = menuHeight > 0 ? Math.min(Math.max(minTop, preferredTop), maxTop) : preferredTop;
-      setMenuStyle({ top, left, width });
-      setSubmenuSide(left + width + submenuWidth + 18 > window.innerWidth ? "left" : "right");
-      window.requestAnimationFrame(updateVisibleSubmenuOffset);
+  function resizeCustomInstructionInput(input = customInstructionRef.current) {
+    if (!input) return;
+    const minHeight = Number.parseFloat(window.getComputedStyle(input).minHeight) || 40;
+    if (!input.value) {
+      input.style.height = `${minHeight}px`;
+      return;
     }
+    input.style.height = "auto";
+    input.style.height = `${Math.max(input.scrollHeight, minHeight)}px`;
+  }
+
+  function updateMenuPosition() {
+    const rect = wrapRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const width = Math.max(rect.width, Number(menuWidth ?? 0));
+    const maxLeft = Math.max(12, window.innerWidth - width - 12);
+    const left = Math.min(Math.max(12, rect.left), maxLeft);
+    const menuHeight = menuRef.current?.offsetHeight ?? 0;
+    const minTop = 12;
+    const maxTop = Math.max(minTop, window.innerHeight - menuHeight - 12);
+    const preferredTop = menuPlacement === "top" ? rect.top - menuHeight - 6 : rect.bottom + 6;
+    const top = menuHeight > 0 ? Math.min(Math.max(minTop, preferredTop), maxTop) : preferredTop;
+    setMenuStyle({ top, left, width });
+    setSubmenuSide(left + width + submenuWidth + 18 > window.innerWidth ? "left" : "right");
+    window.requestAnimationFrame(updateVisibleSubmenuOffset);
+  }
+
+  useLayoutEffect(() => {
+    if (!open) return;
     function handlePointerDown(event: PointerEvent) {
       const target = event.target as Node;
       if (!wrapRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false);
     }
-    updatePosition();
+    resizeCustomInstructionInput();
+    updateMenuPosition();
     document.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("resize", updatePosition);
-    window.addEventListener("scroll", updatePosition, true);
-    const positionFrame = window.requestAnimationFrame(updatePosition);
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    const positionFrame = window.requestAnimationFrame(() => {
+      resizeCustomInstructionInput();
+      updateMenuPosition();
+    });
     const frame = window.requestAnimationFrame(updateVisibleSubmenuOffset);
     return () => {
       document.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("resize", updatePosition);
-      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
       window.cancelAnimationFrame(positionFrame);
       window.cancelAnimationFrame(frame);
     };
-  }, [menuPlacement, menuWidth, open, submenuWidth]);
+  }, [menuPlacement, menuWidth, open, submenuWidth, styleGroups]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    resizeCustomInstructionInput();
+    updateMenuPosition();
+  }, [customInstruction, open]);
 
   useEffect(() => {
     if (!open) {
-      setActiveGroup("");
+      setActiveGroup(null);
       setSubmenuOffsets({});
       return;
     }
     const frame = window.requestAnimationFrame(updateVisibleSubmenuOffset);
     return () => window.cancelAnimationFrame(frame);
-  }, [activeGroup, normalizedValue, open]);
+  }, [activeGroup, normalizedValue, open, styleGroups]);
 
   function selectStyle(nextValue: string) {
-    onChange(normalizePromptOptimizeStyle(nextValue));
+    onChange(normalizePromptOptimizeStyle(nextValue, styleGroups));
     setOpen(false);
   }
 
@@ -160,7 +199,7 @@ export function PromptOptimizeStyleSelect({
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
-        title={promptOptimizeStyleFullLabel(normalizedValue)}
+        title={hasStyleGroups ? promptOptimizeStyleFullLabel(normalizedValue, styleGroups) : "自定义"}
         onClick={() => setOpen((current) => !current)}
       >
         <span className="custom-select-value">
@@ -185,13 +224,13 @@ export function PromptOptimizeStyleSelect({
                 width: menuStyle.width || Math.max(1, Number(menuWidth ?? 0)),
                 "--prompt-style-submenu-width": `${submenuWidth}px`
               } as CSSProperties}
-              onMouseLeave={() => setActiveGroup("")}
+              onMouseLeave={() => setActiveGroup(null)}
             >
-              {promptOptimizeStyleGroups.map((group) => {
-                const children = "children" in group ? group.children : [];
+              {styleGroups.map((group) => {
+                const children = group.children ?? [];
                 const groupActive = normalizedValue === group.value;
                 const childActive = children.some((child) => child.value === normalizedValue);
-                const rowOpen = activeGroup ? activeGroup === group.value : childActive;
+                const rowOpen = activeGroup === null ? childActive : activeGroup === group.value;
                 return (
                   <div
                     className={cx("prompt-style-picker-row", children.length > 0 && "has-children", rowOpen && "open")}
@@ -247,6 +286,45 @@ export function PromptOptimizeStyleSelect({
                   </div>
                 );
               })}
+              {onCustomInstructionChange ? (
+                <div className="prompt-style-picker-custom" onMouseEnter={() => setActiveGroup("")}>
+                  <label>
+                    <span className="prompt-style-picker-custom-control">
+                      <textarea
+                        ref={customInstructionRef}
+                        value={customInstruction}
+                        rows={1}
+                        maxLength={500}
+                        placeholder="自定义"
+                        onFocus={() => setActiveGroup("")}
+                        onChange={(event) => {
+                          onCustomInstructionChange(event.target.value);
+                          resizeCustomInstructionInput(event.currentTarget);
+                        }}
+                      />
+                      {onCustomInstructionSubmit ? (
+                        <button
+                          className="prompt-style-picker-custom-submit"
+                          type="button"
+                          onClick={() => {
+                            onCustomInstructionSubmit();
+                            setOpen(false);
+                          }}
+                          disabled={customInstructionSubmitDisabled || customInstructionSubmitPending}
+                          aria-label="开始优化"
+                          title="开始优化"
+                        >
+                          {customInstructionSubmitPending ? (
+                            <RotateCw size={14} className="spin" />
+                          ) : (
+                            <WandSparkles size={14} />
+                          )}
+                        </button>
+                      ) : null}
+                    </span>
+                  </label>
+                </div>
+              ) : null}
             </div>,
             document.body
           )
