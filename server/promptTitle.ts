@@ -319,21 +319,30 @@ async function requestPromptModelText(
   }
 }
 
+function stripLeadingModelListMarker(value: string) {
+  return value
+    .replace(/^["'“”‘’`*#\-•\s]+/, "")
+    .replace(/^(?:[（(]\s*)?(?:\d{1,2}|[一二三四五六七八九十]{1,3})(?:\s*[.、)）]|\s+[.、)）])\s*/, "")
+    .replace(/^["'“”‘’`*#\-•\s]+/, "");
+}
+
 function cleanGeneratedTitle(value: string) {
-  return value.trim()
-    .replace(/^```(?:json|text)?\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .replace(/^(?:标题|灵感标题|对话标题|提示词|提示内容)\s*[:：]\s*/i, "")
-    .replace(/^["'“”‘’`*#\-•\d.、)）\s]+/, "")
+  return stripLeadingModelListMarker(
+    value.trim()
+      .replace(/^```(?:json|text)?\s*/i, "")
+      .replace(/\s*```$/i, "")
+      .replace(/^(?:标题|灵感标题|对话标题|提示词|提示内容)\s*[:：]\s*/i, "")
+  )
     .replace(/["'“”‘’`]+$/g, "")
     .trim();
 }
 
 function cleanGeneratedEditSuggestionText(value: unknown) {
-  return String(value ?? "")
-    .replace(/^```(?:json|text)?\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .replace(/^["'“”‘’`*#\-•\d.、)）\s]+/, "")
+  return stripLeadingModelListMarker(
+    String(value ?? "")
+      .replace(/^```(?:json|text)?\s*/i, "")
+      .replace(/\s*```$/i, "")
+  )
     .replace(/["'“”‘’`]+$/g, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -767,17 +776,30 @@ export async function generatePromptAssetCategoryIds(prompt: string, options: Pr
 export async function generatePromptEditSuggestions({
   prompt,
   originPrompt = "",
+  promptHistory = [],
   kind = "",
   tone = "default"
 }: {
   prompt: string;
   originPrompt?: string;
+  promptHistory?: string[];
   kind?: string;
   tone?: EditSuggestionTone;
 }) {
   const normalizedPrompt = prompt.replace(/\s+/g, " ").trim();
   const normalizedOriginPrompt = originPrompt.replace(/\s+/g, " ").trim();
-  const fallback = fallbackPromptEditSuggestionsForPrompt(`${normalizedOriginPrompt}\n${normalizedPrompt}`);
+  const normalizedPromptHistory = promptHistory
+    .map((item) => item.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const initialPrompt = normalizedPromptHistory[0] ?? (normalizedOriginPrompt || normalizedPrompt);
+  const editHistory = normalizedPromptHistory.slice(1, -1);
+  const currentPrompt = normalizedPromptHistory.at(-1) ?? (normalizedPrompt || normalizedOriginPrompt);
+  const historyLines = editHistory
+    .slice(-6)
+    .map((item, index) => `${index + 1}. ${Array.from(item).slice(0, 240).join("")}`);
+  const fallback = fallbackPromptEditSuggestionsForPrompt(
+    [initialPrompt, ...editHistory, currentPrompt].filter(Boolean).join("\n")
+  );
   const provider = activePromptProvider();
   if (!provider) return fallback;
   try {
@@ -797,10 +819,11 @@ export async function generatePromptEditSuggestions({
           content: [
             `图片类型：${kind === "edit" ? "编辑图" : "生成图"}`,
             `建议倾向：${editSuggestionToneLabel(tone)}`,
-            `最初生成提示词：${Array.from(normalizedOriginPrompt || normalizedPrompt).slice(0, 1200).join("")}`,
-            `当前图片提示词：${Array.from(normalizedPrompt || normalizedOriginPrompt).slice(0, 1200).join("")}`,
+            `最初生成提示词：${Array.from(initialPrompt).slice(0, 1200).join("")}`,
+            historyLines.length > 0 ? `中间编辑提示词：\n${historyLines.join("\n")}` : "",
+            `当前图片提示词：${Array.from(currentPrompt).slice(0, 1200).join("")}`,
             "请先判断这张图最可能的用途，再给 3 条不同设计路线的具体续改建议。每条 prompt 都要引用提示词里的主体或用途，并给出具体元素、位置或版式动作；不要用抽象词凑数。"
-          ].join("\n")
+          ].filter(Boolean).join("\n")
         }
       ],
       0.72,

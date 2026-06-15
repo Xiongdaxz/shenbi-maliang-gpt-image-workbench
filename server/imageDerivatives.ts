@@ -6,7 +6,7 @@ import type { ImageDerivativeRow } from "./types";
 import { now } from "./utils";
 
 export type ImageVariant = "original" | "preview" | "thumb";
-export type ImageDerivativeSourceType = "image" | "asset" | "image-reference" | "message-source-reference";
+export type ImageDerivativeSourceType = "image" | "asset" | "image-reference" | "message-source-reference" | "branding";
 
 type DerivativeConfig = {
   maxSize: number;

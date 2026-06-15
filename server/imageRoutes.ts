@@ -20,7 +20,13 @@ import { pageInfo, paginationFromQuery } from "./pagination";
 import { callProviderChain, providerChainById } from "./providerRuntime";
 import { providerResponseSnapshot } from "./responseSnapshots";
 import { reviewConversationPrompt } from "./safetyReview";
-import { imageOriginPromptsByImageIds, imageReferencesByImageIds, publicImageReference, publicImagesWithReferences } from "./serializers";
+import {
+  imageOriginPromptsByImageIds,
+  imagePromptHistoriesByImageIds,
+  imageReferencesByImageIds,
+  publicImageReference,
+  publicImagesWithReferences
+} from "./serializers";
 import { imageGenerationSettings } from "./settingsStore";
 import type { ImageReferenceSourceAsset, ImageRow, ProviderImageContext, ProviderRow, RuntimeProviderRow } from "./types";
 import { userPreferences } from "./userPreferences";
@@ -138,6 +144,44 @@ async function applyImageFieldSuggestions(imageIds: string[], prompt?: string) {
   } catch (error) {
     console.warn("图片灵感/素材字段自动生成失败", error);
   }
+}
+
+function warmImageEditSuggestionsInBackground(userId: string, imageIds: string[]) {
+  const ids = Array.from(new Set(imageIds.map((id) => id.trim()).filter(Boolean)));
+  if (ids.length === 0) return;
+
+  setTimeout(() => {
+    void (async () => {
+      const preferences = userPreferences(userId);
+      if (!preferences.editSuggestionsEnabled) return;
+      const images = getAll<ImageRow>(
+        appDb,
+        `select * from images where user_id = ? and id in (${ids.map(() => "?").join(", ")})`,
+        userId,
+        ...ids
+      );
+      if (images.length === 0) return;
+      const promptHistories = imagePromptHistoriesByImageIds(images.map((image) => image.id));
+      const results = await Promise.allSettled(
+        images.map((image) => {
+          const promptHistory = promptHistories.get(image.id) ?? [image.prompt];
+          const originPrompt = promptHistory[0] ?? image.prompt;
+          return ensureImageEditSuggestionsForImageWithTone(
+            image,
+            originPrompt,
+            preferences.editSuggestionTone,
+            promptHistory
+          );
+        })
+      );
+      const rejected = results.filter((item): item is PromiseRejectedResult => item.status === "rejected");
+      if (rejected.length > 0) {
+        console.warn(`图片续改建议后台预生成失败：${rejected.length}/${images.length}`, rejected[0]?.reason);
+      }
+    })().catch((error) => {
+      console.warn("图片续改建议后台预生成任务失败", error);
+    });
+  }, 0);
 }
 
 function isCpaProvider(provider: ProviderRow) {
@@ -677,8 +721,14 @@ api.get("/images/:imageId/edit-suggestions", async (c) => {
   if (!preferences.editSuggestionsEnabled) return c.json({ imageId, suggestions: [], generated: false });
   const image = getOne<ImageRow>(appDb, "select * from images where id = ? and user_id = ?", imageId, user.id);
   if (!image) return c.json({ error: "图片不存在" }, 404);
-  const originPrompt = imageOriginPromptsByImageIds([image.id]).get(image.id) ?? image.prompt;
-  const result = await ensureImageEditSuggestionsForImageWithTone(image, originPrompt, preferences.editSuggestionTone);
+  const promptHistory = imagePromptHistoriesByImageIds([image.id]).get(image.id) ?? [image.prompt];
+  const originPrompt = promptHistory[0] ?? image.prompt;
+  const result = await ensureImageEditSuggestionsForImageWithTone(
+    image,
+    originPrompt,
+    preferences.editSuggestionTone,
+    promptHistory
+  );
   return c.json(result);
 });
 
@@ -883,6 +933,7 @@ api.post("/images/generate", async (c) => {
         jobId
       );
       emitJobStatus(user.id, sessionId, jobId, "succeeded", "generation", { resultImageId: savedImageIds[0] ?? null });
+      warmImageEditSuggestionsInBackground(user.id, savedImageIds);
       return savedImageIds;
     } catch (error) {
       const message = error instanceof Error ? error.message : "生成失败";
@@ -1263,6 +1314,7 @@ api.post("/images/edit", async (c) => {
       jobId
     );
     emitJobStatus(user.id, sessionId, jobId, "succeeded", "edit", { resultImageId });
+    warmImageEditSuggestionsInBackground(user.id, savedImages.map((image) => image.id));
     return;
   } catch (error) {
     const message = error instanceof Error ? error.message : "编辑失败";
@@ -1433,6 +1485,7 @@ api.post("/image-jobs/:id/retry", async (c) => {
         job.id
       );
       emitJobStatus(user.id, retrySessionId, job.id, "succeeded", "generation", { resultImageId: savedImageIds[0] ?? null });
+      warmImageEditSuggestionsInBackground(user.id, savedImageIds);
       return;
     }
 
@@ -1550,6 +1603,7 @@ api.post("/image-jobs/:id/retry", async (c) => {
       job.id
     );
     emitJobStatus(user.id, retrySessionId, job.id, "succeeded", "edit", { resultImageId });
+    warmImageEditSuggestionsInBackground(user.id, savedImages.map((image) => image.id));
     return;
   } catch (error) {
     const message = errorMessage(error, job.type === "edit" ? "编辑失败" : "生成失败");

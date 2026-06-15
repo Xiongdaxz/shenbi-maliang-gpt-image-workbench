@@ -383,6 +383,7 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-textare
 }
 
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-textarea-skeleton span,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .session-title-skeleton > span,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .recent-skeleton-row::before,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-load-skeleton {
   background:
@@ -986,6 +987,7 @@ html[data-appearance="maliang"] .composer {
 }
 
 html[data-appearance="maliang"] .composer-textarea-skeleton span,
+html[data-appearance="maliang"] .session-title-skeleton > span,
 html[data-appearance="maliang"] .recent-skeleton-row::before,
 html[data-appearance="maliang"] .image-load-skeleton {
   background:

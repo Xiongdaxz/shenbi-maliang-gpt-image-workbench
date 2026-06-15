@@ -129,7 +129,11 @@ import { CustomSelect, useToast } from "../../ui";
 
 type PromptDisplayLanguage = "zh" | "en";
 type PromptResultKey = ComposerPromptResultKey;
-type OptimizeRequest = PromptResultKey | { outputKey?: PromptResultKey; optimizeStyle?: PromptTemplateOptimizeStyle } | undefined;
+type OptimizeRequest = PromptResultKey | {
+  customInstruction?: string;
+  outputKey?: PromptResultKey;
+  optimizeStyle?: PromptTemplateOptimizeStyle;
+} | undefined;
 
 const promptTemplateIconMap: Record<string, LucideIcon> = {
   Armchair,
@@ -583,6 +587,7 @@ export function PromptTemplateComposerPanel({
     mutationFn: (request?: OptimizeRequest) => {
       const requestStyle = typeof request === "object" ? request.optimizeStyle : undefined;
       const nextOptimizeStyle = requestStyle ?? optimizeStyle;
+      const requestCustomInstruction = typeof request === "object" ? request.customInstruction ?? "" : "";
       return api.optimizePromptTemplateStream(
         selectedTemplate!.id,
         {
@@ -590,7 +595,7 @@ export function PromptTemplateComposerPanel({
           formValues,
           basePrompt,
           optimizeStyle: nextOptimizeStyle,
-          customInstruction: optimizeCustomInstruction
+          customInstruction: requestCustomInstruction
         },
         {
           onDelta: (chunk) => {
@@ -938,7 +943,7 @@ export function PromptTemplateComposerPanel({
           groups={promptStyleGroups}
           customInstruction={optimizeCustomInstruction}
           onCustomInstructionChange={updateOptimizeCustomInstruction}
-          onCustomInstructionSubmit={() => optimize.mutate(undefined)}
+          onCustomInstructionSubmit={() => optimize.mutate({ customInstruction: optimizeCustomInstruction })}
           customInstructionSubmitDisabled={optimize.isPending || !basePrompt.trim()}
           customInstructionSubmitPending={optimize.isPending}
           disabled={optimize.isPending}

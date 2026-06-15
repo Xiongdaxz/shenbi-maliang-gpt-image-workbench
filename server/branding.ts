@@ -1,12 +1,23 @@
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import type { Hono } from "hono";
+import sharp from "sharp";
 import { LOGIN_ASSET_EXTENSIONS } from "./constants";
 import { audit } from "./auditLog";
 import { requireConfig } from "./auth";
 import { configDb, getAll, getOne, run } from "./db";
+import {
+  deleteImageDerivativesForSources,
+  getOrCreateImageDerivative,
+  imageDerivativePathsForSources,
+  normalizeImageVariant,
+  warmImageDerivatives
+} from "./imageDerivatives";
 import { readImageDimensions } from "./imageDimensions";
 import { imageExtensionFromMime, mimeTypeFromPath } from "./imageFiles";
 import { buildLoginAssets, loginAssetFiles } from "./loginAssets";
+import { ROOT } from "./paths";
 import { deleteStoredFilesIfUnreferenced, readStoredFile, secureBrandingAssetPath, writeEncryptedFile } from "./secureFiles";
 import type { BrandingAssetRow, BrandingAssetType, BrandingSettingsRow } from "./types";
 import { makeId, normalizeIdList, now } from "./utils";
@@ -26,6 +37,11 @@ const BRANDING_ASSET_TYPES: BrandingAssetType[] = [
   "login_background_light",
   "login_background_dark"
 ];
+const DEFAULT_LOGO_URL = "/image/logo.png";
+const DEFAULT_LOGO_THUMB_URL = "/image/logo-small.webp";
+const DEFAULT_FAVICON_URL = DEFAULT_LOGO_URL;
+const DEFAULT_FAVICON_CACHE_VERSION = "default-logo";
+type BrandingAssetUrlVariant = "original" | "thumb" | "preview";
 
 type BrandingDefaults = {
   activeLogoAssetId: string;
@@ -61,9 +77,17 @@ function cleanSiteName(value: unknown) {
   return name ? Array.from(name).slice(0, 40).join("") : DEFAULT_SITE_NAME;
 }
 
-function assetUrl(row: BrandingAssetRow) {
-  if (row.source === "uploaded") return `/api/files/branding/${encodeURIComponent(row.id)}`;
-  return row.url || row.path || "";
+function brandingFileUrl(id: string, variant: BrandingAssetUrlVariant = "original") {
+  const baseUrl = `/api/files/branding/${encodeURIComponent(id)}`;
+  const params = new URLSearchParams();
+  if (variant !== "original") params.set("variant", variant);
+  if (id === DEFAULT_FAVICON_ASSET_ID) params.set("v", DEFAULT_FAVICON_CACHE_VERSION);
+  const query = params.toString();
+  return query ? `${baseUrl}?${query}` : baseUrl;
+}
+
+function assetUrl(row: BrandingAssetRow, variant: BrandingAssetUrlVariant = "original") {
+  return brandingFileUrl(row.id, variant);
 }
 
 function publicAsset(row: BrandingAssetRow) {
@@ -73,6 +97,8 @@ function publicAsset(row: BrandingAssetRow) {
     source: row.source === "builtin" ? "builtin" : "uploaded",
     name: row.name,
     url: assetUrl(row),
+    previewUrl: assetUrl(row, "preview"),
+    thumbnailUrl: assetUrl(row, "thumb"),
     mimeType: row.mime_type || mimeTypeFromPath(row.url || row.path),
     size: row.size,
     imageWidth: row.image_width,
@@ -137,7 +163,7 @@ async function ensureBuiltinBrandingAssets() {
     id: DEFAULT_LOGO_ASSET_ID,
     type: "logo",
     name: "默认 Logo",
-    url: "/image/logo.png",
+    url: DEFAULT_LOGO_URL,
     sortOrder: 0,
     mimeType: "image/png"
   });
@@ -145,7 +171,7 @@ async function ensureBuiltinBrandingAssets() {
     id: DEFAULT_FAVICON_ASSET_ID,
     type: "favicon",
     name: "默认浏览器图标",
-    url: "/image/logo.png",
+    url: DEFAULT_FAVICON_URL,
     sortOrder: 0,
     mimeType: "image/png"
   });
@@ -262,7 +288,7 @@ function normalizeSettingsRow(row: BrandingSettingsRow | null, rows: BrandingAss
   return {
     siteName: cleanSiteName(row.site_name),
     activeLogoAssetId: existingAssetId(byId, row.active_logo_asset_id, ["logo"], defaults.activeLogoAssetId),
-    activeFaviconAssetId: existingAssetId(byId, row.active_favicon_asset_id, ["favicon", "logo"], defaults.activeFaviconAssetId),
+    activeFaviconAssetId: existingAssetId(byId, row.active_favicon_asset_id, ["favicon"], defaults.activeFaviconAssetId),
     activeLoginTitleLightAssetId: existingAssetId(
       byId,
       row.active_login_title_light_asset_id,
@@ -338,13 +364,13 @@ function loginBackgroundUrls(rowsById: Map<string, BrandingAssetRow>, ids: strin
   const urls = ids
     .map((id) => rowsById.get(id))
     .filter((row): row is BrandingAssetRow => Boolean(row && row.enabled && row.type === fallbackType))
-    .map(assetUrl)
+    .map((row) => assetUrl(row))
     .filter(Boolean);
   if (urls.length > 0) return urls;
   return Array.from(rowsById.values())
     .filter((row) => row.enabled && row.type === fallbackType)
     .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at))
-    .map(assetUrl)
+    .map((row) => assetUrl(row))
     .filter(Boolean);
 }
 
@@ -364,14 +390,14 @@ export async function publicBranding() {
         ...Array.from(byId.values())
           .filter((row) => row.type === "login_title" && row.enabled)
           .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at))
-          .map(assetUrl)
+          .map((row) => assetUrl(row))
       ].filter(Boolean)
     )
   );
   return {
     siteName: config.settings.siteName,
-    logoUrl: logo ? assetUrl(logo) : "/image/logo.png",
-    faviconUrl: favicon ? assetUrl(favicon) : "/image/logo.png",
+    logoUrl: logo ? assetUrl(logo, "thumb") : brandingFileUrl(DEFAULT_LOGO_ASSET_ID, "thumb"),
+    faviconUrl: favicon ? assetUrl(favicon, "thumb") : brandingFileUrl(DEFAULT_FAVICON_ASSET_ID, "thumb"),
     loginAssets: {
       backgrounds: {
         light: loginBackgroundUrls(byId, config.settings.loginBackgroundLightAssetIds, "login_background_light"),
@@ -393,7 +419,7 @@ function normalizeIncomingSettings(raw: Record<string, unknown>, rows: BrandingA
   return {
     siteName: cleanSiteName(raw.siteName),
     activeLogoAssetId: existingAssetId(byId, String(raw.activeLogoAssetId ?? ""), ["logo"], defaults.activeLogoAssetId),
-    activeFaviconAssetId: existingAssetId(byId, String(raw.activeFaviconAssetId ?? ""), ["favicon", "logo"], defaults.activeFaviconAssetId),
+    activeFaviconAssetId: existingAssetId(byId, String(raw.activeFaviconAssetId ?? ""), ["favicon"], defaults.activeFaviconAssetId),
     activeLoginTitleLightAssetId: existingAssetId(
       byId,
       String(raw.activeLoginTitleLightAssetId ?? ""),
@@ -446,6 +472,54 @@ function imageResponse(buffer: Buffer, mimeType: string) {
       "ETag": etag
     }
   });
+}
+
+function localPublicAssetPath(publicUrl: string) {
+  const pathname = new URL(publicUrl || "/", "http://local").pathname;
+  const cleanPath = decodeURIComponent(pathname).replace(/^\/+/, "").replaceAll("\\", "/");
+  const publicRoot = path.resolve(ROOT, "public");
+  const absolutePath = path.resolve(publicRoot, cleanPath);
+  if (absolutePath !== publicRoot && !absolutePath.startsWith(`${publicRoot}${path.sep}`)) {
+    throw new Error("品牌资源路径不合法");
+  }
+  return absolutePath;
+}
+
+async function readBuiltinAsset(row: BrandingAssetRow, variant: BrandingAssetUrlVariant) {
+  const sourceUrl = row.url === DEFAULT_LOGO_URL && variant === "thumb" ? DEFAULT_LOGO_THUMB_URL : row.url || row.path;
+  const mimeType = mimeTypeFromPath(sourceUrl);
+  const buffer = await readFile(localPublicAssetPath(sourceUrl));
+  if (variant === "original" || mimeType === "image/svg+xml") {
+    return { buffer, mimeType };
+  }
+  const maxSize = variant === "thumb" ? 512 : 1600;
+  const quality = variant === "thumb" ? 75 : 82;
+  return {
+    buffer: await sharp(buffer, { limitInputPixels: false })
+      .rotate()
+      .resize({ width: maxSize, height: maxSize, fit: "inside", withoutEnlargement: true })
+      .webp({ quality })
+      .toBuffer(),
+    mimeType: "image/webp"
+  };
+}
+
+function builtinAssetNeedsRefresh(row: BrandingAssetRow) {
+  if (row.id === DEFAULT_LOGO_ASSET_ID) {
+    return row.source !== "builtin" || row.url !== DEFAULT_LOGO_URL || row.mime_type !== "image/png";
+  }
+  if (row.id === DEFAULT_FAVICON_ASSET_ID) {
+    return row.source !== "builtin" || row.url !== DEFAULT_FAVICON_URL || row.mime_type !== "image/png";
+  }
+  return false;
+}
+
+async function brandingAssetRowForFileRequest(id: string) {
+  const row = getOne<BrandingAssetRow>(configDb, "select * from branding_assets where id = ? limit 1", id);
+  if (row && !builtinAssetNeedsRefresh(row)) return row;
+  if (!id.startsWith("builtin-")) return null;
+  await ensureBuiltinBrandingAssets();
+  return getOne<BrandingAssetRow>(configDb, "select * from branding_assets where id = ? limit 1", id) ?? null;
 }
 
 export function registerBrandingRoutes(api: Hono) {
@@ -522,6 +596,9 @@ export function registerBrandingRoutes(api: Hono) {
       timestamp,
       timestamp
     );
+    if (type === "logo" || type === "favicon") {
+      void warmImageDerivatives("branding", id, path);
+    }
     audit("branding.asset.upload", { assetId: id, type, name });
     return c.json(await brandingConfig());
   });
@@ -559,16 +636,32 @@ export function registerBrandingRoutes(api: Hono) {
     if (!row) return c.json({ error: "品牌资源不存在" }, 404);
     if (row.source === "builtin") return c.json({ error: "系统默认资源不能删除" }, 400);
     if (currentBrandingReferences().has(id)) return c.json({ error: "该资源正在使用，请先切换到其他资源" }, 400);
+    const derivativeSources = [{ sourceType: "branding" as const, sourceIds: [id] }];
+    const derivativePaths = imageDerivativePathsForSources(derivativeSources).map((item) => item.path);
     run(configDb, "delete from branding_assets where id = ?", id);
-    if (row.path) await deleteStoredFilesIfUnreferenced([row.path]);
+    deleteImageDerivativesForSources(derivativeSources);
+    if (row.path) await deleteStoredFilesIfUnreferenced([row.path, ...derivativePaths]);
     audit("branding.asset.delete", { assetId: id, type: row.type, name: row.name });
     return c.json(await brandingConfig());
   });
 
   api.get("/files/branding/:id", async (c) => {
-    const row = getOne<BrandingAssetRow>(configDb, "select * from branding_assets where id = ? limit 1", c.req.param("id"));
-    if (!row || row.source !== "uploaded" || !row.path) return c.json({ error: "品牌资源不存在" }, 404);
+    const row = await brandingAssetRowForFileRequest(c.req.param("id"));
+    if (!row) return c.json({ error: "品牌资源不存在" }, 404);
     try {
+      const variant = normalizeImageVariant(c.req.query("variant"));
+      if (row.source === "builtin") {
+        const file = await readBuiltinAsset(row, variant);
+        return imageResponse(file.buffer, file.mimeType);
+      }
+      if (!row.path) return c.json({ error: "品牌资源不存在" }, 404);
+      if (variant === "thumb" || variant === "preview") {
+        const derivative = await getOrCreateImageDerivative(
+          { sourceType: "branding", sourceId: row.id, path: row.path },
+          variant
+        );
+        return imageResponse(derivative.buffer, derivative.mimeType);
+      }
       return imageResponse(await readStoredFile(row.path), row.mime_type || "image/png");
     } catch (error) {
       console.warn("品牌资源读取失败", row.id, error);

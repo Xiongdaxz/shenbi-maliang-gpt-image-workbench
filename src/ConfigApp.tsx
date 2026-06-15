@@ -5074,6 +5074,14 @@ function uniqueBrandingAssetsByUrl(assets: BrandingAsset[], activeId?: string) {
   return unique;
 }
 
+function brandingAssetPreviewUrl(asset: BrandingAsset) {
+  return asset.thumbnailUrl || asset.previewUrl || asset.url;
+}
+
+function brandingAssetPanelPreviewUrl(asset: BrandingAsset | null | undefined) {
+  return asset?.previewUrl || asset?.thumbnailUrl || asset?.url || "";
+}
+
 function moveBrandingId(ids: string[], id: string, direction: -1 | 1) {
   const index = ids.indexOf(id);
   const nextIndex = index + direction;
@@ -5138,7 +5146,7 @@ function BrandingAssetCard({
   return (
     <article className={cx("branding-asset-card", selected && "selected")}>
       <div className="branding-asset-preview">
-        {asset.url ? <img src={asset.url} alt={asset.name} /> : <ImageIcon size={28} />}
+        {brandingAssetPreviewUrl(asset) ? <img src={brandingAssetPreviewUrl(asset)} alt={asset.name} /> : <ImageIcon size={28} />}
         {selected ? <span className="branding-selected-badge">{order ? `第 ${order} 张` : "当前使用"}</span> : null}
       </div>
       <div className="branding-asset-body">
@@ -5267,7 +5275,7 @@ function BrandingSettingsPanel() {
     const activeId = type === "logo" ? form.activeLogoAssetId : form.activeFaviconAssetId;
     const label = type === "logo" ? "设为 Logo" : "设为图标";
     const assetsForType = type === "favicon"
-      ? uniqueBrandingAssetsByUrl([...brandingAssetsFor(assets, "favicon"), ...brandingAssetsFor(assets, "logo")], activeId)
+      ? uniqueBrandingAssetsByUrl(brandingAssetsFor(assets, "favicon"), activeId)
       : brandingAssetsFor(assets, "logo");
     return (
       <div className="branding-asset-grid">
@@ -5414,14 +5422,14 @@ function BrandingSettingsPanel() {
           <h2>实际预览</h2>
           <div className="branding-preview-shell">
             <div className="branding-preview-sidebar">
-              {activeLogo?.url ? <img src={activeLogo.url} alt={form.siteName} /> : <ProjectLogo alt={form.siteName} />}
+              {brandingAssetPanelPreviewUrl(activeLogo) ? <img src={brandingAssetPanelPreviewUrl(activeLogo)} alt={form.siteName} /> : <ProjectLogo alt={form.siteName} />}
               <span>{form.siteName}</span>
             </div>
-            <div className="branding-preview-login" style={{ backgroundImage: firstLightBackground?.url ? `url("${firstLightBackground.url}")` : undefined }}>
-              {lightTitle?.url ? <img src={lightTitle.url} alt={form.siteName} /> : null}
+            <div className="branding-preview-login" style={{ backgroundImage: brandingAssetPanelPreviewUrl(firstLightBackground) ? `url("${brandingAssetPanelPreviewUrl(firstLightBackground)}")` : undefined }}>
+              {brandingAssetPanelPreviewUrl(lightTitle) ? <img src={brandingAssetPanelPreviewUrl(lightTitle)} alt={form.siteName} /> : null}
             </div>
-            <div className="branding-preview-login dark" style={{ backgroundImage: firstDarkBackground?.url ? `url("${firstDarkBackground.url}")` : undefined }}>
-              {darkTitle?.url ? <img src={darkTitle.url} alt={form.siteName} /> : null}
+            <div className="branding-preview-login dark" style={{ backgroundImage: brandingAssetPanelPreviewUrl(firstDarkBackground) ? `url("${brandingAssetPanelPreviewUrl(firstDarkBackground)}")` : undefined }}>
+              {brandingAssetPanelPreviewUrl(darkTitle) ? <img src={brandingAssetPanelPreviewUrl(darkTitle)} alt={form.siteName} /> : null}
             </div>
           </div>
           <small>当前图标：{activeFavicon?.name || "默认浏览器图标"}</small>
@@ -5443,7 +5451,7 @@ function BrandingSettingsPanel() {
         <div className="branding-section-head">
           <div>
             <h2>浏览器图标</h2>
-            <p>可复用 Logo，也可以单独上传小尺寸图标。</p>
+            <p>用于浏览器标签页和收藏夹，可单独上传小尺寸图标。</p>
           </div>
           <BrandingUploadButton type="favicon" label="上传图标" disabled={uploadDisabled} onUpload={handleUpload} />
         </div>

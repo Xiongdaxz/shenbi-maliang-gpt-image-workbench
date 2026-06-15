@@ -716,6 +716,7 @@ api.get("/sessions", async (c) => {
   const sessions = getAll<{
     id: string;
     title: string;
+    title_status: string | null;
     archived_at: string | null;
     running_job_count: number;
     created_at: string;
@@ -723,12 +724,12 @@ api.get("/sessions", async (c) => {
   }>(
     appDb,
     archived
-      ? `select id, title, archived_at, created_at, updated_at,
+      ? `select id, title, title_status, archived_at, created_at, updated_at,
           (select count(*) from image_jobs where image_jobs.session_id = sessions.id and image_jobs.user_id = ? and image_jobs.status = 'running') as running_job_count
          from sessions
          where ${whereSql}
          order by archived_at desc, updated_at desc, rowid desc${limitSql}`
-      : `select id, title, archived_at, created_at, updated_at,
+      : `select id, title, title_status, archived_at, created_at, updated_at,
           (select count(*) from image_jobs where image_jobs.session_id = sessions.id and image_jobs.user_id = ? and image_jobs.status = 'running') as running_job_count
          from sessions
          where ${whereSql}
@@ -750,19 +751,21 @@ api.post("/sessions", async (c) => {
   const prompt = String(body.prompt ?? "").trim();
   const fallbackTitle = String(body.title ?? "新的图像对话").trim() || "新的图像对话";
   const title = prompt ? immediateChatTitleFromPrompt(prompt, fallbackTitle) : fallbackTitle;
+  const titleStatus = prompt ? "pending" : "ready";
   const id = makeId("chat");
   const timestamp = now();
   run(
     appDb,
-    "insert into sessions (id, user_id, title, created_at, updated_at) values (?, ?, ?, ?, ?)",
+    "insert into sessions (id, user_id, title, title_status, created_at, updated_at) values (?, ?, ?, ?, ?, ?)",
     id,
     user.id,
     title,
+    titleStatus,
     timestamp,
     timestamp
   );
   refreshChatTitleInBackground(user.id, id, prompt, title);
-  return c.json({ session: { id, title, archivedAt: null, runningImageJobCount: 0, createdAt: timestamp, updatedAt: timestamp } });
+  return c.json({ session: { id, title, titleStatus, archivedAt: null, runningImageJobCount: 0, createdAt: timestamp, updatedAt: timestamp } });
 });
 
 api.post("/sessions/archive-all", async (c) => {

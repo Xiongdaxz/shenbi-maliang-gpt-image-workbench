@@ -3,6 +3,7 @@ import { appDb, run } from "./db";
 import { warmImageDerivatives } from "./imageDerivatives";
 import { readImageDimensions } from "./imageDimensions";
 import { providerFetch, providerHeaders, withProviderRequestTimeout } from "./providerHttp";
+import { providerResponseErrorDetail } from "./responseSnapshots";
 import { readStoredFile, secureImagePath, secureImageReferencePath, writeEncryptedFile } from "./secureFiles";
 import type { ImageReferenceSourceAsset, ProviderImageContext, ProviderRow, SavedImageFile } from "./types";
 import { makeId, now } from "./utils";
@@ -125,6 +126,7 @@ export function mimeTypeFromPath(filePath: string) {
   if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
   if (extension === ".webp") return "image/webp";
   if (extension === ".avif") return "image/avif";
+  if (extension === ".svg") return "image/svg+xml";
   return "image/png";
 }
 
@@ -259,6 +261,13 @@ async function saveImageUrl(provider: ProviderRow, imageUrl: string, imageId: st
   return { path: relativePath, mimeType, fileSize: buffer.length, ...readImageDimensions(buffer) };
 }
 
+function missingImageDataError(responseJson: unknown) {
+  const detail = providerResponseErrorDetail(responseJson);
+  return detail
+    ? new Error(`图片接口返回中没有找到图片数据：${detail}`)
+    : new Error("图片接口返回中没有找到图片数据");
+}
+
 export async function saveProviderImageResult(
   responseJson: unknown,
   provider: ProviderRow,
@@ -271,7 +280,7 @@ export async function saveProviderImageResult(
   if (base64) return saveBase64Image(base64, imageId, userId, sessionId, responseMimeType);
   const imageUrl = findImageUrl(responseJson);
   if (imageUrl) return saveImageUrl(provider, imageUrl, imageId, userId, sessionId);
-  throw new Error("图片接口返回中没有找到图片数据");
+  throw missingImageDataError(responseJson);
 }
 
 function uniqueImageValues(values: string[]) {
@@ -338,7 +347,7 @@ export async function saveProviderImageResults(
     return saved;
   }
 
-  throw new Error("图片接口返回中没有找到图片数据");
+  throw missingImageDataError(responseJson);
 }
 
 export async function snapshotImageReferences(userId: string, sessionId: string | null, imageId: string, sources: ImageReferenceSnapshotInput[]) {

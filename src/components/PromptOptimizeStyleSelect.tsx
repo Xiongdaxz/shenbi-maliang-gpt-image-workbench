@@ -295,7 +295,7 @@ export function PromptOptimizeStyleSelect({
                         value={customInstruction}
                         rows={1}
                         maxLength={500}
-                        placeholder="自定义"
+                        placeholder="自定义补充，仅点右侧按钮时生效"
                         onFocus={() => setActiveGroup("")}
                         onChange={(event) => {
                           onCustomInstructionChange(event.target.value);
@@ -311,8 +311,8 @@ export function PromptOptimizeStyleSelect({
                             setOpen(false);
                           }}
                           disabled={customInstructionSubmitDisabled || customInstructionSubmitPending}
-                          aria-label="开始优化"
-                          title="开始优化"
+                          aria-label="按自定义补充优化"
+                          title="按自定义补充优化"
                         >
                           {customInstructionSubmitPending ? (
                             <RotateCw size={14} className="spin" />

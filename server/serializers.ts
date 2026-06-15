@@ -266,6 +266,40 @@ export function imageOriginPromptsByImageIds(imageIds: string[]) {
   return prompts;
 }
 
+export function imagePromptHistoriesByImageIds(imageIds: string[]) {
+  const uniqueImageIds = Array.from(new Set(imageIds.map((id) => id.trim()).filter(Boolean)));
+  const histories = new Map<string, string[]>();
+  if (uniqueImageIds.length === 0) return histories;
+  const rows = getAll<{ start_id: string; prompt: string; depth: number }>(
+    appDb,
+    `with recursive image_prompt_chain(start_id, id, parent_image_id, prompt, depth, path) as (
+       select id, id, parent_image_id, prompt, 0, '|' || id || '|'
+       from images
+       where id in (${uniqueImageIds.map(() => "?").join(", ")})
+       union all
+       select image_prompt_chain.start_id, parent.id, parent.parent_image_id,
+              parent.prompt, image_prompt_chain.depth + 1,
+              image_prompt_chain.path || parent.id || '|'
+       from image_prompt_chain
+       join images parent on parent.id = image_prompt_chain.parent_image_id
+       where image_prompt_chain.depth < 20
+         and instr(image_prompt_chain.path, '|' || parent.id || '|') = 0
+     )
+     select start_id, prompt, depth
+     from image_prompt_chain
+     order by start_id asc, depth desc`,
+    ...uniqueImageIds
+  );
+  for (const row of rows) {
+    const prompt = String(row.prompt ?? "").trim();
+    if (!prompt) continue;
+    const group = histories.get(row.start_id) ?? [];
+    group.push(prompt);
+    histories.set(row.start_id, group);
+  }
+  return histories;
+}
+
 export function publicImageWithReferences(
   row: ImageRow,
   references: Map<string, ReturnType<typeof publicImageReference>[]>,

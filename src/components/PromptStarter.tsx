@@ -191,7 +191,6 @@ export function PromptStarter({
   const caseScrollRef = useRef<HTMLDivElement | null>(null);
   const logoMotionFrameRef = useRef<number | null>(null);
   const [caseScrollHint, setCaseScrollHint] = useState({ overflow: false, atEnd: true });
-  const [logoMotionKey, setLogoMotionKey] = useState(0);
   const [isLogoMotionPlaying, setIsLogoMotionPlaying] = useState(true);
   const refreshCaseImages = useCallback((behavior: ScrollBehavior = "smooth") => {
     caseScrollRef.current?.scrollTo({ left: 0, behavior });
@@ -202,7 +201,6 @@ export function PromptStarter({
       cancelAnimationFrame(logoMotionFrameRef.current);
     }
     setIsLogoMotionPlaying(false);
-    setLogoMotionKey((value) => value + 1);
     logoMotionFrameRef.current = requestAnimationFrame(() => {
       logoMotionFrameRef.current = requestAnimationFrame(() => {
         setIsLogoMotionPlaying(true);
@@ -295,7 +293,6 @@ export function PromptStarter({
     <div className="starter">
       <h2 className="starter-title" aria-label={headline}>
         <button
-          key={logoMotionKey}
           className={cx("starter-logo", isLogoMotionPlaying && "is-playing")}
           type="button"
           aria-label="放大工作台 logo"

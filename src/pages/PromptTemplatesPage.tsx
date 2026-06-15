@@ -1646,7 +1646,7 @@ export function PromptTemplatesPage() {
       saveOptimizeStyle.mutate({ templateId: template.id, nextOptimizeStyle: nextStyle });
     }
     if (shouldAutoOptimize && template) {
-      optimize.mutate({ templateId: template.id, signature, basePrompt, optimizeStyle: nextStyle, customInstruction: optimizeCustomInstruction });
+      optimize.mutate({ templateId: template.id, signature, basePrompt, optimizeStyle: nextStyle });
     }
   }
 
@@ -2085,8 +2085,7 @@ export function PromptTemplatesPage() {
                       templateId: template.id,
                       signature,
                       basePrompt,
-                      optimizeStyle,
-                      customInstruction: optimizeCustomInstruction
+                      optimizeStyle
                     })}
                     disabled={Boolean(usingPromptTarget) || optimize.isPending || !basePrompt.trim()}
                     aria-label={`${optimizeActionLabel}，${optimizeStyleOption.label}风格`}

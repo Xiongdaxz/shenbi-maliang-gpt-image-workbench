@@ -58,6 +58,8 @@ export type BrandingAsset = {
   source: BrandingAssetSource;
   name: string;
   url: string;
+  previewUrl: string;
+  thumbnailUrl: string;
   mimeType: string;
   size: number;
   imageWidth: number;
@@ -527,6 +529,7 @@ export type ChangelogEntry = {
 export type ChatSession = {
   id: string;
   title: string;
+  titleStatus: "pending" | "ready" | "manual";
   archivedAt: string | null;
   runningImageJobCount: number;
   createdAt: string;

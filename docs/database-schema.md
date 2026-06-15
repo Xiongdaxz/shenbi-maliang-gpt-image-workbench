@@ -123,6 +123,7 @@
 | `id` | 会话 ID |
 | `user_id` | 用户 ID |
 | `title` | 会话标题 |
+| `title_status` | 标题状态：`pending` 后台生成中，`ready` 已生成或已使用截取兜底，`manual` 用户手动修改 |
 | `archived_at` | 归档时间 |
 | `deleted_at` | 删除时间 |
 | `created_at` / `updated_at` | 创建和更新时间 |
@@ -211,7 +212,7 @@
 
 ### image_edit_suggestions
 
-图片续改建议缓存，只在用户请求某张图片建议后写入。
+图片续改建议缓存。图片生成或编辑完成后会在后台预生成；用户请求时会按需补齐或按新的建议倾向刷新。
 
 | 字段 | 说明 |
 | --- | --- |
@@ -260,11 +261,11 @@
 
 ### image_derivatives
 
-图片、素材、引用图的派生缩略图或预览文件。
+图片、素材、引用图和品牌图的派生缩略图或预览文件。
 
 | 字段 | 说明 |
 | --- | --- |
-| `source_type` | 来源类型：`image` 图片、`asset` 素材、`image-reference` 图片引用快照、`message-source-reference` 消息引用快照 |
+| `source_type` | 来源类型：`image` 图片、`asset` 素材、`image-reference` 图片引用快照、`message-source-reference` 消息引用快照、`branding` 品牌资源 |
 | `source_id` | 来源 ID |
 | `variant` | 派生规格：`thumb` 缩略图、`preview` 预览图 |
 | `path` / `mime_type` / `size` | 派生文件信息 |

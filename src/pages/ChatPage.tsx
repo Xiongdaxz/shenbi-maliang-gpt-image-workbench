@@ -245,12 +245,16 @@ export function ChatPage({ user }: { user: User }) {
     markSessionGenerationCompleted,
     clearSessionGenerationStatus,
     newChatPromptOptimizeRequest,
-    clearNewChatPromptOptimizeRequest
+    clearNewChatPromptOptimizeRequest,
+    pendingChatSubmit,
+    setPendingChatSubmit,
+    setPendingChatSubmitScope,
+    clearPendingChatSubmitForScopes
   } = useWorkbench();
   const [error, setError] = useState("");
-  const [pendingUserMessage, setPendingUserMessage] = useState<Message | null>(null);
-  const [pendingMode, setPendingMode] = useState<SubmitRequest["mode"]>("generation");
-  const [pendingSubmitScope, setPendingSubmitScopeState] = useState<string | null>(null);
+  const pendingUserMessage = pendingChatSubmit?.message ?? null;
+  const pendingMode = pendingChatSubmit?.mode ?? "generation";
+  const pendingSubmitScope = pendingChatSubmit?.scope ?? null;
   const [submittingScopes, setSubmittingScopes] = useState<string[]>([]);
   const [imageCount, setImageCount] = useState(1);
   const [assetTarget, setAssetTarget] = useState<AssetModalTarget | null>(null);
@@ -260,7 +264,7 @@ export function ChatPage({ user }: { user: User }) {
   const [starterPromptOptimizeRequest, setStarterPromptOptimizeRequest] = useState<{ id: number; prompt: string } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const promptOptimizeCustomInstructionSaveTimerRef = useRef<number | null>(null);
-  const pendingSubmitScopeRef = useRef<string | null>(null);
+  const pendingSubmitScopeRef = useRef<string | null>(pendingSubmitScope);
   const starterPromptOptimizeRequestIdRef = useRef(0);
   const submitSessionByRequestRef = useRef(new Map<string, string>());
   const retryInFlightJobIdsRef = useRef(new Set<string>());
@@ -395,7 +399,11 @@ export function ChatPage({ user }: { user: User }) {
 
   const setPendingScope = (scope: string | null) => {
     pendingSubmitScopeRef.current = scope;
-    setPendingSubmitScopeState(scope);
+    if (scope) {
+      setPendingChatSubmitScope(scope);
+    } else {
+      setPendingChatSubmit(null);
+    }
   };
 
   const addSubmittingScope = (scope: string) => {
@@ -416,12 +424,16 @@ export function ChatPage({ user }: { user: User }) {
 
   const clearPendingForScopes = (scopes: string[]) => {
     const scopeSet = new Set(scopes.filter(Boolean));
-    const currentScope = pendingSubmitScopeRef.current;
+    const currentScope = pendingSubmitScopeRef.current ?? pendingSubmitScope;
     if (currentScope && scopeSet.has(currentScope)) {
-      setPendingUserMessage(null);
-      setPendingScope(null);
+      pendingSubmitScopeRef.current = null;
     }
+    clearPendingChatSubmitForScopes(scopes);
   };
+
+  useEffect(() => {
+    pendingSubmitScopeRef.current = pendingSubmitScope;
+  }, [pendingSubmitScope]);
 
   const ensureSubmitSession = async (request: SubmitRequest) => {
     if (request.sessionId) {
@@ -492,7 +504,6 @@ export function ChatPage({ user }: { user: User }) {
       submitSessionByRequestRef.current.delete(request.clientRequestId);
       if (request.pendingScope === NEW_SESSION_PENDING_SCOPE) appIntroGuide.markSeen();
       removeSubmittingScopes([request.pendingScope, completedSessionId]);
-      clearPendingForScopes([request.pendingScope, completedSessionId]);
       if (returnedJob) {
         queryClient.setQueryData<{ jobs: ImageJob[] }>(["session-image-jobs", completedSessionId], (current) => {
           const jobs = current?.jobs ?? [];
@@ -620,8 +631,17 @@ export function ChatPage({ user }: { user: User }) {
       showToast(error instanceof Error ? error.message : "加入素材库失败", "error");
     }
   });
-  const currentSubmitScope = sessionId ?? NEW_SESSION_PENDING_SCOPE;
-  const currentScopeSubmitting = submittingScopes.includes(currentSubmitScope);
+  const routeSubmitScope = sessionId ?? NEW_SESSION_PENDING_SCOPE;
+  const pendingSessionHandoffScope =
+    !sessionId
+    && pendingSubmitScope
+    && pendingSubmitScope !== NEW_SESSION_PENDING_SCOPE
+      ? pendingSubmitScope
+      : null;
+  const currentSubmitScope = pendingSessionHandoffScope ?? routeSubmitScope;
+  const currentScopeSubmitting =
+    submittingScopes.includes(routeSubmitScope)
+    || (pendingSessionHandoffScope ? submittingScopes.includes(pendingSessionHandoffScope) : false);
   const imageJobs = sessionImageJobs.data?.jobs ?? [];
   const runningImageJobs = imageJobs.filter((job) => job.status === "running");
   const failedJobIds = useMemo(() => new Set(imageJobs.filter((job) => job.status === "failed").map((job) => job.id)), [imageJobs]);
@@ -756,27 +776,30 @@ export function ChatPage({ user }: { user: User }) {
     const branchFields = activeChatBranchId !== MAIN_CHAT_BRANCH_ID ? { branchId: activeChatBranchId } : {};
     addSubmittingScope(pendingScope);
     setPendingScope(pendingScope);
-    setPendingMode(mode);
-    setPendingUserMessage({
-      id: `pending-${Date.now()}`,
-      role: "user",
-      content: prompt,
-      metadata: {
-        mode,
-        pending: true,
-        sourceImageIds: requestSourceImage ? [requestSourceImage.id] : [],
-        sourceAssetIds: selectedAssets.map((asset) => asset.id),
-        sourceCaseItemIds: selectedCaseItemIds,
-        sourceReferenceIds: [],
-        ...(selectedCaseReferences.length > 0 ? { sourceCaseReferences: selectedCaseReferences } : {}),
-        ...(requestCaseItemId ? { caseItemId: requestCaseItemId } : {}),
-        ...(sourceAsset ? { referenceAssetId: sourceAsset.id } : {}),
-        ...(useHiddenContinuityImage ? { hideReference: true, autoReference: true } : {}),
-        ...branchFields,
-        n: imageCount
-      },
-      createdAt: new Date().toISOString(),
-      ...sourcePreview
+    setPendingChatSubmit({
+      scope: pendingScope,
+      mode,
+      message: {
+        id: `pending-${Date.now()}`,
+        role: "user",
+        content: prompt,
+        metadata: {
+          mode,
+          pending: true,
+          sourceImageIds: requestSourceImage ? [requestSourceImage.id] : [],
+          sourceAssetIds: selectedAssets.map((asset) => asset.id),
+          sourceCaseItemIds: selectedCaseItemIds,
+          sourceReferenceIds: [],
+          ...(selectedCaseReferences.length > 0 ? { sourceCaseReferences: selectedCaseReferences } : {}),
+          ...(requestCaseItemId ? { caseItemId: requestCaseItemId } : {}),
+          ...(sourceAsset ? { referenceAssetId: sourceAsset.id } : {}),
+          ...(useHiddenContinuityImage ? { hideReference: true, autoReference: true } : {}),
+          ...branchFields,
+          n: imageCount
+        },
+        createdAt: new Date().toISOString(),
+        ...sourcePreview
+      }
     });
     setDraftPrompt("");
     setEditImage(null);
@@ -821,6 +844,10 @@ export function ChatPage({ user }: { user: User }) {
   });
   const pendingInCurrentScope = pendingSubmitScope === currentSubmitScope;
   const pendingHasServerEcho = Boolean(pendingUserMessage && serverMessages.some((message) => isServerEchoOfPending(message, pendingUserMessage)));
+  useEffect(() => {
+    if (!pendingHasServerEcho || !pendingSubmitScope) return;
+    clearPendingForScopes([pendingSubmitScope]);
+  }, [pendingHasServerEcho, pendingSubmitScope]);
   const branchCatalogMessages = useMemo(
     () => [...serverMessages, ...(pendingInCurrentScope && pendingUserMessage && !pendingHasServerEcho ? [pendingUserMessage] : [])],
     [pendingHasServerEcho, pendingInCurrentScope, pendingUserMessage, serverMessages]
@@ -933,7 +960,6 @@ export function ChatPage({ user }: { user: User }) {
     setCasePickerOpen(false);
     setError("");
     if (!sessionId) {
-      setPendingUserMessage(null);
       setPendingScope(null);
       if (imageEditor) closeImageEditor();
     }
@@ -990,44 +1016,47 @@ export function ChatPage({ user }: { user: User }) {
     const branchFields = activeChatBranchId !== MAIN_CHAT_BRANCH_ID ? { branchId: activeChatBranchId } : {};
     addSubmittingScope(pendingScope);
     setPendingScope(pendingScope);
-    setPendingMode("edit");
-    setPendingUserMessage({
-      id: `pending-${Date.now()}`,
-      role: "user",
-      content: trimmedPrompt,
-      metadata: {
-        mode: "edit",
-        pending: true,
-        sourceImageIds: [image.id],
-        sourceAssetIds,
-        sourceCaseItemIds,
-        ...(selectedCaseReferences.length > 0 ? { sourceCaseReferences: selectedCaseReferences } : {}),
-        hasMask: Boolean(maskDataUrl),
-        size: selectedRequestSize,
-        ...branchFields,
-        n: imageCount
-      },
-      createdAt: new Date().toISOString(),
-      imageId: image.id,
-      imageUrl: image.url,
-      imageOriginalUrl: image.originalUrl || image.url,
-      imagePreviewUrl: image.previewUrl || image.url,
-      imageThumbnailUrl: image.thumbnailUrl || image.previewUrl || image.url,
-      imagePrompt: image.prompt,
-      referenceImageUrl: image.url,
-      referenceImageOriginalUrl: image.originalUrl || image.url,
-      referenceImagePreviewUrl: image.previewUrl || image.url,
-      referenceImageThumbnailUrl: image.thumbnailUrl || image.previewUrl || image.url,
-      referenceImagePrompt: image.prompt,
-      referenceImageKind: "image",
-      referenceImageWidth: image.imageWidth,
-      referenceImageHeight: image.imageHeight,
-      sourceReferenceImages,
-      imageKind: image.kind,
-      imageSize: image.size,
-      imageQuality: image.quality,
-      imageProviderId: image.providerId,
-      parentImageId: image.parentImageId
+    setPendingChatSubmit({
+      scope: pendingScope,
+      mode: "edit",
+      message: {
+        id: `pending-${Date.now()}`,
+        role: "user",
+        content: trimmedPrompt,
+        metadata: {
+          mode: "edit",
+          pending: true,
+          sourceImageIds: [image.id],
+          sourceAssetIds,
+          sourceCaseItemIds,
+          ...(selectedCaseReferences.length > 0 ? { sourceCaseReferences: selectedCaseReferences } : {}),
+          hasMask: Boolean(maskDataUrl),
+          size: selectedRequestSize,
+          ...branchFields,
+          n: imageCount
+        },
+        createdAt: new Date().toISOString(),
+        imageId: image.id,
+        imageUrl: image.url,
+        imageOriginalUrl: image.originalUrl || image.url,
+        imagePreviewUrl: image.previewUrl || image.url,
+        imageThumbnailUrl: image.thumbnailUrl || image.previewUrl || image.url,
+        imagePrompt: image.prompt,
+        referenceImageUrl: image.url,
+        referenceImageOriginalUrl: image.originalUrl || image.url,
+        referenceImagePreviewUrl: image.previewUrl || image.url,
+        referenceImageThumbnailUrl: image.thumbnailUrl || image.previewUrl || image.url,
+        referenceImagePrompt: image.prompt,
+        referenceImageKind: "image",
+        referenceImageWidth: image.imageWidth,
+        referenceImageHeight: image.imageHeight,
+        sourceReferenceImages,
+        imageKind: image.kind,
+        imageSize: image.size,
+        imageQuality: image.quality,
+        imageProviderId: image.providerId,
+        parentImageId: image.parentImageId
+      }
     });
     closeImageEditor();
     setDraftPrompt("");
@@ -1157,28 +1186,31 @@ export function ChatPage({ user }: { user: User }) {
     addSubmittingScope(pendingScope);
     setActiveBranchId(branchId);
     setPendingScope(pendingScope);
-    setPendingMode(mode);
-    setPendingUserMessage({
-      id: `pending-${Date.now()}`,
-      role: "user",
-      content: trimmedPrompt,
-      metadata: {
-        mode,
-        pending: true,
-        revisionRootId: payload.rootId,
-        editedMessageId: payload.userMessage.id,
-        ...branchFields,
-        ...(hideReference ? { hideReference: true, autoReference: true } : {}),
-        sourceImageIds: sourceSnapshot.sourceImageIds,
-        sourceAssetIds: sourceSnapshot.sourceAssetIds,
-        sourceCaseItemIds: sourceSnapshot.sourceCaseItemIds,
-        sourceReferenceIds: sourceSnapshot.sourceReferenceIds,
-        ...(sourceSnapshot.caseReferences.length > 0 ? { sourceCaseReferences: sourceSnapshot.caseReferences } : {}),
-        ...(sourceSnapshot.referenceAssetId ? { referenceAssetId: sourceSnapshot.referenceAssetId } : {}),
-        n: imageCount
-      },
-      createdAt: new Date().toISOString(),
-      ...referenceFields
+    setPendingChatSubmit({
+      scope: pendingScope,
+      mode,
+      message: {
+        id: `pending-${Date.now()}`,
+        role: "user",
+        content: trimmedPrompt,
+        metadata: {
+          mode,
+          pending: true,
+          revisionRootId: payload.rootId,
+          editedMessageId: payload.userMessage.id,
+          ...branchFields,
+          ...(hideReference ? { hideReference: true, autoReference: true } : {}),
+          sourceImageIds: sourceSnapshot.sourceImageIds,
+          sourceAssetIds: sourceSnapshot.sourceAssetIds,
+          sourceCaseItemIds: sourceSnapshot.sourceCaseItemIds,
+          sourceReferenceIds: sourceSnapshot.sourceReferenceIds,
+          ...(sourceSnapshot.caseReferences.length > 0 ? { sourceCaseReferences: sourceSnapshot.caseReferences } : {}),
+          ...(sourceSnapshot.referenceAssetId ? { referenceAssetId: sourceSnapshot.referenceAssetId } : {}),
+          n: imageCount
+        },
+        createdAt: new Date().toISOString(),
+        ...referenceFields
+      }
     });
     submit.mutate({
       clientRequestId,

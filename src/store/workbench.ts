@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { PromptTemplateOptimizeStyle } from "../lib/promptOptimizeStyles";
-import type { AssetItem, CaseMaterialItem, WorkImage } from "../types";
+import type { AssetItem, CaseMaterialItem, Message, WorkImage } from "../types";
 import type { PromptTemplateFormValues, PromptTemplateResult } from "../types";
 
 const COMPOSER_DRAFTS_STORAGE_KEY = "gpt-image.composer-drafts.v1";
@@ -57,6 +57,12 @@ export type NewChatPromptOptimizeRequest = {
   prompt: string;
 };
 
+export type PendingChatSubmit = {
+  scope: string;
+  mode: "generation" | "edit";
+  message: Message;
+};
+
 type WorkbenchState = {
   draftPrompt: string;
   draftCaseUsage: DraftCaseUsage | null;
@@ -71,6 +77,7 @@ type WorkbenchState = {
   composerDrafts: Record<string, ComposerSessionDraft>;
   sessionGenerationStates: Record<string, SessionGenerationState>;
   newChatPromptOptimizeRequest: NewChatPromptOptimizeRequest | null;
+  pendingChatSubmit: PendingChatSubmit | null;
   setDraftPrompt: (value: string, caseUsage?: DraftCaseUsage | null) => void;
   setEditImage: (image: WorkImage | null) => void;
   setEditorImageRequest: (request: ImageEditorOpenRequest | null) => void;
@@ -83,6 +90,9 @@ type WorkbenchState = {
   resetNewChatComposer: () => void;
   startNewChatPromptOptimize: (prompt: string) => void;
   clearNewChatPromptOptimizeRequest: (id: number) => void;
+  setPendingChatSubmit: (pendingChatSubmit: PendingChatSubmit | null) => void;
+  setPendingChatSubmitScope: (scope: string) => void;
+  clearPendingChatSubmitForScopes: (scopes: string[]) => void;
   setMaterialPickerOpen: (value: boolean) => void;
   setMobileMenuOpen: (value: boolean) => void;
   setSidebarCollapsed: (value: boolean) => void;
@@ -221,6 +231,7 @@ export const useWorkbench = create<WorkbenchState>((set) => ({
   composerDrafts: initialComposerDrafts,
   sessionGenerationStates: {},
   newChatPromptOptimizeRequest: null,
+  pendingChatSubmit: null,
   setDraftPrompt: (draftPrompt, caseUsage) =>
     set((state) => ({
       draftPrompt,
@@ -315,6 +326,19 @@ export const useWorkbench = create<WorkbenchState>((set) => ({
         ? { newChatPromptOptimizeRequest: null }
         : state
     )),
+  setPendingChatSubmit: (pendingChatSubmit) => set({ pendingChatSubmit }),
+  setPendingChatSubmitScope: (scope) =>
+    set((state) => (
+      state.pendingChatSubmit && state.pendingChatSubmit.scope !== scope
+        ? { pendingChatSubmit: { ...state.pendingChatSubmit, scope } }
+        : state
+    )),
+  clearPendingChatSubmitForScopes: (scopes) =>
+    set((state) => {
+      if (!state.pendingChatSubmit) return state;
+      const scopeSet = new Set(scopes.filter(Boolean));
+      return scopeSet.has(state.pendingChatSubmit.scope) ? { pendingChatSubmit: null } : state;
+    }),
   setMaterialPickerOpen: (materialPickerOpen) => set({ materialPickerOpen }),
   setMobileMenuOpen: (mobileMenuOpen) => set({ mobileMenuOpen }),
   setSidebarCollapsed: (sidebarCollapsed) => {

@@ -413,6 +413,34 @@
   text-overflow: clip;
 }
 
+.session-title-skeleton {
+  display: flex;
+  align-items: center;
+}
+
+.session-title-skeleton > span {
+  width: min(76%, 156px);
+  height: 14px;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.62), transparent),
+    #eeeeec;
+  background-size: 180px 100%, 100% 100%;
+  background-position: -180px 0, 0 0;
+  animation: recentSkeletonSweep 1.2s ease-in-out infinite;
+}
+
+.collapsed-recent-card-title.session-title-skeleton > span {
+  width: min(82%, 150px);
+}
+
+.session-title-char-in > span {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(4px);
+  animation: sidebarTitleCharIn 260ms ease forwards;
+}
+
 .recent-row.has-generation-status .recent-item {
   padding-right: 38px;
 }
@@ -1172,6 +1200,13 @@
 @keyframes recentSkeletonSweep {
   to {
     background-position: calc(100% + 180px) 0, 0 0;
+  }
+}
+
+@keyframes sidebarTitleCharIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 

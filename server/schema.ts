@@ -576,6 +576,7 @@ export function initAppDb() {
       id text primary key,
       user_id text not null,
       title text not null,
+      title_status text not null default 'ready',
       archived_at text,
       deleted_at text,
       created_at text not null,
@@ -585,6 +586,9 @@ export function initAppDb() {
   `);
   if (!tableColumnExists(appDb, "sessions", "archived_at")) {
     appDb.run("alter table sessions add column archived_at text");
+  }
+  if (!tableColumnExists(appDb, "sessions", "title_status")) {
+    appDb.run("alter table sessions add column title_status text not null default 'ready'");
   }
   if (!tableColumnExists(appDb, "sessions", "deleted_at")) {
     appDb.run("alter table sessions add column deleted_at text");

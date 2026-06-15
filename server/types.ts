@@ -232,7 +232,7 @@ export type MessageSourceReferenceRow = {
 };
 
 export type ImageDerivativeRow = {
-  source_type: "image" | "asset" | "image-reference" | "message-source-reference";
+  source_type: "image" | "asset" | "image-reference" | "message-source-reference" | "branding";
   source_id: string;
   variant: "thumb" | "preview";
   path: string;

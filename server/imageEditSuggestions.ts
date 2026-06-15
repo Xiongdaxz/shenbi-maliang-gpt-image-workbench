@@ -13,7 +13,13 @@ export type PublicImageEditSuggestion = PromptEditSuggestion & {
 };
 
 const EDIT_SUGGESTION_COUNT = 3;
-const EDIT_SUGGESTION_PROMPT_UPDATED_AT = "2026-06-05T13:44:00.000";
+const EDIT_SUGGESTION_PROMPT_UPDATED_AT = "2026-06-15T00:00:00.000";
+type ImageEditSuggestionResult = {
+  imageId: string;
+  suggestions: PublicImageEditSuggestion[];
+  generated: boolean;
+};
+const inFlightEditSuggestions = new Map<string, Promise<ImageEditSuggestionResult>>();
 const LEGACY_EDIT_SUGGESTION_LABELS = new Set([
   "增强光影层次",
   "简化背景突出主体",
@@ -88,7 +94,12 @@ export async function ensureImageEditSuggestionsForImage(image: ImageRow, origin
   return ensureImageEditSuggestionsForImageWithTone(image, originPrompt, "default");
 }
 
-export async function ensureImageEditSuggestionsForImageWithTone(image: ImageRow, originPrompt = "", tone: EditSuggestionTone = "default") {
+export async function ensureImageEditSuggestionsForImageWithTone(
+  image: ImageRow,
+  originPrompt = "",
+  tone: EditSuggestionTone = "default",
+  promptHistory: string[] = []
+) {
   const preferenceKey = normalizeEditSuggestionTone(tone);
   const existing = getOne<ImageEditSuggestionRow>(
     appDb,
@@ -110,33 +121,45 @@ export async function ensureImageEditSuggestionsForImageWithTone(image: ImageRow
     }
   }
 
-  const suggestions = await generatePromptEditSuggestions({
-    prompt: image.prompt,
-    originPrompt,
-    kind: image.kind,
-    tone: preferenceKey
+  const inFlightKey = `${image.user_id}:${image.id}:${preferenceKey}`;
+  const inFlight = inFlightEditSuggestions.get(inFlightKey);
+  if (inFlight) return inFlight;
+
+  const generationTask = (async (): Promise<ImageEditSuggestionResult> => {
+    const suggestions = await generatePromptEditSuggestions({
+      prompt: image.prompt,
+      originPrompt,
+      promptHistory,
+      kind: image.kind,
+      tone: preferenceKey
+    });
+    const timestamp = now();
+    run(
+      appDb,
+      `insert into image_edit_suggestions (
+        image_id, user_id, suggestions_json, preference_key, created_at, updated_at
+      ) values (?, ?, ?, ?, ?, ?)
+      on conflict(image_id) do update set
+        user_id = excluded.user_id,
+        suggestions_json = excluded.suggestions_json,
+        preference_key = excluded.preference_key,
+        updated_at = excluded.updated_at`,
+      image.id,
+      image.user_id,
+      JSON.stringify(suggestions.slice(0, EDIT_SUGGESTION_COUNT)),
+      preferenceKey,
+      existing?.created_at ?? timestamp,
+      timestamp
+    );
+    return {
+      imageId: image.id,
+      suggestions: publicEditSuggestions(suggestions),
+      generated: true
+    };
+  })().finally(() => {
+    inFlightEditSuggestions.delete(inFlightKey);
   });
-  const timestamp = now();
-  run(
-    appDb,
-    `insert into image_edit_suggestions (
-      image_id, user_id, suggestions_json, preference_key, created_at, updated_at
-    ) values (?, ?, ?, ?, ?, ?)
-    on conflict(image_id) do update set
-      user_id = excluded.user_id,
-      suggestions_json = excluded.suggestions_json,
-      preference_key = excluded.preference_key,
-      updated_at = excluded.updated_at`,
-    image.id,
-    image.user_id,
-    JSON.stringify(suggestions.slice(0, EDIT_SUGGESTION_COUNT)),
-    preferenceKey,
-    existing?.created_at ?? timestamp,
-    timestamp
-  );
-  return {
-    imageId: image.id,
-    suggestions: publicEditSuggestions(suggestions),
-    generated: true
-  };
+
+  inFlightEditSuggestions.set(inFlightKey, generationTask);
+  return generationTask;
 }

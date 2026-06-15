@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, FormEvent } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { InfiniteData } from "@tanstack/react-query";
@@ -37,6 +37,7 @@ const COLLAPSED_RECENT_CHAT_LIMIT = 10;
 const COLLAPSED_RECENT_CARD_ESTIMATED_HEIGHT = 442;
 const COLLAPSED_RECENT_VIEWPORT_PADDING = 14;
 const USER_CARD_CLOSE_ANIMATION_MS = 240;
+const SIDEBAR_TITLE_CHAR_DELAY_MS = 34;
 const USERNAME_RULE_MESSAGE =
   "用户名支持中文、英文、数字、单个空格、下划线和短横线，长度 2-20 个字符，不支持首尾空格或连续空格";
 type SessionPage = Awaited<ReturnType<typeof api.sessions>>;
@@ -110,31 +111,37 @@ function truncateTextToWidth(text: string, maxWidth: number, font: string, ellip
 
 function SidebarSessionTitle({
   title,
+  titleStatus = "ready",
   className,
   ellipsisWhenTruncated = false
 }: {
   title: string;
+  titleStatus?: ChatSession["titleStatus"];
   className: string;
   ellipsisWhenTruncated?: boolean;
 }) {
+  const titlePending = titleStatus === "pending";
   const normalizedTitle = sidebarSessionTitle(title);
   const titleRef = useRef<HTMLSpanElement | null>(null);
+  const [targetTitle, setTargetTitle] = useState(normalizedTitle);
   const [displayTitle, setDisplayTitle] = useState(normalizedTitle);
+  const [animateTitle, setAnimateTitle] = useState(false);
+  const previousPendingRef = useRef(titlePending);
 
   const updateDisplayTitle = useCallback(() => {
     const element = titleRef.current;
     if (!element) {
-      setDisplayTitle(normalizedTitle);
+      setTargetTitle(normalizedTitle);
       return;
     }
     const width = Math.max(0, Math.floor(element.clientWidth) - 1);
     const font = window.getComputedStyle(element).font;
     const nextTitle = truncateTextToWidth(normalizedTitle, width, font, ellipsisWhenTruncated);
-    setDisplayTitle((current) => (current === nextTitle ? current : nextTitle));
+    setTargetTitle((current) => (current === nextTitle ? current : nextTitle));
   }, [ellipsisWhenTruncated, normalizedTitle]);
 
   useLayoutEffect(() => {
-    setDisplayTitle(normalizedTitle);
+    setTargetTitle(normalizedTitle);
   }, [normalizedTitle]);
 
   useLayoutEffect(() => {
@@ -150,7 +157,42 @@ function SidebarSessionTitle({
     return () => resizeObserver.disconnect();
   }, [updateDisplayTitle]);
 
-  return <span className={className} ref={titleRef}>{displayTitle}</span>;
+  useEffect(() => {
+    if (titlePending) {
+      previousPendingRef.current = true;
+      setAnimateTitle(false);
+      setDisplayTitle("");
+      return undefined;
+    }
+
+    const shouldAnimate = previousPendingRef.current && targetTitle.trim().length > 0 && titleStatus === "ready";
+    previousPendingRef.current = false;
+    setAnimateTitle(shouldAnimate);
+    setDisplayTitle(targetTitle);
+    return undefined;
+  }, [targetTitle, titlePending, titleStatus]);
+
+  const displayChars = useMemo(() => Array.from(displayTitle), [displayTitle]);
+
+  return (
+    <span
+      className={cx(className, titlePending && "session-title-skeleton", animateTitle && "session-title-char-in")}
+      ref={titleRef}
+      aria-label={titlePending ? "标题生成中" : normalizedTitle}
+    >
+      {titlePending ? (
+        <span aria-hidden="true" />
+      ) : animateTitle ? (
+        displayChars.map((char, index) => (
+          <span key={`${char}-${index}`} style={{ animationDelay: `${index * SIDEBAR_TITLE_CHAR_DELAY_MS}ms` }}>
+            {char === " " ? "\u00a0" : char}
+          </span>
+        ))
+      ) : (
+        displayTitle
+      )}
+    </span>
+  );
 }
 
 export function WorkbenchShell({ user }: { user: User }) {
@@ -683,6 +725,7 @@ export function WorkbenchShell({ user }: { user: User }) {
   const archivedChatSessions = archivedSessions.data?.sessions ?? [];
   const archivedSessionTotal = archivedSessions.data?.pageInfo?.total ?? archivedChatSessions.length;
   const activeSessionRunKey = activeSessions.map((session) => `${session.id}:${session.runningImageJobCount}`).join("|");
+  const hasPendingSessionTitle = activeSessions.some((session) => session.titleStatus === "pending");
   const hasActiveSessionCache = Boolean(sessions.data?.pages.length);
   const showInitialSessionSkeleton = sessions.isLoading && !hasActiveSessionCache;
   const sessionListSentinelRef = useInfinitePageLoader({
@@ -710,6 +753,12 @@ export function WorkbenchShell({ user }: { user: User }) {
   const refreshSessionsNonCancel = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["sessions"] }, { cancelRefetch: false });
   }, [queryClient]);
+
+  useEffect(() => {
+    if (!hasPendingSessionTitle) return undefined;
+    const interval = window.setInterval(refreshSessionsNonCancel, 1600);
+    return () => window.clearInterval(interval);
+  }, [hasPendingSessionTitle, refreshSessionsNonCancel]);
 
   const pauseRenderingBeforeChatNavigation = useCallback((nextSessionId: string) => {
     if (nextSessionId === activeChatSessionId) return;
@@ -946,6 +995,8 @@ export function WorkbenchShell({ user }: { user: User }) {
                   const rawGenerationState =
                     sessionGenerationStates[session.id]?.state ?? (session.runningImageJobCount > 0 ? "running" : null);
                   const isCurrentSession = session.id === activeChatSessionId;
+                  const titlePending = session.titleStatus === "pending";
+                  const sessionTitleLabel = titlePending ? "标题生成中" : session.title;
                   const generationState = isCurrentSession && rawGenerationState === "running" ? null : rawGenerationState;
                   return (
                     <div
@@ -954,6 +1005,7 @@ export function WorkbenchShell({ user }: { user: User }) {
                       onMouseLeave={() => setHoveredSessionId((current) => (current === session.id ? null : current))}
                       className={cx(
                         "recent-row",
+                        titlePending && "has-title-pending",
                         generationState && "has-generation-status",
                         isCurrentSession && "active",
                         openSessionMenuId === session.id && "menu-open"
@@ -961,7 +1013,7 @@ export function WorkbenchShell({ user }: { user: User }) {
                     >
                       <NavLink
                         to={`/chat/${session.id}`}
-                        title={session.title}
+                        title={sessionTitleLabel}
                         className={({ isActive }) => cx("recent-item", isActive && "active")}
                         onPointerDown={() => pauseRenderingBeforeChatNavigation(session.id)}
                         onClick={() => {
@@ -973,6 +1025,7 @@ export function WorkbenchShell({ user }: { user: User }) {
                       >
                         <SidebarSessionTitle
                           title={session.title}
+                          titleStatus={session.titleStatus}
                           className="recent-item-title"
                           ellipsisWhenTruncated={hoveredSessionId === session.id || openSessionMenuId === session.id}
                         />
@@ -1088,11 +1141,12 @@ export function WorkbenchShell({ user }: { user: User }) {
                 ) : null}
                 {collapsedRecentSessions.map((session) => {
                   const isCurrentSession = session.id === activeChatSessionId;
+                  const titlePending = session.titleStatus === "pending";
                   return (
                     <NavLink
                       key={session.id}
                       to={`/chat/${session.id}`}
-                      title={session.title}
+                      title={titlePending ? "标题生成中" : session.title}
                       className={cx("collapsed-recent-card-link", isCurrentSession && "active")}
                       onPointerDown={() => pauseRenderingBeforeChatNavigation(session.id)}
                       onClick={() => {
@@ -1103,7 +1157,7 @@ export function WorkbenchShell({ user }: { user: User }) {
                         if (sessionGenerationStates[session.id]?.state === "completed") clearSessionGenerationStatus(session.id);
                       }}
                     >
-                      <SidebarSessionTitle title={session.title} className="collapsed-recent-card-title" />
+                      <SidebarSessionTitle title={session.title} titleStatus={session.titleStatus} className="collapsed-recent-card-title" />
                     </NavLink>
                   );
                 })}

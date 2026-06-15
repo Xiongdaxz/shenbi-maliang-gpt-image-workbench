@@ -39,6 +39,8 @@ function downloadUrl(sourceType: ImageDerivativeSourceType, sourceId: string, va
       ? "images"
       : sourceType === "asset"
         ? "assets"
+        : sourceType === "branding"
+          ? "branding"
         : sourceType === "message-source-reference"
           ? "message-source-references"
           : "image-references";

@@ -36,39 +36,70 @@ export function expireStaleImageJobs(userId: string, sessionId?: string) {
 }
 
 const DEFAULT_CHAT_TITLE = "新的图像对话";
+export type ChatTitleStatus = "pending" | "ready" | "manual";
+
+function normalizeChatTitleStatus(value: string | null | undefined): ChatTitleStatus {
+  return value === "pending" || value === "manual" ? value : "ready";
+}
 
 export function immediateChatTitleFromPrompt(prompt: string, fallbackTitle = DEFAULT_CHAT_TITLE) {
   const normalizedPrompt = prompt.trim();
   return normalizedPrompt ? fallbackTitleFromPrompt(normalizedPrompt, fallbackTitle, null) || fallbackTitle : fallbackTitle;
 }
 
-export function generateChatTitleFromPrompt(prompt: string) {
-  return generatePromptSummaryTitle(prompt, {
+function compactTitleText(value: string) {
+  return value.replace(/[\s"'“”‘’`*#\-•，,、：:。！？!?；;（）()[\]{}]/g, "").toLowerCase();
+}
+
+function enrichedShortChatTitle(prompt: string, title: string) {
+  const normalizedTitle = title.replace(/\s+/g, " ").trim();
+  if (!normalizedTitle) return title;
+  const titleChars = Array.from(normalizedTitle);
+  if (titleChars.length > 6) return normalizedTitle;
+  if (compactTitleText(normalizedTitle) !== compactTitleText(prompt)) return normalizedTitle;
+  if (/logo|图标|标志|商标|品牌/i.test(normalizedTitle)) return `${normalizedTitle}设计`;
+  if (/猫|狗|兔|熊|鸟|鱼|虎|狮|熊猫|狐狸|宠物|动物/.test(normalizedTitle)) return `${normalizedTitle}形象创作`;
+  if (/人|人物|头像|角色|女孩|男孩|女性|男性/.test(normalizedTitle)) return `${normalizedTitle}角色创作`;
+  if (/海报|封面|banner|活动|节日|邀请/.test(normalizedTitle)) return `${normalizedTitle}视觉设计`;
+  return `${normalizedTitle}主题创作`;
+}
+
+export async function generateChatTitleFromPrompt(prompt: string) {
+  const title = await generatePromptSummaryTitle(prompt, {
     fallbackTitle: DEFAULT_CHAT_TITLE,
     logLabel: "对话标题自动生成失败",
     logSource: "chat-title",
     maxLength: null,
-    systemPrompt: "你是对话标题整理助手。请把用户的生图或图片编辑提示词精简成一个中文对话标题，让用户一眼知道这段对话要生成或修改什么内容。标题应概括画面主题、类型、用途或场景，保持简短清晰；英文产品名不要截断。只输出标题，不要引号、标点、说明或 Markdown。"
+    systemPrompt: "你是对话标题整理助手。请把用户的生图或图片编辑提示词整理成一个中文对话标题，让用户一眼知道这段对话要生成或修改什么内容。标题应概括画面主题、类型、用途或场景，保持简短清晰；英文产品名不要截断。用户输入很短时不要原样照抄，例如“小狗”应扩展成“小狗主题创作”“可爱小狗形象”或更贴合语义的标题；即使用户只输入一个字，也要补出可识别的主题或用途。标题一般 4 到 14 个中文字符，避免空泛的“图片生成”“新的对话”。只输出标题，不要引号、标点、说明或 Markdown。"
   });
+  return enrichedShortChatTitle(prompt, title);
 }
 
 export function refreshChatTitleInBackground(userId: string, sessionId: string, prompt: string, currentTitle: string) {
   if (!prompt.trim()) return;
   void generateChatTitleFromPrompt(prompt)
     .then((title) => {
-      const nextTitle = title.trim();
-      if (!nextTitle || nextTitle === currentTitle) return;
+      const nextTitle = title.trim() || currentTitle;
       run(
         appDb,
-        "update sessions set title = ? where id = ? and user_id = ? and title = ? and deleted_at is null",
+        "update sessions set title = ?, title_status = ? where id = ? and user_id = ? and title_status = ? and deleted_at is null",
         nextTitle,
+        "ready",
         sessionId,
         userId,
-        currentTitle
+        "pending"
       );
     })
     .catch((error) => {
       console.warn("对话标题后台更新失败", error);
+      run(
+        appDb,
+        "update sessions set title_status = ? where id = ? and user_id = ? and title_status = ? and deleted_at is null",
+        "ready",
+        sessionId,
+        userId,
+        "pending"
+      );
     });
 }
 
@@ -85,6 +116,7 @@ export function ownedSession(userId: string, sessionId: string | null | undefine
 export function serializeSession(row: {
   id: string;
   title: string;
+  title_status?: string | null;
   archived_at?: string | null;
   running_job_count?: number | null;
   created_at: string;
@@ -93,6 +125,7 @@ export function serializeSession(row: {
   return {
     id: row.id,
     title: row.title,
+    titleStatus: normalizeChatTitleStatus(row.title_status),
     archivedAt: row.archived_at ?? null,
     runningImageJobCount: row.running_job_count ?? 0,
     createdAt: row.created_at,
@@ -106,12 +139,14 @@ export async function ensureChatSession(userId: string, sessionId: string | null
   const id = makeId("chat");
   const timestamp = now();
   const title = immediateChatTitleFromPrompt(prompt);
+  const titleStatus: ChatTitleStatus = prompt.trim() ? "pending" : "ready";
   run(
     appDb,
-    "insert into sessions (id, user_id, title, created_at, updated_at) values (?, ?, ?, ?, ?)",
+    "insert into sessions (id, user_id, title, title_status, created_at, updated_at) values (?, ?, ?, ?, ?, ?)",
     id,
     userId,
     title,
+    titleStatus,
     timestamp,
     timestamp
   );
@@ -156,10 +191,11 @@ export function archiveSession(userId: string, sessionId: string, archived: bool
   return getOne<{
     id: string;
     title: string;
+    title_status: string | null;
     archived_at: string | null;
     created_at: string;
     updated_at: string;
-  }>(appDb, "select id, title, archived_at, created_at, updated_at from sessions where id = ? and user_id = ? and deleted_at is null", sessionId, userId);
+  }>(appDb, "select id, title, title_status, archived_at, created_at, updated_at from sessions where id = ? and user_id = ? and deleted_at is null", sessionId, userId);
 }
 
 export function renameSession(userId: string, sessionId: string, title: string) {
@@ -167,14 +203,15 @@ export function renameSession(userId: string, sessionId: string, title: string) 
   if (!nextTitle) return null;
   const session = getOne<{ id: string }>(appDb, "select id from sessions where id = ? and user_id = ? and deleted_at is null", sessionId, userId);
   if (!session) return null;
-  run(appDb, "update sessions set title = ? where id = ? and user_id = ? and deleted_at is null", nextTitle, sessionId, userId);
+  run(appDb, "update sessions set title = ?, title_status = ? where id = ? and user_id = ? and deleted_at is null", nextTitle, "manual", sessionId, userId);
   return getOne<{
     id: string;
     title: string;
+    title_status: string | null;
     archived_at: string | null;
     created_at: string;
     updated_at: string;
-  }>(appDb, "select id, title, archived_at, created_at, updated_at from sessions where id = ? and user_id = ? and deleted_at is null", sessionId, userId);
+  }>(appDb, "select id, title, title_status, archived_at, created_at, updated_at from sessions where id = ? and user_id = ? and deleted_at is null", sessionId, userId);
 }
 
 export function archiveAllSessions(userId: string) {

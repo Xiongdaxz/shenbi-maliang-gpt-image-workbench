@@ -504,7 +504,12 @@ export function ChatComposer({
     return promptBeforeInputOptimize && currentDraftPrompt === promptOptimizedDraftRef.current ? promptBeforeInputOptimize : currentDraftPrompt;
   }
 
-  async function optimizeCurrentPrompt(nextOptimizeStyle = promptInputOptimizeStyle, sourceOverride?: string, imageCountOverride?: number) {
+  async function optimizeCurrentPrompt(
+    nextOptimizeStyle = promptInputOptimizeStyle,
+    sourceOverride?: string,
+    imageCountOverride?: number,
+    customInstructionOverride = ""
+  ) {
     const originalPrompt = currentPromptOptimizeSource(sourceOverride);
     const sourcePrompt = originalPrompt.trim();
     if (!sourcePrompt || promptInputOptimizePending) return;
@@ -521,7 +526,7 @@ export function ChatComposer({
           prompt: sourcePrompt,
           optimizeStyle: nextOptimizeStyle,
           imageCount: optimizeImageCount,
-          customInstruction: promptInputCustomInstruction
+          customInstruction: customInstructionOverride
         },
         {
           onDelta: (chunk) => {
@@ -836,7 +841,12 @@ export function ChatComposer({
                       groups={promptOptimizeStyleGroups}
                       customInstruction={promptInputCustomInstruction}
                       onCustomInstructionChange={updatePromptOptimizeCustomInstruction}
-                      onCustomInstructionSubmit={() => optimizeCurrentPrompt()}
+                      onCustomInstructionSubmit={() => optimizeCurrentPrompt(
+                        promptInputOptimizeStyle,
+                        undefined,
+                        undefined,
+                        promptInputCustomInstruction
+                      )}
                       customInstructionSubmitDisabled={promptInputOptimizePending || !draftPrompt.trim()}
                       customInstructionSubmitPending={promptInputOptimizePending}
                       disabled={promptInputOptimizePending}
