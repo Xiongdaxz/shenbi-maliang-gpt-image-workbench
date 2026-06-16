@@ -2,7 +2,7 @@
   min-height: 100vh;
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
-  transition: grid-template-columns 180ms ease;
+  transition: grid-template-columns 200ms cubic-bezier(0.2, 0.82, 0.2, 1);
 }
 
 .app-shell.sidebar-collapsed {
@@ -28,8 +28,8 @@
   overflow: hidden;
   overscroll-behavior: contain;
   transition:
-    padding 180ms ease,
-    width 180ms ease;
+    padding 200ms cubic-bezier(0.2, 0.82, 0.2, 1),
+    width 200ms cubic-bezier(0.2, 0.82, 0.2, 1);
 }
 
 .sidebar-fixed {
@@ -110,10 +110,57 @@
   background: transparent;
   border-radius: 8px;
   cursor: ew-resize;
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    opacity 180ms ease;
 }
 
-.sidebar-toggle:hover {
+.sidebar-head-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0;
+}
+
+.sidebar-head-search {
+  width: 34px;
+  height: 34px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #111827;
+  padding: 0;
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    opacity 180ms ease;
+}
+
+.sidebar-toggle:hover,
+.sidebar-head-search:hover {
   background: var(--button-default-hover-bg);
+}
+
+.sidebar-toggle-icon-stack {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.sidebar-toggle-icon {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.app-shell:not(.sidebar-collapsed) .sidebar-toggle-icon-close,
+.app-shell.sidebar-collapsed .sidebar-toggle-icon-open {
+  opacity: 1;
 }
 
 .sidebar [data-sidebar-tip] {
@@ -233,6 +280,24 @@
   line-height: 20px;
 }
 
+.sidebar-fixed .main-nav-actions,
+.sidebar-scroll,
+.user-footer-panel {
+  opacity: 1;
+  transition: opacity 150ms ease;
+  will-change: opacity;
+}
+
+.app-shell.sidebar-motion-collapsing .sidebar-fixed .main-nav-actions,
+.app-shell.sidebar-motion-collapsing .sidebar-scroll,
+.app-shell.sidebar-motion-collapsing .user-footer-panel,
+.app-shell.sidebar-motion-expanding .sidebar-fixed .main-nav-actions,
+.app-shell.sidebar-motion-expanding .sidebar-scroll,
+.app-shell.sidebar-motion-expanding .user-footer-panel {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .main-nav button.nav-item,
 .main-nav-actions button.nav-item {
   width: 100%;
@@ -280,6 +345,12 @@
 .main-nav-actions .nav-item span {
   font-size: 14px;
   line-height: 20px;
+}
+
+.main-nav-actions button.nav-item:hover,
+.main-nav-actions button.nav-item:focus-visible,
+.main-nav-actions button.nav-item.active {
+  background: var(--button-default-hover-bg);
 }
 
 .collapsed-recent-wrap {
@@ -676,6 +747,7 @@
   border-radius: 10px;
   padding: 4px;
   transition:
+    opacity 150ms ease,
     background 140ms ease,
     box-shadow 140ms ease;
 }
@@ -956,45 +1028,41 @@
 }
 
 .sidebar-collapsed .sidebar-head .brand-row,
-.sidebar-collapsed .sidebar-head .sidebar-toggle {
+.sidebar-collapsed .sidebar-head .sidebar-head-actions {
   grid-area: 1 / 1;
 }
 
 .sidebar-collapsed .sidebar-head .brand-row {
   justify-content: center;
-  transition:
-    opacity 140ms ease,
-    transform 140ms ease;
+  transition: opacity 180ms ease;
 }
 
-.sidebar-collapsed .sidebar-head .sidebar-toggle {
+.sidebar-collapsed .sidebar-head .sidebar-head-actions {
+  justify-content: center;
   width: 34px;
   height: 34px;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transform: scale(0.92);
   transition:
-    opacity 140ms ease,
-    visibility 0s linear 140ms,
-    transform 140ms ease,
-    background 140ms ease;
+    opacity 180ms ease,
+    visibility 0s linear 180ms;
+}
+
+.sidebar-collapsed .sidebar-head .sidebar-toggle {
+  width: 34px;
+  height: 34px;
 }
 
 .sidebar-collapsed .sidebar.collapsed-toggle-visible .sidebar-head .brand-row {
   opacity: 0;
-  transform: scale(0.92);
 }
 
-.sidebar-collapsed .sidebar.collapsed-toggle-visible .sidebar-head .sidebar-toggle {
+.sidebar-collapsed .sidebar.collapsed-toggle-visible .sidebar-head .sidebar-head-actions {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
-  transform: scale(1);
-  transition:
-    opacity 140ms ease,
-    transform 140ms ease,
-    background 140ms ease;
+  transition: opacity 180ms ease;
 }
 
 .sidebar-collapsed .main-nav,
@@ -1012,6 +1080,10 @@
   width: 38px;
   justify-content: center;
   padding-inline: 0;
+}
+
+.sidebar-collapsed .main-nav-actions button.nav-item {
+  width: 38px;
 }
 
 .sidebar-collapsed .nav-item span,

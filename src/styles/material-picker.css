@@ -1,4 +1,42 @@
+.composer-material-drawer {
+  --composer-material-drawer-height: clamp(280px, 34vh, 340px);
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--composer-material-drawer-height);
+  margin-top: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 26px;
+  background: #fff;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+  box-shadow: 0 14px 44px rgba(15, 23, 42, 0.12);
+  animation: composerMaterialDrawerOpen 300ms cubic-bezier(0.2, 0.82, 0.2, 1) both;
+  will-change: height, margin-top, opacity, box-shadow;
+}
+
+.composer-material-drawer[data-state="closing"] {
+  pointer-events: none;
+  animation: composerMaterialDrawerClose 240ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+.composer-material-drawer > .material-picker {
+  height: 100%;
+  border: 0;
+  border-radius: 25px;
+  margin-top: 0;
+  box-shadow: none;
+  animation: materialPickerPanelOpen 300ms cubic-bezier(0.2, 0.82, 0.2, 1) both;
+  will-change: transform, opacity;
+}
+
+.composer-material-drawer[data-state="closing"] > .material-picker {
+  animation: materialPickerPanelClose 240ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
 .material-picker {
+  box-sizing: border-box;
   border: 1px solid #e5e7eb;
   background: #fff;
   border-radius: 26px;
@@ -9,6 +47,68 @@
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
+}
+
+@keyframes composerMaterialDrawerOpen {
+  from {
+    height: 0;
+    margin-top: 0;
+    opacity: 0.72;
+    box-shadow: 0 0 0 rgba(15, 23, 42, 0);
+  }
+  to {
+    height: var(--composer-material-drawer-height);
+    margin-top: 10px;
+    opacity: 1;
+    box-shadow: 0 14px 44px rgba(15, 23, 42, 0.12);
+  }
+}
+
+@keyframes composerMaterialDrawerClose {
+  from {
+    height: var(--composer-material-drawer-height);
+    margin-top: 10px;
+    opacity: 1;
+    box-shadow: 0 14px 44px rgba(15, 23, 42, 0.12);
+  }
+  to {
+    height: 0;
+    margin-top: 0;
+    opacity: 0.72;
+    box-shadow: 0 0 0 rgba(15, 23, 42, 0);
+  }
+}
+
+@keyframes materialPickerPanelOpen {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 34px, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes materialPickerPanelClose {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(0, 30px, 0) scale(0.985);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-material-drawer,
+  .composer-material-drawer[data-state="closing"],
+  .composer-material-drawer > .material-picker,
+  .composer-material-drawer[data-state="closing"] > .material-picker {
+    animation-duration: 1ms;
+    transform: none;
+  }
 }
 
 .material-head {

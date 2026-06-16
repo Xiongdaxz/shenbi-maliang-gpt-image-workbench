@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEventHandler, type CSSProperties, type RefObject } from "react";
 import { ArrowUp, BrushCleaning, ImageIcon, Lightbulb, Plus, RotateCw, Sparkles, Undo2, WandSparkles, X } from "lucide-react";
 import { ImageLightbox, type ImageLightboxState } from "../ImageLightbox";
-import { MaterialPicker } from "../MaterialPicker";
+import { MATERIAL_PICKER_DRAWER_ANIMATION_MS, MaterialPickerDrawer } from "../MaterialPicker";
 import { ImageCountStepper, QualityPicker, SizePicker } from "../ImageOptionPickers";
 import { PromptOptimizeStyleSelect } from "../PromptOptimizeStyleSelect";
 import { PromptTemplateComposerPanel } from "./PromptTemplateComposerPanel";
@@ -170,9 +170,11 @@ export function ChatComposer({
   const [promptInputCustomInstruction, setPromptInputCustomInstruction] = useState(promptOptimizeCustomInstruction);
   const [promptBeforeInputOptimize, setPromptBeforeInputOptimize] = useState("");
   const [promptTemplateCollapseSignal, setPromptTemplateCollapseSignal] = useState(0);
+  const [materialPickerClosing, setMaterialPickerClosing] = useState(false);
   const { showToast } = useToast();
   const quickMenuRef = useRef<HTMLDivElement | null>(null);
   const slashTriggerRef = useRef<{ index: number } | null>(null);
+  const materialPickerCloseTimerRef = useRef<number | null>(null);
   const promptTemplateLoadingRef = useRef(false);
   const promptTemplateStreamedRef = useRef(false);
   const promptTemplateTypeTimerRef = useRef<number | null>(null);
@@ -188,6 +190,8 @@ export function ChatComposer({
   const promptTextareaLoading = (promptTemplateLoading && !promptTemplateStreaming) || (promptInputOptimizePending && !promptInputOptimizeStreaming);
   const optimizeStyleOption = promptOptimizeStyleOption(promptInputOptimizeStyle, promptOptimizeStyleGroups);
   const hasDraftPrompt = Boolean(draftPrompt.trim());
+  const hasClearableInput = hasDraftPrompt || selectedAssets.length > 0;
+  const clearInputLabel = selectedAssets.length > 0 ? "清空输入内容和素材" : "清空输入内容";
   const visibleEditSuggestions = editSuggestions.slice(0, 3);
   const showEditSuggestions = editSuggestionsLoading || visibleEditSuggestions.length > 0;
   const previewItems = previews.map((preview) => ({
@@ -240,8 +244,18 @@ export function ChatComposer({
   useEffect(() => {
     return () => {
       if (promptTemplateTypeTimerRef.current !== null) window.clearTimeout(promptTemplateTypeTimerRef.current);
+      if (materialPickerCloseTimerRef.current !== null) window.clearTimeout(materialPickerCloseTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!materialPickerOpen) return;
+    if (materialPickerCloseTimerRef.current !== null) {
+      window.clearTimeout(materialPickerCloseTimerRef.current);
+      materialPickerCloseTimerRef.current = null;
+    }
+    setMaterialPickerClosing(false);
+  }, [materialPickerOpen]);
 
   useEffect(() => {
     try {
@@ -469,9 +483,28 @@ export function ChatComposer({
     onDraftPromptChange(value);
   }
 
+  function closeMaterialPickerWithMotion() {
+    if (!materialPickerOpen || materialPickerClosing) return;
+    if (materialPickerCloseTimerRef.current !== null) window.clearTimeout(materialPickerCloseTimerRef.current);
+    setMaterialPickerClosing(true);
+    materialPickerCloseTimerRef.current = window.setTimeout(() => {
+      materialPickerCloseTimerRef.current = null;
+      setMaterialPickerClosing(false);
+      onToggleMaterialPicker();
+    }, MATERIAL_PICKER_DRAWER_ANIMATION_MS);
+  }
+
+  function toggleMaterialPickerWithMotion() {
+    if (materialPickerOpen) {
+      closeMaterialPickerWithMotion();
+      return;
+    }
+    onToggleMaterialPicker();
+  }
+
   function openMaterialPickerFromMenu() {
     selectQuickMenuItem();
-    onToggleMaterialPicker();
+    toggleMaterialPickerWithMotion();
   }
 
   function openCasePickerFromMenu() {
@@ -481,13 +514,14 @@ export function ChatComposer({
 
   function openPromptTemplateFromMenu() {
     selectQuickMenuItem();
-    if (materialPickerOpen) onToggleMaterialPicker();
+    if (materialPickerOpen) closeMaterialPickerWithMotion();
     const panelDraft = promptTemplatePanelDraftRef.current ?? promptTemplateDraft?.panel ?? null;
     setPromptTemplateOpen(true);
     onPromptTemplateDraftChange?.({ open: true, panel: panelDraft });
   }
 
   function collapsePromptTemplateOnInputFocus() {
+    if (materialPickerOpen && selectedAssets.length > 0) closeMaterialPickerWithMotion();
     if (!promptTemplateOpen || !draftPrompt.trim()) return;
     setPromptTemplateCollapseSignal((value) => value + 1);
   }
@@ -593,6 +627,7 @@ export function ChatComposer({
     onPromptInputOptimizeStyleChange?.("standard");
     if (imageCount !== 1) onImageCountChange(1);
     onDraftPromptChange("");
+    if (selectedAssets.length > 0) onSelectedAssetsChange([]);
     window.setTimeout(() => textareaRef.current?.focus(), 0);
   }
 
@@ -636,9 +671,38 @@ export function ChatComposer({
     }
   }
 
+  const editSuggestionStrip = showEditSuggestions ? (
+    <div className="composer-edit-suggestions" aria-label="续改建议">
+      {editSuggestionsLoading && visibleEditSuggestions.length === 0 ? (
+        Array.from({ length: 3 }).map((_, index) => (
+          <span
+            key={index}
+            className="composer-edit-suggestion-skeleton"
+            style={{ "--composer-suggestion-delay": `${index * 95}ms` } as CSSProperties}
+            aria-hidden="true"
+          />
+        ))
+      ) : (
+        visibleEditSuggestions.map((suggestion, index) => (
+          <button
+            key={suggestion.id}
+            type="button"
+            className="composer-edit-suggestion"
+            style={{ "--composer-suggestion-delay": `${index * 95}ms` } as CSSProperties}
+            title={suggestion.prompt}
+            onClick={() => onApplyEditSuggestion?.(suggestion)}
+          >
+            {suggestion.label}
+          </button>
+        ))
+      )}
+    </div>
+  ) : null;
+
   return (
     <footer className="composer-wrap">
       {error ? <div className="form-error">{error}</div> : null}
+      {promptTemplateOpen ? editSuggestionStrip : null}
       {promptTemplateOpen ? (
         <PromptTemplateComposerPanel
           key={composerInstanceKey}
@@ -658,33 +722,7 @@ export function ChatComposer({
           onDraftChange={handlePromptTemplateDraftChange}
         />
       ) : null}
-      {showEditSuggestions ? (
-        <div className="composer-edit-suggestions" aria-label="续改建议">
-          {editSuggestionsLoading && visibleEditSuggestions.length === 0 ? (
-            Array.from({ length: 3 }).map((_, index) => (
-              <span
-                key={index}
-                className="composer-edit-suggestion-skeleton"
-                style={{ "--composer-suggestion-delay": `${index * 95}ms` } as CSSProperties}
-                aria-hidden="true"
-              />
-            ))
-          ) : (
-            visibleEditSuggestions.map((suggestion, index) => (
-              <button
-                key={suggestion.id}
-                type="button"
-                className="composer-edit-suggestion"
-                style={{ "--composer-suggestion-delay": `${index * 95}ms` } as CSSProperties}
-                title={suggestion.prompt}
-                onClick={() => onApplyEditSuggestion?.(suggestion)}
-              >
-                {suggestion.label}
-              </button>
-            ))
-          )}
-        </div>
-      ) : null}
+      {!promptTemplateOpen ? editSuggestionStrip : null}
       <form
         className={cx("composer", previews.length > 0 && "has-preview", quickMenuOpen && "quick-menu-open")}
         onSubmit={(event) => {
@@ -859,14 +897,14 @@ export function ChatComposer({
                 </div>
                 <button
                   type="button"
-                  className={cx("composer-tool-btn composer-prompt-template-clear-submit", hasDraftPrompt && "is-visible")}
+                  className={cx("composer-tool-btn composer-prompt-template-clear-submit", hasClearableInput && "is-visible")}
                   onClick={clearDraftPrompt}
-                  disabled={!hasDraftPrompt || promptOptimizationLoading}
-                  aria-hidden={!hasDraftPrompt}
-                  tabIndex={hasDraftPrompt ? 0 : -1}
-                  aria-label="清空输入内容"
-                  title="清空输入内容"
-                  data-tooltip="清空输入内容"
+                  disabled={!hasClearableInput || promptOptimizationLoading}
+                  aria-hidden={!hasClearableInput}
+                  tabIndex={hasClearableInput ? 0 : -1}
+                  aria-label={clearInputLabel}
+                  title={clearInputLabel}
+                  data-tooltip={clearInputLabel}
                 >
                   <BrushCleaning size={15} />
                 </button>
@@ -879,15 +917,15 @@ export function ChatComposer({
           </button>
         </div>
       </form>
-      {materialPickerOpen ? (
-        <MaterialPicker
-          assets={assets}
-          selectedAssets={selectedAssets}
-          onToggleAsset={onToggleAsset}
-          onSelectedAssetsChange={onSelectedAssetsChange}
-          onClose={onToggleMaterialPicker}
-        />
-      ) : null}
+      <MaterialPickerDrawer
+        open={materialPickerOpen}
+        closing={materialPickerClosing}
+        assets={assets}
+        selectedAssets={selectedAssets}
+        onToggleAsset={onToggleAsset}
+        onSelectedAssetsChange={onSelectedAssetsChange}
+        onClose={closeMaterialPickerWithMotion}
+      />
       <ImageLightbox
         state={previewState}
         onClose={() => setPreviewState(null)}

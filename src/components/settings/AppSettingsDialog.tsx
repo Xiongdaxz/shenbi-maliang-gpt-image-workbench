@@ -106,6 +106,7 @@ export function AppSettingsDialog({
   const preferences = {
     editSuggestionsEnabled: user.preferences?.editSuggestionsEnabled ?? true,
     editSuggestionTone: user.preferences?.editSuggestionTone ?? "default" as const,
+    autoUploadPastedAssets: user.preferences?.autoUploadPastedAssets ?? true,
     promptOptimizeStyleGroups: sanitizePromptOptimizeStyleGroups(user.preferences?.promptOptimizeStyleGroups)
   };
   const toneDisabled = !preferences.editSuggestionsEnabled;
@@ -175,6 +176,24 @@ export function AppSettingsDialog({
                     );
                   })}
                 </div>
+              </div>
+              <div className="settings-row settings-preference-row">
+                <div>
+                  <strong>自动上传素材库</strong>
+                  <span>开启后，输入框粘贴的图片会自动保存到素材库；关闭后仅作为本次输入素材使用</span>
+                </div>
+                <button
+                  className={cx("settings-switch-control", preferences.autoUploadPastedAssets && "checked")}
+                  type="button"
+                  role="switch"
+                  aria-checked={preferences.autoUploadPastedAssets}
+                  aria-label="自动上传素材库"
+                  onClick={() => onPreferencesChange({ autoUploadPastedAssets: !preferences.autoUploadPastedAssets })}
+                >
+                  <span className="settings-switch-track" aria-hidden="true">
+                    <span className="settings-switch-thumb" />
+                  </span>
+                </button>
               </div>
             </div>
           ) : activeSection === "personalization" ? (

@@ -10,6 +10,7 @@ import { emitImageJobEvent, type ImageJobEventStatus } from "./imageJobEvents";
 import { ensureImageEditSuggestionsForImageWithTone } from "./imageEditSuggestions";
 import { saveImageEditMaskDebugArtifacts } from "./imageEditDebug";
 import { imageEditMaskSnapshotDataUrl, normalizeImageEditMaskDataUrl, saveImageEditMaskSnapshot } from "./imageMasks";
+import { readImageDimensions } from "./imageDimensions";
 import {
   messageSourceReferencesByIds,
   publicMessageSourceReference,
@@ -454,6 +455,57 @@ function requestRevisionMetadata(metadata: Record<string, unknown>) {
   return revisionRootId ? { revisionRootId, ...(editedMessageId ? { editedMessageId } : {}) } : {};
 }
 
+type InlineSourceImage = {
+  id: string;
+  name: string;
+  dataUrl: string;
+  mimeType: string;
+  buffer: Buffer;
+  size: number;
+  imageWidth: number;
+  imageHeight: number;
+};
+
+const MAX_INLINE_SOURCE_IMAGES = 8;
+const MAX_INLINE_SOURCE_IMAGE_BYTES = 20 * 1024 * 1024;
+
+function inlineSourceImageFromRecord(record: unknown, index: number): InlineSourceImage | null {
+  if (!record || typeof record !== "object" || Array.isArray(record)) return null;
+  const source = record as Record<string, unknown>;
+  const dataUrl = String(source.dataUrl ?? "").trim();
+  if (!dataUrl) return null;
+  const match = dataUrl.match(/^data:([^;,]+)?(;base64)?,(.*)$/);
+  if (!match) throw new Error("粘贴图片数据格式不正确");
+  const mimeType = String(match[1] || "image/png").toLowerCase();
+  if (!mimeType.startsWith("image/")) throw new Error("只能使用图片素材");
+  const payload = match[3] ?? "";
+  const buffer = match[2] ? Buffer.from(payload, "base64") : Buffer.from(decodeURIComponent(payload));
+  if (buffer.length <= 0) throw new Error("粘贴图片数据为空");
+  if (buffer.length > MAX_INLINE_SOURCE_IMAGE_BYTES) throw new Error("粘贴图片不能超过 20MB");
+  const dimensions = readImageDimensions(buffer);
+  return {
+    id: String(source.id ?? `inline-${index + 1}`).trim() || `inline-${index + 1}`,
+    name: String(source.name ?? "").trim() || `粘贴图片 ${index + 1}`,
+    dataUrl: `data:${mimeType};base64,${buffer.toString("base64")}`,
+    mimeType,
+    buffer,
+    size: buffer.length,
+    imageWidth: dimensions.width,
+    imageHeight: dimensions.height
+  };
+}
+
+function inlineSourceImagesFromPayload(value: unknown) {
+  const records = Array.isArray(value) ? value : [];
+  const sources: InlineSourceImage[] = [];
+  for (const [index, record] of records.entries()) {
+    if (sources.length >= MAX_INLINE_SOURCE_IMAGES) break;
+    const source = inlineSourceImageFromRecord(record, index);
+    if (source) sources.push(source);
+  }
+  return sources;
+}
+
 function numberFromPayload(value: unknown, fallback: number) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -507,6 +559,20 @@ function messageSourceInputsFromCases(cases: NonNullable<ReturnType<typeof caseM
   }));
 }
 
+function messageSourceInputsFromInlineImages(sources: InlineSourceImage[]): MessageSourceReferenceInput[] {
+  return sources.map((source) => ({
+    sourceType: "asset",
+    sourceId: null,
+    sourceCaseItemId: null,
+    name: source.name,
+    buffer: source.buffer,
+    mimeType: source.mimeType,
+    size: source.size,
+    imageWidth: source.imageWidth,
+    imageHeight: source.imageHeight
+  }));
+}
+
 function imageReferenceInputsFromAssets(assets: ImageReferenceSourceAsset[]): ImageReferenceSnapshotInput[] {
   return assets.map((asset) => ({
     sourceType: "asset",
@@ -518,6 +584,21 @@ function imageReferenceInputsFromAssets(assets: ImageReferenceSourceAsset[]): Im
     size: asset.size,
     imageWidth: asset.image_width,
     imageHeight: asset.image_height
+  }));
+}
+
+function imageReferenceInputsFromInlineImages(sources: InlineSourceImage[]): ImageReferenceSnapshotInput[] {
+  return sources.map((source) => ({
+    sourceType: "asset",
+    sourceId: null,
+    sourceAssetId: null,
+    sourceCaseItemId: null,
+    name: source.name,
+    buffer: source.buffer,
+    mimeType: source.mimeType,
+    size: source.size,
+    imageWidth: source.imageWidth,
+    imageHeight: source.imageHeight
   }));
 }
 
@@ -980,6 +1061,12 @@ api.post("/images/edit", async (c) => {
   const sourceAssetIds = normalizeIdList(body.sourceAssetIds);
   const sourceCaseItemIds = normalizeIdList(body.sourceCaseItemIds);
   const sourceReferenceIds = normalizeIdList(body.sourceReferenceIds);
+  let sourceInlineImages: InlineSourceImage[] = [];
+  try {
+    sourceInlineImages = inlineSourceImagesFromPayload(body.sourceInlineImages);
+  } catch (error) {
+    return c.json({ error: errorMessage(error, "粘贴图片处理失败") }, 400);
+  }
   const requestedReferenceAssetId = String(body.referenceAssetId ?? "").trim();
   const referenceAssetId = sourceAssetIds.includes(requestedReferenceAssetId) ? requestedReferenceAssetId : "";
   const rawMaskDataUrl = String(body.maskDataUrl ?? "").trim();
@@ -992,7 +1079,13 @@ api.post("/images/edit", async (c) => {
   const branchForkMessageId = String(body.branchForkMessageId ?? "").trim();
   const branchMetadata = requestBranchMetadata(body);
   if (!prompt) return c.json({ error: "请输入编辑描述" }, 400);
-  if (sourceImageIds.length === 0 && sourceAssetIds.length === 0 && sourceCaseItemIds.length === 0 && sourceReferenceIds.length === 0) return c.json({ error: "请选择要编辑的图片或素材" }, 400);
+  if (
+    sourceImageIds.length === 0
+    && sourceAssetIds.length === 0
+    && sourceCaseItemIds.length === 0
+    && sourceReferenceIds.length === 0
+    && sourceInlineImages.length === 0
+  ) return c.json({ error: "请选择要编辑的图片或素材" }, 400);
   const safetyReview = await reviewConversationPrompt({
     userId: user.id,
     sessionId: String(body.sessionId ?? "").trim(),
@@ -1051,13 +1144,15 @@ api.post("/images/edit", async (c) => {
     ...imageReferenceInputsFromImages(validSourceImages),
     ...imageReferenceInputsFromAssets(validSourceAssets),
     ...imageReferenceInputsFromCases(validSourceCases),
-    ...imageReferenceInputsFromMessageSources(validSourceReferences)
+    ...imageReferenceInputsFromMessageSources(validSourceReferences),
+    ...imageReferenceInputsFromInlineImages(sourceInlineImages)
   ];
   const imageUrls = [
     ...(await Promise.all(validSourceImages.map((item) => fileToDataUrl(item.path, item.mime_type)))),
     ...(await Promise.all(validSourceAssets.map((item) => fileToDataUrl(item.path, item.mime_type)))),
     ...(await Promise.all(validSourceCases.map((item) => fileToDataUrl(item.path, item.mimeType)))),
-    ...(await Promise.all(validSourceReferences.map((item) => fileToDataUrl(item.path, item.mime_type))))
+    ...(await Promise.all(validSourceReferences.map((item) => fileToDataUrl(item.path, item.mime_type)))),
+    ...sourceInlineImages.map((item) => item.dataUrl)
   ];
   const primarySourceImage = validSourceImages[0] ?? null;
   const sessionId = await ensureChatSession(user.id, String(body.sessionId ?? primarySourceImage?.session_id ?? "") || null, prompt);
@@ -1153,7 +1248,11 @@ api.post("/images/edit", async (c) => {
     sessionId,
     messageId: userMessageId,
     jobId,
-    sources: [...messageSourceInputsFromAssets(validSourceAssets), ...messageSourceInputsFromCases(validSourceCases)]
+    sources: [
+      ...messageSourceInputsFromAssets(validSourceAssets),
+      ...messageSourceInputsFromCases(validSourceCases),
+      ...messageSourceInputsFromInlineImages(sourceInlineImages)
+    ]
   });
   const messageSourceReferences = [...existingSourceReferences, ...snapshotReferences];
   if (messageSourceReferences.length > 0) {

@@ -41,12 +41,51 @@ export function useChatScrollJump({
   };
 
   useEffect(() => {
-    if (showStarter) return;
-    const frame = requestAnimationFrame(() => {
-      messageEndRef.current?.scrollIntoView({ block: "end", behavior: "auto" });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [loadingTitle, messageListLength, visiblePendingMessageId, sessionId, showStarter]);
+    if (showStarter || imageEditorOpen) return;
+    const frames: number[] = [];
+    const timers: number[] = [];
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const scrollToCurrentTarget = (behavior: ScrollBehavior = reduceMotion ? "auto" : "smooth") => {
+      const frame = requestAnimationFrame(() => {
+        const loadingTarget = loadingTitle ? loadingMessageRef.current : null;
+        const target = loadingTarget ?? messageEndRef.current;
+        target?.scrollIntoView({
+          block: loadingTarget ? "center" : "end",
+          behavior
+        });
+      });
+      frames.push(frame);
+    };
+    const scheduleScroll = (delay: number, behavior?: ScrollBehavior) => {
+      const timer = window.setTimeout(() => scrollToCurrentTarget(behavior), delay);
+      timers.push(timer);
+    };
+    const baseDelay = loadingTitle ? 180 : 120;
+    scheduleScroll(baseDelay);
+    scheduleScroll(baseDelay + 300);
+    scheduleScroll(baseDelay + 680, reduceMotion ? "auto" : "smooth");
+    scheduleScroll(baseDelay + 1200, "auto");
+
+    let resizeSettledTimer = 0;
+    let resizeObserver: ResizeObserver | null = null;
+    const messageArea = messageEndRef.current?.parentElement;
+    if (messageArea && typeof ResizeObserver !== "undefined") {
+      const startedAt = performance.now();
+      resizeObserver = new ResizeObserver(() => {
+        if (performance.now() - startedAt > 2200) return;
+        if (resizeSettledTimer) window.clearTimeout(resizeSettledTimer);
+        resizeSettledTimer = window.setTimeout(() => scrollToCurrentTarget(reduceMotion ? "auto" : "smooth"), 80);
+      });
+      resizeObserver.observe(messageArea);
+    }
+
+    return () => {
+      if (resizeSettledTimer) window.clearTimeout(resizeSettledTimer);
+      resizeObserver?.disconnect();
+      timers.forEach((timer) => window.clearTimeout(timer));
+      frames.forEach((frame) => cancelAnimationFrame(frame));
+    };
+  }, [imageEditorOpen, loadingTitle, messageListLength, renderItemCount, visiblePendingMessageId, sessionId, showStarter]);
 
   return { jumpToLoadingOrScrollEdge, loadingMessageRef, messageEndRef, scrollJump };
 }

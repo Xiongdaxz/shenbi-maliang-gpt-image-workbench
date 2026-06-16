@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { InfiniteData } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
@@ -38,7 +38,7 @@ import { useImageProviderSelection } from "../hooks/useImageProviderSelection";
 import { useImageEditorLauncher } from "../hooks/useImageEditorLauncher";
 import { useRunningImageJobRefresh } from "../hooks/useRunningImageJobRefresh";
 import { COMPOSER_NEW_DRAFT_SCOPE_KEY, useWorkbench, type ComposerSessionDraft } from "../store/workbench";
-import type { CaseCategory, CaseMaterialItem, ChatSession, ImageEditSuggestion, ImageJob, Message, User, WorkImage } from "../types";
+import type { AssetItem, CaseCategory, CaseMaterialItem, ChatSession, ImageEditSuggestion, ImageJob, Message, User, WorkImage } from "../types";
 import { useToast } from "../ui";
 
 type SessionPage = Awaited<ReturnType<typeof api.sessions>>;
@@ -51,6 +51,8 @@ type AssetModalTarget =
   | { type: "case"; item: CaseMaterialItem };
 
 const PROMPT_INPUT_OPTIMIZE_STYLE_STORAGE_KEY = "gpt-image.prompt-input-optimize-style";
+const MESSAGE_REVEAL_STAGGER_MS = 46;
+const MESSAGE_REVEAL_MAX_DELAY_MS = 414;
 const FALLBACK_IMAGE_EDIT_SUGGESTIONS: ImageEditSuggestion[] = [
   {
     id: "fallback-edit-suggestion-1",
@@ -68,6 +70,29 @@ const FALLBACK_IMAGE_EDIT_SUGGESTIONS: ImageEditSuggestion[] = [
     prompt: "保留整体构图，针对最容易出错的文字、边缘、材质或表情做局部精修，让画面更干净可信。"
   }
 ];
+
+function messageRevealStyle(index: number): CSSProperties {
+  return {
+    "--message-enter-delay": `${Math.min(index * MESSAGE_REVEAL_STAGGER_MS, MESSAGE_REVEAL_MAX_DELAY_MS)}ms`
+  } as CSSProperties;
+}
+
+function ChatMessageSkeleton() {
+  return (
+    <div className="message-skeleton-list" aria-hidden="true">
+      <div className="message-skeleton message-skeleton-user">
+        <span className="message-skeleton-line message-skeleton-line-user" />
+      </div>
+      <div className="message-skeleton message-skeleton-assistant">
+        <span className="message-skeleton-line message-skeleton-line-wide" />
+        <span className="message-skeleton-line message-skeleton-line-short" />
+      </div>
+      <div className="message-skeleton message-skeleton-assistant">
+        <span className="message-skeleton-image-box" />
+      </div>
+    </div>
+  );
+}
 
 function fallbackImageEditSuggestionsForImage(image: WorkImage | null): ImageEditSuggestion[] {
   const promptText = `${image?.originPrompt ?? ""} ${image?.prompt ?? ""}`.replace(/\s+/g, " ").trim();
@@ -209,6 +234,28 @@ function hasComposerDraftContent(draft: Pick<
   );
 }
 
+function isTemporaryAsset(asset: AssetItem) {
+  return asset.temporary === true || Boolean(asset.dataUrl);
+}
+
+function persistableAssets(assets: AssetItem[]) {
+  return assets.filter((asset) => !isTemporaryAsset(asset));
+}
+
+function assetIdsForRequest(assets: AssetItem[]) {
+  return persistableAssets(assets).map((asset) => asset.id);
+}
+
+function inlineImagesForRequest(assets: AssetItem[]) {
+  return assets
+    .filter((asset) => isTemporaryAsset(asset) && asset.dataUrl)
+    .map((asset) => ({
+      id: asset.id,
+      name: asset.name,
+      dataUrl: asset.dataUrl ?? asset.url
+    }));
+}
+
 function initialPromptInputOptimizeStyleFromBrowser(): ComposerSessionDraft["promptInputOptimizeStyle"] {
   if (typeof window === "undefined") return "standard";
   try {
@@ -274,6 +321,7 @@ export function ChatPage({ user }: { user: User }) {
   const guideGreeting = getTimeGreeting();
   const editSuggestionsEnabled = user.preferences?.editSuggestionsEnabled !== false;
   const editSuggestionTone = user.preferences?.editSuggestionTone ?? "default";
+  const autoUploadPastedAssets = user.preferences?.autoUploadPastedAssets !== false;
   const promptOptimizeStyleGroups = useMemo(
     () => sanitizePromptOptimizeStyleGroups(user.preferences?.promptOptimizeStyleGroups),
     [user.preferences?.promptOptimizeStyleGroups]
@@ -475,6 +523,7 @@ export function ChatPage({ user }: { user: User }) {
           sourceAssetIds: request.sourceAssetIds ?? [],
           sourceCaseItemIds: request.sourceCaseItemIds ?? [],
           sourceReferenceIds: request.sourceReferenceIds ?? [],
+          ...(request.sourceInlineImages?.length ? { sourceInlineImages: request.sourceInlineImages } : {}),
           ...(request.referenceAssetId ? { referenceAssetId: request.referenceAssetId } : {}),
           ...(request.maskDataUrl ? { maskDataUrl: request.maskDataUrl } : {}),
           ...(request.hideReference ? { hideReference: true } : {}),
@@ -658,7 +707,7 @@ export function ChatPage({ user }: { user: User }) {
       }
     });
   };
-  const { handleComposerPaste } = useComposerPasteAsset({ selectedAssets, setSelectedAssets, showToast });
+  const { handleComposerPaste } = useComposerPasteAsset({ autoUploadPastedAssets, selectedAssets, setSelectedAssets, showToast });
   const pickCasePrompt = (item: Pick<CaseCategory["items"][number], "id" | "groupId" | "prompt">) => {
     const caseItemId = item.groupId || item.id;
     setDraftPrompt(item.prompt, caseItemId && !isDefaultCaseItemId(caseItemId) ? { caseItemId, prompt: item.prompt } : null);
@@ -705,6 +754,9 @@ export function ChatPage({ user }: { user: User }) {
     const useHiddenContinuityImage = !sourceImage && selectedAssets.length === 0 && !hasSelectedCaseMaterials && Boolean(continuityImage);
     const mode: SubmitRequest["mode"] = requestSourceImage || selectedAssets.length > 0 || hasSelectedCaseMaterials ? "edit" : "generation";
     const sourceAsset = selectedAssets[0];
+    const sourceAssetIds = assetIdsForRequest(selectedAssets);
+    const sourceInlineImages = inlineImagesForRequest(selectedAssets);
+    const referenceAsset = persistableAssets(selectedAssets)[0] ?? null;
     const sourceReferenceImages = [...selectedCaseReferences, ...selectedAssets.map(sourceReferenceFromAsset)];
     const primaryMaterialReference = selectedCaseReferences[0] ?? (sourceAsset ? sourceReferenceFromAsset(sourceAsset) : null);
     const selectedCaseItemIds = selectedCaseMaterials.map((item) => item.caseItemId);
@@ -787,12 +839,12 @@ export function ChatPage({ user }: { user: User }) {
           mode,
           pending: true,
           sourceImageIds: requestSourceImage ? [requestSourceImage.id] : [],
-          sourceAssetIds: selectedAssets.map((asset) => asset.id),
+          sourceAssetIds,
           sourceCaseItemIds: selectedCaseItemIds,
           sourceReferenceIds: [],
           ...(selectedCaseReferences.length > 0 ? { sourceCaseReferences: selectedCaseReferences } : {}),
           ...(requestCaseItemId ? { caseItemId: requestCaseItemId } : {}),
-          ...(sourceAsset ? { referenceAssetId: sourceAsset.id } : {}),
+          ...(referenceAsset ? { referenceAssetId: referenceAsset.id } : {}),
           ...(useHiddenContinuityImage ? { hideReference: true, autoReference: true } : {}),
           ...branchFields,
           n: imageCount
@@ -819,10 +871,11 @@ export function ChatPage({ user }: { user: User }) {
       n: imageCount,
       ...(requestCaseItemId ? { caseItemId: requestCaseItemId } : {}),
       ...(requestSourceImage ? { sourceImageIds: [requestSourceImage.id] } : { sourceImageIds: [] }),
-      sourceAssetIds: selectedAssets.map((asset) => asset.id),
+      sourceAssetIds,
       sourceCaseItemIds: selectedCaseItemIds,
       sourceReferenceIds: [],
-      ...(sourceAsset ? { referenceAssetId: sourceAsset.id } : {}),
+      ...(sourceInlineImages.length > 0 ? { sourceInlineImages } : {}),
+      ...(referenceAsset ? { referenceAssetId: referenceAsset.id } : {}),
       ...(useHiddenContinuityImage ? { hideReference: true } : {}),
       ...branchFields
     });
@@ -928,11 +981,12 @@ export function ChatPage({ user }: { user: User }) {
   }, [closeImageEditor, imageEditor, sessionId]);
   useEffect(() => {
     const storedDraft = useWorkbench.getState().composerDrafts[composerScopeKey];
+    const draftSelectedAssets = persistableAssets(selectedAssets);
     const handoffDraftFields = {
       draftPrompt,
       draftCaseUsage,
       selectedCaseMaterials,
-      selectedAssets,
+      selectedAssets: draftSelectedAssets,
       imageCount,
       size,
       quality,
@@ -952,7 +1006,7 @@ export function ChatPage({ user }: { user: User }) {
 
     setDraftPrompt(nextDraft.draftPrompt, nextDraft.draftCaseUsage);
     setSelectedCaseMaterials(nextDraft.selectedCaseMaterials);
-    setSelectedAssets(nextDraft.selectedAssets);
+    setSelectedAssets(persistableAssets(nextDraft.selectedAssets));
     setImageCount(nextDraft.imageCount);
     setSize(nextDraft.size);
     setQuality(nextDraft.quality);
@@ -978,7 +1032,7 @@ export function ChatPage({ user }: { user: User }) {
       draftPrompt,
       draftCaseUsage,
       selectedCaseMaterials,
-      selectedAssets,
+      selectedAssets: persistableAssets(selectedAssets),
       imageCount,
       size,
       quality,
@@ -1312,6 +1366,14 @@ export function ChatPage({ user }: { user: User }) {
     runningJobCount: runningImageJobs.length,
     sessionId
   });
+  const showMessageSkeleton = Boolean(
+    sessionId &&
+    messages.isLoading &&
+    renderItems.length === 0 &&
+    !visibleLoadingMode &&
+    !latestVisibleFailedJob &&
+    !showStarter
+  );
 
   return (
     <section
@@ -1350,52 +1412,58 @@ export function ChatPage({ user }: { user: User }) {
             onPickPrompt={pickCasePrompt}
           />
         ) : null}
-        {renderItems.map((item) =>
+        {showMessageSkeleton ? <ChatMessageSkeleton /> : null}
+        {renderItems.map((item, index) =>
           item.type === "thread" ? (
-            <ChatMessageThread
-              key={`${item.branchId}:${item.rootId}`}
-              rootId={item.rootId}
-              versions={item.versions}
-              activeVersionIndex={item.activeVersionIndex}
-              isSubmitting={currentViewSubmitting}
-              onOpenEditor={openImageEditor}
-              onAddAsset={openAssetModal}
-              failedJobIds={failedJobIds}
-              retryingJobId={retryingJobId}
-              onRetryJob={(jobId) => {
-                triggerRetryImageJob(jobId);
-              }}
-              onSelectVersion={
-                item.activeVersionIndex === undefined
-                  ? undefined
-                  : (revision) => setActiveBranchId(revision.branchId || MAIN_CHAT_BRANCH_ID)
-              }
-              onSubmitEdit={(payload) =>
-                submitMessageEdit({
-                  ...payload,
-                  branchId: item.branchId,
-                  branchForkMessageId: item.rootId
-                })
-              }
-            />
+            <div key={`${item.branchId}:${item.rootId}`} className="message-enter-thread" style={messageRevealStyle(index)}>
+              <ChatMessageThread
+                rootId={item.rootId}
+                versions={item.versions}
+                activeVersionIndex={item.activeVersionIndex}
+                isSubmitting={currentViewSubmitting}
+                onOpenEditor={openImageEditor}
+                onAddAsset={openAssetModal}
+                failedJobIds={failedJobIds}
+                retryingJobId={retryingJobId}
+                onRetryJob={(jobId) => {
+                  triggerRetryImageJob(jobId);
+                }}
+                onSelectVersion={
+                  item.activeVersionIndex === undefined
+                    ? undefined
+                    : (revision) => setActiveBranchId(revision.branchId || MAIN_CHAT_BRANCH_ID)
+                }
+                onSubmitEdit={(payload) =>
+                  submitMessageEdit({
+                    ...payload,
+                    branchId: item.branchId,
+                    branchForkMessageId: item.rootId
+                  })
+                }
+              />
+            </div>
           ) : (
-            <ChatMessage key={item.message.id} message={item.message} onOpenEditor={openImageEditor} onAddAsset={openAssetModal} />
+            <div key={item.message.id} className="message-enter-row" style={messageRevealStyle(index)}>
+              <ChatMessage message={item.message} onOpenEditor={openImageEditor} onAddAsset={openAssetModal} />
+            </div>
           )
         )}
         {visibleLoadingMode ? (
-          <div ref={loadingMessageRef} className="loading-message-anchor">
+          <div ref={loadingMessageRef} className="message-enter-row loading-message-anchor" style={messageRevealStyle(renderItems.length)}>
             <RenderingMessage mode={visibleLoadingMode} />
           </div>
         ) : latestVisibleFailedJob ? (
-          <RenderingErrorMessage
-            mode={latestVisibleFailedJob.type}
-            message={latestVisibleFailedJob.error ?? "图片任务失败"}
-            canRetry={true}
-            retrying={retryImageJob.isPending}
-            onRetry={() => {
-              triggerRetryImageJob(latestVisibleFailedJob.id);
-            }}
-          />
+          <div className="message-enter-row" style={messageRevealStyle(renderItems.length)}>
+            <RenderingErrorMessage
+              mode={latestVisibleFailedJob.type}
+              message={latestVisibleFailedJob.error ?? "图片任务失败"}
+              canRetry={true}
+              retrying={retryImageJob.isPending}
+              onRetry={() => {
+                triggerRetryImageJob(latestVisibleFailedJob.id);
+              }}
+            />
+          </div>
         ) : null}
         <div ref={messageEndRef} className="message-scroll-anchor" aria-hidden="true" />
       </div>
@@ -1421,7 +1489,7 @@ export function ChatPage({ user }: { user: User }) {
               prompt,
               maskDataUrl,
               "",
-              sourceAssetIds ?? selectedAssets.map((asset) => asset.id),
+              sourceAssetIds ?? assetIdsForRequest(selectedAssets),
               sourceCaseItemIds ?? selectedCaseMaterials.map((item) => item.caseItemId)
             )
           }

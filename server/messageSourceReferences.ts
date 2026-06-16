@@ -13,7 +13,8 @@ export type MessageSourceReferenceInput = {
   sourceId: string | null;
   sourceCaseItemId?: string | null;
   name: string;
-  path: string;
+  path?: string;
+  buffer?: Buffer;
   mimeType: string;
   size: number;
   imageWidth: number;
@@ -85,12 +86,13 @@ export async function snapshotMessageSourceReferences({
   const createdAt = now();
   const rows: MessageSourceReferenceRow[] = [];
   for (const [index, source] of sources.entries()) {
+    if (!source.path && !source.buffer) continue;
     const referenceId = makeId("msgref");
-    const buffer = await readStoredFile(source.path);
+    const buffer = source.buffer ?? await readStoredFile(source.path ?? "");
     const dimensions = readImageDimensions(buffer);
     const imageWidth = dimensions.width || source.imageWidth || 0;
     const imageHeight = dimensions.height || source.imageHeight || 0;
-    const mimeType = source.mimeType || mimeTypeFromPath(source.path);
+    const mimeType = source.mimeType || (source.path ? mimeTypeFromPath(source.path) : "image/png");
     const referencePath = secureImageReferencePath(userId, sessionId, messageId, referenceId);
     await writeEncryptedFile(referencePath, buffer);
     void warmImageDerivatives("message-source-reference", referenceId, referencePath);

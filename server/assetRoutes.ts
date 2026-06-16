@@ -1,4 +1,5 @@
 import type { Context, Hono } from "hono";
+import { createHash } from "node:crypto";
 import { ensureCategoryIds, makeCategorySlug } from "./categories";
 import { caseMaterialSourceById } from "./caseMaterialSources";
 import { appDb, getAll, getOne, run } from "./db";
@@ -7,7 +8,7 @@ import { readImageDimensions } from "./imageDimensions";
 import { imageExtensionFromMime } from "./imageFiles";
 import { pageInfo, paginationFromQuery } from "./pagination";
 import { generatePromptSummaryTitle } from "./promptTitle";
-import { deleteStoredFilesIfUnreferenced, secureAssetPath, writeEncryptedFile } from "./secureFiles";
+import { deleteStoredFilesIfUnreferenced, readStoredFile, secureAssetPath, writeEncryptedFile } from "./secureFiles";
 import { assetUrlFromAssetId, imageOriginPromptsByImageIds } from "./serializers";
 import { deleteImageDerivativesForSources, imageDerivativePathsForSources, warmImageDerivatives } from "./imageDerivatives";
 import type { AssetRow, AssetSpace, ImageRow } from "./types";
@@ -25,6 +26,18 @@ import {
 import { requireUser } from "./auth";
 
 const DEFAULT_ASSET_NAME_MAX_LENGTH = 18;
+
+function assetContentHash(buffer: Buffer) {
+  return createHash("sha256").update(buffer).digest("hex");
+}
+
+async function assetContentHashFromPath(relativePath: string) {
+  try {
+    return assetContentHash(await readStoredFile(relativePath));
+  } catch {
+    return "";
+  }
+}
 
 function defaultAssetNameFromPrompt(prompt: string) {
   const normalized = prompt.replace(/\s+/g, " ").trim();
@@ -131,6 +144,53 @@ function replaceAssetCategories(assetId: string, categoryIds: string[]) {
       timestamp
     );
   }
+}
+
+function publicAssetById(assetId: string, userId: string) {
+  const asset = getOne<AssetRow>(
+    appDb,
+    `select assets.*, users.username as source_username
+     from assets
+     left join users on users.id = assets.user_id
+     where assets.id = ?`,
+    assetId
+  );
+  const categories = assetCategoryMap(asset ? [asset.id] : []);
+  return asset ? publicAsset(asset, categories, userId) : null;
+}
+
+function applyDuplicateUploadOptions({
+  asset,
+  categoryIds,
+  hasCategoryIds,
+  uploadMode,
+  userId
+}: {
+  asset: AssetRow;
+  categoryIds: string[];
+  hasCategoryIds: boolean;
+  uploadMode: ReturnType<typeof normalizeAssetUploadMode>;
+  userId: string;
+}) {
+  if (asset.user_id === userId && uploadMode !== "private") {
+    const timestamp = now();
+    const shareState = assetShareStateFromUploadMode(uploadMode, timestamp);
+    run(
+      appDb,
+      `update assets
+       set space = 'private', shared = ?, share_status = ?, share_requested_at = ?,
+           share_reviewed_at = ?, share_reviewed_by = ?, share_reject_reason = ''
+       where id = ? and user_id = ?`,
+      shareState.shared,
+      shareState.shareStatus,
+      shareState.shareRequestedAt,
+      shareState.shareReviewedAt,
+      shareState.shareReviewedBy,
+      asset.id,
+      userId
+    );
+  }
+  if (asset.user_id === userId && hasCategoryIds) replaceAssetCategories(asset.id, categoryIds);
 }
 
 type AssetListFilters = {
@@ -314,14 +374,52 @@ api.post("/assets/upload", async (c) => {
   const file = form.get("file");
   const uploadMode = normalizeAssetUploadMode(form.get("spaceMode"), form.get("space"));
   const space: AssetSpace = "private";
-  const categoryIds = normalizeIdList(form.getAll("categoryIds").length > 0 ? form.getAll("categoryIds") : form.get("categoryIds"));
+  const rawCategoryValues = form.getAll("categoryIds");
+  const hasCategoryIds = rawCategoryValues.length > 0 || form.has("categoryIds");
+  const categoryIds = normalizeIdList(rawCategoryValues.length > 0 ? rawCategoryValues : form.get("categoryIds"));
   if (!(file instanceof File)) return c.json({ error: "请选择素材图片" }, 400);
   if (!file.type.startsWith("image/")) return c.json({ error: "只能上传图片素材" }, 400);
   if (!ensureCategoryIds(categoryIds, "asset")) return c.json({ error: "素材标签不存在" }, 400);
 
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const contentHash = assetContentHash(buffer);
+  const ownExisting = getOne<AssetRow>(
+    appDb,
+    `select assets.*, users.username as source_username
+     from assets
+     left join users on users.id = assets.user_id
+     where assets.user_id = ? and assets.content_hash = ?
+     order by assets.created_at desc, assets.rowid desc
+     limit 1`,
+    user.id,
+    contentHash
+  );
+  if (ownExisting) {
+    applyDuplicateUploadOptions({ asset: ownExisting, categoryIds, hasCategoryIds, uploadMode, userId: user.id });
+    return c.json({ asset: publicAssetById(ownExisting.id, user.id), created: false, duplicateScope: "own" });
+  }
+
+  const sharedExisting =
+    uploadMode !== "private"
+      ? getOne<AssetRow>(
+          appDb,
+          `select assets.*, users.username as source_username
+           from assets
+           left join users on users.id = assets.user_id
+           where assets.content_hash = ?
+             and ${approvedSharedAssetSql("assets")}
+           order by assets.created_at desc, assets.rowid desc
+           limit 1`,
+          contentHash
+        )
+      : null;
+  if (sharedExisting) {
+    const categories = assetCategoryMap([sharedExisting.id]);
+    return c.json({ asset: publicAsset(sharedExisting, categories, user.id), created: false, duplicateScope: "shared" });
+  }
+
   const id = makeId("asset");
   const relativePath = secureAssetPath(user.id, id);
-  const buffer = Buffer.from(await file.arrayBuffer());
   const dimensions = readImageDimensions(buffer);
   await writeEncryptedFile(relativePath, buffer);
   void warmImageDerivatives("asset", id, relativePath);
@@ -331,8 +429,8 @@ api.post("/assets/upload", async (c) => {
     appDb,
     `insert into assets (
       id, user_id, space, shared, share_status, share_requested_at, share_reviewed_at, share_reviewed_by, name, path, mime_type,
-      size, image_width, image_height, created_at
-    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      size, content_hash, image_width, image_height, created_at
+    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     user.id,
     space,
@@ -345,6 +443,7 @@ api.post("/assets/upload", async (c) => {
     relativePath,
     file.type,
     buffer.length,
+    contentHash,
     dimensions.width,
     dimensions.height,
     createdAt
@@ -360,7 +459,8 @@ api.post("/assets/upload", async (c) => {
   );
   const categories = assetCategoryMap([id]);
   return c.json({
-    asset: asset ? publicAsset(asset, categories, user.id) : null
+    asset: asset ? publicAsset(asset, categories, user.id) : null,
+    created: true
   });
 });
 
@@ -433,6 +533,10 @@ api.post("/assets/from-image", async (c) => {
     source.path
   );
   if (existing) {
+    if (!existing.content_hash) {
+      const contentHash = await assetContentHashFromPath(existing.path);
+      if (contentHash) run(appDb, "update assets set content_hash = ? where id = ? and user_id = ?", contentHash, existing.id, user.id);
+    }
     const nextName = Object.prototype.hasOwnProperty.call(body, "name") ? normalizeAssetNameInput(body.name, existing) : "";
     if (hasSpaceMode) {
       const timestamp = now();
@@ -471,14 +575,15 @@ api.post("/assets/from-image", async (c) => {
   const extension = `.${imageExtensionFromMime(source.mimeType)}`;
   const nameSeed = String(body.name ?? "").trim() || source.suggestedName.trim() || await generateAssetNameFromPrompt(source.prompt);
   const name = `${nameSeed.replace(/[\\/]/g, " ").replace(/\s+/g, " ").trim() || "素材图片"}${extension}`;
+  const contentHash = await assetContentHashFromPath(source.path);
   const createdAt = now();
   const shareState = assetShareStateFromUploadMode(uploadMode, createdAt);
   run(
     appDb,
     `insert into assets (
       id, user_id, space, shared, share_status, share_requested_at, share_reviewed_at, share_reviewed_by, name, path, mime_type,
-      size, image_width, image_height, created_at
-    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      size, content_hash, image_width, image_height, created_at
+    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     user.id,
     space,
@@ -491,6 +596,7 @@ api.post("/assets/from-image", async (c) => {
     source.path,
     source.mimeType,
     source.fileSize,
+    contentHash,
     source.imageWidth,
     source.imageHeight,
     createdAt

@@ -638,6 +638,7 @@
 }
 
 .image-editor-shell.is-preview-dragging .image-editor-composer,
+.image-editor-shell.is-preview-dragging .image-editor-composer-wrap .composer-material-drawer,
 .image-editor-shell.is-preview-dragging .image-editor-composer-wrap .material-picker,
 .image-editor-shell.is-preview-dragging .image-editor-composer-wrap .form-error {
   pointer-events: none;
@@ -780,6 +781,7 @@
   box-shadow: none;
 }
 
+.image-editor-composer-wrap .composer-material-drawer,
 .image-editor-composer-wrap .material-picker {
   width: min(770px, 100%);
   pointer-events: auto;

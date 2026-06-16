@@ -14,6 +14,7 @@ const EDIT_SUGGESTION_TONES = new Set<EditSuggestionTone>(["default", "practical
 export type PublicUserPreferences = {
   editSuggestionsEnabled: boolean;
   editSuggestionTone: EditSuggestionTone;
+  autoUploadPastedAssets: boolean;
   promptOptimizeStyleGroups: PromptOptimizeStyleGroup[];
   promptOptimizeCustomInstruction: string;
 };
@@ -26,6 +27,7 @@ export function defaultUserPreferences(): PublicUserPreferences {
   return {
     editSuggestionsEnabled: true,
     editSuggestionTone: "default",
+    autoUploadPastedAssets: true,
     promptOptimizeStyleGroups: cloneDefaultPromptOptimizeStyleGroups(),
     promptOptimizeCustomInstruction: ""
   };
@@ -47,6 +49,7 @@ function publicUserPreferences(row: UserPreferencesRow | null | undefined): Publ
   return {
     editSuggestionsEnabled: Boolean(row.edit_suggestions_enabled),
     editSuggestionTone: normalizeEditSuggestionTone(row.edit_suggestion_tone),
+    autoUploadPastedAssets: row.auto_upload_pasted_assets !== 0,
     promptOptimizeStyleGroups: storedPromptOptimizeStyleGroups(row.prompt_optimize_styles_json),
     promptOptimizeCustomInstruction: normalizePromptOptimizeCustomInstruction(row.prompt_optimize_custom_instruction)
   };
@@ -69,6 +72,8 @@ export function saveUserPreferences(userId: string, input: Record<string, unknow
     typeof input.editSuggestionsEnabled === "boolean" ? input.editSuggestionsEnabled : current.editSuggestionsEnabled;
   const editSuggestionTone =
     input.editSuggestionTone === undefined ? current.editSuggestionTone : normalizeEditSuggestionTone(input.editSuggestionTone);
+  const autoUploadPastedAssets =
+    typeof input.autoUploadPastedAssets === "boolean" ? input.autoUploadPastedAssets : current.autoUploadPastedAssets;
   const promptOptimizeStyleGroups =
     input.promptOptimizeStyleGroups === undefined
       ? current.promptOptimizeStyleGroups
@@ -81,17 +86,20 @@ export function saveUserPreferences(userId: string, input: Record<string, unknow
   run(
     appDb,
     `insert into user_preferences (
-      user_id, edit_suggestions_enabled, edit_suggestion_tone, prompt_optimize_styles_json, prompt_optimize_custom_instruction, updated_at
-    ) values (?, ?, ?, ?, ?, ?)
+      user_id, edit_suggestions_enabled, edit_suggestion_tone, auto_upload_pasted_assets,
+      prompt_optimize_styles_json, prompt_optimize_custom_instruction, updated_at
+    ) values (?, ?, ?, ?, ?, ?, ?)
     on conflict(user_id) do update set
       edit_suggestions_enabled = excluded.edit_suggestions_enabled,
       edit_suggestion_tone = excluded.edit_suggestion_tone,
+      auto_upload_pasted_assets = excluded.auto_upload_pasted_assets,
       prompt_optimize_styles_json = excluded.prompt_optimize_styles_json,
       prompt_optimize_custom_instruction = excluded.prompt_optimize_custom_instruction,
       updated_at = excluded.updated_at`,
     userId,
     editSuggestionsEnabled ? 1 : 0,
     editSuggestionTone,
+    autoUploadPastedAssets ? 1 : 0,
     JSON.stringify(promptOptimizeStyleGroups),
     promptOptimizeCustomInstruction,
     timestamp

@@ -54,7 +54,9 @@
 | `user_id` | 用户 ID，主键 |
 | `edit_suggestions_enabled` | 对话页图片续改建议开关，`0` 关闭、`1` 开启 |
 | `edit_suggestion_tone` | 图片续改建议倾向：`default` 默认均衡、`practical` 实用优化、`creative` 创意扩展、`detail` 细节修复 |
+| `auto_upload_pasted_assets` | 输入框粘贴图片是否自动保存到素材库，`0` 关闭、`1` 开启；关闭后仅作为本次消息引用素材保存 |
 | `prompt_optimize_styles_json` | 用户自定义 AI 优化风格 JSON，保存主风格、子风格、排序、显示状态和自定义优化指令；为空时使用系统默认风格 |
+| `prompt_optimize_custom_instruction` | 用户在输入区 AI 优化风格里的自定义补充指令 |
 | `updated_at` | 更新时间 |
 
 ### user_auth_sessions
@@ -288,6 +290,7 @@
 | `share_reject_reason` | 共享审核拒绝原因 |
 | `name` | 素材名称 |
 | `path` / `mime_type` / `size` | 文件信息 |
+| `content_hash` | 原始图片内容 SHA-256 哈希，用于上传时识别重复素材；旧素材会在启动迁移时尽量补齐 |
 | `image_width` / `image_height` | 图片尺寸 |
 | `created_at` | 创建时间 |
 

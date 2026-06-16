@@ -166,6 +166,7 @@ export type UserPreferencesRow = {
   user_id: string;
   edit_suggestions_enabled: number;
   edit_suggestion_tone: string;
+  auto_upload_pasted_assets: number;
   prompt_optimize_styles_json: string;
   prompt_optimize_custom_instruction: string;
   updated_at: string;
@@ -189,6 +190,7 @@ export type AssetRow = {
   path: string;
   mime_type: string;
   size: number;
+  content_hash: string;
   image_width: number;
   image_height: number;
   created_at: string;

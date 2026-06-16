@@ -6,6 +6,7 @@ export type EditSuggestionTone = "default" | "practical" | "creative" | "detail"
 export type UserPreferences = {
   editSuggestionsEnabled: boolean;
   editSuggestionTone: EditSuggestionTone;
+  autoUploadPastedAssets: boolean;
   promptOptimizeStyleGroups: PromptOptimizeStyleGroup[];
   promptOptimizeCustomInstruction: string;
 };
@@ -899,4 +900,6 @@ export type AssetItem = {
   shareRejectReason?: string;
   categoryIds: string[];
   categoryNames: string[];
+  temporary?: boolean;
+  dataUrl?: string;
 };

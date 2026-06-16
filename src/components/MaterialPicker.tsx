@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { WheelEvent as ReactWheelEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { BrushCleaning, Check, Search, X } from "lucide-react";
@@ -7,26 +7,79 @@ import { assetSpaceLabel } from "../lib/assets";
 import { cx } from "../lib/cx";
 import type { AssetItem } from "../types";
 
-const MATERIAL_PICKER_CLOSE_ANIMATION_MS = 240;
+export const MATERIAL_PICKER_DRAWER_ANIMATION_MS = 260;
+
+type MaterialPickerProps = {
+  assets?: { assets: AssetItem[] };
+  selectedAssets: AssetItem[];
+  onToggleAsset: (asset: AssetItem) => void;
+  onSelectedAssetsChange: (assets: AssetItem[]) => void;
+  onClose?: () => void;
+  closing?: boolean;
+};
+
+export function MaterialPickerDrawer({
+  open,
+  closing = false,
+  assets,
+  selectedAssets,
+  onToggleAsset,
+  onSelectedAssetsChange,
+  onClose
+}: Omit<MaterialPickerProps, "closing"> & { open: boolean; closing?: boolean }) {
+  const [rendered, setRendered] = useState(open || closing);
+  const closeTimerRef = useRef<number | null>(null);
+  const drawerClosing = closing || (rendered && !open);
+
+  useEffect(() => {
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    if (open || closing) {
+      setRendered(true);
+      return;
+    }
+    if (!rendered) return;
+    closeTimerRef.current = window.setTimeout(() => {
+      closeTimerRef.current = null;
+      setRendered(false);
+    }, MATERIAL_PICKER_DRAWER_ANIMATION_MS);
+    return () => {
+      if (closeTimerRef.current !== null) {
+        window.clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+    };
+  }, [closing, open, rendered]);
+
+  if (!rendered) return null;
+
+  return (
+    <div className="composer-material-drawer" data-state={drawerClosing ? "closing" : "open"}>
+      <MaterialPicker
+        assets={assets}
+        selectedAssets={selectedAssets}
+        onToggleAsset={onToggleAsset}
+        onSelectedAssetsChange={onSelectedAssetsChange}
+        onClose={onClose}
+        closing={drawerClosing}
+      />
+    </div>
+  );
+}
 
 export function MaterialPicker({
   assets,
   selectedAssets,
   onToggleAsset,
   onSelectedAssetsChange,
-  onClose
-}: {
-  assets?: { assets: AssetItem[] };
-  selectedAssets: AssetItem[];
-  onToggleAsset: (asset: AssetItem) => void;
-  onSelectedAssetsChange: (assets: AssetItem[]) => void;
-  onClose?: () => void;
-}) {
+  onClose,
+  closing = false
+}: MaterialPickerProps) {
   const queryClient = useQueryClient();
-  const closeTimerRef = useRef<number | null>(null);
   const [keyword, setKeyword] = useState("");
   const [selectedTagKey, setSelectedTagKey] = useState("");
-  const [closing, setClosing] = useState(false);
   const upload = useMutation({
     mutationFn: (form: FormData) => api.uploadAsset(form),
     onSuccess: (result) => {
@@ -91,32 +144,8 @@ export function MaterialPicker({
     event.preventDefault();
     element.scrollLeft += delta;
   };
-  const clearCloseTimer = useCallback(() => {
-    if (closeTimerRef.current === null) return;
-    window.clearTimeout(closeTimerRef.current);
-    closeTimerRef.current = null;
-  }, []);
-
-  const closeWithMotion = useCallback(() => {
-    if (!onClose || closing) return;
-    clearCloseTimer();
-    setClosing(true);
-    closeTimerRef.current = window.setTimeout(() => {
-      closeTimerRef.current = null;
-      onClose();
-      setClosing(false);
-    }, MATERIAL_PICKER_CLOSE_ANIMATION_MS);
-  }, [clearCloseTimer, closing, onClose]);
-
-  useEffect(
-    () => () => {
-      clearCloseTimer();
-    },
-    [clearCloseTimer]
-  );
-
   return (
-    <div className={cx("material-picker", "ui-pop-motion")} data-state={closing ? "closing" : "open"} data-placement="bottom-start">
+    <div className="material-picker" data-state={closing ? "closing" : "open"}>
       <div className="material-head">
         <div className="material-title-row">
           <strong>选择素材</strong>
@@ -160,7 +189,7 @@ export function MaterialPicker({
             />
           </label>
           {onClose ? (
-            <button type="button" className="icon-btn material-close-btn" onClick={closeWithMotion} aria-label="关闭素材选择">
+            <button type="button" className="icon-btn material-close-btn" onClick={onClose} aria-label="关闭素材选择">
               <X size={17} />
             </button>
           ) : null}

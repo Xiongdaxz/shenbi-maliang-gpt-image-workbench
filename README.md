@@ -2,7 +2,7 @@
 
 简体中文 | [English](README.en.md)
 
-神笔马良 GPT Image Workbench 是一个面向团队内部私有部署的 AI 图片生成与图片编辑工作台。
+神笔马良 GPT Image Workbench 是一个面向团队内部私有部署的 AI 图片生成与图片编辑工作台，主要用于基于 ChatGPT `gpt-image-2` 模型搭建团队生图平台。
 
 ## ✨ 亮点功能
 

@@ -627,7 +627,7 @@
 }
 
 .composer-wrap > .form-error,
-.composer-wrap > .material-picker {
+.composer-wrap > .composer-material-drawer {
   position: relative;
   z-index: 1;
 }
@@ -1683,9 +1683,10 @@
 
 .composer-prompt-template-style-menu.prompt-style-picker-menu .custom-select-option-text,
 .composer-prompt-template-style-menu.prompt-style-picker-menu .prompt-style-picker-copy {
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .composer-prompt-template-style-menu.prompt-style-picker-menu .prompt-style-picker-title {

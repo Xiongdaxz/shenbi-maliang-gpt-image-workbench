@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, RefreshCw } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, MoreHorizontal, RefreshCw } from "lucide-react";
 import { AddCaseModal } from "../AddCaseModal";
 import { ImageLightbox, type ImageLightboxState, type ImageLightboxTarget } from "../ImageLightbox";
 import { ImageDownloadMenu } from "../ImageDownloadMenu";
@@ -14,6 +15,7 @@ import { useToast } from "../../ui";
 
 const USER_MESSAGE_COLLAPSED_LINES = 10;
 const ASSISTANT_LONG_IMAGE_RATIO = 1.8;
+const MESSAGE_MORE_CARD_WIDTH = 172;
 
 function messagePreviewUrl(message: Message) {
   return message.imagePreviewUrl ?? message.imageUrl ?? "";
@@ -44,6 +46,109 @@ function isLongAssistantImage(message: Message | null | undefined) {
   const width = Number(message?.imageWidth || parsedSize?.width || 0);
   const height = Number(message?.imageHeight || parsedSize?.height || 0);
   return width > 0 && height / width >= ASSISTANT_LONG_IMAGE_RATIO;
+}
+
+function sameLocalDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function padTime(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function messageTimeLabel(value: string) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "时间未知";
+
+  const now = new Date();
+  const time = `${padTime(date.getHours())}:${padTime(date.getMinutes())}`;
+  if (sameLocalDay(date, now)) return `今天，${time}`;
+  if (date.getFullYear() === now.getFullYear()) return `${date.getMonth() + 1}月${date.getDate()}日，${time}`;
+  return `${date.getFullYear()}/${padTime(date.getMonth() + 1)}/${padTime(date.getDate())}，${time}`;
+}
+
+function MessageMoreButton({ createdAt }: { createdAt: string }) {
+  const [open, setOpen] = useState(false);
+  const [cardStyle, setCardStyle] = useState<CSSProperties>({});
+  const rootRef = useRef<HTMLSpanElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const visible = open && typeof document !== "undefined";
+
+  const updatePosition = useCallback(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const rect = root.getBoundingClientRect();
+    const viewportPadding = 12;
+    const gap = 8;
+    const width = Math.min(MESSAGE_MORE_CARD_WIDTH, Math.max(1, window.innerWidth - viewportPadding * 2));
+    const height = cardRef.current?.offsetHeight ?? 45;
+    const left = Math.min(Math.max(viewportPadding, rect.left), Math.max(viewportPadding, window.innerWidth - width - viewportPadding));
+    const top = Math.max(viewportPadding, rect.top - height - gap);
+    setCardStyle({ left, top, width });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!visible) return;
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [updatePosition, visible]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target instanceof Node ? event.target : null;
+      if (!target) return;
+      if (rootRef.current?.contains(target) || cardRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <span className="message-more-wrap" ref={rootRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-label="更多"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title="更多"
+      >
+        <MoreHorizontal size={17} />
+      </button>
+      {visible
+        ? createPortal(
+            <div
+              ref={cardRef}
+              className="message-more-card ui-pop-motion"
+              style={cardStyle}
+              role="dialog"
+              aria-label="消息时间"
+              data-state="open"
+              data-placement="top-start"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <time dateTime={createdAt || undefined}>{messageTimeLabel(createdAt)}</time>
+            </div>,
+            document.body
+          )
+        : null}
+    </span>
+  );
 }
 
 async function convertImageBlobToPng(blob: Blob) {
@@ -243,6 +348,7 @@ export function ChatMessageThread({
                 </button>
               </>
             ) : null}
+            <MessageMoreButton createdAt={revision.user.createdAt} />
           </div>
         ) : null}
       </div>
@@ -395,6 +501,7 @@ function AssistantImageGroup({
           <button type="button" onClick={() => void copyImage()} disabled={copyingImage} aria-label="复制图片" title="复制图片">
             <Copy size={17} />
           </button>
+          <MessageMoreButton createdAt={activeMessage.createdAt} />
         </div>
       </div>
       {image && caseOpen ? (
@@ -736,6 +843,7 @@ export function ChatMessage({
             <button type="button" onClick={() => void copyImage()} disabled={copyingImage} aria-label="复制图片" title="复制图片">
               <Copy size={17} />
             </button>
+            <MessageMoreButton createdAt={message.createdAt} />
           </div>
         </>
       ) : null}

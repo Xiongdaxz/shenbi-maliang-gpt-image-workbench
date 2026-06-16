@@ -20,6 +20,7 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .user-footer {
 }
 
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .sidebar-toggle,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .sidebar-head-search,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .mobile-menu-btn,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .nav-item,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .recent-item,
@@ -73,6 +74,7 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .page-header-icon
 
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .collapsed-recent-card,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .session-action-card,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .message-more-card,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .user-info-card,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-more-action-card,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-quick-menu,
@@ -93,6 +95,7 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .user-info-action
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .collapsed-recent-card-link:hover,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .collapsed-recent-card-link.active,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .collapsed-recent-card-link[aria-current="page"],
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .sidebar-head-search:hover,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-category-select-menu button.active,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-category-select-menu button:hover,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-quick-menu button:hover,
@@ -823,6 +826,16 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-picker-moda
   background: var(--app-surface-raised);
   color: var(--app-text);
   box-shadow: var(--app-modal-shadow);
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-material-drawer {
+  border-color: var(--app-border);
+  background: var(--app-surface-raised);
+  box-shadow: var(--app-modal-shadow);
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-material-drawer > .material-picker {
+  box-shadow: none;
 }
 
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-picker-pinned-tabs button {

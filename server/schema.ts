@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import type { Database } from "bun:sqlite";
 import {
   DEFAULT_IMAGE_MODEL,
@@ -20,6 +21,7 @@ import { appDb, configDb, getAll, getOne, run, tableColumnExists } from "./db";
 import { DEFAULT_GLOBAL_SWITCH_ENABLED, GLOBAL_SWITCH_TYPES, type GlobalSwitchType } from "./globalSwitches";
 import { readImageDimensions } from "./imageDimensions";
 import { absoluteDataPath } from "./paths";
+import { decryptBuffer } from "./secureFiles";
 import type { ProviderRow } from "./types";
 import { makeId, makeProviderConfigId, normalizeProviderChannel, now } from "./utils";
 
@@ -362,6 +364,22 @@ function backfillAssetDimensions() {
   }
 }
 
+function backfillAssetContentHashes() {
+  const rows = getAll<{ id: string; path: string }>(
+    appDb,
+    "select id, path from assets where coalesce(content_hash, '') = ''"
+  );
+  for (const row of rows) {
+    try {
+      const buffer = decryptBuffer(readFileSync(absoluteDataPath(row.path)));
+      const contentHash = createHash("sha256").update(buffer).digest("hex");
+      run(appDb, "update assets set content_hash = ? where id = ?", contentHash, row.id);
+    } catch {
+      // Keep old records readable even when the local file has been removed.
+    }
+  }
+}
+
 function migrateAssetCategoryType() {
   const referencedCaseCategories = getAll<{ id: string; name: string; sort_order: number }>(
     appDb,
@@ -480,6 +498,7 @@ export function initAppDb() {
       user_id text primary key,
       edit_suggestions_enabled integer not null default 1,
       edit_suggestion_tone text not null default 'default',
+      auto_upload_pasted_assets integer not null default 1,
       prompt_optimize_styles_json text not null default '',
       prompt_optimize_custom_instruction text not null default '',
       updated_at text not null,
@@ -491,6 +510,9 @@ export function initAppDb() {
   }
   if (!tableColumnExists(appDb, "user_preferences", "edit_suggestion_tone")) {
     appDb.run("alter table user_preferences add column edit_suggestion_tone text not null default 'default'");
+  }
+  if (!tableColumnExists(appDb, "user_preferences", "auto_upload_pasted_assets")) {
+    appDb.run("alter table user_preferences add column auto_upload_pasted_assets integer not null default 1");
   }
   if (!tableColumnExists(appDb, "user_preferences", "prompt_optimize_styles_json")) {
     appDb.run("alter table user_preferences add column prompt_optimize_styles_json text not null default ''");
@@ -838,6 +860,7 @@ export function initAppDb() {
       path text not null,
       mime_type text not null,
       size integer not null,
+      content_hash text not null default '',
       image_width integer not null default 0,
       image_height integer not null default 0,
       created_at text not null,
@@ -866,6 +889,9 @@ export function initAppDb() {
   if (!tableColumnExists(appDb, "assets", "share_reject_reason")) {
     appDb.run("alter table assets add column share_reject_reason text not null default ''");
   }
+  if (!tableColumnExists(appDb, "assets", "content_hash")) {
+    appDb.run("alter table assets add column content_hash text not null default ''");
+  }
   run(appDb, "update assets set shared = 0 where space = 'shared' and coalesce(shared, 0) <> 0");
   run(
     appDb,
@@ -884,6 +910,7 @@ export function initAppDb() {
     appDb.run("alter table assets add column image_height integer not null default 0");
   }
   backfillAssetDimensions();
+  backfillAssetContentHashes();
 
   appDb.run(`
     create table if not exists case_categories (

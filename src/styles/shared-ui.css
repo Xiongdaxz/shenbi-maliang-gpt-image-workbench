@@ -270,27 +270,28 @@ textarea {
 }
 
 .prompt-style-picker-menu .custom-select-option-text {
-  overflow: visible;
-  white-space: normal;
-  text-overflow: clip;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .prompt-style-picker-copy {
   display: block;
   min-width: 0;
   color: var(--app-text);
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .prompt-style-picker-title,
 .prompt-style-picker-description {
   display: block;
   min-width: 0;
-  overflow: visible;
-  white-space: normal;
-  text-overflow: clip;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .prompt-style-picker-title {
@@ -378,7 +379,7 @@ textarea {
 
 .prompt-style-picker-custom-control {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: start;
   gap: 6px;
 }
@@ -404,7 +405,8 @@ textarea {
   box-shadow: none;
 }
 
-.prompt-style-picker-menu .prompt-style-picker-custom-submit {
+.prompt-style-picker-menu .prompt-style-picker-custom-submit,
+.prompt-style-picker-menu .prompt-style-picker-custom-clear {
   width: 40px;
   height: 40px;
   min-height: 40px;
@@ -423,12 +425,14 @@ textarea {
   white-space: nowrap;
 }
 
-.prompt-style-picker-menu .prompt-style-picker-custom-submit svg {
+.prompt-style-picker-menu .prompt-style-picker-custom-submit svg,
+.prompt-style-picker-menu .prompt-style-picker-custom-clear svg {
   display: block;
   flex: 0 0 auto;
 }
 
-.prompt-style-picker-menu .prompt-style-picker-custom-submit:hover:not(:disabled) {
+.prompt-style-picker-menu .prompt-style-picker-custom-submit:hover:not(:disabled),
+.prompt-style-picker-menu .prompt-style-picker-custom-clear:hover:not(:disabled) {
   background: var(--button-default-hover-bg);
 }
 

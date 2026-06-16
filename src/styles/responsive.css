@@ -61,6 +61,16 @@
     transform: none;
   }
 
+  .sidebar-collapsed .sidebar-head .sidebar-head-actions {
+    width: auto;
+    height: auto;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: none;
+    transition: none;
+  }
+
   .sidebar-collapsed .main-nav,
   .sidebar-collapsed .main-nav-actions {
     justify-items: stretch;

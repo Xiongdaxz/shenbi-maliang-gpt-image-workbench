@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, ChevronRight, RotateCw, WandSparkles } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, RotateCw, WandSparkles, X } from "lucide-react";
 import { cx } from "../lib/cx";
 import {
   normalizePromptOptimizeStyle,
@@ -64,6 +64,7 @@ export function PromptOptimizeStyleSelect({
   const selected = hasStyleGroups
     ? promptOptimizeStyleOption(normalizedValue, styleGroups)
     : { label: "自定义", description: "自定义优化方向", value: "", prompt: "", visible: true };
+  const hasCustomInstruction = customInstruction.trim().length > 0;
 
   function childrenForGroup(groupValue: string) {
     const group = styleGroups.find((item) => item.value === groupValue);
@@ -295,13 +296,30 @@ export function PromptOptimizeStyleSelect({
                         value={customInstruction}
                         rows={1}
                         maxLength={500}
-                        placeholder="自定义补充，仅点右侧按钮时生效"
+                        placeholder="自定义风格"
                         onFocus={() => setActiveGroup("")}
                         onChange={(event) => {
                           onCustomInstructionChange(event.target.value);
                           resizeCustomInstructionInput(event.currentTarget);
                         }}
                       />
+                      {hasCustomInstruction ? (
+                        <button
+                          className="prompt-style-picker-custom-clear"
+                          type="button"
+                          onClick={() => {
+                            onCustomInstructionChange("");
+                            window.requestAnimationFrame(() => {
+                              resizeCustomInstructionInput();
+                              customInstructionRef.current?.focus();
+                            });
+                          }}
+                          aria-label="清空自定义风格"
+                          title="清空"
+                        >
+                          <X size={14} />
+                        </button>
+                      ) : null}
                       {onCustomInstructionSubmit ? (
                         <button
                           className="prompt-style-picker-custom-submit"

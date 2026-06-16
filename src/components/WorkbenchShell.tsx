@@ -38,8 +38,11 @@ const COLLAPSED_RECENT_CARD_ESTIMATED_HEIGHT = 442;
 const COLLAPSED_RECENT_VIEWPORT_PADDING = 14;
 const USER_CARD_CLOSE_ANIMATION_MS = 240;
 const SIDEBAR_TITLE_CHAR_DELAY_MS = 34;
+const SIDEBAR_CONTENT_FADE_MS = 110;
+const SIDEBAR_WIDTH_ANIMATION_MS = 200;
 const USERNAME_RULE_MESSAGE =
   "用户名支持中文、英文、数字、单个空格、下划线和短横线，长度 2-20 个字符，不支持首尾空格或连续空格";
+type SidebarMotionState = "expanded" | "collapsing" | "collapsed" | "expanding";
 type SessionPage = Awaited<ReturnType<typeof api.sessions>>;
 type ActiveSessionPages = InfiniteData<SessionPage, number>;
 
@@ -61,6 +64,9 @@ function userPreferencesToast(preferences: Partial<UserPreferences>) {
   }
   if (typeof preferences.editSuggestionsEnabled === "boolean") {
     return preferences.editSuggestionsEnabled ? "续改建议已开启" : "续改建议已关闭";
+  }
+  if (typeof preferences.autoUploadPastedAssets === "boolean") {
+    return preferences.autoUploadPastedAssets ? "自动上传素材库已开启" : "自动上传素材库已关闭";
   }
   if (preferences.editSuggestionTone) {
     const labels: Record<UserPreferences["editSuggestionTone"], string> = {
@@ -123,41 +129,19 @@ function SidebarSessionTitle({
   const titlePending = titleStatus === "pending";
   const normalizedTitle = sidebarSessionTitle(title);
   const titleRef = useRef<HTMLSpanElement | null>(null);
-  const [targetTitle, setTargetTitle] = useState(normalizedTitle);
-  const [displayTitle, setDisplayTitle] = useState(normalizedTitle);
+  const [displayTitle, setDisplayTitle] = useState("");
   const [animateTitle, setAnimateTitle] = useState(false);
   const previousPendingRef = useRef(titlePending);
 
-  const updateDisplayTitle = useCallback(() => {
+  const measuredDisplayTitle = useCallback(() => {
     const element = titleRef.current;
-    if (!element) {
-      setTargetTitle(normalizedTitle);
-      return;
-    }
+    if (!element) return normalizedTitle;
     const width = Math.max(0, Math.floor(element.clientWidth) - 1);
     const font = window.getComputedStyle(element).font;
-    const nextTitle = truncateTextToWidth(normalizedTitle, width, font, ellipsisWhenTruncated);
-    setTargetTitle((current) => (current === nextTitle ? current : nextTitle));
+    return truncateTextToWidth(normalizedTitle, width, font, ellipsisWhenTruncated);
   }, [ellipsisWhenTruncated, normalizedTitle]);
 
   useLayoutEffect(() => {
-    setTargetTitle(normalizedTitle);
-  }, [normalizedTitle]);
-
-  useLayoutEffect(() => {
-    updateDisplayTitle();
-    const element = titleRef.current;
-    if (!element) return undefined;
-    if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", updateDisplayTitle);
-      return () => window.removeEventListener("resize", updateDisplayTitle);
-    }
-    const resizeObserver = new ResizeObserver(updateDisplayTitle);
-    resizeObserver.observe(element);
-    return () => resizeObserver.disconnect();
-  }, [updateDisplayTitle]);
-
-  useEffect(() => {
     if (titlePending) {
       previousPendingRef.current = true;
       setAnimateTitle(false);
@@ -165,12 +149,26 @@ function SidebarSessionTitle({
       return undefined;
     }
 
-    const shouldAnimate = previousPendingRef.current && targetTitle.trim().length > 0 && titleStatus === "ready";
+    const nextTitle = measuredDisplayTitle();
+    const shouldAnimate = previousPendingRef.current && nextTitle.trim().length > 0 && titleStatus === "ready";
     previousPendingRef.current = false;
     setAnimateTitle(shouldAnimate);
-    setDisplayTitle(targetTitle);
-    return undefined;
-  }, [targetTitle, titlePending, titleStatus]);
+    setDisplayTitle(nextTitle);
+
+    const element = titleRef.current;
+    if (!element) return undefined;
+    const updateDisplayTitle = () => {
+      const measuredTitle = measuredDisplayTitle();
+      setDisplayTitle((current) => (current === measuredTitle ? current : measuredTitle));
+    };
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateDisplayTitle);
+      return () => window.removeEventListener("resize", updateDisplayTitle);
+    }
+    const resizeObserver = new ResizeObserver(updateDisplayTitle);
+    resizeObserver.observe(element);
+    return () => resizeObserver.disconnect();
+  }, [measuredDisplayTitle, titlePending, titleStatus]);
 
   const displayChars = useMemo(() => Array.from(displayTitle), [displayTitle]);
 
@@ -225,6 +223,7 @@ export function WorkbenchShell({ user }: { user: User }) {
   const [deleteAllConfirmOpen, setDeleteAllConfirmOpen] = useState(false);
   const [collapsedToggleVisible, setCollapsedToggleVisible] = useState(false);
   const [collapsedToggleArmed, setCollapsedToggleArmed] = useState(true);
+  const [sidebarMotionState, setSidebarMotionState] = useState<SidebarMotionState>(() => (sidebarCollapsed ? "collapsed" : "expanded"));
   const [collapsedRecentOpen, setCollapsedRecentOpen] = useState(false);
   const [collapsedRecentTop, setCollapsedRecentTop] = useState<number | null>(null);
   const [hoveredSessionId, setHoveredSessionId] = useState<string | null>(null);
@@ -232,6 +231,8 @@ export function WorkbenchShell({ user }: { user: User }) {
   const collapsedRecentRef = useRef<HTMLDivElement | null>(null);
   const collapsedRecentCardRef = useRef<HTMLDivElement | null>(null);
   const userCardCloseTimerRef = useRef<number | null>(null);
+  const sidebarMotionTimerRef = useRef<number | null>(null);
+  const sidebarMotionFrameRef = useRef<number | null>(null);
   const configWindowRef = useRef<Window | null>(null);
   const userCardVisible = userCardOpen || userCardClosing;
   const sessions = useInfiniteQuery({
@@ -265,11 +266,51 @@ export function WorkbenchShell({ user }: { user: User }) {
     navigate("/", { replace: false });
   }, [location.pathname, navigate, resetNewChatComposer, setMobileMenuOpen]);
   const sidebarToggleLabel = sidebarCollapsed ? "打开边栏" : "关闭边栏";
+  const clearSidebarMotionTimer = useCallback(() => {
+    if (sidebarMotionFrameRef.current !== null) {
+      window.cancelAnimationFrame(sidebarMotionFrameRef.current);
+      sidebarMotionFrameRef.current = null;
+    }
+    if (sidebarMotionTimerRef.current === null) return;
+    window.clearTimeout(sidebarMotionTimerRef.current);
+    sidebarMotionTimerRef.current = null;
+  }, []);
+
+  useEffect(() => () => clearSidebarMotionTimer(), [clearSidebarMotionTimer]);
+
+  useEffect(() => {
+    setSidebarMotionState((current) => {
+      if (current === "collapsing" || current === "expanding") return current;
+      return sidebarCollapsed ? "collapsed" : "expanded";
+    });
+  }, [sidebarCollapsed]);
+
   const toggleSidebar = () => {
-    const nextCollapsed = !sidebarCollapsed;
     setCollapsedToggleVisible(false);
-    setCollapsedToggleArmed(!nextCollapsed);
-    setSidebarCollapsed(nextCollapsed);
+    clearSidebarMotionTimer();
+    if (sidebarCollapsed) {
+      setCollapsedToggleArmed(true);
+      setSidebarMotionState("expanding");
+      sidebarMotionFrameRef.current = window.requestAnimationFrame(() => {
+        sidebarMotionFrameRef.current = null;
+        setSidebarCollapsed(false);
+        sidebarMotionTimerRef.current = window.setTimeout(() => {
+          setSidebarMotionState("expanded");
+          sidebarMotionTimerRef.current = null;
+        }, SIDEBAR_WIDTH_ANIMATION_MS);
+      });
+      return;
+    }
+
+    setCollapsedToggleArmed(false);
+    setSidebarMotionState("collapsing");
+    sidebarMotionTimerRef.current = window.setTimeout(() => {
+      setSidebarCollapsed(true);
+      sidebarMotionTimerRef.current = window.setTimeout(() => {
+        setSidebarMotionState("collapsed");
+        sidebarMotionTimerRef.current = null;
+      }, SIDEBAR_WIDTH_ANIMATION_MS);
+    }, SIDEBAR_CONTENT_FADE_MS);
   };
 
   const clearUserCardCloseTimer = useCallback(() => {
@@ -855,7 +896,7 @@ export function WorkbenchShell({ user }: { user: User }) {
   }, [openCurrentOrNewChat]);
 
   return (
-    <div className={cx("app-shell", sidebarCollapsed && "sidebar-collapsed")}>
+    <div className={cx("app-shell", sidebarCollapsed && "sidebar-collapsed", `sidebar-motion-${sidebarMotionState}`)}>
       <button className="mobile-menu-btn" onClick={() => setMobileMenuOpen(true)} aria-label="打开菜单">
         <Menu size={20} />
       </button>
@@ -875,18 +916,37 @@ export function WorkbenchShell({ user }: { user: User }) {
               <div className="brand-row">
                 <ProjectLogo className="sidebar-logo" />
               </div>
-              <button
-                className="sidebar-toggle"
-                type="button"
-                onClick={toggleSidebar}
-                aria-label={sidebarToggleLabel}
-                data-sidebar-tip={sidebarToggleLabel}
-              >
-                {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
-              </button>
-              <button className="icon-btn mobile-only" onClick={() => setMobileMenuOpen(false)} aria-label="关闭菜单">
-                <X size={18} />
-              </button>
+              <div className="sidebar-head-actions">
+                {!sidebarCollapsed ? (
+                  <button
+                    className="sidebar-head-search"
+                    type="button"
+                    aria-label="搜索聊天"
+                    title="搜索聊天"
+                    onClick={() => {
+                      setSearchOpen(true);
+                      setMobileMenuOpen(false);
+                    }}
+                  >
+                    <Search size={18} />
+                  </button>
+                ) : null}
+                <button
+                  className="sidebar-toggle"
+                  type="button"
+                  onClick={toggleSidebar}
+                  aria-label={sidebarToggleLabel}
+                  data-sidebar-tip={sidebarToggleLabel}
+                >
+                  <span className="sidebar-toggle-icon-stack" aria-hidden="true">
+                    <PanelLeftClose className="sidebar-toggle-icon sidebar-toggle-icon-close" size={18} />
+                    <PanelLeftOpen className="sidebar-toggle-icon sidebar-toggle-icon-open" size={18} />
+                  </span>
+                </button>
+                <button className="icon-btn mobile-only" onClick={() => setMobileMenuOpen(false)} aria-label="关闭菜单">
+                  <X size={18} />
+                </button>
+              </div>
             </div>
             <nav className="main-nav-actions" onClick={() => setMobileMenuOpen(false)}>
               <NavLink
@@ -907,22 +967,24 @@ export function WorkbenchShell({ user }: { user: User }) {
                   <kbd>Ctrl + Shift + O</kbd>
                 </div>
               </NavLink>
-              <button
-                type="button"
-                className={cx("nav-item", "nav-item-with-shortcut-tip", searchOpen && "active")}
-                aria-label="搜索聊天"
-                onClick={() => {
-                  setSearchOpen(true);
-                  setMobileMenuOpen(false);
-                }}
-              >
-                <Search size={18} />
-                <span>搜索聊天</span>
-                <div className="sidebar-shortcut-tip" role="tooltip" aria-hidden="true">
-                  <strong>搜索聊天</strong>
-                  <kbd>Ctrl + K</kbd>
-                </div>
-              </button>
+              {sidebarCollapsed ? (
+                <button
+                  type="button"
+                  className={cx("nav-item", "nav-item-with-shortcut-tip", searchOpen && "active")}
+                  aria-label="搜索聊天"
+                  onClick={() => {
+                    setSearchOpen(true);
+                    setMobileMenuOpen(false);
+                  }}
+                >
+                  <Search size={18} />
+                  <span>搜索聊天</span>
+                  <div className="sidebar-shortcut-tip" role="tooltip" aria-hidden="true">
+                    <strong>搜索聊天</strong>
+                    <kbd>Ctrl + K</kbd>
+                  </div>
+                </button>
+              ) : null}
             </nav>
           </div>
           <div className="sidebar-scroll">

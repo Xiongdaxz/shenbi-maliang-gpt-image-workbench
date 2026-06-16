@@ -14,7 +14,8 @@ export type ImageReferenceSnapshotInput = {
   sourceAssetId?: string | null;
   sourceCaseItemId?: string | null;
   name: string;
-  path: string;
+  path?: string;
+  buffer?: Buffer;
   mimeType: string;
   size: number;
   imageWidth: number;
@@ -355,11 +356,12 @@ export async function snapshotImageReferences(userId: string, sessionId: string 
   const createdAt = now();
   for (const [index, source] of sources.entries()) {
     const referenceId = makeId("imgref");
-    const buffer = await readStoredFile(source.path);
+    if (!source.path && !source.buffer) continue;
+    const buffer = source.buffer ?? await readStoredFile(source.path ?? "");
     const dimensions = readImageDimensions(buffer);
     const imageWidth = dimensions.width || source.imageWidth || 0;
     const imageHeight = dimensions.height || source.imageHeight || 0;
-    const mimeType = source.mimeType || mimeTypeFromPath(source.path);
+    const mimeType = source.mimeType || (source.path ? mimeTypeFromPath(source.path) : "image/png");
     const referencePath = secureImageReferencePath(userId, sessionId, imageId, referenceId);
     await writeEncryptedFile(referencePath, buffer);
     void warmImageDerivatives("image-reference", referenceId, referencePath);

@@ -2,7 +2,7 @@
 
 [简体中文](README.md) | English
 
-Shenbi Maliang GPT Image Workbench is an AI image generation and image editing workbench designed for private team deployments.
+Shenbi Maliang GPT Image Workbench is an AI image generation and image editing workbench designed for private team deployments, primarily for building a team image generation platform powered by ChatGPT `gpt-image-2`.
 
 ## ✨ Highlights
 

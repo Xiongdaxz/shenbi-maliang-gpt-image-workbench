@@ -15,6 +15,7 @@ export type SubmitRequest = {
   sourceAssetIds?: string[];
   sourceCaseItemIds?: string[];
   sourceReferenceIds?: string[];
+  sourceInlineImages?: Array<{ id?: string; name?: string; dataUrl: string }>;
   referenceAssetId?: string;
   maskDataUrl?: string;
   hideReference?: boolean;
@@ -163,6 +164,22 @@ export function sourceSnapshotFromMessage(message: Message) {
 }
 
 export function sourceReferenceFromAsset(asset: AssetItem): MessageSourceReferenceImage {
+  if (asset.temporary || asset.dataUrl) {
+    return {
+      id: `inline:${asset.id}`,
+      sourceAssetId: null,
+      sourceType: "pasted",
+      sourceId: null,
+      kind: "asset",
+      name: asset.name,
+      url: asset.url,
+      originalUrl: asset.originalUrl ?? asset.url,
+      previewUrl: asset.previewUrl ?? asset.url,
+      thumbnailUrl: asset.thumbnailUrl ?? asset.previewUrl ?? asset.url,
+      imageWidth: asset.imageWidth,
+      imageHeight: asset.imageHeight
+    };
+  }
   return {
     id: `asset:${asset.id}`,
     sourceAssetId: asset.id,

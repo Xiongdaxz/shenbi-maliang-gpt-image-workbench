@@ -92,6 +92,7 @@ export type EditImagePayload = GenerateImagePayload & {
   sourceAssetIds?: string[];
   sourceCaseItemIds?: string[];
   sourceReferenceIds?: string[];
+  sourceInlineImages?: Array<{ id?: string; name?: string; dataUrl: string }>;
   referenceAssetId?: string;
   maskDataUrl?: string;
   inputFidelity?: "low" | "high";
@@ -834,7 +835,7 @@ export const api = {
       })}`
     ),
   uploadAsset: (form: FormData) =>
-    request<{ asset: AssetItem }>("/api/assets/upload", {
+    request<{ asset: AssetItem; created?: boolean; duplicateScope?: "shared" | "own" }>("/api/assets/upload", {
       method: "POST",
       body: form
     }),

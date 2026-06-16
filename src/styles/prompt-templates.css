@@ -1855,9 +1855,9 @@
 .prompt-optimize-style-menu .custom-select-option-text,
 .prompt-optimize-style-menu strong,
 .prompt-optimize-style-menu small {
-  overflow: visible;
-  white-space: normal;
-  text-overflow: clip;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .prompt-optimize-style-menu.prompt-style-picker-menu .prompt-style-picker-title {

@@ -23,7 +23,7 @@ import {
 import { ImageDownloadMenu } from "./ImageDownloadMenu";
 import { ImageLightbox, type ImageLightboxState } from "./ImageLightbox";
 import { EditorSizePicker } from "./ImageOptionPickers";
-import { MaterialPicker } from "./MaterialPicker";
+import { MATERIAL_PICKER_DRAWER_ANIMATION_MS, MaterialPickerDrawer } from "./MaterialPicker";
 import { cx } from "../lib/cx";
 import type { SizeOption } from "../lib/imageOptions";
 import {
@@ -295,7 +295,9 @@ export function ImageEditorComposer({
 }: ImageEditorComposerProps) {
   const [previewState, setPreviewState] = useState<ImageLightboxState | null>(null);
   const [quickMenuOpen, setQuickMenuOpen] = useState(false);
+  const [materialPickerClosing, setMaterialPickerClosing] = useState(false);
   const quickMenuRef = useRef<HTMLDivElement | null>(null);
+  const materialPickerCloseTimerRef = useRef<number | null>(null);
   const previewItems = previews.map((preview) => ({
     url: preview.previewUrl ?? preview.url,
     thumbnailUrl: preview.url,
@@ -319,14 +321,53 @@ export function ImageEditorComposer({
     };
   }, [quickMenuOpen]);
 
+  useEffect(
+    () => () => {
+      if (materialPickerCloseTimerRef.current !== null) window.clearTimeout(materialPickerCloseTimerRef.current);
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!materialPickerOpen) return;
+    if (materialPickerCloseTimerRef.current !== null) {
+      window.clearTimeout(materialPickerCloseTimerRef.current);
+      materialPickerCloseTimerRef.current = null;
+    }
+    setMaterialPickerClosing(false);
+  }, [materialPickerOpen]);
+
+  function closeMaterialPickerWithMotion() {
+    if (!materialPickerOpen || materialPickerClosing) return;
+    if (materialPickerCloseTimerRef.current !== null) window.clearTimeout(materialPickerCloseTimerRef.current);
+    setMaterialPickerClosing(true);
+    materialPickerCloseTimerRef.current = window.setTimeout(() => {
+      materialPickerCloseTimerRef.current = null;
+      setMaterialPickerClosing(false);
+      onToggleMaterialPicker();
+    }, MATERIAL_PICKER_DRAWER_ANIMATION_MS);
+  }
+
+  function toggleMaterialPickerWithMotion() {
+    if (materialPickerOpen) {
+      closeMaterialPickerWithMotion();
+      return;
+    }
+    onToggleMaterialPicker();
+  }
+
   function selectMaterialPicker() {
     setQuickMenuOpen(false);
-    onToggleMaterialPicker();
+    toggleMaterialPickerWithMotion();
   }
 
   function selectCasePicker() {
     setQuickMenuOpen(false);
     onOpenCasePicker();
+  }
+
+  function focusEditorInput() {
+    if (materialPickerOpen && selectedAssets.length > 0) closeMaterialPickerWithMotion();
   }
 
   return (
@@ -378,20 +419,20 @@ export function ImageEditorComposer({
             ) : null}
           </div>
         </div>
-        <input value={prompt} onChange={(event) => onPromptChange(event.target.value)} placeholder="描述编辑" />
+        <input value={prompt} onChange={(event) => onPromptChange(event.target.value)} onFocus={focusEditorInput} placeholder="描述编辑" />
         <button type="submit" className="editor-send-btn" disabled={isSubmitting || !prompt.trim()} aria-label="发送">
           <ArrowUp size={22} />
         </button>
       </form>
-      {materialPickerOpen ? (
-        <MaterialPicker
-          assets={assets}
-          selectedAssets={selectedAssets}
-          onToggleAsset={onToggleAsset}
-          onSelectedAssetsChange={onSelectedAssetsChange}
-          onClose={onToggleMaterialPicker}
-        />
-      ) : null}
+      <MaterialPickerDrawer
+        open={materialPickerOpen}
+        closing={materialPickerClosing}
+        assets={assets}
+        selectedAssets={selectedAssets}
+        onToggleAsset={onToggleAsset}
+        onSelectedAssetsChange={onSelectedAssetsChange}
+        onClose={closeMaterialPickerWithMotion}
+      />
       <ImageLightbox
         state={previewState}
         onClose={() => setPreviewState(null)}
