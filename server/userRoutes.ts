@@ -30,6 +30,7 @@ import {
   expireStaleImageJobs,
   immediateChatTitleFromPrompt,
   ownedSession,
+  pinSession,
   refreshChatTitleInBackground,
   renameSession,
   serializeJob,
@@ -717,6 +718,7 @@ api.get("/sessions", async (c) => {
     id: string;
     title: string;
     title_status: string | null;
+    pinned_at: string | null;
     archived_at: string | null;
     running_job_count: number;
     created_at: string;
@@ -724,16 +726,16 @@ api.get("/sessions", async (c) => {
   }>(
     appDb,
     archived
-      ? `select id, title, title_status, archived_at, created_at, updated_at,
+      ? `select id, title, title_status, pinned_at, archived_at, created_at, updated_at,
           (select count(*) from image_jobs where image_jobs.session_id = sessions.id and image_jobs.user_id = ? and image_jobs.status = 'running') as running_job_count
          from sessions
          where ${whereSql}
          order by archived_at desc, updated_at desc, rowid desc${limitSql}`
-      : `select id, title, title_status, archived_at, created_at, updated_at,
+      : `select id, title, title_status, pinned_at, archived_at, created_at, updated_at,
           (select count(*) from image_jobs where image_jobs.session_id = sessions.id and image_jobs.user_id = ? and image_jobs.status = 'running') as running_job_count
          from sessions
          where ${whereSql}
-         order by updated_at desc, rowid desc${limitSql}`,
+          order by pinned_at asc nulls last, updated_at desc, rowid desc${limitSql}`,
     user.id,
     ...baseParams,
     ...limitParams
@@ -765,7 +767,7 @@ api.post("/sessions", async (c) => {
     timestamp
   );
   refreshChatTitleInBackground(user.id, id, prompt, title);
-  return c.json({ session: { id, title, titleStatus, archivedAt: null, runningImageJobCount: 0, createdAt: timestamp, updatedAt: timestamp } });
+  return c.json({ session: { id, title, titleStatus, pinnedAt: null, archivedAt: null, runningImageJobCount: 0, createdAt: timestamp, updatedAt: timestamp } });
 });
 
 api.post("/sessions/archive-all", async (c) => {
@@ -794,6 +796,15 @@ api.patch("/sessions/:id/archive", async (c) => {
   if (!user) return c.json({ error: "未登录" }, 401);
   const body = await c.req.json().catch(() => ({}));
   const session = archiveSession(user.id, c.req.param("id"), Boolean(body.archived));
+  if (!session) return c.json({ error: "对话不存在" }, 404);
+  return c.json({ session: serializeSession(session) });
+});
+
+api.patch("/sessions/:id/pin", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return c.json({ error: "未登录" }, 401);
+  const body = await c.req.json().catch(() => ({}));
+  const session = pinSession(user.id, c.req.param("id"), Boolean(body.pinned));
   if (!session) return c.json({ error: "对话不存在" }, 404);
   return c.json({ session: serializeSession(session) });
 });

@@ -44,9 +44,40 @@ export function useChatScrollJump({
     if (showStarter || imageEditorOpen) return;
     const frames: number[] = [];
     const timers: number[] = [];
+    let userInterrupted = false;
+    let resizeSettledTimer = 0;
+    let resizeObserver: ResizeObserver | null = null;
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const clearScheduledScroll = () => {
+      if (resizeSettledTimer) {
+        window.clearTimeout(resizeSettledTimer);
+        resizeSettledTimer = 0;
+      }
+      resizeObserver?.disconnect();
+      resizeObserver = null;
+      while (timers.length > 0) {
+        const timer = timers.pop();
+        if (timer) window.clearTimeout(timer);
+      }
+      while (frames.length > 0) {
+        const frame = frames.pop();
+        if (frame) cancelAnimationFrame(frame);
+      }
+    };
+    const cancelAutoScroll = () => {
+      userInterrupted = true;
+      clearScheduledScroll();
+    };
+    const handleAutoScrollKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) {
+        cancelAutoScroll();
+      }
+    };
     const scrollToCurrentTarget = (behavior: ScrollBehavior = reduceMotion ? "auto" : "smooth") => {
+      if (userInterrupted) return;
       const frame = requestAnimationFrame(() => {
+        if (userInterrupted) return;
         const loadingTarget = loadingTitle ? loadingMessageRef.current : null;
         const target = loadingTarget ?? messageEndRef.current;
         target?.scrollIntoView({
@@ -57,7 +88,9 @@ export function useChatScrollJump({
       frames.push(frame);
     };
     const scheduleScroll = (delay: number, behavior?: ScrollBehavior) => {
-      const timer = window.setTimeout(() => scrollToCurrentTarget(behavior), delay);
+      const timer = window.setTimeout(() => {
+        if (!userInterrupted) scrollToCurrentTarget(behavior);
+      }, delay);
       timers.push(timer);
     };
     const baseDelay = loadingTitle ? 180 : 120;
@@ -66,24 +99,28 @@ export function useChatScrollJump({
     scheduleScroll(baseDelay + 680, reduceMotion ? "auto" : "smooth");
     scheduleScroll(baseDelay + 1200, "auto");
 
-    let resizeSettledTimer = 0;
-    let resizeObserver: ResizeObserver | null = null;
     const messageArea = messageEndRef.current?.parentElement;
     if (messageArea && typeof ResizeObserver !== "undefined") {
       const startedAt = performance.now();
       resizeObserver = new ResizeObserver(() => {
+        if (userInterrupted) return;
         if (performance.now() - startedAt > 2200) return;
         if (resizeSettledTimer) window.clearTimeout(resizeSettledTimer);
-        resizeSettledTimer = window.setTimeout(() => scrollToCurrentTarget(reduceMotion ? "auto" : "smooth"), 80);
+        resizeSettledTimer = window.setTimeout(() => {
+          if (!userInterrupted) scrollToCurrentTarget(reduceMotion ? "auto" : "smooth");
+        }, 80);
       });
       resizeObserver.observe(messageArea);
     }
+    window.addEventListener("wheel", cancelAutoScroll, { passive: true });
+    window.addEventListener("touchmove", cancelAutoScroll, { passive: true });
+    window.addEventListener("keydown", handleAutoScrollKey);
 
     return () => {
-      if (resizeSettledTimer) window.clearTimeout(resizeSettledTimer);
-      resizeObserver?.disconnect();
-      timers.forEach((timer) => window.clearTimeout(timer));
-      frames.forEach((frame) => cancelAnimationFrame(frame));
+      window.removeEventListener("wheel", cancelAutoScroll);
+      window.removeEventListener("touchmove", cancelAutoScroll);
+      window.removeEventListener("keydown", handleAutoScrollKey);
+      clearScheduledScroll();
     };
   }, [imageEditorOpen, loadingTitle, messageListLength, renderItemCount, visiblePendingMessageId, sessionId, showStarter]);
 

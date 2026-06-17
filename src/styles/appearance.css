@@ -1,3 +1,55 @@
+html[data-appearance="light"] .sidebar,
+html[data-appearance="light"] .sidebar-fixed,
+html[data-appearance="light"] .user-footer {
+  background: #ffffff;
+}
+
+html[data-appearance="light"] .sidebar .nav-item,
+html[data-appearance="light"] .sidebar .recent-item,
+html[data-appearance="light"] .sidebar .recent-item-title,
+html[data-appearance="light"] .collapsed-recent-card-link,
+html[data-appearance="light"] .collapsed-recent-card-title,
+html[data-appearance="light"] .session-action-card button:not(.danger),
+html[data-appearance="light"] .user-footer-name strong,
+html[data-appearance="light"] .user-avatar {
+  color: #0d0d0d;
+}
+
+html[data-appearance="light"] .app-shell:not(.sidebar-collapsed) .sidebar-toggle,
+html[data-appearance="light"] .sidebar-head-search,
+html[data-appearance="light"] .user-footer-name span {
+  color: #8f8f8f;
+}
+
+html[data-appearance="light"] .sidebar-toggle:hover,
+html[data-appearance="light"] .sidebar-head-search:hover,
+html[data-appearance="light"] .sidebar .nav-item:hover,
+html[data-appearance="light"] .recent-row:hover,
+html[data-appearance="light"] .collapsed-recent-card-link:hover,
+html[data-appearance="light"] .session-menu-trigger:hover,
+html[data-appearance="light"] .session-action-card button:hover,
+html[data-appearance="light"] .user-footer-panel:hover {
+  background: #f4f4f4;
+}
+
+html[data-appearance="light"] .sidebar .nav-item.active,
+html[data-appearance="light"] .sidebar .nav-item[aria-current="page"],
+html[data-appearance="light"] .recent-row.active,
+html[data-appearance="light"] .recent-row.menu-open,
+html[data-appearance="light"] .collapsed-recent-card-link.active,
+html[data-appearance="light"] .collapsed-recent-card-link[aria-current="page"],
+html[data-appearance="light"] .session-menu-trigger[aria-expanded="true"],
+html[data-appearance="light"] .user-footer-panel.is-open {
+  background: #ededed;
+}
+
+html[data-appearance="light"] .recent-row.active .session-menu-trigger:hover,
+html[data-appearance="light"] .recent-row.active .session-menu-trigger[aria-expanded="true"],
+html[data-appearance="light"] .recent-row.menu-open .session-menu-trigger:hover,
+html[data-appearance="light"] .recent-row.menu-open .session-menu-trigger[aria-expanded="true"] {
+  background: transparent;
+}
+
 html:is([data-appearance="dark"], [data-appearance="maliang"]) body {
   background: var(--app-bg);
   color: var(--app-text);

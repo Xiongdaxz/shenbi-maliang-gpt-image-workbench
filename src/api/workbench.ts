@@ -625,6 +625,11 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ archived })
     }),
+  pinSession: (sessionId: string, pinned: boolean) =>
+    request<{ session: ChatSession }>(`/api/sessions/${sessionId}/pin`, {
+      method: "PATCH",
+      body: JSON.stringify({ pinned })
+    }),
   renameSession: (sessionId: string, title: string) =>
     request<{ session: ChatSession }>(`/api/sessions/${sessionId}/title`, {
       method: "PATCH",

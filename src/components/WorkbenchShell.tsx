@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, FormEvent } from "react";
+import type { CSSProperties, FocusEvent, FormEvent, MouseEvent } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { InfiniteData } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
-import { Camera, FolderOpen, Images, Lightbulb, LogOut, Menu, MessageCircle, MessageCirclePlus, PanelLeftClose, PanelLeftOpen, RotateCcw, Search, Settings, ShieldCheck, Sparkles, X } from "lucide-react";
+import { Camera, ChevronDown, ChevronRight, FolderOpen, Images, Lightbulb, LogOut, Menu, MessageCircle, MessageCirclePlus, PanelLeft, Pin, PinOff, RotateCcw, Search, Settings, ShieldCheck, Sparkles, X } from "lucide-react";
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import type { AppearanceMode } from "../lib/appearance";
@@ -40,11 +40,52 @@ const USER_CARD_CLOSE_ANIMATION_MS = 240;
 const SIDEBAR_TITLE_CHAR_DELAY_MS = 34;
 const SIDEBAR_CONTENT_FADE_MS = 110;
 const SIDEBAR_WIDTH_ANIMATION_MS = 200;
+const SESSION_GROUP_COLLAPSE_STORAGE_KEY = "gpt-image.sidebar.session-groups.collapsed";
 const USERNAME_RULE_MESSAGE =
   "用户名支持中文、英文、数字、单个空格、下划线和短横线，长度 2-20 个字符，不支持首尾空格或连续空格";
 type SidebarMotionState = "expanded" | "collapsing" | "collapsed" | "expanding";
+type SessionGroupKey = "pinned" | "recent";
+type SessionGroupCollapseState = Record<SessionGroupKey, boolean>;
+type SidebarFloatingTip = {
+  label: string;
+  shortcut?: string;
+  left: number;
+  top: number;
+};
 type SessionPage = Awaited<ReturnType<typeof api.sessions>>;
 type ActiveSessionPages = InfiniteData<SessionPage, number>;
+
+function readSessionGroupCollapseState(): SessionGroupCollapseState {
+  if (typeof window === "undefined") return { pinned: false, recent: false };
+  try {
+    const raw = window.localStorage.getItem(SESSION_GROUP_COLLAPSE_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return {
+      pinned: Boolean(parsed?.pinned),
+      recent: Boolean(parsed?.recent)
+    };
+  } catch {
+    return { pinned: false, recent: false };
+  }
+}
+
+function writeSessionGroupCollapseState(state: SessionGroupCollapseState) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(SESSION_GROUP_COLLAPSE_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // Keep the in-memory state when browser storage is unavailable.
+  }
+}
+
+function compareActiveSessions(left: ChatSession, right: ChatSession) {
+  const leftPinnedAt = left.pinnedAt ?? "";
+  const rightPinnedAt = right.pinnedAt ?? "";
+  if (leftPinnedAt && rightPinnedAt && leftPinnedAt !== rightPinnedAt) return leftPinnedAt.localeCompare(rightPinnedAt);
+  if (leftPinnedAt && !rightPinnedAt) return -1;
+  if (!leftPinnedAt && rightPinnedAt) return 1;
+  return right.updatedAt.localeCompare(left.updatedAt);
+}
 
 function validateProfileUsername(value: string) {
   const username = value.trim();
@@ -226,6 +267,8 @@ export function WorkbenchShell({ user }: { user: User }) {
   const [sidebarMotionState, setSidebarMotionState] = useState<SidebarMotionState>(() => (sidebarCollapsed ? "collapsed" : "expanded"));
   const [collapsedRecentOpen, setCollapsedRecentOpen] = useState(false);
   const [collapsedRecentTop, setCollapsedRecentTop] = useState<number | null>(null);
+  const [sessionGroupsCollapsed, setSessionGroupsCollapsed] = useState<SessionGroupCollapseState>(readSessionGroupCollapseState);
+  const [sidebarFloatingTip, setSidebarFloatingTip] = useState<SidebarFloatingTip | null>(null);
   const [hoveredSessionId, setHoveredSessionId] = useState<string | null>(null);
   const userFooterRef = useRef<HTMLDivElement | null>(null);
   const collapsedRecentRef = useRef<HTMLDivElement | null>(null);
@@ -266,6 +309,18 @@ export function WorkbenchShell({ user }: { user: User }) {
     navigate("/", { replace: false });
   }, [location.pathname, navigate, resetNewChatComposer, setMobileMenuOpen]);
   const sidebarToggleLabel = sidebarCollapsed ? "打开边栏" : "关闭边栏";
+  const showSidebarFloatingTip = useCallback(
+    (event: MouseEvent<HTMLElement> | FocusEvent<HTMLElement>, tip: Pick<SidebarFloatingTip, "label" | "shortcut">) => {
+      const rect = event.currentTarget.getBoundingClientRect();
+      setSidebarFloatingTip({
+        ...tip,
+        left: rect.left + rect.width / 2,
+        top: rect.bottom + 8
+      });
+    },
+    []
+  );
+  const hideSidebarFloatingTip = useCallback(() => setSidebarFloatingTip(null), []);
   const clearSidebarMotionTimer = useCallback(() => {
     if (sidebarMotionFrameRef.current !== null) {
       window.cancelAnimationFrame(sidebarMotionFrameRef.current);
@@ -286,6 +341,7 @@ export function WorkbenchShell({ user }: { user: User }) {
   }, [sidebarCollapsed]);
 
   const toggleSidebar = () => {
+    setSidebarFloatingTip(null);
     setCollapsedToggleVisible(false);
     clearSidebarMotionTimer();
     if (sidebarCollapsed) {
@@ -365,6 +421,17 @@ export function WorkbenchShell({ user }: { user: User }) {
       return nextOpen;
     });
   }, [measureCollapsedRecentTop]);
+
+  const toggleSessionGroup = useCallback((group: SessionGroupKey) => {
+    setSessionGroupsCollapsed((current) => {
+      const next = {
+        ...current,
+        [group]: !current[group]
+      };
+      writeSessionGroupCollapseState(next);
+      return next;
+    });
+  }, []);
 
   const removeSessionsFromCache = (ids: string[]) => {
     const idSet = new Set(ids);
@@ -493,6 +560,32 @@ export function WorkbenchShell({ user }: { user: User }) {
     },
     onError: (error) => {
       showToast(error instanceof Error ? error.message : "操作失败", "error");
+    }
+  });
+  const pinChat = useMutation({
+    mutationFn: (payload: { sessionId: string; pinned: boolean }) => api.pinSession(payload.sessionId, payload.pinned),
+    onSuccess: ({ session }, payload) => {
+      queryClient.setQueryData<ActiveSessionPages>(["sessions", "active"], (current) => {
+        if (!current) return current;
+        const sortedSessions = current.pages
+          .flatMap((page) => page.sessions)
+          .map((item) => (item.id === session.id ? { ...item, ...session } : item))
+          .sort(compareActiveSessions);
+        let cursor = 0;
+        return {
+          ...current,
+          pages: current.pages.map((page) => {
+            const nextSessions = sortedSessions.slice(cursor, cursor + page.sessions.length);
+            cursor += page.sessions.length;
+            return { ...page, sessions: nextSessions };
+          })
+        };
+      });
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      showToast(payload.pinned ? "已置顶聊天" : "已取消置顶");
+    },
+    onError: (error) => {
+      showToast(error instanceof Error ? error.message : "置顶失败", "error");
     }
   });
   const renameChat = useMutation({
@@ -761,6 +854,8 @@ export function WorkbenchShell({ user }: { user: User }) {
   );
 
   const activeSessions = sessions.data?.pages.flatMap((page) => page.sessions) ?? [];
+  const pinnedSessions = activeSessions.filter((session) => session.pinnedAt);
+  const recentSessions = activeSessions.filter((session) => !session.pinnedAt);
   const collapsedRecentSessions = activeSessions.slice(0, COLLAPSED_RECENT_CHAT_LIMIT);
   const activeSessionTotal = sessions.data?.pages[0]?.pageInfo?.total ?? activeSessions.length;
   const archivedChatSessions = archivedSessions.data?.sessions ?? [];
@@ -895,6 +990,89 @@ export function WorkbenchShell({ user }: { user: User }) {
     return () => window.removeEventListener("keydown", handleGlobalShortcuts);
   }, [openCurrentOrNewChat]);
 
+  const pendingPinSessionId = pinChat.isPending ? pinChat.variables?.sessionId ?? null : null;
+  const globalSessionActionPending = renameChat.isPending || archiveChat.isPending || deleteChat.isPending;
+  const renderSessionRows = (sessionRows: ChatSession[]) =>
+    sessionRows.map((session) => {
+      const rawGenerationState =
+        sessionGenerationStates[session.id]?.state ?? (session.runningImageJobCount > 0 ? "running" : null);
+      const isCurrentSession = session.id === activeChatSessionId;
+      const titlePending = session.titleStatus === "pending";
+      const sessionTitleLabel = titlePending ? "标题生成中" : session.title;
+      const generationState = isCurrentSession && rawGenerationState === "running" ? null : rawGenerationState;
+      const pinned = Boolean(session.pinnedAt);
+      const nextPinned = !pinned;
+      const sessionActionPending = globalSessionActionPending || pendingPinSessionId === session.id;
+      return (
+        <div
+          key={session.id}
+          onMouseEnter={() => setHoveredSessionId(session.id)}
+          onMouseLeave={() => setHoveredSessionId((current) => (current === session.id ? null : current))}
+          className={cx(
+            "recent-row",
+            pinned && "pinned",
+            titlePending && "has-title-pending",
+            generationState && "has-generation-status",
+            isCurrentSession && "active",
+            openSessionMenuId === session.id && "menu-open"
+          )}
+        >
+          <NavLink
+            to={`/chat/${session.id}`}
+            title={sessionTitleLabel}
+            className={({ isActive }) => cx("recent-item", isActive && "active")}
+            onPointerDown={() => pauseRenderingBeforeChatNavigation(session.id)}
+            onClick={() => {
+              pauseRenderingBeforeChatNavigation(session.id);
+              setMobileMenuOpen(false);
+              setOpenSessionMenuId(null);
+              if (rawGenerationState === "completed") clearSessionGenerationStatus(session.id);
+            }}
+          >
+            <SidebarSessionTitle
+              title={session.title}
+              titleStatus={session.titleStatus}
+              className="recent-item-title"
+              ellipsisWhenTruncated={hoveredSessionId === session.id || openSessionMenuId === session.id}
+            />
+          </NavLink>
+          {generationState ? (
+            <span
+              className={cx("recent-generation-status", generationState)}
+              role="status"
+              aria-label={generationState === "running" ? "图片生成中" : "图片已生成"}
+            />
+          ) : null}
+          <button
+            className={cx("session-pin-trigger", pinned && "is-pinned")}
+            type="button"
+            disabled={sessionActionPending}
+            aria-label={pinned ? "取消置顶聊天" : "置顶聊天"}
+            title={pinned ? "取消置顶" : "置顶"}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              if (sessionActionPending) return;
+              pinChat.mutate({ sessionId: session.id, pinned: nextPinned });
+            }}
+          >
+            {pinned ? <PinOff size={16} /> : <Pin size={16} />}
+          </button>
+          <SessionActionsMenu
+            open={openSessionMenuId === session.id}
+            title={session.title}
+            pinned={pinned}
+            disabled={sessionActionPending}
+            onOpenChange={(open) => setOpenSessionMenuId(open ? session.id : null)}
+            onRename={(title) => renameChat.mutate({ sessionId: session.id, title })}
+            onPin={() => pinChat.mutate({ sessionId: session.id, pinned: nextPinned })}
+            onArchive={() => archiveChat.mutate({ sessionId: session.id, archived: true })}
+            onDelete={() => requestDeleteSession(session, "active")}
+          />
+        </div>
+      );
+    });
+
   return (
     <div className={cx("app-shell", sidebarCollapsed && "sidebar-collapsed", `sidebar-motion-${sidebarMotionState}`)}>
       <button className="mobile-menu-btn" onClick={() => setMobileMenuOpen(true)} aria-label="打开菜单">
@@ -922,8 +1100,12 @@ export function WorkbenchShell({ user }: { user: User }) {
                     className="sidebar-head-search"
                     type="button"
                     aria-label="搜索聊天"
-                    title="搜索聊天"
+                    onMouseEnter={(event) => showSidebarFloatingTip(event, { label: "搜索聊天", shortcut: "Ctrl + K" })}
+                    onMouseLeave={hideSidebarFloatingTip}
+                    onFocus={(event) => showSidebarFloatingTip(event, { label: "搜索聊天", shortcut: "Ctrl + K" })}
+                    onBlur={hideSidebarFloatingTip}
                     onClick={() => {
+                      hideSidebarFloatingTip();
                       setSearchOpen(true);
                       setMobileMenuOpen(false);
                     }}
@@ -936,12 +1118,17 @@ export function WorkbenchShell({ user }: { user: User }) {
                   type="button"
                   onClick={toggleSidebar}
                   aria-label={sidebarToggleLabel}
-                  data-sidebar-tip={sidebarToggleLabel}
+                  data-sidebar-tip={sidebarCollapsed ? sidebarToggleLabel : undefined}
+                  onMouseEnter={(event) => {
+                    if (!sidebarCollapsed) showSidebarFloatingTip(event, { label: sidebarToggleLabel });
+                  }}
+                  onMouseLeave={hideSidebarFloatingTip}
+                  onFocus={(event) => {
+                    if (!sidebarCollapsed) showSidebarFloatingTip(event, { label: sidebarToggleLabel });
+                  }}
+                  onBlur={hideSidebarFloatingTip}
                 >
-                  <span className="sidebar-toggle-icon-stack" aria-hidden="true">
-                    <PanelLeftClose className="sidebar-toggle-icon sidebar-toggle-icon-close" size={18} />
-                    <PanelLeftOpen className="sidebar-toggle-icon sidebar-toggle-icon-open" size={18} />
-                  </span>
+                  <PanelLeft size={18} aria-hidden="true" />
                 </button>
                 <button className="icon-btn mobile-only" onClick={() => setMobileMenuOpen(false)} aria-label="关闭菜单">
                   <X size={18} />
@@ -1047,76 +1234,47 @@ export function WorkbenchShell({ user }: { user: User }) {
                 <MessageCircle size={18} />
               </button>
             </div>
-            <div className="recent-section">
-              <div className="recent-title">最近</div>
-              <div className="recent-list">
-                {showInitialSessionSkeleton
-                  ? Array.from({ length: 8 }).map((_, index) => <div className="recent-skeleton-row" key={`session-skeleton-${index}`} />)
-                  : null}
-                {activeSessions.map((session) => {
-                  const rawGenerationState =
-                    sessionGenerationStates[session.id]?.state ?? (session.runningImageJobCount > 0 ? "running" : null);
-                  const isCurrentSession = session.id === activeChatSessionId;
-                  const titlePending = session.titleStatus === "pending";
-                  const sessionTitleLabel = titlePending ? "标题生成中" : session.title;
-                  const generationState = isCurrentSession && rawGenerationState === "running" ? null : rawGenerationState;
-                  return (
-                    <div
-                      key={session.id}
-                      onMouseEnter={() => setHoveredSessionId(session.id)}
-                      onMouseLeave={() => setHoveredSessionId((current) => (current === session.id ? null : current))}
-                      className={cx(
-                        "recent-row",
-                        titlePending && "has-title-pending",
-                        generationState && "has-generation-status",
-                        isCurrentSession && "active",
-                        openSessionMenuId === session.id && "menu-open"
-                      )}
-                    >
-                      <NavLink
-                        to={`/chat/${session.id}`}
-                        title={sessionTitleLabel}
-                        className={({ isActive }) => cx("recent-item", isActive && "active")}
-                        onPointerDown={() => pauseRenderingBeforeChatNavigation(session.id)}
-                        onClick={() => {
-                          pauseRenderingBeforeChatNavigation(session.id);
-                          setMobileMenuOpen(false);
-                          setOpenSessionMenuId(null);
-                          if (rawGenerationState === "completed") clearSessionGenerationStatus(session.id);
-                        }}
-                      >
-                        <SidebarSessionTitle
-                          title={session.title}
-                          titleStatus={session.titleStatus}
-                          className="recent-item-title"
-                          ellipsisWhenTruncated={hoveredSessionId === session.id || openSessionMenuId === session.id}
-                        />
-                      </NavLink>
-                      {generationState ? (
-                        <span
-                          className={cx("recent-generation-status", generationState)}
-                          role="status"
-                          aria-label={generationState === "running" ? "图片生成中" : "图片已生成"}
-                        />
-                      ) : null}
-                      <SessionActionsMenu
-                        open={openSessionMenuId === session.id}
-                        title={session.title}
-                        disabled={renameChat.isPending || archiveChat.isPending || deleteChat.isPending}
-                        onOpenChange={(open) => setOpenSessionMenuId(open ? session.id : null)}
-                        onRename={(title) => renameChat.mutate({ sessionId: session.id, title })}
-                        onArchive={() => archiveChat.mutate({ sessionId: session.id, archived: true })}
-                        onDelete={() => requestDeleteSession(session, "active")}
-                      />
-                    </div>
-                  );
-                })}
-                {!showInitialSessionSkeleton && sessions.hasNextPage ? <div className="recent-load-sentinel" ref={sessionListSentinelRef} /> : null}
-                {sessions.isFetchingNextPage
-                  ? Array.from({ length: 4 }).map((_, index) => <div className="recent-skeleton-row compact" key={`session-next-skeleton-${index}`} />)
-                  : null}
-              </div>
-            </div>
+            {pinnedSessions.length > 0 ? (
+              <section className={cx("recent-section", "session-group", sessionGroupsCollapsed.pinned && "collapsed")}>
+                <button
+                  className="session-group-title"
+                  type="button"
+                  aria-expanded={!sessionGroupsCollapsed.pinned}
+                  onClick={() => toggleSessionGroup("pinned")}
+                >
+                  <h2>已置顶</h2>
+                  <span className="session-group-chevron" aria-hidden="true">
+                    {sessionGroupsCollapsed.pinned ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                  </span>
+                </button>
+                {!sessionGroupsCollapsed.pinned ? <div className="recent-list">{renderSessionRows(pinnedSessions)}</div> : null}
+              </section>
+            ) : null}
+            <section className={cx("recent-section", "session-group", sessionGroupsCollapsed.recent && "collapsed")}>
+              <button
+                className="session-group-title"
+                type="button"
+                aria-expanded={!sessionGroupsCollapsed.recent}
+                onClick={() => toggleSessionGroup("recent")}
+              >
+                <h2>最近</h2>
+                <span className="session-group-chevron" aria-hidden="true">
+                  {sessionGroupsCollapsed.recent ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                </span>
+              </button>
+              {!sessionGroupsCollapsed.recent ? (
+                <div className="recent-list">
+                  {showInitialSessionSkeleton
+                    ? Array.from({ length: 8 }).map((_, index) => <div className="recent-skeleton-row" key={`session-skeleton-${index}`} />)
+                    : null}
+                  {renderSessionRows(recentSessions)}
+                  {!showInitialSessionSkeleton && sessions.hasNextPage ? <div className="recent-load-sentinel" ref={sessionListSentinelRef} /> : null}
+                  {sessions.isFetchingNextPage
+                    ? Array.from({ length: 4 }).map((_, index) => <div className="recent-skeleton-row compact" key={`session-next-skeleton-${index}`} />)
+                    : null}
+                </div>
+              ) : null}
+            </section>
           </div>
         </div>
         <div className="user-footer" ref={userFooterRef}>
@@ -1182,6 +1340,19 @@ export function WorkbenchShell({ user }: { user: User }) {
           ) : null}
         </div>
       </aside>
+      {sidebarFloatingTip
+        ? createPortal(
+            <div
+              className="sidebar-floating-tip"
+              role="tooltip"
+              style={{ left: sidebarFloatingTip.left, top: sidebarFloatingTip.top }}
+            >
+              <strong>{sidebarFloatingTip.label}</strong>
+              {sidebarFloatingTip.shortcut ? <kbd>{sidebarFloatingTip.shortcut}</kbd> : null}
+            </div>,
+            document.body
+          )
+        : null}
       {sidebarCollapsed && collapsedRecentOpen
         ? createPortal(
             <div

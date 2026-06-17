@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Archive, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Archive, MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import { cx } from "../../lib/cx";
 
 const SESSION_MENU_CLOSE_ANIMATION_MS = 240;
@@ -8,14 +8,16 @@ const SESSION_MENU_CLOSE_ANIMATION_MS = 240;
 type SessionActionsMenuProps = {
   open: boolean;
   title: string;
+  pinned?: boolean;
   disabled?: boolean;
   onOpenChange: (open: boolean) => void;
   onRename: (title: string) => void;
+  onPin: () => void;
   onArchive: () => void;
   onDelete: () => void;
 };
 
-export function SessionActionsMenu({ open, title, disabled, onOpenChange, onRename, onArchive, onDelete }: SessionActionsMenuProps) {
+export function SessionActionsMenu({ open, title, pinned, disabled, onOpenChange, onRename, onPin, onArchive, onDelete }: SessionActionsMenuProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const renameSettledRef = useRef(false);
@@ -194,6 +196,17 @@ export function SessionActionsMenu({ open, title, disabled, onOpenChange, onRena
                   <span>重命名</span>
                 </button>
               )}
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  closeMenu();
+                  onPin();
+                }}
+              >
+                {pinned ? <PinOff size={16} /> : <Pin size={16} />}
+                <span>{pinned ? "取消置顶" : "置顶聊天"}</span>
+              </button>
               <button
                 type="button"
                 role="menuitem"

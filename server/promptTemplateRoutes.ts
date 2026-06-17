@@ -220,6 +220,15 @@ function normalizePromptOptimizeImageCount(value: unknown) {
   return Math.min(integer, 10);
 }
 
+function promptImageCountContext(imageCount?: number) {
+  const normalizedCount = normalizePromptOptimizeImageCount(imageCount);
+  if (!normalizedCount || normalizedCount <= 1) return null;
+  return {
+    requestedImageCount: normalizedCount,
+    outputMode: "separate-images"
+  };
+}
+
 function normalizePromptOptimizeCustomInstruction(value: unknown) {
   const text = String(value ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
   if (!text) return "";
@@ -234,14 +243,27 @@ function parentPromptOptimizeStyle(optimizeStyle: PromptOptimizeStyle, styleGrou
 
 function seriesPromptImageCountContext(optimizeStyle: PromptOptimizeStyle, imageCount?: number, styleGroups?: PromptOptimizeStyleGroup[]) {
   if (parentPromptOptimizeStyle(optimizeStyle, styleGroups) !== "series") return null;
-  const normalizedCount = normalizePromptOptimizeImageCount(imageCount);
-  const requestedImageCount = normalizedCount && normalizedCount > 1 ? normalizedCount : null;
+  const requestedImageCount = promptImageCountContext(imageCount)?.requestedImageCount ?? null;
   const planCount = requestedImageCount ?? 4;
   return {
     requestedImageCount,
     planCount,
     mode: requestedImageCount ? "numbered-series" : "default-series-plan"
   };
+}
+
+function promptImageCountInstructions(optimizeStyle: PromptOptimizeStyle, imageCount?: number, styleGroups?: PromptOptimizeStyleGroup[]) {
+  const context = promptImageCountContext(imageCount);
+  if (!context) return [];
+  const isSeriesStyle = parentPromptOptimizeStyle(optimizeStyle, styleGroups) === "series";
+  const count = context.requestedImageCount;
+  return [
+    `当前生成数量为 ${count} 张；优化结果必须在对应输出语言中明确写出生成 ${count} 张独立图片（中文可写“生成 ${count} 张独立图片”，英文可写“generate ${count} separate images”），并把这个数量作为硬性约束。`,
+    isSeriesStyle
+      ? ""
+      : `当前不是组图优化风格，但生成数量大于 1；应让 ${count} 张作为同一风格下的 ${count} 个独立成品分别生成，可区分构图、角度、景别、细节或场景。`,
+    "不要把多张图合成在同一张画布里；避免使用拼图、拼贴、九宫格、四宫格、合集、同屏分镜、多面板等会让模型生成单张拼接图的措辞，除非用户原文明确要求。"
+  ].filter(Boolean);
 }
 
 function seriesPromptImageCountInstructions(optimizeStyle: PromptOptimizeStyle, imageCount?: number, styleGroups?: PromptOptimizeStyleGroup[]) {
@@ -1938,6 +1960,7 @@ async function optimizePlainPromptWithProvider({
   logContext: ModelRequestLogContext;
 }) {
   const styleConfig = resolvedPromptOptimizeStyleConfig(optimizeStyle, styleGroups);
+  const imageCountContext = promptImageCountContext(imageCount);
   const seriesImageContext = seriesPromptImageCountContext(optimizeStyle, imageCount, styleGroups);
   const temporaryInstruction = normalizePromptOptimizeCustomInstruction(customInstruction);
   const promptLanguage = promptLanguageFromText(prompt);
@@ -1971,6 +1994,7 @@ async function optimizePlainPromptWithProvider({
           ...styleConfig.instructions,
           temporaryInstruction ? `用户自定义优化方向：${temporaryInstruction}` : "",
           temporaryInstruction ? "自定义优化方向优先级高于所选风格，但仍必须保留用户原始主体、用途和硬性约束。" : "",
+          ...promptImageCountInstructions(optimizeStyle, imageCount, styleGroups),
           ...seriesPromptImageCountInstructions(optimizeStyle, imageCount, styleGroups)
         ].filter(Boolean).join("\n")
       },
@@ -1984,6 +2008,7 @@ async function optimizePlainPromptWithProvider({
               label: styleConfig.label,
               rules: styleConfig.rules
             },
+            imageCountContext,
             imageSeriesContext: seriesImageContext,
             customInstruction: temporaryInstruction,
             outputRules: {

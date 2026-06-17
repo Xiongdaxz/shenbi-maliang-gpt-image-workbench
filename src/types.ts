@@ -531,6 +531,7 @@ export type ChatSession = {
   id: string;
   title: string;
   titleStatus: "pending" | "ready" | "manual";
+  pinnedAt: string | null;
   archivedAt: string | null;
   runningImageJobCount: number;
   createdAt: string;

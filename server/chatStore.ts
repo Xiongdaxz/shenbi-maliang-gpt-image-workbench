@@ -117,6 +117,7 @@ export function serializeSession(row: {
   id: string;
   title: string;
   title_status?: string | null;
+  pinned_at?: string | null;
   archived_at?: string | null;
   running_job_count?: number | null;
   created_at: string;
@@ -126,6 +127,7 @@ export function serializeSession(row: {
     id: row.id,
     title: row.title,
     titleStatus: normalizeChatTitleStatus(row.title_status),
+    pinnedAt: row.pinned_at ?? null,
     archivedAt: row.archived_at ?? null,
     runningImageJobCount: row.running_job_count ?? 0,
     createdAt: row.created_at,
@@ -192,10 +194,38 @@ export function archiveSession(userId: string, sessionId: string, archived: bool
     id: string;
     title: string;
     title_status: string | null;
+    pinned_at: string | null;
     archived_at: string | null;
     created_at: string;
     updated_at: string;
-  }>(appDb, "select id, title, title_status, archived_at, created_at, updated_at from sessions where id = ? and user_id = ? and deleted_at is null", sessionId, userId);
+  }>(appDb, "select id, title, title_status, pinned_at, archived_at, created_at, updated_at from sessions where id = ? and user_id = ? and deleted_at is null", sessionId, userId);
+}
+
+export function pinSession(userId: string, sessionId: string, pinned: boolean) {
+  const session = getOne<{ id: string }>(
+    appDb,
+    "select id from sessions where id = ? and user_id = ? and archived_at is null and deleted_at is null",
+    sessionId,
+    userId
+  );
+  if (!session) return null;
+  const timestamp = now();
+  run(
+    appDb,
+    "update sessions set pinned_at = ? where id = ? and user_id = ? and archived_at is null and deleted_at is null",
+    pinned ? timestamp : null,
+    sessionId,
+    userId
+  );
+  return getOne<{
+    id: string;
+    title: string;
+    title_status: string | null;
+    pinned_at: string | null;
+    archived_at: string | null;
+    created_at: string;
+    updated_at: string;
+  }>(appDb, "select id, title, title_status, pinned_at, archived_at, created_at, updated_at from sessions where id = ? and user_id = ? and deleted_at is null", sessionId, userId);
 }
 
 export function renameSession(userId: string, sessionId: string, title: string) {
@@ -208,10 +238,11 @@ export function renameSession(userId: string, sessionId: string, title: string) 
     id: string;
     title: string;
     title_status: string | null;
+    pinned_at: string | null;
     archived_at: string | null;
     created_at: string;
     updated_at: string;
-  }>(appDb, "select id, title, title_status, archived_at, created_at, updated_at from sessions where id = ? and user_id = ? and deleted_at is null", sessionId, userId);
+  }>(appDb, "select id, title, title_status, pinned_at, archived_at, created_at, updated_at from sessions where id = ? and user_id = ? and deleted_at is null", sessionId, userId);
 }
 
 export function archiveAllSessions(userId: string) {

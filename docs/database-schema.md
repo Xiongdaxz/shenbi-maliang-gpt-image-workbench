@@ -126,6 +126,7 @@
 | `user_id` | 用户 ID |
 | `title` | 会话标题 |
 | `title_status` | 标题状态：`pending` 后台生成中，`ready` 已生成或已使用截取兜底，`manual` 用户手动修改 |
+| `pinned_at` | 置顶时间；为空表示未置顶 |
 | `archived_at` | 归档时间 |
 | `deleted_at` | 删除时间 |
 | `created_at` / `updated_at` | 创建和更新时间 |

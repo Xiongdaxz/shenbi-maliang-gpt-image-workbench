@@ -599,6 +599,7 @@ export function initAppDb() {
       user_id text not null,
       title text not null,
       title_status text not null default 'ready',
+      pinned_at text,
       archived_at text,
       deleted_at text,
       created_at text not null,
@@ -612,11 +613,16 @@ export function initAppDb() {
   if (!tableColumnExists(appDb, "sessions", "title_status")) {
     appDb.run("alter table sessions add column title_status text not null default 'ready'");
   }
+  if (!tableColumnExists(appDb, "sessions", "pinned_at")) {
+    appDb.run("alter table sessions add column pinned_at text");
+  }
   if (!tableColumnExists(appDb, "sessions", "deleted_at")) {
     appDb.run("alter table sessions add column deleted_at text");
   }
   appDb.run("create index if not exists sessions_user_archive_time_idx on sessions(user_id, archived_at, updated_at desc)");
   appDb.run("create index if not exists sessions_user_visible_time_idx on sessions(user_id, deleted_at, archived_at, updated_at desc)");
+  appDb.run("drop index if exists sessions_user_active_pin_time_idx");
+  appDb.run("create index if not exists sessions_user_active_pin_asc_time_idx on sessions(user_id, deleted_at, archived_at, pinned_at asc, updated_at desc)");
 
   appDb.run(`
     create table if not exists messages (

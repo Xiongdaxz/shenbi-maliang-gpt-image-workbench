@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createPortal } from "react-dom";
 import { Check, X } from "lucide-react";
 import { api } from "../api";
 import { cx } from "../lib/cx";
@@ -157,7 +158,7 @@ export function AddCaseModal({
     setTitle(nextTitle);
   };
 
-  return (
+  const modal = (
     <div className="modal-backdrop">
       <section className="case-modal">
         <header>
@@ -256,4 +257,6 @@ export function AddCaseModal({
       </section>
     </div>
   );
+
+  return typeof document === "undefined" ? modal : createPortal(modal, document.body);
 }
