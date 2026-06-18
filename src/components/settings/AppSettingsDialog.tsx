@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Archive, Check, Database, KeyRound, Monitor, Moon, Palette, Pencil, ScrollText, Settings, Smile, Sun, Trash2, UserRound, X } from "lucide-react";
+import { Archive, Check, Database, Github, KeyRound, Monitor, Moon, Palette, Pencil, Scale, Settings, Smile, Sun, Trash2, UserRound, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api } from "../../api";
 import { cx } from "../../lib/cx";
@@ -12,14 +12,17 @@ import { useToast } from "../../ui";
 import { MarkdownView } from "../MarkdownView";
 import { PromptOptimizeStyleSettingsDialog } from "../PromptOptimizeStyleSettingsDialog";
 
-type SettingsSectionId = "general" | "personalization" | "account" | "data" | "changelog";
+type SettingsSectionId = "general" | "personalization" | "account" | "data" | "about";
+
+const PROJECT_REPOSITORY_URL = "https://github.com/Xiongdaxz/shenbi-maliang-gpt-image-workbench";
+const PROJECT_LICENSE_URL = `${PROJECT_REPOSITORY_URL}/blob/main/LICENSE`;
 
 const settingsSections: Array<{ id: SettingsSectionId; label: string; icon: LucideIcon }> = [
   { id: "general", label: "常规", icon: Settings },
   { id: "personalization", label: "个性化", icon: Smile },
   { id: "account", label: "账户", icon: UserRound },
   { id: "data", label: "数据管理", icon: Database },
-  { id: "changelog", label: "更新日志", icon: ScrollText }
+  { id: "about", label: "关于", icon: Github }
 ];
 
 const settingsSectionTitles: Record<SettingsSectionId, string> = {
@@ -27,7 +30,7 @@ const settingsSectionTitles: Record<SettingsSectionId, string> = {
   personalization: "个性化",
   account: "账户",
   data: "数据管理",
-  changelog: "更新日志"
+  about: "关于"
 };
 
 const appearanceOptions: Array<{ value: AppearanceMode; label: string; icon: LucideIcon }> = [
@@ -90,7 +93,7 @@ export function AppSettingsDialog({
   const changelog = useQuery({
     queryKey: ["changelog"],
     queryFn: api.changelog,
-    enabled: open && activeSection === "changelog"
+    enabled: open && activeSection === "about"
   });
 
   useEffect(() => {
@@ -365,23 +368,50 @@ export function AppSettingsDialog({
               </div>
             </div>
           ) : (
-            <div className="settings-changelog">
-              <div className="settings-changelog-summary">
-                <span>当前版本</span>
-                <strong>{latestEntry?.version ?? "-"}</strong>
+            <div className="settings-about">
+              <div className="settings-list settings-about-list">
+                <div className="settings-row">
+                  <div>
+                    <strong>当前版本</strong>
+                    <span>{latestEntry?.version ?? "-"}</span>
+                  </div>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>开源地址</strong>
+                    <span className="settings-about-url">{PROJECT_REPOSITORY_URL}</span>
+                  </div>
+                  <a className="secondary-btn" href={PROJECT_REPOSITORY_URL} target="_blank" rel="noreferrer">
+                    <Github size={15} />
+                    GitHub
+                  </a>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <strong>许可证</strong>
+                    <span>MIT 开源协议</span>
+                  </div>
+                  <a className="secondary-btn" href={PROJECT_LICENSE_URL} target="_blank" rel="noreferrer">
+                    <Scale size={15} />
+                    许可证
+                  </a>
+                </div>
               </div>
-              {changelog.isLoading ? <div className="settings-empty">更新日志加载中...</div> : null}
-              {changelog.error ? <div className="form-error">{changelog.error.message}</div> : null}
-              {!changelog.isLoading && entries.length === 0 ? <div className="settings-empty">暂无更新日志</div> : null}
-              {entries.map((entry) => (
-                <article className="settings-changelog-entry" key={entry.version}>
-                  <header>
-                    <strong>{entry.version}</strong>
-                    <time>{entry.date || "-"}</time>
-                  </header>
-                  <MarkdownView markdown={entry.content} />
-                </article>
-              ))}
+              <div className="settings-changelog">
+                <h3 className="settings-section-title">更新日志</h3>
+                {changelog.isLoading ? <div className="settings-empty">更新日志加载中...</div> : null}
+                {changelog.error ? <div className="form-error">{changelog.error.message}</div> : null}
+                {!changelog.isLoading && entries.length === 0 ? <div className="settings-empty">暂无更新日志</div> : null}
+                {entries.map((entry) => (
+                  <article className="settings-changelog-entry" key={entry.version}>
+                    <header>
+                      <strong>{entry.version}</strong>
+                      <time>{entry.date || "-"}</time>
+                    </header>
+                    <MarkdownView markdown={entry.content} />
+                  </article>
+                ))}
+              </div>
             </div>
           )}
         </div>

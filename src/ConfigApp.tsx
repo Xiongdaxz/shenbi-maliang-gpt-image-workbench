@@ -258,6 +258,33 @@ function inputDateOffset(days: number) {
   return inputDateValue(date);
 }
 
+function incrementVersionNumberText(value: string) {
+  const digits = value.split("");
+  let carry = 1;
+  for (let index = digits.length - 1; index >= 0; index -= 1) {
+    const nextDigit = Number(digits[index]) + carry;
+    if (nextDigit >= 10) {
+      digits[index] = "0";
+      carry = 1;
+    } else {
+      digits[index] = String(nextDigit);
+      carry = 0;
+      break;
+    }
+  }
+  return `${carry ? "1" : ""}${digits.join("")}`;
+}
+
+function nextChangelogVersion(version?: string) {
+  const currentVersion = version?.trim();
+  if (!currentVersion) return "";
+  const match = currentVersion.match(/^(.*?)(\d+)(\D*)$/);
+  if (!match) return "";
+  const [, prefix, numberText, suffix] = match;
+  const nextNumberText = incrementVersionNumberText(numberText);
+  return `${prefix}${nextNumberText.padStart(numberText.length, "0")}${suffix}`;
+}
+
 function numberLabel(value: number) {
   return new Intl.NumberFormat("zh-CN").format(value);
 }
@@ -1717,6 +1744,10 @@ function ChangelogPanel() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const changelog = useQuery({ queryKey: ["config-changelog"], queryFn: configApi.changelog });
+  const suggestedNewVersion = useMemo(
+    () => nextChangelogVersion(changelog.data?.entries[0]?.version),
+    [changelog.data?.entries]
+  );
   const [dialog, setDialog] = useState<{ mode: "create" | "edit"; entry?: ChangelogEntry } | null>(null);
   const [removeTarget, setRemoveTarget] = useState<ChangelogEntry | null>(null);
   const save = useMutation({
@@ -1792,6 +1823,7 @@ function ChangelogPanel() {
         <ChangelogDialog
           mode={dialog.mode}
           entry={dialog.entry}
+          suggestedVersion={dialog.mode === "create" ? suggestedNewVersion : undefined}
           saving={save.isPending}
           error={save.error}
           onClose={closeDialog}
@@ -1822,6 +1854,7 @@ function ChangelogPanel() {
 function ChangelogDialog({
   mode,
   entry,
+  suggestedVersion,
   saving,
   error,
   onClose,
@@ -1829,15 +1862,22 @@ function ChangelogDialog({
 }: {
   mode: "create" | "edit";
   entry?: ChangelogEntry;
+  suggestedVersion?: string;
   saving: boolean;
   error?: Error | null;
   onClose: () => void;
   onSubmit: (payload: Pick<ChangelogEntry, "version" | "date" | "content">) => void;
 }) {
-  const [version, setVersion] = useState(entry?.version ?? "");
+  const versionEditedRef = useRef(false);
+  const [version, setVersion] = useState(entry?.version ?? suggestedVersion ?? "");
   const [date, setDate] = useState(entry?.date || todayInputDate());
   const [content, setContent] = useState(entry?.content ?? "");
   const canSubmit = version.trim() && date.trim() && content.trim();
+
+  useEffect(() => {
+    if (mode !== "create" || versionEditedRef.current) return;
+    setVersion(suggestedVersion ?? "");
+  }, [mode, suggestedVersion]);
 
   return (
     <div className="modal-backdrop">
@@ -1849,7 +1889,15 @@ function ChangelogDialog({
         <div className="changelog-form">
           <label>
             版本号
-            <input value={version} onChange={(event) => setVersion(event.target.value)} placeholder="例如 v0.1.1" autoFocus />
+            <input
+              value={version}
+              onChange={(event) => {
+                versionEditedRef.current = true;
+                setVersion(event.target.value);
+              }}
+              placeholder="例如 v0.1.1"
+              autoFocus
+            />
           </label>
           <label>
             发布日期

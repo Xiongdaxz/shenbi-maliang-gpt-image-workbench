@@ -3,7 +3,7 @@ import type { CSSProperties, FocusEvent, FormEvent, MouseEvent } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { InfiniteData } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
-import { Camera, ChevronDown, ChevronRight, FolderOpen, Images, Lightbulb, LogOut, Menu, MessageCircle, MessageCirclePlus, PanelLeft, Pin, PinOff, RotateCcw, Search, Settings, ShieldCheck, Sparkles, X } from "lucide-react";
+import { Camera, ChevronRight, FolderOpen, Images, Lightbulb, LogOut, Menu, MessageCircle, MessageCirclePlus, PanelLeft, Pin, PinOff, RotateCcw, Search, Settings, ShieldCheck, Sparkles, X } from "lucide-react";
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import type { AppearanceMode } from "../lib/appearance";
@@ -1244,10 +1244,14 @@ export function WorkbenchShell({ user }: { user: User }) {
                 >
                   <h2>已置顶</h2>
                   <span className="session-group-chevron" aria-hidden="true">
-                    {sessionGroupsCollapsed.pinned ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                    <ChevronRight size={14} />
                   </span>
                 </button>
-                {!sessionGroupsCollapsed.pinned ? <div className="recent-list">{renderSessionRows(pinnedSessions)}</div> : null}
+                <div className="session-group-body" aria-hidden={sessionGroupsCollapsed.pinned}>
+                  <div className="session-group-body-inner">
+                    <div className="recent-list">{renderSessionRows(pinnedSessions)}</div>
+                  </div>
+                </div>
               </section>
             ) : null}
             <section className={cx("recent-section", "session-group", sessionGroupsCollapsed.recent && "collapsed")}>
@@ -1259,21 +1263,23 @@ export function WorkbenchShell({ user }: { user: User }) {
               >
                 <h2>最近</h2>
                 <span className="session-group-chevron" aria-hidden="true">
-                  {sessionGroupsCollapsed.recent ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                  <ChevronRight size={14} />
                 </span>
               </button>
-              {!sessionGroupsCollapsed.recent ? (
-                <div className="recent-list">
-                  {showInitialSessionSkeleton
-                    ? Array.from({ length: 8 }).map((_, index) => <div className="recent-skeleton-row" key={`session-skeleton-${index}`} />)
-                    : null}
-                  {renderSessionRows(recentSessions)}
-                  {!showInitialSessionSkeleton && sessions.hasNextPage ? <div className="recent-load-sentinel" ref={sessionListSentinelRef} /> : null}
-                  {sessions.isFetchingNextPage
-                    ? Array.from({ length: 4 }).map((_, index) => <div className="recent-skeleton-row compact" key={`session-next-skeleton-${index}`} />)
-                    : null}
+              <div className="session-group-body" aria-hidden={sessionGroupsCollapsed.recent}>
+                <div className="session-group-body-inner">
+                  <div className="recent-list">
+                    {showInitialSessionSkeleton
+                      ? Array.from({ length: 8 }).map((_, index) => <div className="recent-skeleton-row" key={`session-skeleton-${index}`} />)
+                      : null}
+                    {renderSessionRows(recentSessions)}
+                    {!showInitialSessionSkeleton && sessions.hasNextPage ? <div className="recent-load-sentinel" ref={sessionListSentinelRef} /> : null}
+                    {sessions.isFetchingNextPage
+                      ? Array.from({ length: 4 }).map((_, index) => <div className="recent-skeleton-row compact" key={`session-next-skeleton-${index}`} />)
+                      : null}
+                  </div>
                 </div>
-              ) : null}
+              </div>
             </section>
           </div>
         </div>

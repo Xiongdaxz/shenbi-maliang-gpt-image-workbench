@@ -88,6 +88,8 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .search-result-gr
 }
 
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .recent-title,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .session-group-title,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .session-group-title h2,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .recent-generation-status,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .session-menu-trigger,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .user-footer-name span,
@@ -166,6 +168,11 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-more-action
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-category-select-menu button,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-quick-menu button,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-template-select-trigger {
+  color: var(--app-text);
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .session-group-title:hover h2,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .session-group-title:focus-visible h2 {
   color: var(--app-text);
 }
 

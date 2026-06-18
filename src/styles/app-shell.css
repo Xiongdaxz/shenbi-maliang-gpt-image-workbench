@@ -54,7 +54,7 @@
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   scrollbar-color: var(--app-scrollbar-thumb) var(--app-scrollbar-track);
-  margin: 0 calc(var(--sidebar-pad-x) * -1);
+  margin: 0 calc((var(--sidebar-pad-x) + 2px) * -1) 0 calc(var(--sidebar-pad-x) * -1);
 }
 
 .sidebar-head,
@@ -442,8 +442,12 @@
   min-width: 0;
 }
 
+.collapsed-recent-wrap + .session-group {
+  margin-top: 6px;
+}
+
 .session-group + .session-group {
-  margin-top: 12px;
+  margin-top: 6px;
 }
 
 .session-group-title {
@@ -482,6 +486,17 @@
     color 140ms ease;
 }
 
+.session-group-chevron svg {
+  transform: rotate(90deg);
+  transition: transform 160ms cubic-bezier(0.2, 0.82, 0.2, 1);
+}
+
+.session-group.collapsed .session-group-chevron svg {
+  transform: rotate(0deg);
+}
+
+.session-group.collapsed .session-group-chevron,
+.session-group:hover .session-group-chevron,
 .session-group-title:hover .session-group-chevron,
 .session-group-title:focus-visible .session-group-chevron {
   opacity: 1;
@@ -489,6 +504,44 @@
 
 .session-group-title:focus-visible {
   outline: none;
+}
+
+.session-group-body {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition:
+    grid-template-rows 190ms cubic-bezier(0.2, 0.82, 0.2, 1),
+    opacity 150ms ease,
+    transform 170ms ease,
+    visibility 0s linear 0s;
+}
+
+.session-group-body-inner {
+  min-height: 0;
+  overflow: hidden;
+  margin-right: -8px;
+  padding-right: 8px;
+}
+
+.session-group.collapsed {
+  gap: 0;
+}
+
+.session-group.collapsed .session-group-body {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition:
+    grid-template-rows 170ms cubic-bezier(0.32, 0, 0.67, 0),
+    opacity 120ms ease,
+    transform 140ms ease,
+    visibility 0s linear 170ms;
 }
 
 .recent-title {
@@ -1387,6 +1440,19 @@
   padding: 28px 16px;
   color: #6b7280;
   text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-group-body,
+  .session-group.collapsed .session-group-body,
+  .session-group-chevron svg {
+    transition: none;
+  }
+
+  .session-group-body,
+  .session-group.collapsed .session-group-body {
+    transform: none;
+  }
 }
 
 @keyframes recentSkeletonSweep {

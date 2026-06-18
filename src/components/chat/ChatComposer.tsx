@@ -644,7 +644,6 @@ export function ChatComposer({
       && imageCount === 1;
     const nextImageCount = shouldApplySeriesDefaultCount ? 4 : imageCount;
     const shouldAutoOptimize = Boolean(sourcePrompt)
-      && styleChanged
       && !promptInputOptimizePending
       && !promptTemplateOptimizeControlVisible
       && !isUneditedStyleDefaultPrompt;
