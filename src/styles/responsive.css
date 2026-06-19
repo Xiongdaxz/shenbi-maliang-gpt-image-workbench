@@ -383,6 +383,14 @@
     height: 34px;
   }
 
+  .case-preview-navigator {
+    top: 10px;
+    left: 10px;
+    max-width: calc(100vw - 68px);
+    box-sizing: border-box;
+    padding: 6px;
+  }
+
   .case-preview-stage {
     padding: 0;
   }

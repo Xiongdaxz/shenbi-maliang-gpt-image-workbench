@@ -370,7 +370,7 @@ export function AppSettingsDialog({
           ) : (
             <div className="settings-about">
               <div className="settings-list settings-about-list">
-                <div className="settings-row">
+                <div className="settings-row settings-about-version-row">
                   <div>
                     <strong>当前版本</strong>
                     <span>{latestEntry?.version ?? "-"}</span>

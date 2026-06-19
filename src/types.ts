@@ -246,6 +246,31 @@ export type SmsSettings = {
   updatedAt: string;
 };
 
+export type BackupSettings = {
+  enabled: boolean;
+  runTime: string;
+  retentionDays: number;
+  backupDir: string;
+  resolvedBackupDir: string;
+  updatedAt: string;
+};
+
+export type BackupRun = {
+  id: string;
+  source: "manual" | "scheduled";
+  status: "running" | "succeeded" | "failed" | "deleted";
+  backupDir: string;
+  resolvedBackupDir: string;
+  fileName: string;
+  fileSize: number;
+  fileCount: number;
+  durationMs: number;
+  error: string;
+  startedAt: string;
+  finishedAt: string;
+  deletedAt: string;
+};
+
 export type ProxyConfig = {
   enabled: boolean;
   url: string;

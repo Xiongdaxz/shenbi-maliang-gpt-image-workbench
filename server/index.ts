@@ -66,6 +66,7 @@ import {
   requireConfig
 } from "./auth";
 import { registerAssetRoutes } from "./assetRoutes";
+import { registerBackupRoutes, startBackupScheduler } from "./backupRoutes";
 import { registerBrandingRoutes } from "./branding";
 import { registerCaseRoutes } from "./caseRoutes";
 import { registerChangelogRoutes } from "./changelogRoutes";
@@ -289,6 +290,8 @@ registerPromptOptimizerRoutes(api);
 registerSafetyReviewRoutes(api);
 
 registerStarterCopyRoutes(api);
+
+registerBackupRoutes(api);
 
 api.get("/config/auth/status", (c) => {
   return c.json({
@@ -2870,10 +2873,15 @@ api.get("/config/statistics", (c) => {
 api.get("/config/request-logs", (c) => {
   const blocked = requireConfig(c);
   if (blocked) return blocked;
+  const limit = Math.max(1, Math.min(100, Math.trunc(Number(c.req.query("limit") ?? 40) || 40)));
+  const offset = Math.max(0, Math.trunc(Number(c.req.query("offset") ?? 0) || 0));
+  const total = getOne<{ total: number }>(configDb, "select count(*) as total from provider_request_logs")?.total ?? 0;
   const logs = resolvedProviderRequestLogs(
     getAll<ProviderRequestLogRow>(
       configDb,
-      "select * from provider_request_logs order by created_at desc limit 80"
+      "select * from provider_request_logs order by created_at desc limit ? offset ?",
+      limit,
+      offset
     )
   );
   const userIds = [...new Set(logs.map((log) => String(log.user_id ?? "").trim()).filter(Boolean))];
@@ -2927,7 +2935,13 @@ api.get("/config/request-logs", (c) => {
         responseSnapshot: log.response_snapshot ?? "",
         createdAt: log.created_at
       };
-    })
+    }),
+    pageInfo: {
+      limit,
+      offset,
+      total,
+      hasMore: offset + logs.length < total
+    }
   });
 });
 
@@ -3211,3 +3225,4 @@ const server = Bun.serve({
 
 startStarterCopyScheduler();
 scheduleCpaSync();
+startBackupScheduler();

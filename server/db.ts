@@ -3,28 +3,14 @@ import { existsSync } from "node:fs";
 import { mkdir, stat, unlink } from "node:fs/promises";
 import {
   APP_DB_PATH,
-  ASSET_DIR,
   CONFIG_DB_PATH,
   DATA_DIR,
-  IMAGE_DIR,
-  IMAGE_MASK_DIR,
-  IMAGE_REFERENCE_DIR,
-  SECURE_BRANDING_DIR,
-  SECURE_ASSET_DIR,
-  SECURE_IMAGE_DIR,
-  SECURE_IMAGE_REFERENCE_DIR
+  SECURE_FILES_DIR
 } from "./paths";
 
 await Promise.all([
   mkdir(DATA_DIR, { recursive: true }),
-  mkdir(IMAGE_DIR, { recursive: true }),
-  mkdir(ASSET_DIR, { recursive: true }),
-  mkdir(IMAGE_REFERENCE_DIR, { recursive: true }),
-  mkdir(IMAGE_MASK_DIR, { recursive: true }),
-  mkdir(SECURE_IMAGE_DIR, { recursive: true }),
-  mkdir(SECURE_ASSET_DIR, { recursive: true }),
-  mkdir(SECURE_BRANDING_DIR, { recursive: true }),
-  mkdir(SECURE_IMAGE_REFERENCE_DIR, { recursive: true })
+  mkdir(SECURE_FILES_DIR, { recursive: true })
 ]);
 
 async function removeFailedEmptyDb(dbPath: string) {
@@ -40,6 +26,9 @@ await Promise.all([removeFailedEmptyDb(APP_DB_PATH), removeFailedEmptyDb(CONFIG_
 
 export const appDb = new Database(APP_DB_PATH, { create: true });
 export const configDb = new Database(CONFIG_DB_PATH, { create: true });
+
+appDb.exec("pragma busy_timeout = 10000");
+configDb.exec("pragma busy_timeout = 10000");
 
 export function run(db: Database, sql: string, ...params: any[]) {
   return db.query(sql).run(...params);

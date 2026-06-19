@@ -80,7 +80,8 @@
 .settings-content {
   min-width: 0;
   overflow: auto;
-  padding: 18px 30px 34px;
+  scrollbar-gutter: stable;
+  padding: 18px 15px 34px 30px;
 }
 
 .settings-content-head {
@@ -431,11 +432,18 @@
 
 .settings-about {
   display: grid;
+  width: 100%;
+  min-width: 0;
   gap: 16px;
 }
 
 .settings-about-list {
+  width: 100%;
   margin-top: 12px;
+}
+
+.settings-about-version-row {
+  grid-template-columns: 1fr;
 }
 
 .settings-about-url {

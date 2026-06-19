@@ -1983,6 +1983,47 @@ export function initConfigDb() {
   `);
 
   configDb.run(`
+    create table if not exists backup_settings (
+      id text primary key,
+      enabled integer not null default 0,
+      run_time text not null default '03:00',
+      retention_days integer not null default 30,
+      backup_dir text not null default 'backups',
+      updated_at text not null
+    )
+  `);
+
+  run(
+    configDb,
+    `insert or ignore into backup_settings (
+      id, enabled, run_time, retention_days, backup_dir, updated_at
+    ) values (?, ?, ?, ?, ?, ?)`,
+    "default",
+    0,
+    "03:00",
+    30,
+    "backups",
+    now()
+  );
+
+  configDb.run(`
+    create table if not exists backup_runs (
+      id text primary key,
+      source text not null,
+      status text not null,
+      backup_dir text not null,
+      file_name text not null default '',
+      file_size integer not null default 0,
+      file_count integer not null default 0,
+      error text not null default '',
+      started_at text not null,
+      finished_at text not null default '',
+      deleted_at text not null default ''
+    )
+  `);
+  configDb.run("create index if not exists backup_runs_status_time_idx on backup_runs(status, started_at desc)");
+
+  configDb.run(`
     create table if not exists changelog_entries (
       id text primary key,
       version text not null unique,

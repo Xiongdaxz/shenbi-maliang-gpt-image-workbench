@@ -49,7 +49,7 @@
   position: absolute;
   top: 18px;
   right: 18px;
-  z-index: 2;
+  z-index: 5;
   width: 36px;
   height: 36px;
   display: grid;
@@ -116,7 +116,7 @@
 .case-preview-navigator {
   position: absolute;
   top: 18px;
-  right: 18px;
+  left: 18px;
   z-index: 3;
   display: grid;
   place-items: center;

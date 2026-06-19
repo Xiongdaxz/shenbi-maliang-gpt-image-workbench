@@ -41,6 +41,7 @@ const DEFAULT_LOGO_URL = "/image/logo.png";
 const DEFAULT_LOGO_THUMB_URL = "/image/logo-small.webp";
 const DEFAULT_FAVICON_URL = DEFAULT_LOGO_URL;
 const DEFAULT_FAVICON_CACHE_VERSION = "default-logo";
+const PUBLIC_BRANDING_CACHE_MS = 30 * 1000;
 type BrandingAssetUrlVariant = "original" | "thumb" | "preview";
 
 type BrandingDefaults = {
@@ -56,6 +57,27 @@ type BrandingSettings = BrandingDefaults & {
   siteName: string;
   updatedAt: string;
 };
+
+type PublicBrandingPayload = {
+  siteName: string;
+  logoUrl: string;
+  faviconUrl: string;
+  loginAssets: {
+    backgrounds: {
+      light: string[];
+      dark: string[];
+    };
+    titles: {
+      light: string;
+      dark: string;
+    };
+    titleFallbacks: string[];
+  };
+};
+
+let builtinBrandingAssetsReady = false;
+let builtinBrandingAssetsPromise: Promise<void> | null = null;
+let publicBrandingCache: { expiresAt: number; value: PublicBrandingPayload } | null = null;
 
 function normalizeBrandingAssetType(value: unknown): BrandingAssetType | null {
   const type = String(value ?? "").trim();
@@ -213,6 +235,25 @@ async function ensureBuiltinBrandingAssets() {
   });
 }
 
+async function ensureBuiltinBrandingAssetsReady(force = false) {
+  if (force) builtinBrandingAssetsReady = false;
+  if (builtinBrandingAssetsReady) return;
+  if (!builtinBrandingAssetsPromise) {
+    builtinBrandingAssetsPromise = ensureBuiltinBrandingAssets()
+      .then(() => {
+        builtinBrandingAssetsReady = true;
+      })
+      .finally(() => {
+        builtinBrandingAssetsPromise = null;
+      });
+  }
+  await builtinBrandingAssetsPromise;
+}
+
+function invalidatePublicBrandingCache() {
+  publicBrandingCache = null;
+}
+
 function brandingAssetRows() {
   return getAll<BrandingAssetRow>(
     configDb,
@@ -347,7 +388,7 @@ function persistBrandingSettings(settings: BrandingSettings) {
 }
 
 export async function brandingConfig() {
-  await ensureBuiltinBrandingAssets();
+  await ensureBuiltinBrandingAssetsReady();
   const rows = brandingAssetRows();
   const row = getOne<BrandingSettingsRow>(configDb, "select * from branding_settings where id = ? limit 1", BRANDING_SETTINGS_ID);
   const defaults = defaultBrandingSettings(rows);
@@ -375,6 +416,7 @@ function loginBackgroundUrls(rowsById: Map<string, BrandingAssetRow>, ids: strin
 }
 
 export async function publicBranding() {
+  if (publicBrandingCache && publicBrandingCache.expiresAt > Date.now()) return publicBrandingCache.value;
   const config = await brandingConfig();
   const rows = brandingAssetRows();
   const byId = assetsById(rows);
@@ -394,7 +436,7 @@ export async function publicBranding() {
       ].filter(Boolean)
     )
   );
-  return {
+  const payload: PublicBrandingPayload = {
     siteName: config.settings.siteName,
     logoUrl: logo ? assetUrl(logo, "thumb") : brandingFileUrl(DEFAULT_LOGO_ASSET_ID, "thumb"),
     faviconUrl: favicon ? assetUrl(favicon, "thumb") : brandingFileUrl(DEFAULT_FAVICON_ASSET_ID, "thumb"),
@@ -410,6 +452,8 @@ export async function publicBranding() {
       titleFallbacks
     }
   };
+  publicBrandingCache = { expiresAt: Date.now() + PUBLIC_BRANDING_CACHE_MS, value: payload };
+  return payload;
 }
 
 function normalizeIncomingSettings(raw: Record<string, unknown>, rows: BrandingAssetRow[]) {
@@ -518,7 +562,7 @@ async function brandingAssetRowForFileRequest(id: string) {
   const row = getOne<BrandingAssetRow>(configDb, "select * from branding_assets where id = ? limit 1", id);
   if (row && !builtinAssetNeedsRefresh(row)) return row;
   if (!id.startsWith("builtin-")) return null;
-  await ensureBuiltinBrandingAssets();
+  await ensureBuiltinBrandingAssetsReady(true);
   return getOne<BrandingAssetRow>(configDb, "select * from branding_assets where id = ? limit 1", id) ?? null;
 }
 
@@ -534,10 +578,11 @@ export function registerBrandingRoutes(api: Hono) {
   api.put("/config/branding", async (c) => {
     const blocked = requireConfig(c);
     if (blocked) return blocked;
-    await ensureBuiltinBrandingAssets();
+    await ensureBuiltinBrandingAssetsReady();
     const body = await c.req.json().catch(() => ({}));
     const settings = normalizeIncomingSettings(body as Record<string, unknown>, brandingAssetRows());
     persistBrandingSettings(settings);
+    invalidatePublicBrandingCache();
     audit("branding.save", { siteName: settings.siteName });
     return c.json(await brandingConfig());
   });
@@ -545,9 +590,10 @@ export function registerBrandingRoutes(api: Hono) {
   api.post("/config/branding/reset", async (c) => {
     const blocked = requireConfig(c);
     if (blocked) return blocked;
-    await ensureBuiltinBrandingAssets();
+    await ensureBuiltinBrandingAssetsReady();
     const settings = defaultBrandingSettings(brandingAssetRows());
     persistBrandingSettings(settings);
+    invalidatePublicBrandingCache();
     audit("branding.reset", { siteName: settings.siteName });
     return c.json(await brandingConfig());
   });
@@ -599,6 +645,7 @@ export function registerBrandingRoutes(api: Hono) {
     if (type === "logo" || type === "favicon") {
       void warmImageDerivatives("branding", id, path);
     }
+    invalidatePublicBrandingCache();
     audit("branding.asset.upload", { assetId: id, type, name });
     return c.json(await brandingConfig());
   });
@@ -624,6 +671,7 @@ export function registerBrandingRoutes(api: Hono) {
       now(),
       id
     );
+    invalidatePublicBrandingCache();
     audit("branding.asset.update", { assetId: id, source: row.source, type: row.type, name, enabled });
     return c.json(await brandingConfig());
   });
@@ -641,6 +689,7 @@ export function registerBrandingRoutes(api: Hono) {
     run(configDb, "delete from branding_assets where id = ?", id);
     deleteImageDerivativesForSources(derivativeSources);
     if (row.path) await deleteStoredFilesIfUnreferenced([row.path, ...derivativePaths]);
+    invalidatePublicBrandingCache();
     audit("branding.asset.delete", { assetId: id, type: row.type, name: row.name });
     return c.json(await brandingConfig());
   });

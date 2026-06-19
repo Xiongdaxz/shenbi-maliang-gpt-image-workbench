@@ -751,6 +751,36 @@ CPA 同步执行记录。
 | `message` | 执行结果 |
 | `started_at` / `finished_at` | 开始和结束时间 |
 
+### backup_settings
+
+数据备份配置。默认备份目录是项目根目录下的 `backups`，不放在 `data` 下。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 固定为 `default` |
+| `enabled` | 是否启用每日自动备份，`0` 否、`1` 是 |
+| `run_time` | 每日备份时间，格式 `HH:mm` |
+| `retention_days` | 备份保留天数，当前限制为 `1` 到 `3650` |
+| `backup_dir` | 备份目录；相对路径按项目根目录解析，绝对路径按原路径使用 |
+| `updated_at` | 更新时间 |
+
+### backup_runs
+
+数据备份执行记录。备份包为无压缩 `.tar` 归档，包内包含 `manifest.json`、`app.db`、`config.db`、`files/secure/**`、`files/image-masks/**` 以及数据库仍直接引用的旧版非 secure 文件；不包含 `data/config.toml`、`data/debug/**`、历史备份包和备份临时目录。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 备份执行 ID |
+| `source` | 触发来源：`manual` 手动、`scheduled` 定时 |
+| `status` | 执行状态：`running` 运行中、`succeeded` 成功、`failed` 失败、`deleted` 已删除 |
+| `backup_dir` | 本次备份使用的目录配置 |
+| `file_name` | 备份包文件名 |
+| `file_size` | 备份包大小 |
+| `file_count` | 归档内文件数量，后台显示为“文件数”，包含 `manifest.json` 和两个数据库快照 |
+| `error` | 失败信息 |
+| `started_at` / `finished_at` | 开始和结束时间；后台显示的“耗时”由这两个时间计算，不单独落库 |
+| `deleted_at` | 删除时间；为空表示未删除 |
+
 ### changelog_entries
 
 后台维护的更新日志。
@@ -770,7 +800,7 @@ CPA 同步执行记录。
 | 字段 | 说明 |
 | --- | --- |
 | `id` | 日志 ID |
-| `action` | 操作类型；当前代码写入 `config.setup`、`config.login`、`config.user_access`、`team.create`、`team.update`、`team.delete`、`user.create`、`user.update`、`user.reset_password`、`user.delete`、`user.self_register`、`user.password_reset`、`registration_settings.save`、`global_switch.save`、`smtp_settings.save`、`smtp_settings.test`、`sms_settings.save`、`sms_settings.test`、`image_account.refresh_usage`、`image_account.create`、`image_account.update`、`image_account.delete`、`image_mode.save`、`provider.save`、`prompt_optimizer.save`、`prompt_optimizer.models`、`prompt_optimizer.test`、`proxy.save`、`debug.save`、`cpa.save`、`cpa.sync`、`safety_review.save`、`asset.share.approve`、`asset.share.reject`、`case.review.approve`、`case.review.reject`、`changelog.create`、`changelog.update`、`changelog.delete` |
+| `action` | 操作类型；当前代码写入 `config.setup`、`config.login`、`config.user_access`、`team.create`、`team.update`、`team.delete`、`user.create`、`user.update`、`user.reset_password`、`user.delete`、`user.self_register`、`user.password_reset`、`registration_settings.save`、`global_switch.save`、`smtp_settings.save`、`smtp_settings.test`、`sms_settings.save`、`sms_settings.test`、`image_account.refresh_usage`、`image_account.create`、`image_account.update`、`image_account.delete`、`image_mode.save`、`provider.save`、`prompt_optimizer.save`、`prompt_optimizer.models`、`prompt_optimizer.test`、`proxy.save`、`debug.save`、`cpa.save`、`cpa.sync`、`backup.settings.save`、`backup.run`、`backup.delete`、`safety_review.save`、`asset.share.approve`、`asset.share.reject`、`case.review.approve`、`case.review.reject`、`changelog.create`、`changelog.update`、`changelog.delete` |
 | `detail` | JSON 详情 |
 | `created_at` | 创建时间 |
 

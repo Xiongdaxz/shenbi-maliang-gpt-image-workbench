@@ -1,4 +1,6 @@
 import type {
+  BackupRun,
+  BackupSettings,
   BrandingAsset,
   BrandingDefaults,
   BrandingSettings,
@@ -29,6 +31,13 @@ import type {
   User
 } from "../types";
 import { request } from "./client";
+
+type ConfigPageInfo = {
+  limit: number;
+  offset: number;
+  total: number;
+  hasMore: boolean;
+};
 
 type ConfigUser = {
   id: string;
@@ -212,6 +221,30 @@ export const configApi = {
       method: "POST",
       body: JSON.stringify({ phone })
     }),
+  backups: () =>
+    request<{
+      settings: BackupSettings;
+      nextAutoBackupAt: string;
+      running: boolean;
+      runs: BackupRun[];
+    }>("/api/config/backups"),
+  saveBackupSettings: (settings: Pick<BackupSettings, "enabled" | "runTime" | "retentionDays" | "backupDir">) =>
+    request<{ settings: BackupSettings; nextAutoBackupAt: string }>("/api/config/backups/settings", {
+      method: "PUT",
+      body: JSON.stringify(settings)
+    }),
+  runBackup: () =>
+    request<{ run: BackupRun; nextAutoBackupAt: string }>("/api/config/backups/run", {
+      method: "POST"
+    }),
+  selectBackupDirectory: (currentDir: string) =>
+    request<{ directory: string }>("/api/config/backups/select-directory", {
+      method: "POST",
+      body: JSON.stringify({ currentDir })
+    }),
+  deleteBackup: (id: string) =>
+    request<{ ok: boolean }>(`/api/config/backups/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  backupDownloadUrl: (id: string) => `/api/config/backups/${encodeURIComponent(id)}/download`,
   users: (filters?: { teamId?: string; keyword?: string; status?: string }) => {
     const params = new URLSearchParams();
     if (filters?.teamId) params.set("teamId", filters.teamId);
@@ -402,7 +435,13 @@ export const configApi = {
       method: "PUT",
       body: JSON.stringify(debug)
     }),
-  requestLogs: () => request<{ logs: ProviderRequestLog[] }>("/api/config/request-logs"),
+  requestLogs: (filters: { limit?: number; offset?: number } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.limit) params.set("limit", String(filters.limit));
+    if (filters.offset) params.set("offset", String(filters.offset));
+    const query = params.toString();
+    return request<{ logs: ProviderRequestLog[]; pageInfo: ConfigPageInfo }>(`/api/config/request-logs${query ? `?${query}` : ""}`);
+  },
   modelRequestLogs: (filters: { success?: "all" | "success" | "failure"; purpose?: string; providerId?: string; limit?: number } = {}) => {
     const params = new URLSearchParams();
     if (filters.success === "success") params.set("success", "true");
