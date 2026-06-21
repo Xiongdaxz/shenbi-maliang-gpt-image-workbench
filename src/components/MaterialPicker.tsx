@@ -7,7 +7,7 @@ import { assetSpaceLabel } from "../lib/assets";
 import { cx } from "../lib/cx";
 import type { AssetItem } from "../types";
 
-export const MATERIAL_PICKER_DRAWER_ANIMATION_MS = 260;
+export const MATERIAL_PICKER_DRAWER_ANIMATION_MS = 240;
 
 type MaterialPickerProps = {
   assets?: { assets: AssetItem[] };

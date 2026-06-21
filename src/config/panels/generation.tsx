@@ -2275,17 +2275,18 @@ function safetyReviewUserLabel(log: SafetyReviewLog) {
 }
 
 export function SafetyReviewPanel() {
-  const queryClient = useQueryClient();
   const { showToast } = useToast();
   const query = useQuery({ queryKey: ["config-safety-review"], queryFn: configApi.safetyReview });
   const [form, setForm] = useState<SafetyReviewSettings>(emptySafetyReviewSettings());
   const save = useMutation({
-    mutationFn: () => configApi.saveSafetyReview(normalizeSafetyReviewSettings(form)),
-    onSuccess: (data) => {
-      setForm(normalizeSafetyReviewSettings(data.settings));
-      showToast("安全审核配置已保存");
-      queryClient.invalidateQueries({ queryKey: ["config-safety-review"] });
-    }
+    mutationFn: ({ nextSettings }: { nextSettings: SafetyReviewSettings; message: string; autosave?: boolean }) =>
+      configApi.saveSafetyReview(normalizeSafetyReviewSettings(nextSettings)),
+    onSuccess: (data, variables) => {
+      const savedSettings = normalizeSafetyReviewSettings(data.settings);
+      setForm((current) => (variables.autosave ? { ...savedSettings, blockMessage: current.blockMessage } : savedSettings));
+      showToast(variables.message);
+    },
+    onError: (error) => showToast(error instanceof Error ? error.message : "安全审核配置保存失败", "error")
   });
 
   useEffect(() => {
@@ -2294,6 +2295,12 @@ export function SafetyReviewPanel() {
 
   function patch(patchValue: Partial<SafetyReviewSettings>) {
     setForm((value) => ({ ...value, ...patchValue }));
+  }
+
+  function savePatch(patchValue: Partial<SafetyReviewSettings>, message = "安全审核配置已自动保存") {
+    const nextForm = normalizeSafetyReviewSettings({ ...form, ...patchValue });
+    setForm(nextForm);
+    save.mutate({ nextSettings: nextForm, message, autosave: true });
   }
 
   const logs = query.data?.logs ?? [];
@@ -2311,24 +2318,27 @@ export function SafetyReviewPanel() {
               <strong>文本审核总开关</strong>
               <small>开启后在提交生图前审核用户提示词，命中拦截时不调用图片渠道。</small>
             </div>
-            <SwitchControl
-              checked={form.enabled}
-              disabled={save.isPending}
-              label={form.enabled ? "已启用" : "已关闭"}
-              onChange={(enabled) => patch({ enabled })}
-            />
+            <div className="safety-review-inline-controls">
+              <SwitchControl
+                checked={form.enabled}
+                disabled={save.isPending}
+                label={form.enabled ? "已启用" : "已关闭"}
+                onChange={(enabled) => savePatch({ enabled })}
+              />
+              <label className="safety-review-policy-field">
+                审核异常策略
+                <CustomSelect
+                  value={form.failurePolicy}
+                  disabled={save.isPending}
+                  onChange={(failurePolicy) => savePatch({ failurePolicy: failurePolicy === "block" ? "block" : "allow" })}
+                  options={[
+                    { value: "allow", label: "异常时放行" },
+                    { value: "block", label: "异常时拦截" }
+                  ]}
+                />
+              </label>
+            </div>
           </div>
-          <label className="safety-review-policy-field">
-            审核异常策略
-            <CustomSelect
-              value={form.failurePolicy}
-              onChange={(failurePolicy) => patch({ failurePolicy: failurePolicy === "block" ? "block" : "allow" })}
-              options={[
-                { value: "allow", label: "异常时放行" },
-                { value: "block", label: "异常时拦截" }
-              ]}
-            />
-          </label>
         </div>
         <label className="safety-review-message-field">
           拦截提示文案
@@ -2345,7 +2355,7 @@ export function SafetyReviewPanel() {
             {form.updatedAt ? <small>最近更新：{formatDate(form.updatedAt)}</small> : null}
           </div>
           <div className="form-actions safety-review-actions">
-            <button className="primary-btn" type="button" onClick={() => save.mutate()} disabled={save.isPending}>
+            <button className="primary-btn" type="button" onClick={() => save.mutate({ nextSettings: form, message: "安全审核配置已保存" })} disabled={save.isPending}>
               <Save size={16} />
               保存配置
             </button>

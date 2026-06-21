@@ -8,6 +8,7 @@
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color-scheme: light;
   --app-bg: #f7f7f5;
+  --app-chat-scrollbar-gutter-bg: #ffffff;
   --app-surface: #ffffff;
   --app-surface-muted: #fbfbfa;
   --app-surface-soft: #f9fafb;
@@ -76,6 +77,7 @@
 html[data-appearance="dark"] {
   color-scheme: dark;
   --app-bg: #151513;
+  --app-chat-scrollbar-gutter-bg: var(--app-bg);
   --app-surface: #20201d;
   --app-surface-muted: #1b1b19;
   --app-surface-soft: #24231f;
@@ -141,6 +143,7 @@ html[data-appearance="dark"] {
 html[data-appearance="maliang"] {
   color-scheme: light;
   --app-bg: #f5f4ed;
+  --app-chat-scrollbar-gutter-bg: var(--app-bg);
   --app-surface: #faf9f5;
   --app-surface-muted: #efede4;
   --app-surface-soft: #f7f5ee;
@@ -205,6 +208,20 @@ html[data-appearance="maliang"] {
 
 html {
   scrollbar-gutter: auto;
+}
+
+html.chat-page-stable-scrollbar {
+  background: var(--app-chat-scrollbar-gutter-bg);
+  scrollbar-color: var(--app-scrollbar-thumb) var(--app-chat-scrollbar-gutter-bg);
+  scrollbar-gutter: stable;
+}
+
+html.chat-page-stable-scrollbar body {
+  background: var(--app-chat-scrollbar-gutter-bg);
+}
+
+html.chat-page-stable-scrollbar::-webkit-scrollbar-track {
+  background: var(--app-chat-scrollbar-gutter-bg);
 }
 
 * {

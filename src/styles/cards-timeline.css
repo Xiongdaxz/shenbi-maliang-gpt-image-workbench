@@ -5,6 +5,20 @@
   gap: 16px;
 }
 
+.image-virtual-grid {
+  position: relative;
+  width: 100%;
+}
+
+.image-virtual-grid-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: grid;
+  align-items: start;
+  will-change: transform;
+}
+
 .case-grid {
   grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
 }
@@ -175,6 +189,12 @@
   padding-left: 30px;
 }
 
+.image-timeline.image-virtual-timeline {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .image-timeline::before {
   content: "";
   position: absolute;
@@ -190,6 +210,20 @@
   display: grid;
   align-items: start;
   gap: 10px;
+}
+
+.image-virtual-timeline-row {
+  position: absolute;
+  right: 0;
+  will-change: transform;
+}
+
+.image-virtual-timeline-date-row {
+  display: block;
+}
+
+.image-virtual-timeline-image-row {
+  min-width: 0;
 }
 
 .image-timeline-marker {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEventHandler, type CSSProperties, type RefObject } from "react";
 import { ArrowUp, BrushCleaning, ImageIcon, Lightbulb, Plus, RotateCw, Sparkles, Undo2, WandSparkles, X } from "lucide-react";
 import { ImageLightbox, type ImageLightboxState } from "../ImageLightbox";
-import { MATERIAL_PICKER_DRAWER_ANIMATION_MS, MaterialPickerDrawer } from "../MaterialPicker";
+import { MaterialPickerDrawer } from "../MaterialPicker";
 import { ImageCountStepper, QualityPicker, SizePicker } from "../ImageOptionPickers";
 import { PromptOptimizeStyleSelect } from "../PromptOptimizeStyleSelect";
 import { PromptTemplateComposerPanel } from "./PromptTemplateComposerPanel";
@@ -170,11 +170,9 @@ export function ChatComposer({
   const [promptInputCustomInstruction, setPromptInputCustomInstruction] = useState(promptOptimizeCustomInstruction);
   const [promptBeforeInputOptimize, setPromptBeforeInputOptimize] = useState("");
   const [promptTemplateCollapseSignal, setPromptTemplateCollapseSignal] = useState(0);
-  const [materialPickerClosing, setMaterialPickerClosing] = useState(false);
   const { showToast } = useToast();
   const quickMenuRef = useRef<HTMLDivElement | null>(null);
   const slashTriggerRef = useRef<{ index: number } | null>(null);
-  const materialPickerCloseTimerRef = useRef<number | null>(null);
   const promptTemplateLoadingRef = useRef(false);
   const promptTemplateStreamedRef = useRef(false);
   const promptTemplateTypeTimerRef = useRef<number | null>(null);
@@ -244,18 +242,8 @@ export function ChatComposer({
   useEffect(() => {
     return () => {
       if (promptTemplateTypeTimerRef.current !== null) window.clearTimeout(promptTemplateTypeTimerRef.current);
-      if (materialPickerCloseTimerRef.current !== null) window.clearTimeout(materialPickerCloseTimerRef.current);
     };
   }, []);
-
-  useEffect(() => {
-    if (!materialPickerOpen) return;
-    if (materialPickerCloseTimerRef.current !== null) {
-      window.clearTimeout(materialPickerCloseTimerRef.current);
-      materialPickerCloseTimerRef.current = null;
-    }
-    setMaterialPickerClosing(false);
-  }, [materialPickerOpen]);
 
   useEffect(() => {
     try {
@@ -484,14 +472,8 @@ export function ChatComposer({
   }
 
   function closeMaterialPickerWithMotion() {
-    if (!materialPickerOpen || materialPickerClosing) return;
-    if (materialPickerCloseTimerRef.current !== null) window.clearTimeout(materialPickerCloseTimerRef.current);
-    setMaterialPickerClosing(true);
-    materialPickerCloseTimerRef.current = window.setTimeout(() => {
-      materialPickerCloseTimerRef.current = null;
-      setMaterialPickerClosing(false);
-      onToggleMaterialPicker();
-    }, MATERIAL_PICKER_DRAWER_ANIMATION_MS);
+    if (!materialPickerOpen) return;
+    onToggleMaterialPicker();
   }
 
   function toggleMaterialPickerWithMotion() {
@@ -918,7 +900,6 @@ export function ChatComposer({
       </form>
       <MaterialPickerDrawer
         open={materialPickerOpen}
-        closing={materialPickerClosing}
         assets={assets}
         selectedAssets={selectedAssets}
         onToggleAsset={onToggleAsset}

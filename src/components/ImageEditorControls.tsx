@@ -23,7 +23,7 @@ import {
 import { ImageDownloadMenu } from "./ImageDownloadMenu";
 import { ImageLightbox, type ImageLightboxState } from "./ImageLightbox";
 import { EditorSizePicker } from "./ImageOptionPickers";
-import { MATERIAL_PICKER_DRAWER_ANIMATION_MS, MaterialPickerDrawer } from "./MaterialPicker";
+import { MaterialPickerDrawer } from "./MaterialPicker";
 import { cx } from "../lib/cx";
 import type { SizeOption } from "../lib/imageOptions";
 import {
@@ -295,9 +295,7 @@ export function ImageEditorComposer({
 }: ImageEditorComposerProps) {
   const [previewState, setPreviewState] = useState<ImageLightboxState | null>(null);
   const [quickMenuOpen, setQuickMenuOpen] = useState(false);
-  const [materialPickerClosing, setMaterialPickerClosing] = useState(false);
   const quickMenuRef = useRef<HTMLDivElement | null>(null);
-  const materialPickerCloseTimerRef = useRef<number | null>(null);
   const previewItems = previews.map((preview) => ({
     url: preview.previewUrl ?? preview.url,
     thumbnailUrl: preview.url,
@@ -321,31 +319,9 @@ export function ImageEditorComposer({
     };
   }, [quickMenuOpen]);
 
-  useEffect(
-    () => () => {
-      if (materialPickerCloseTimerRef.current !== null) window.clearTimeout(materialPickerCloseTimerRef.current);
-    },
-    []
-  );
-
-  useEffect(() => {
-    if (!materialPickerOpen) return;
-    if (materialPickerCloseTimerRef.current !== null) {
-      window.clearTimeout(materialPickerCloseTimerRef.current);
-      materialPickerCloseTimerRef.current = null;
-    }
-    setMaterialPickerClosing(false);
-  }, [materialPickerOpen]);
-
   function closeMaterialPickerWithMotion() {
-    if (!materialPickerOpen || materialPickerClosing) return;
-    if (materialPickerCloseTimerRef.current !== null) window.clearTimeout(materialPickerCloseTimerRef.current);
-    setMaterialPickerClosing(true);
-    materialPickerCloseTimerRef.current = window.setTimeout(() => {
-      materialPickerCloseTimerRef.current = null;
-      setMaterialPickerClosing(false);
-      onToggleMaterialPicker();
-    }, MATERIAL_PICKER_DRAWER_ANIMATION_MS);
+    if (!materialPickerOpen) return;
+    onToggleMaterialPicker();
   }
 
   function toggleMaterialPickerWithMotion() {
@@ -426,7 +402,6 @@ export function ImageEditorComposer({
       </form>
       <MaterialPickerDrawer
         open={materialPickerOpen}
-        closing={materialPickerClosing}
         assets={assets}
         selectedAssets={selectedAssets}
         onToggleAsset={onToggleAsset}

@@ -540,6 +540,29 @@
   align-self: center;
 }
 
+.image-total-count {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(209, 213, 219, 0.78);
+  border-radius: 999px;
+  color: #4b5563;
+  background: #ffffff;
+  padding: 0 12px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+}
+
+.image-total-count strong {
+  color: #111827;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 .image-list-toolbar .case-favorite-filter-btn {
   min-height: 40px;
   height: 40px;

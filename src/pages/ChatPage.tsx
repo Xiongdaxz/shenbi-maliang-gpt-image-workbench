@@ -328,6 +328,11 @@ export function ChatPage({ user }: { user: User }) {
   );
   const promptOptimizeCustomInstruction = user.preferences?.promptOptimizeCustomInstruction ?? "";
 
+  useEffect(() => {
+    document.documentElement.classList.add("chat-page-stable-scrollbar");
+    return () => document.documentElement.classList.remove("chat-page-stable-scrollbar");
+  }, []);
+
   const savePromptOptimizeCustomInstruction = useMutation({
     mutationFn: (value: string) => api.saveUserPreferences({ promptOptimizeCustomInstruction: value }),
     onSuccess: (data) => {

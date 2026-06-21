@@ -626,6 +626,10 @@
   z-index: 4;
 }
 
+.composer:has(.size-picker-trigger[aria-expanded="true"], .quality-picker-trigger[aria-expanded="true"]) {
+  z-index: 5;
+}
+
 .composer-wrap > .form-error,
 .composer-wrap > .composer-material-drawer {
   position: relative;
@@ -1871,6 +1875,10 @@
 .size-picker {
   position: relative;
   flex: 0 0 auto;
+}
+
+.size-picker:has(.size-picker-trigger[aria-expanded="true"], .quality-picker-trigger[aria-expanded="true"]) {
+  z-index: 2;
 }
 
 .size-picker-trigger,

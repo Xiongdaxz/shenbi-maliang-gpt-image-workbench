@@ -622,6 +622,7 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .library-filter-r
 }
 
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-favorite-filter-btn,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-total-count,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .page-header-view-toggle,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-space-filter-tabs button,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .pill-tabs button,
@@ -630,6 +631,14 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-filter-pinn
   background: var(--button-default-bg);
   color: var(--app-text);
   box-shadow: none;
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-total-count {
+  color: var(--app-muted);
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-total-count strong {
+  color: var(--app-text);
 }
 
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .page-header-view-toggle::before,

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, CalendarDays, ChevronDown, ChevronUp, Heart, Images, LayoutGrid, Search } from "lucide-react";
+import { CalendarArrowDown, CalendarArrowUp, CalendarDays, ChevronDown, ChevronUp, Heart, Images, LayoutGrid, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { AddAssetFromImageModal } from "../components/AddAssetFromImageModal";
@@ -23,6 +23,42 @@ import { ConfirmDialog, useToast } from "../ui";
 type ImagesViewMode = "grid" | "timeline";
 
 const IMAGES_VIEW_MODE_STORAGE_KEY = "gpt-image.images.viewMode";
+const VIRTUAL_OVERSCAN_PX = 900;
+const GRID_MIN_CARD_WIDTH = 240;
+const GRID_GAP = 16;
+const GRID_MOBILE_GAP = 10;
+const TIMELINE_MIN_CARD_WIDTH = 148;
+const TIMELINE_GAP = 18;
+const TIMELINE_MOBILE_GAP = 14;
+const TIMELINE_PANEL_GAP = 10;
+const TIMELINE_MOBILE_PANEL_GAP = 8;
+const TIMELINE_PADDING_LEFT = 30;
+const TIMELINE_MOBILE_PADDING_LEFT = 22;
+const TIMELINE_DATE_ROW_HEIGHT = 28;
+const TIMELINE_MOBILE_DATE_ROW_HEIGHT = 24;
+
+type VirtualMetric = {
+  top: number;
+  height: number;
+};
+
+type TimelineVirtualRow =
+  | {
+      type: "date";
+      key: string;
+      top: number;
+      height: number;
+      group: ReturnType<typeof groupImagesByTimeline>[number];
+      collapsed: boolean;
+    }
+  | {
+      type: "images";
+      key: string;
+      top: number;
+      height: number;
+      groupKey: string;
+      images: WorkImage[];
+    };
 
 function storedImagesViewMode(): ImagesViewMode {
   try {
@@ -31,6 +67,87 @@ function storedImagesViewMode(): ImagesViewMode {
   } catch {
     return "timeline";
   }
+}
+
+function columnsForWidth(width: number, minWidth: number, gap: number, fixedMobileColumns = false) {
+  if (fixedMobileColumns) return 2;
+  return Math.max(1, Math.floor((Math.max(1, width) + gap) / (minWidth + gap)));
+}
+
+function useElementWidth<T extends HTMLElement>(ref: RefObject<T | null>, observeKey: unknown) {
+  const [width, setWidth] = useState(0);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const updateWidth = () => setWidth(element.getBoundingClientRect().width);
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [observeKey, ref]);
+
+  return width;
+}
+
+function lowerBound(metrics: VirtualMetric[], value: number, useEnd: boolean) {
+  let low = 0;
+  let high = metrics.length;
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    const metric = metrics[mid];
+    const compare = useEnd ? metric.top + metric.height : metric.top;
+    if (compare < value) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  return low;
+}
+
+function useWindowVirtualRange<T extends HTMLElement>(
+  metrics: VirtualMetric[],
+  overscan = VIRTUAL_OVERSCAN_PX,
+  externalRef?: RefObject<T | null>,
+  observeKey?: unknown
+) {
+  const ownedRef = useRef<T | null>(null);
+  const containerRef = externalRef ?? ownedRef;
+  const [range, setRange] = useState({ start: 0, end: 0 });
+
+  useEffect(() => {
+    let frame = 0;
+    const updateRange = () => {
+      const container = containerRef.current;
+      if (!container || metrics.length === 0) {
+        setRange({ start: 0, end: 0 });
+        return;
+      }
+      const containerTop = container.getBoundingClientRect().top + window.scrollY;
+      const viewportTop = window.scrollY - containerTop;
+      const viewportBottom = viewportTop + window.innerHeight;
+      const startPx = Math.max(0, viewportTop - overscan);
+      const endPx = viewportBottom + overscan;
+      const start = Math.min(metrics.length - 1, Math.max(0, lowerBound(metrics, startPx, true)));
+      const end = Math.max(start + 1, Math.min(metrics.length, lowerBound(metrics, endPx, false) + 1));
+      setRange((current) => (current.start === start && current.end === end ? current : { start, end }));
+    };
+    const scheduleUpdate = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(updateRange);
+    };
+    updateRange();
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
+    };
+  }, [metrics, observeKey, overscan]);
+
+  return { containerRef, range };
 }
 
 export function ImagesPage() {
@@ -50,6 +167,10 @@ export function ImagesPage() {
   const [collapsedTimelineGroups, setCollapsedTimelineGroups] = useState<Set<string>>(() => new Set());
   const [autoCollapseTimelineGroups, setAutoCollapseTimelineGroups] = useState(false);
   const knownTimelineGroupKeysRef = useRef<Set<string>>(new Set());
+  const gridVirtualRef = useRef<HTMLDivElement | null>(null);
+  const timelineVirtualRef = useRef<HTMLDivElement | null>(null);
+  const gridWidth = useElementWidth(gridVirtualRef, viewMode);
+  const timelineWidth = useElementWidth(timelineVirtualRef, viewMode);
   const [timelineSort, setTimelineSort] = useState<"desc" | "asc">("desc");
   const images = useInfiniteQuery({
     queryKey: ["images", "paged", keyword, favoriteOnly, timelineSort],
@@ -189,15 +310,16 @@ export function ImagesPage() {
       showToast(error instanceof Error ? error.message : "删除图片失败", "error");
     }
   });
+  const mutateImageFavorite = setImageFavorite.mutate;
 
-  const openEditor = (image: WorkImage) => {
+  const openEditor = useCallback((image: WorkImage) => {
     setDraftPrompt("");
     setEditImage(null);
     setEditorImageRequest({ image, images: allImagesNewestFirst });
     navigate("/");
-  };
+  }, [allImagesNewestFirst, navigate, setDraftPrompt, setEditImage, setEditorImageRequest]);
 
-  const addCaseFromImage = (image: WorkImage) => {
+  const addCaseFromImage = useCallback((image: WorkImage) => {
     const originPrompt = image.originPrompt?.trim() || image.prompt;
     setCaseSource({
       type: "image",
@@ -208,13 +330,13 @@ export function ImagesPage() {
       suggestedTitle: image.suggestedCaseTitle,
       suggestedCategoryIds: image.suggestedCaseCategoryIds
     });
-  };
+  }, []);
 
-  const toggleImageFavorite = (image: WorkImage) => {
-    setImageFavorite.mutate({ imageId: image.id, favorited: !image.favorited });
-  };
+  const toggleImageFavorite = useCallback((image: WorkImage) => {
+    mutateImageFavorite({ imageId: image.id, favorited: !image.favorited });
+  }, [mutateImageFavorite]);
 
-  const toggleTimelineGroup = (groupKey: string) => {
+  const toggleTimelineGroup = useCallback((groupKey: string) => {
     setCollapsedTimelineGroups((value) => {
       const next = new Set(value);
       if (next.has(groupKey)) {
@@ -224,9 +346,9 @@ export function ImagesPage() {
       }
       return next;
     });
-  };
+  }, []);
 
-  const toggleAllTimelineGroups = () => {
+  const toggleAllTimelineGroups = useCallback(() => {
     const shouldExpandAll = allTimelineGroupsCollapsed;
     setAutoCollapseTimelineGroups(!shouldExpandAll);
     setCollapsedTimelineGroups((value) => {
@@ -237,7 +359,217 @@ export function ImagesPage() {
       }
       return new Set([...value, ...visibleTimelineGroupKeys]);
     });
-  };
+  }, [allTimelineGroupsCollapsed, visibleTimelineGroupKeys]);
+
+  const gridVirtual = useMemo(() => {
+    const width = Math.max(1, gridWidth || 840);
+    const mobile = width <= 640;
+    const gap = mobile ? GRID_MOBILE_GAP : GRID_GAP;
+    const columns = columnsForWidth(width, GRID_MIN_CARD_WIDTH, gap, mobile);
+    const cardWidth = (width - gap * (columns - 1)) / columns;
+    const rowHeight = Math.ceil(cardWidth * 1.25) + 2;
+    const rowStride = rowHeight + gap;
+    const rowCount = Math.ceil(imageList.length / columns);
+    const metrics = Array.from({ length: rowCount }, (_, index) => ({
+      top: index * rowStride,
+      height: rowHeight
+    }));
+    return {
+      columns,
+      gap,
+      rowHeight,
+      totalHeight: rowCount > 0 ? rowCount * rowStride - gap : 0,
+      metrics
+    };
+  }, [gridWidth, imageList.length]);
+  const gridRange = useWindowVirtualRange<HTMLDivElement>(gridVirtual.metrics, VIRTUAL_OVERSCAN_PX, gridVirtualRef, viewMode).range;
+
+  const timelineVirtual = useMemo(() => {
+    const measuredWidth = Math.max(1, timelineWidth || 840);
+    const mobile = measuredWidth <= 640;
+    const groupGap = mobile ? TIMELINE_MOBILE_GAP : TIMELINE_GAP;
+    const panelGap = mobile ? TIMELINE_MOBILE_PANEL_GAP : TIMELINE_PANEL_GAP;
+    const paddingLeft = mobile ? TIMELINE_MOBILE_PADDING_LEFT : TIMELINE_PADDING_LEFT;
+    const dateRowHeight = mobile ? TIMELINE_MOBILE_DATE_ROW_HEIGHT : TIMELINE_DATE_ROW_HEIGHT;
+    const contentWidth = Math.max(1, measuredWidth - paddingLeft);
+    const columns = columnsForWidth(contentWidth, TIMELINE_MIN_CARD_WIDTH, panelGap, mobile);
+    const cardWidth = (contentWidth - panelGap * (columns - 1)) / columns;
+    const cardHeight = Math.ceil(cardWidth * 1.25) + 2;
+    const rows: TimelineVirtualRow[] = [];
+    let cursor = 0;
+
+    for (const group of timelineGroups) {
+      const collapsed = collapsedTimelineGroups.has(group.key);
+      rows.push({
+        type: "date",
+        key: `${group.key}:date`,
+        top: cursor,
+        height: dateRowHeight,
+        group,
+        collapsed
+      });
+      cursor += dateRowHeight;
+
+      if (!collapsed && group.items.length > 0) {
+        cursor += panelGap;
+        for (let index = 0; index < group.items.length; index += columns) {
+          rows.push({
+            type: "images",
+            key: `${group.key}:images:${index}`,
+            top: cursor,
+            height: cardHeight,
+            groupKey: group.key,
+            images: group.items.slice(index, index + columns)
+          });
+          cursor += cardHeight;
+          if (index + columns < group.items.length) cursor += panelGap;
+        }
+      }
+
+      cursor += groupGap;
+    }
+
+    return {
+      columns,
+      panelGap,
+      paddingLeft,
+      rows,
+      metrics: rows.map((row) => ({ top: row.top, height: row.height })),
+      totalHeight: rows.length > 0 ? Math.max(0, cursor - groupGap) : 0
+    };
+  }, [collapsedTimelineGroups, timelineGroups, timelineWidth]);
+  const timelineRange = useWindowVirtualRange<HTMLDivElement>(timelineVirtual.metrics, VIRTUAL_OVERSCAN_PX, timelineVirtualRef, viewMode).range;
+
+  const imageContent = useMemo(() => {
+    if (viewMode === "grid") {
+      const visibleRows = gridVirtual.metrics.slice(gridRange.start, gridRange.end);
+      return (
+        <div ref={gridVirtualRef} className="image-virtual-grid" style={{ height: gridVirtual.totalHeight }}>
+          {visibleRows.map((metric, visibleIndex) => {
+            const rowIndex = gridRange.start + visibleIndex;
+            const rowImages = imageList.slice(rowIndex * gridVirtual.columns, rowIndex * gridVirtual.columns + gridVirtual.columns);
+            return (
+              <div
+                className="image-virtual-grid-row"
+                key={`grid-row-${rowIndex}`}
+                style={{
+                  height: metric.height,
+                  gap: gridVirtual.gap,
+                  gridTemplateColumns: `repeat(${gridVirtual.columns}, minmax(0, 1fr))`,
+                  transform: `translateY(${metric.top}px)`
+                }}
+              >
+                {rowImages.map((image) => (
+                  <MyImageCard
+                    key={image.id}
+                    image={image}
+                    assetPending={addAsset.isPending}
+                    deletePending={deleteImage.isPending}
+                    favoritePending={setImageFavorite.isPending}
+                    onOpenEditor={openEditor}
+                    onAddCase={addCaseFromImage}
+                    onAddAsset={setAssetTarget}
+                    onDelete={setDeleteTarget}
+                    onToggleFavorite={toggleImageFavorite}
+                  />
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    const visibleRows = timelineVirtual.rows.slice(timelineRange.start, timelineRange.end);
+    return (
+      <div ref={timelineVirtualRef} className="image-timeline image-virtual-timeline" style={{ height: timelineVirtual.totalHeight }}>
+        {visibleRows.map((row) => {
+          if (row.type === "date") {
+            return (
+              <section
+                className={cx("image-timeline-node", "image-virtual-timeline-row", "image-virtual-timeline-date-row", row.collapsed && "collapsed")}
+                key={row.key}
+                style={{
+                  height: row.height,
+                  left: timelineVirtual.paddingLeft,
+                  transform: `translateY(${row.top}px)`
+                }}
+              >
+                <span className="image-timeline-marker" aria-hidden="true" />
+                <div className="image-timeline-date">
+                  <strong>{row.group.dateLabel}</strong>
+                  <span>{row.group.weekdayLabel}</span>
+                  <small>共 {row.group.items.length} 张</small>
+                  <button
+                    className="image-timeline-toggle"
+                    type="button"
+                    onClick={() => toggleTimelineGroup(row.group.key)}
+                    aria-expanded={!row.collapsed}
+                    aria-label={`${row.collapsed ? "展开" : "收起"}${row.group.dateLabel}时间轴节点`}
+                    title={row.collapsed ? "展开" : "收起"}
+                  >
+                    {row.collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
+                  </button>
+                </div>
+              </section>
+            );
+          }
+
+          return (
+            <div
+              className="image-timeline-panel image-virtual-timeline-row image-virtual-timeline-image-row"
+              key={row.key}
+              style={{
+                height: row.height,
+                left: timelineVirtual.paddingLeft,
+                transform: `translateY(${row.top}px)`
+              }}
+            >
+              <div
+                className="image-timeline-images"
+                style={{
+                  gap: timelineVirtual.panelGap,
+                  gridTemplateColumns: `repeat(${timelineVirtual.columns}, minmax(0, 1fr))`
+                }}
+              >
+                {row.images.map((image) => (
+                  <MyImageCard
+                    key={image.id}
+                    image={image}
+                    compact
+                    assetPending={addAsset.isPending}
+                    deletePending={deleteImage.isPending}
+                    favoritePending={setImageFavorite.isPending}
+                    onOpenEditor={openEditor}
+                    onAddCase={addCaseFromImage}
+                    onAddAsset={setAssetTarget}
+                    onDelete={setDeleteTarget}
+                    onToggleFavorite={toggleImageFavorite}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }, [
+    addAsset.isPending,
+    addCaseFromImage,
+    deleteImage.isPending,
+    gridRange.end,
+    gridRange.start,
+    gridVirtual,
+    imageList,
+    openEditor,
+    setImageFavorite.isPending,
+    timelineRange.end,
+    timelineRange.start,
+    timelineVirtual,
+    toggleImageFavorite,
+    toggleTimelineGroup,
+    viewMode
+  ]);
 
   return (
     <section className="page-section">
@@ -273,6 +605,9 @@ export function ImagesPage() {
         }
       />
       <div className="image-list-toolbar">
+        <span className="image-total-count" aria-label={`我的图片总数 ${imageFilterCounts.all} 张`} title={`我的图片共 ${imageFilterCounts.all} 张`}>
+          共 <strong>{imageFilterCounts.all}</strong> 张
+        </span>
         <button
           className={cx("case-favorite-filter-btn", favoriteOnly && "active")}
           type="button"
@@ -313,75 +648,11 @@ export function ImagesPage() {
           aria-label={`时间轴排序：${timelineSort === "desc" ? "新到旧" : "旧到新"}`}
           title={`时间轴排序：${timelineSort === "desc" ? "新到旧" : "旧到新"}`}
         >
-          {timelineSort === "desc" ? <ArrowDown size={16} /> : <ArrowUp size={16} />}
+          {timelineSort === "desc" ? <CalendarArrowDown size={16} /> : <CalendarArrowUp size={16} />}
           {timelineSort === "desc" ? "新到旧" : "旧到新"}
         </button>
       </div>
-      {viewMode === "grid" ? (
-        <div className="image-grid">
-          {imageList.map((image) => (
-            <MyImageCard
-              key={image.id}
-              image={image}
-              assetPending={addAsset.isPending}
-              deletePending={deleteImage.isPending}
-              favoritePending={setImageFavorite.isPending}
-              onOpenEditor={openEditor}
-              onAddCase={addCaseFromImage}
-              onAddAsset={setAssetTarget}
-              onDelete={setDeleteTarget}
-              onToggleFavorite={toggleImageFavorite}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="image-timeline">
-          {timelineGroups.map((group) => {
-            const collapsed = collapsedTimelineGroups.has(group.key);
-            const panelId = `image-timeline-panel-${group.key}`;
-            return (
-              <section className={cx("image-timeline-node", collapsed && "collapsed")} key={group.key}>
-                <span className="image-timeline-marker" aria-hidden="true" />
-                <div className="image-timeline-date">
-                  <strong>{group.dateLabel}</strong>
-                  <span>{group.weekdayLabel}</span>
-                  <small>共 {group.items.length} 张</small>
-                  <button
-                    className="image-timeline-toggle"
-                    type="button"
-                    onClick={() => toggleTimelineGroup(group.key)}
-                    aria-expanded={!collapsed}
-                    aria-controls={panelId}
-                    aria-label={`${collapsed ? "展开" : "收起"}${group.dateLabel}时间轴节点`}
-                    title={collapsed ? "展开" : "收起"}
-                  >
-                    {collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
-                  </button>
-                </div>
-                <div id={panelId} className="image-timeline-panel" hidden={collapsed}>
-                  <div className="image-timeline-images">
-                    {group.items.map((image) => (
-                      <MyImageCard
-                        key={image.id}
-                        image={image}
-                        compact
-                        assetPending={addAsset.isPending}
-                        deletePending={deleteImage.isPending}
-                        favoritePending={setImageFavorite.isPending}
-                        onOpenEditor={openEditor}
-                        onAddCase={addCaseFromImage}
-                        onAddAsset={setAssetTarget}
-                        onDelete={setDeleteTarget}
-                        onToggleFavorite={toggleImageFavorite}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </section>
-            );
-          })}
-        </div>
-      )}
+      {imageContent}
       {!images.isLoading && imageList.length === 0 ? <div className="case-empty">暂无匹配图片</div> : null}
       <div ref={imageLoadMoreRef} className="page-load-sentinel" aria-hidden="true" />
       <ScrollJumpButton className="page-scroll-jump-btn" scrollJump={scrollJump} onClick={jumpToScrollEdge} />

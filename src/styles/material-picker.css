@@ -18,6 +18,8 @@
 
 .composer-material-drawer[data-state="closing"] {
   pointer-events: none;
+  border-color: rgba(229, 231, 235, 0);
+  box-shadow: 0 0 0 rgba(15, 23, 42, 0);
   animation: composerMaterialDrawerClose 240ms cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 
@@ -69,12 +71,14 @@
     height: var(--composer-material-drawer-height);
     margin-top: 10px;
     opacity: 1;
-    box-shadow: 0 14px 44px rgba(15, 23, 42, 0.12);
+    border-color: rgba(229, 231, 235, 0);
+    box-shadow: 0 0 0 rgba(15, 23, 42, 0);
   }
   to {
     height: 0;
     margin-top: 0;
-    opacity: 0.72;
+    opacity: 0;
+    border-color: rgba(229, 231, 235, 0);
     box-shadow: 0 0 0 rgba(15, 23, 42, 0);
   }
 }
@@ -97,7 +101,7 @@
   }
   to {
     opacity: 0;
-    transform: translate3d(0, 30px, 0) scale(0.985);
+    transform: translate3d(0, 0, 0) scale(1);
   }
 }
 
