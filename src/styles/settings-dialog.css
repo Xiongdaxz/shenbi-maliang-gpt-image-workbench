@@ -443,11 +443,7 @@
 }
 
 .settings-about-version-row {
-  grid-template-columns: 1fr;
-}
-
-.settings-about-url {
-  overflow-wrap: anywhere;
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .settings-section-title {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Archive, Check, Database, Github, KeyRound, Monitor, Moon, Palette, Pencil, Scale, Settings, Smile, Sun, Trash2, UserRound, X } from "lucide-react";
+import { Archive, Check, Database, Github, KeyRound, Monitor, Moon, Palette, Pencil, Settings, Smile, Sun, Trash2, UserRound, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api } from "../../api";
 import { cx } from "../../lib/cx";
@@ -15,7 +15,6 @@ import { PromptOptimizeStyleSettingsDialog } from "../PromptOptimizeStyleSetting
 type SettingsSectionId = "general" | "personalization" | "account" | "data" | "about";
 
 const PROJECT_REPOSITORY_URL = "https://github.com/Xiongdaxz/shenbi-maliang-gpt-image-workbench";
-const PROJECT_LICENSE_URL = `${PROJECT_REPOSITORY_URL}/blob/main/LICENSE`;
 
 const settingsSections: Array<{ id: SettingsSectionId; label: string; icon: LucideIcon }> = [
   { id: "general", label: "常规", icon: Settings },
@@ -375,25 +374,9 @@ export function AppSettingsDialog({
                     <strong>当前版本</strong>
                     <span>{latestEntry?.version ?? "-"}</span>
                   </div>
-                </div>
-                <div className="settings-row">
-                  <div>
-                    <strong>开源地址</strong>
-                    <span className="settings-about-url">{PROJECT_REPOSITORY_URL}</span>
-                  </div>
                   <a className="secondary-btn" href={PROJECT_REPOSITORY_URL} target="_blank" rel="noreferrer">
                     <Github size={15} />
                     GitHub
-                  </a>
-                </div>
-                <div className="settings-row">
-                  <div>
-                    <strong>许可证</strong>
-                    <span>MIT 开源协议</span>
-                  </div>
-                  <a className="secondary-btn" href={PROJECT_LICENSE_URL} target="_blank" rel="noreferrer">
-                    <Scale size={15} />
-                    许可证
                   </a>
                 </div>
               </div>
