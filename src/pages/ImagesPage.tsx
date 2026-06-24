@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarArrowDown, CalendarArrowUp, CalendarDays, ChevronDown, ChevronUp, Heart, Images, LayoutGrid, Search } from "lucide-react";
+import { CalendarArrowDown, CalendarArrowUp, CalendarDays, ChevronDown, ChevronUp, Heart, Images, LayoutGrid, Plus, Search, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { AddAssetFromImageModal } from "../components/AddAssetFromImageModal";
 import { AddCaseModal, type AddCaseSource } from "../components/AddCaseModal";
 import { MyImageCard } from "../components/MyImageCard";
+import { LibraryEmptyState } from "../components/LibraryEmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { SearchHistoryInput } from "../components/SearchHistoryInput";
 import { ScrollJumpButton } from "../components/ScrollJumpButton";
@@ -311,6 +312,7 @@ export function ImagesPage() {
     }
   });
   const mutateImageFavorite = setImageFavorite.mutate;
+  const hasImageFilters = favoriteOnly || Boolean(keyword.trim());
 
   const openEditor = useCallback((image: WorkImage) => {
     setDraftPrompt("");
@@ -318,6 +320,16 @@ export function ImagesPage() {
     setEditorImageRequest({ image, images: allImagesNewestFirst });
     navigate("/");
   }, [allImagesNewestFirst, navigate, setDraftPrompt, setEditImage, setEditorImageRequest]);
+  const startImageCreation = useCallback(() => {
+    setDraftPrompt("");
+    setEditImage(null);
+    setEditorImageRequest(null);
+    navigate("/");
+  }, [navigate, setDraftPrompt, setEditImage, setEditorImageRequest]);
+  const clearImageFilters = useCallback(() => {
+    setFavoriteOnly(false);
+    setKeyword("");
+  }, []);
 
   const addCaseFromImage = useCallback((image: WorkImage) => {
     const originPrompt = image.originPrompt?.trim() || image.prompt;
@@ -653,7 +665,36 @@ export function ImagesPage() {
         </button>
       </div>
       {imageContent}
-      {!images.isLoading && imageList.length === 0 ? <div className="case-empty">暂无匹配图片</div> : null}
+      {!images.isLoading && imageList.length === 0 ? (
+        hasImageFilters ? (
+          <LibraryEmptyState
+            compact
+            imageSrc="/image/empty-states/images-empty.png"
+            imageAlt="空白画卷、画框与神笔"
+            title="没有匹配图片"
+            description="换个关键词或清除筛选后再看看。"
+            action={
+              <button className="secondary-btn" type="button" onClick={clearImageFilters}>
+                <X size={16} />
+                清除筛选
+              </button>
+            }
+          />
+        ) : (
+          <LibraryEmptyState
+            imageSrc="/image/empty-states/images-empty.png"
+            imageAlt="空白画卷、画框与神笔"
+            title="还没有生成图片"
+            description="从第一张图开始，生成和编辑结果会在这里沉淀。"
+            action={
+              <button className="primary-btn" type="button" onClick={startImageCreation}>
+                <Plus size={16} />
+                开始生图
+              </button>
+            }
+          />
+        )
+      ) : null}
       <div ref={imageLoadMoreRef} className="page-load-sentinel" aria-hidden="true" />
       <ScrollJumpButton className="page-scroll-jump-btn" scrollJump={scrollJump} onClick={jumpToScrollEdge} />
       {assetTarget ? (

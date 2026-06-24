@@ -8,6 +8,7 @@ import { AssetUploadModal } from "../components/AssetUploadModal";
 import { AssetTagScroller, FilterModeToggle, FilterTabLabel, FilterTabsScroller, useLibraryFilterDisplayMode } from "../components/HorizontalScrollers";
 import { ImageDownloadMenu } from "../components/ImageDownloadMenu";
 import { ImagePreviewModal } from "../components/ImagePreviewModal";
+import { LibraryEmptyState } from "../components/LibraryEmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { SearchHistoryInput } from "../components/SearchHistoryInput";
 import { SkeletonImage } from "../components/SkeletonImage";
@@ -215,9 +216,19 @@ export function AssetsPage() {
     [filterDisplayMode, keyword, selectedCategoryIds, spaceFilter, visibleAssets.length]
   );
   const { jumpToScrollEdge, scrollJump } = useScrollJump({ syncKey: assetScrollJumpKey });
+  const hasAssetFilters = spaceFilter !== "all" || selectedCategoryIds.length > 0 || Boolean(keyword.trim());
 
   const toggleAssetCategory = (categoryId: string) => {
     setSelectedCategoryIds((value) => (value.includes(categoryId) ? [] : [categoryId]));
+  };
+  const openUploadModal = () => {
+    upload.reset();
+    setUploadOpen(true);
+  };
+  const clearAssetFilters = () => {
+    setSpaceFilter("all");
+    setSelectedCategoryIds([]);
+    setKeyword("");
   };
   const useAssetInNewChat = (asset: AssetItem) => {
     resetNewChatComposer();
@@ -296,14 +307,7 @@ export function AssetsPage() {
             <Plus size={16} />
             新增标签
           </button>
-          <button
-            className="upload-btn"
-            type="button"
-            onClick={() => {
-              upload.reset();
-              setUploadOpen(true);
-            }}
-          >
+          <button className="upload-btn" type="button" onClick={openUploadModal}>
             <Plus size={16} />
             上传素材
           </button>
@@ -368,7 +372,36 @@ export function AssetsPage() {
           </article>
         ))}
       </div>
-      {visibleAssets.length === 0 ? <div className="case-empty">暂无匹配素材</div> : null}
+      {!assets.isLoading && visibleAssets.length === 0 ? (
+        hasAssetFilters ? (
+          <LibraryEmptyState
+            compact
+            imageSrc="/image/empty-states/assets-empty.png"
+            imageAlt="空白画卷、素材盒与神笔"
+            title="没有匹配素材"
+            description="换个关键词或清除筛选后再看看。"
+            action={
+              <button className="secondary-btn" type="button" onClick={clearAssetFilters}>
+                <X size={16} />
+                清除筛选
+              </button>
+            }
+          />
+        ) : (
+          <LibraryEmptyState
+            imageSrc="/image/empty-states/assets-empty.png"
+            imageAlt="空白画卷、素材盒与神笔"
+            title="素材库还是空的"
+            description="上传参考图或把生成结果加入素材库，后续创作可以直接复用。"
+            action={
+              <button className="primary-btn" type="button" onClick={openUploadModal}>
+                <Plus size={16} />
+                上传素材
+              </button>
+            }
+          />
+        )
+      ) : null}
       <div ref={assetLoadMoreRef} className="page-load-sentinel" aria-hidden="true" />
       <ScrollJumpButton className="page-scroll-jump-btn" scrollJump={scrollJump} onClick={jumpToScrollEdge} />
       {previewIndex !== null ? (

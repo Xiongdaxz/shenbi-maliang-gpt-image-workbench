@@ -271,6 +271,7 @@ export function WorkbenchShell({ user }: { user: User }) {
   const [sidebarFloatingTip, setSidebarFloatingTip] = useState<SidebarFloatingTip | null>(null);
   const [hoveredSessionId, setHoveredSessionId] = useState<string | null>(null);
   const userFooterRef = useRef<HTMLDivElement | null>(null);
+  const sidebarMainScrollRef = useRef<HTMLDivElement | null>(null);
   const collapsedRecentRef = useRef<HTMLDivElement | null>(null);
   const collapsedRecentCardRef = useRef<HTMLDivElement | null>(null);
   const userCardCloseTimerRef = useRef<number | null>(null);
@@ -308,6 +309,9 @@ export function WorkbenchShell({ user }: { user: User }) {
     }
     navigate("/", { replace: false });
   }, [location.pathname, navigate, resetNewChatComposer, setMobileMenuOpen]);
+  const scrollSidebarHistoryToTop = useCallback(() => {
+    sidebarMainScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
   const sidebarToggleLabel = sidebarCollapsed ? "打开边栏" : "关闭边栏";
   const showSidebarFloatingTip = useCallback(
     (event: MouseEvent<HTMLElement> | FocusEvent<HTMLElement>, tip: Pick<SidebarFloatingTip, "label" | "shortcut">) => {
@@ -1088,11 +1092,19 @@ export function WorkbenchShell({ user }: { user: User }) {
           setCollapsedToggleArmed(true);
         }}
       >
-        <div className="sidebar-main-scroll">
+        <div className="sidebar-main-scroll" ref={sidebarMainScrollRef}>
           <div className="sidebar-fixed">
             <div className="sidebar-head">
               <div className="brand-row">
-                <ProjectLogo className="sidebar-logo" />
+                <button
+                  className="sidebar-logo-button"
+                  type="button"
+                  onClick={scrollSidebarHistoryToTop}
+                  aria-label="回到对话记录顶部"
+                  title="回到对话记录顶部"
+                >
+                  <ProjectLogo className="sidebar-logo" />
+                </button>
               </div>
               <div className="sidebar-head-actions">
                 {!sidebarCollapsed ? (

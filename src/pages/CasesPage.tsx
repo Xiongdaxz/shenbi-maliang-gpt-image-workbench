@@ -10,6 +10,7 @@ import { CaseMaterialActionsMenu } from "../components/CaseMaterialActionsMenu";
 import { AssetTagScroller, FilterModeToggle, FilterTabLabel, FilterTabsScroller, useLibraryFilterDisplayMode } from "../components/HorizontalScrollers";
 import { ImageDownloadMenu } from "../components/ImageDownloadMenu";
 import { ImagePreviewModal } from "../components/ImagePreviewModal";
+import { LibraryEmptyState } from "../components/LibraryEmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { PromptReferenceLinksDialog } from "../components/PromptReferenceLinksDialog";
 import { SearchHistoryInput } from "../components/SearchHistoryInput";
@@ -394,10 +395,21 @@ export function CasesPage() {
     [favoriteOnly, filterDisplayMode, keyword, mineOnly, selectedCategoryIds, visibleItems.length]
   );
   const { jumpToScrollEdge, scrollJump } = useScrollJump({ syncKey: caseScrollJumpKey });
+  const hasCaseFilters = selectedCategoryIds.length > 0 || mineOnly || favoriteOnly || Boolean(keyword.trim());
   const useCasePrompt = (item: GalleryCaseItem) => {
     resetNewChatComposer();
     setDraftPrompt(item.prompt, { caseItemId: item.groupId || item.id, prompt: item.prompt });
     navigate("/");
+  };
+  const startNewCaseCreation = () => {
+    resetNewChatComposer();
+    navigate("/");
+  };
+  const clearCaseFilters = () => {
+    setSelectedCategoryIds([]);
+    setMineOnly(false);
+    setFavoriteOnly(false);
+    setKeyword("");
   };
   const useCaseAsMaterial = (item: GalleryCaseItem) => {
     const caseMaterial = caseMaterialFromCaseItem(item);
@@ -598,7 +610,36 @@ export function CasesPage() {
           );
         })}
       </div>
-      {visibleItems.length === 0 ? <div className="case-empty">暂无匹配灵感</div> : null}
+      {!cases.isLoading && visibleItems.length === 0 ? (
+        hasCaseFilters ? (
+          <LibraryEmptyState
+            compact
+            imageSrc="/image/empty-states/inspiration-empty.png"
+            imageAlt="空白画卷与神笔"
+            title="没有匹配灵感"
+            description="换个关键词或清除筛选后再看看。"
+            action={
+              <button className="secondary-btn" type="button" onClick={clearCaseFilters}>
+                <X size={16} />
+                清除筛选
+              </button>
+            }
+          />
+        ) : (
+          <LibraryEmptyState
+            imageSrc="/image/empty-states/inspiration-empty.png"
+            imageAlt="空白画卷与神笔"
+            title="灵感空间还没有内容"
+            description="先创作第一张图片，再把满意的结果加入灵感空间。"
+            action={
+              <button className="primary-btn" type="button" onClick={startNewCaseCreation}>
+                <Send size={16} />
+                去创作图片
+              </button>
+            }
+          />
+        )
+      ) : null}
       <div ref={caseLoadMoreRef} className="page-load-sentinel" aria-hidden="true" />
       <ScrollJumpButton className="page-scroll-jump-btn" scrollJump={scrollJump} onClick={jumpToScrollEdge} />
       {previewIndex !== null ? (

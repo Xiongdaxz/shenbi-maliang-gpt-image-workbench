@@ -2933,17 +2933,24 @@ function payloadForProvider(provider: RuntimeProviderRow, payload: Record<string
   return nextPayload;
 }
 
-export async function callProviderChain(
+type ProviderChainResponseHandler<T> = (input: {
+  provider: RuntimeProviderRow;
+  responseJson: unknown;
+}) => Promise<T> | T;
+
+export async function callProviderChain<T = undefined>(
   providers: RuntimeProviderRow[],
   mode: "generation" | "edit",
   payload: Record<string, unknown>,
-  context: ProviderRequestContext = {}
+  context: ProviderRequestContext = {},
+  onProviderResponse?: ProviderChainResponseHandler<T>
 ) {
   const errors: string[] = [];
   for (const provider of providers) {
     try {
       const responseJson = await callProvider(provider, mode, payloadForProvider(provider, payload), context);
-      return { provider, responseJson };
+      const result = onProviderResponse ? await onProviderResponse({ provider, responseJson }) : undefined;
+      return { provider, responseJson, result };
     } catch (error) {
       errors.push(`${provider.name}：${error instanceof Error ? error.message : String(error)}`);
     }

@@ -407,27 +407,36 @@ async function saveProviderImagesWithRetry({
   const maxAttempts = retryCount + 1;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      const { provider, responseJson } = await callProviderChain(providers, mode, requestPayload, {
-        userId,
-        jobId,
-        attemptNo: attempt,
-        maxAttempts,
-        isRetry: attempt > 1
-      });
-      onResponseJson?.(responseJson);
-      let savedImages: Awaited<ReturnType<typeof saveProviderImageResults>>;
-      try {
-        savedImages = await saveProviderImageResults(responseJson, provider, () => makeId("img"), userId, sessionId);
-      } catch (error) {
-        markProviderRequestPostProcessFailure({
-          provider,
-          operation: mode,
+      const { provider, responseJson, result: savedImages } = await callProviderChain<Awaited<ReturnType<typeof saveProviderImageResults>>>(
+        providers,
+        mode,
+        requestPayload,
+        {
+          userId,
           jobId,
           attemptNo: attempt,
-          error: errorMessage(error, `${imageOperationLabel(mode)}失败`),
-          responseSnapshot: providerResponseSnapshot(responseJson)
-        });
-        throw error;
+          maxAttempts,
+          isRetry: attempt > 1
+        },
+        async ({ provider, responseJson }) => {
+          onResponseJson?.(responseJson);
+          try {
+            return await saveProviderImageResults(responseJson, provider, () => makeId("img"), userId, sessionId);
+          } catch (error) {
+            markProviderRequestPostProcessFailure({
+              provider,
+              operation: mode,
+              jobId,
+              attemptNo: attempt,
+              error: errorMessage(error, `${imageOperationLabel(mode)}失败`),
+              responseSnapshot: providerResponseSnapshot(responseJson)
+            });
+            throw error;
+          }
+        }
+      );
+      if (!savedImages) {
+        throw new Error(`${imageOperationLabel(mode)}失败：渠道没有返回可保存的图片`);
       }
       return { provider, responseJson, savedImages, attemptNo: attempt, retryCount, maxAttempts };
     } catch (error) {

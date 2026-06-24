@@ -1061,9 +1061,9 @@ export function DebugSettingsPanel() {
 
 function emptyBackupSettings(): BackupSettings {
   return {
-    enabled: false,
+    enabled: true,
     runTime: "03:00",
-    retentionDays: 30,
+    retentionDays: 3,
     backupDir: "backups",
     resolvedBackupDir: "",
     updatedAt: ""
@@ -1076,7 +1076,7 @@ function backupSettingsPayload(settings: BackupSettings): BackupSettingsPayload 
   return {
     enabled: settings.enabled,
     runTime: settings.runTime,
-    retentionDays: Math.max(1, Math.min(3650, Math.trunc(Number(settings.retentionDays) || 30))),
+    retentionDays: Math.max(1, Math.min(3650, Math.trunc(Number(settings.retentionDays) || 3))),
     backupDir: settings.backupDir.trim() || "backups"
   };
 }

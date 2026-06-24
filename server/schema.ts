@@ -1985,9 +1985,9 @@ export function initConfigDb() {
   configDb.run(`
     create table if not exists backup_settings (
       id text primary key,
-      enabled integer not null default 0,
+      enabled integer not null default 1,
       run_time text not null default '03:00',
-      retention_days integer not null default 30,
+      retention_days integer not null default 3,
       backup_dir text not null default 'backups',
       updated_at text not null
     )
@@ -1999,11 +1999,30 @@ export function initConfigDb() {
       id, enabled, run_time, retention_days, backup_dir, updated_at
     ) values (?, ?, ?, ?, ?, ?)`,
     "default",
+    1,
+    "03:00",
+    3,
+    "backups",
+    now()
+  );
+
+  run(
+    configDb,
+    `update backup_settings
+     set enabled = ?, retention_days = ?, updated_at = ?
+     where id = ?
+       and enabled = ?
+       and run_time = ?
+       and retention_days = ?
+       and backup_dir = ?`,
+    1,
+    3,
+    now(),
+    "default",
     0,
     "03:00",
     30,
-    "backups",
-    now()
+    "backups"
   );
 
   configDb.run(`

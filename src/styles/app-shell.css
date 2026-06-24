@@ -78,6 +78,23 @@
   font-weight: 700;
 }
 
+.sidebar-logo-button {
+  width: 35px;
+  height: 35px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.sidebar-logo-button:focus-visible {
+  outline: 2px solid rgba(17, 24, 39, 0.18);
+  outline-offset: 2px;
+}
+
 .project-logo {
   display: block;
   object-fit: contain;

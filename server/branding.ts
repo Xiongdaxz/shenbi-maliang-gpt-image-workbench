@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { Hono } from "hono";
@@ -518,21 +519,26 @@ function imageResponse(buffer: Buffer, mimeType: string) {
   });
 }
 
-function localPublicAssetPath(publicUrl: string) {
-  const pathname = new URL(publicUrl || "/", "http://local").pathname;
-  const cleanPath = decodeURIComponent(pathname).replace(/^\/+/, "").replaceAll("\\", "/");
-  const publicRoot = path.resolve(ROOT, "public");
-  const absolutePath = path.resolve(publicRoot, cleanPath);
-  if (absolutePath !== publicRoot && !absolutePath.startsWith(`${publicRoot}${path.sep}`)) {
+function localStaticAssetPath(root: string, cleanPath: string) {
+  const absolutePath = path.resolve(root, cleanPath);
+  if (absolutePath !== root && !absolutePath.startsWith(`${root}${path.sep}`)) {
     throw new Error("品牌资源路径不合法");
   }
   return absolutePath;
 }
 
+function localBuiltinAssetPath(publicUrl: string) {
+  const pathname = new URL(publicUrl || "/", "http://local").pathname;
+  const cleanPath = decodeURIComponent(pathname).replace(/^\/+/, "").replaceAll("\\", "/");
+  const candidates = [path.resolve(ROOT, "dist"), path.resolve(ROOT, "public")]
+    .map((root) => localStaticAssetPath(root, cleanPath));
+  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
+}
+
 async function readBuiltinAsset(row: BrandingAssetRow, variant: BrandingAssetUrlVariant) {
   const sourceUrl = row.url === DEFAULT_LOGO_URL && variant === "thumb" ? DEFAULT_LOGO_THUMB_URL : row.url || row.path;
   const mimeType = mimeTypeFromPath(sourceUrl);
-  const buffer = await readFile(localPublicAssetPath(sourceUrl));
+  const buffer = await readFile(localBuiltinAssetPath(sourceUrl));
   if (variant === "original" || mimeType === "image/svg+xml") {
     return { buffer, mimeType };
   }

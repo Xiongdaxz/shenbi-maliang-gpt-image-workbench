@@ -11,7 +11,7 @@ import { localTimestamp, now } from "./utils";
 export const BACKUP_SETTINGS_ID = "default";
 export const DEFAULT_BACKUP_DIR = "backups";
 export const DEFAULT_BACKUP_RUN_TIME = "03:00";
-export const DEFAULT_BACKUP_RETENTION_DAYS = 30;
+export const DEFAULT_BACKUP_RETENTION_DAYS = 3;
 export const MIN_BACKUP_RETENTION_DAYS = 1;
 export const MAX_BACKUP_RETENTION_DAYS = 3650;
 
@@ -127,7 +127,7 @@ export async function ensureBackupDirectory(backupDirValue: string) {
 export function publicBackupSettings(row: BackupSettingsRow | null) {
   const backupDir = normalizeBackupDir(row?.backup_dir);
   return {
-    enabled: Boolean(row?.enabled ?? 0),
+    enabled: Boolean(row?.enabled ?? 1),
     runTime: normalizeRunTime(row?.run_time),
     retentionDays: normalizeRetentionDays(row?.retention_days),
     backupDir,
