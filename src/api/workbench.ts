@@ -29,7 +29,9 @@ import type {
 } from "../types";
 import { ApiError, request } from "./client";
 import type { AppearanceMode } from "../lib/appearance";
+import type { PromptColorScheme, PromptColorSchemePayload } from "../lib/promptColorSchemes";
 import type { PromptTemplateOptimizeStyle } from "../lib/promptOptimizeStyles";
+export type { PromptColorScheme, PromptColorSchemePayload } from "../lib/promptColorSchemes";
 export type { PromptTemplateOptimizeStyle } from "../lib/promptOptimizeStyles";
 export type { LoginAssets, PublicBranding } from "../types";
 
@@ -692,6 +694,26 @@ export const api = {
       body: JSON.stringify({ name })
     }),
   promptReferenceLinks: () => request<{ links: PromptReferenceLink[] }>("/api/prompt-reference-links"),
+  promptColorSchemes: (params?: { includeDeleted?: boolean }) =>
+    request<{ schemes: PromptColorScheme[] }>(`/api/prompt-color-schemes${queryString({ includeDeleted: params?.includeDeleted ? 1 : undefined })}`),
+  createPromptColorScheme: (payload: PromptColorSchemePayload) =>
+    request<{ scheme: PromptColorScheme | null }>("/api/prompt-color-schemes", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
+  updatePromptColorScheme: (id: string, payload: PromptColorSchemePayload) =>
+    request<{ scheme: PromptColorScheme | null }>(`/api/prompt-color-schemes/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    }),
+  deletePromptColorScheme: (id: string) =>
+    request<{ ok: boolean }>(`/api/prompt-color-schemes/${encodeURIComponent(id)}`, {
+      method: "DELETE"
+    }),
+  restoreDefaultPromptColorSchemes: () =>
+    request<{ schemes: PromptColorScheme[] }>("/api/prompt-color-schemes/defaults/restore", {
+      method: "POST"
+    }),
   createPromptReferenceLink: (payload: PromptReferenceLinkPayload) =>
     request<{ link: PromptReferenceLink }>("/api/prompt-reference-links", {
       method: "POST",

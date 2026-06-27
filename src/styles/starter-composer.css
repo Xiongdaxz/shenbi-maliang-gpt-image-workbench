@@ -1509,6 +1509,22 @@
   flex: 0 0 auto;
 }
 
+.composer-prompt-template-color-select {
+  width: max-content;
+  min-width: 88px;
+  max-width: 116px;
+  flex: 0 0 auto;
+}
+
+.composer-prompt-template-color-select.has-custom-color {
+  min-width: 126px;
+  max-width: 126px;
+}
+
+.composer-prompt-template-color-control {
+  flex: 0 0 auto;
+}
+
 .composer-prompt-template-style-tooltip {
   min-width: 0;
   display: inline-flex;
@@ -1524,6 +1540,7 @@
 }
 
 .composer-prompt-template-style-select .custom-select-trigger,
+.composer-prompt-template-color-select .custom-select-trigger,
 .composer-result-select-trigger {
   min-height: 36px;
   height: 36px;
@@ -1551,7 +1568,7 @@
   border: 0;
   border-radius: 999px 0 0 999px;
   background: transparent;
-  color: #374151;
+  color: #111827;
   padding: 0;
 }
 
@@ -1569,7 +1586,7 @@
   min-width: 0;
   margin-left: 0;
   overflow: visible;
-  color: #374151;
+  color: #111827;
   opacity: 0;
   pointer-events: none;
   transform: scale(0.82);
@@ -1599,13 +1616,19 @@
   background: transparent;
 }
 
+.composer-prompt-template-clear-submit svg {
+  display: block;
+}
+
 .composer-prompt-template-undo-submit svg {
   display: block;
   transform: translateX(1px);
 }
 
+.composer-prompt-template-optimize-submit svg,
+.composer-prompt-template-undo-submit svg,
 .composer-prompt-template-clear-submit svg {
-  display: block;
+  stroke-width: 2.1;
 }
 
 .composer-prompt-template-optimize-submit:hover:not(:disabled),
@@ -1628,15 +1651,95 @@
   border: 0;
   border-radius: 0 999px 999px 0;
   background: transparent;
-  color: #374151;
+  color: #111827;
   padding: 0 9px 0 5px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.composer-prompt-template-optimize-control .composer-prompt-template-style-select .custom-select-trigger {
+  border-radius: 0 999px 999px 0;
+}
+
+.composer-prompt-template-color-select .custom-select-trigger {
+  width: 100%;
+  min-width: 88px;
+  display: inline-grid;
+  grid-template-columns: minmax(0, 1fr) 15px;
+  align-items: center;
+  justify-content: stretch;
+  gap: 5px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #111827;
+  padding: 0 8px 0 10px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.composer-prompt-template-color-select .prompt-color-scheme-trigger-main {
+  justify-content: center;
+}
+
+.composer-prompt-template-color-select .prompt-color-scheme-caret,
+.composer-prompt-template-color-select .prompt-color-scheme-clear {
+  justify-self: end;
+}
+
+.composer-prompt-template-color-select .custom-select-trigger:hover {
+  border-color: #d1d5db;
+  background: #fff;
+}
+
+.composer-prompt-template-color-select .custom-select-trigger:focus,
+.composer-prompt-template-color-select .custom-select-trigger[aria-expanded="true"] {
+  border-color: #d1d5db;
+  background: #fff;
+  box-shadow: none;
+}
+
+.composer-prompt-template-color-select .custom-select-value {
+  max-width: 82px;
+  overflow: hidden;
+  gap: 5px;
+}
+
+.composer-prompt-template-color-select .prompt-color-scheme-preview-stack {
+  width: 62px;
+  overflow: visible;
+}
+
+.composer-prompt-template-color-select .custom-select-trigger.has-custom-color .custom-select-value,
+.composer-prompt-template-color-select .custom-select-trigger.has-custom-color .prompt-color-scheme-preview-stack {
+  width: auto;
+}
+
+.composer-prompt-template-color-select .custom-select-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .composer-prompt-template-optimize-control .custom-select-trigger > svg {
   width: 15px;
   height: 15px;
+  color: #6b7280;
+}
+
+.composer-prompt-template-color-select .custom-select-trigger > svg,
+.composer-prompt-template-color-select .custom-select-value > svg {
+  stroke-width: 2.1;
+}
+
+.composer-prompt-template-color-select .custom-select-value > svg {
+  color: #111827;
+}
+
+.composer-prompt-template-color-select .custom-select-trigger > svg {
+  color: #6b7280;
 }
 
 .composer-prompt-template-action-slot:empty {
@@ -1657,14 +1760,33 @@
 
 .composer-result-select-trigger {
   min-width: 112px;
-  display: inline-flex;
+  display: inline-grid;
+  grid-template-columns: 15px minmax(0, 1fr) 15px;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
+  justify-content: stretch;
+  gap: 5px;
   border: 1px solid #d1d5db;
   color: #111827;
   background: #fff;
   padding: 0 10px;
+}
+
+.composer-result-select-trigger::before {
+  content: "";
+  width: 15px;
+  height: 15px;
+}
+
+.composer-result-select-trigger > span {
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-result-select-trigger > svg {
+  justify-self: end;
 }
 
 .composer-prompt-template-style-menu .custom-select-option-main {
@@ -1697,13 +1819,22 @@
   font-weight: 400;
 }
 
+.composer-prompt-template-color-menu {
+  max-width: calc(100vw - 24px);
+}
+
+.composer-prompt-template-color-menu.prompt-color-scheme-menu {
+  max-height: min(620px, calc(100vh - 92px));
+}
+
 .composer-prompt-template-style-menu > button > svg {
   width: 15px;
   height: 15px;
 }
 
 .composer-result-select-trigger .open,
-.composer-prompt-template-style-select .custom-select-trigger .open {
+.composer-prompt-template-style-select .custom-select-trigger .open,
+.composer-prompt-template-color-select .custom-select-trigger .open {
   transform: rotate(180deg);
 }
 
@@ -1792,6 +1923,32 @@
   margin: 0;
 }
 
+.composer-prompt-template-panel.is-form:has(.composer-result-select-menu:not(.composer-template-select-menu)) {
+  overflow: visible;
+}
+
+.composer-prompt-template-panel.is-form:has(.composer-result-select-menu:not(.composer-template-select-menu)) .composer-prompt-template-head {
+  position: relative;
+  z-index: 45;
+}
+
+.composer-prompt-template-panel.is-form .composer-result-select-menu:not(.composer-template-select-menu) {
+  z-index: 55;
+}
+
+.composer-prompt-template-panel.is-form:has(.prompt-template-color-menu) {
+  max-height: min(760px, calc(100vh - 92px));
+}
+
+.composer-prompt-template-form .prompt-template-color-menu {
+  position: static;
+  width: 100%;
+  min-width: 0;
+  max-height: min(430px, calc(100vh - 180px));
+  margin-top: 6px;
+  box-shadow: 0 12px 28px rgba(17, 24, 39, 0.12);
+}
+
 .composer-template-multi-options {
   display: flex;
   flex-wrap: wrap;
@@ -1859,6 +2016,10 @@
     flex-basis: auto;
   }
 
+  .composer-prompt-template-color-select .custom-select-label {
+    max-width: 52px;
+  }
+
   .composer-prompt-template-list {
     grid-template-columns: 1fr;
   }
@@ -1877,12 +2038,17 @@
   flex: 0 0 auto;
 }
 
-.size-picker:has(.size-picker-trigger[aria-expanded="true"], .quality-picker-trigger[aria-expanded="true"]) {
+.size-picker:has(.size-picker-trigger[aria-expanded="true"], .quality-picker-trigger[aria-expanded="true"], .image-count-trigger[aria-expanded="true"]) {
   z-index: 2;
 }
 
+.image-count-stepper:has(.image-count-trigger[aria-expanded="true"]) {
+  z-index: 24;
+}
+
 .size-picker-trigger,
-.quality-picker-trigger {
+.quality-picker-trigger,
+.image-count-trigger {
   min-height: 36px;
   height: 36px;
   display: inline-flex;
@@ -1897,95 +2063,43 @@
   line-height: 1;
 }
 
+.image-count-trigger {
+  min-width: 94px;
+  justify-content: center;
+  padding-inline: 10px 8px;
+}
+
 .quality-picker-trigger {
   min-width: 84px;
   justify-content: center;
   padding-inline: 10px 8px;
 }
 
-.quality-trigger-icon {
+.quality-trigger-icon,
+.image-count-trigger-icon {
   color: #111827;
 }
 
 .image-count-stepper {
-  height: 36px;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  border: 1px solid #d1d5db;
-  color: #111827;
-  background: #fff;
-  border-radius: 999px;
-  padding: 0 8px 0 10px;
   font-size: 14px;
-  line-height: 1;
-}
-
-.image-count-stepper > span {
-  color: #111827;
-  white-space: nowrap;
-}
-
-.image-count-stepper button {
-  width: 22px;
-  height: 22px;
-  display: inline-grid;
-  place-items: center;
-  border: 0;
-  border-radius: 999px;
-  color: #111827;
-  background: transparent;
-  padding: 0;
-}
-
-.image-count-stepper button:hover:not(:disabled) {
-  background: var(--button-default-hover-bg);
-}
-
-.image-count-stepper button:disabled {
-  color: #c4c9d1;
-  cursor: not-allowed;
-}
-
-.image-count-stepper input {
-  width: 20px;
-  height: 22px;
-  border: 0;
-  outline: none;
-  background: transparent;
-  color: #111827;
-  font: inherit;
-  font-weight: 400;
-  line-height: 22px;
-  padding: 0;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  box-sizing: border-box;
-}
-
-.image-count-stepper input::-webkit-outer-spin-button,
-.image-count-stepper input::-webkit-inner-spin-button {
-  margin: 0;
-  appearance: none;
-}
-
-.image-count-stepper input[type="number"] {
-  appearance: textfield;
 }
 
 .size-picker-trigger small {
   color: #6b7280;
   font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 .size-picker-trigger svg,
-.quality-picker-trigger svg {
+.quality-picker-trigger svg,
+.image-count-trigger svg {
   color: #6b7280;
   transition: transform 160ms ease;
 }
 
 .size-picker-trigger svg.open,
-.quality-picker-trigger svg.open {
+.quality-picker-trigger svg.open,
+.image-count-trigger svg.open {
   transform: rotate(180deg);
 }
 
@@ -2009,7 +2123,8 @@
 }
 
 .size-trigger-icon svg,
-.quality-trigger-icon svg {
+.quality-trigger-icon svg,
+.image-count-trigger-icon svg {
   width: 15px;
   height: 15px;
   color: #111827;
@@ -2062,9 +2177,25 @@
   width: 112px;
 }
 
+.image-count-menu {
+  position: fixed;
+  right: auto;
+  bottom: auto;
+  z-index: 260;
+  width: 112px;
+  max-height: 272px;
+  overflow-y: auto;
+}
+
 .quality-picker-menu button {
   grid-template-columns: minmax(0, 1fr) 18px;
   min-height: 44px;
+}
+
+.image-count-menu button {
+  grid-template-columns: minmax(0, 1fr) 18px;
+  min-height: 36px;
+  padding-block: 7px;
 }
 
 .size-option-check {
@@ -2077,12 +2208,15 @@
   min-width: 0;
 }
 
+.image-count-option-copy,
 .quality-option-copy,
 .size-option-copy strong,
 .size-option-copy small {
   min-width: 0;
 }
 
+.image-count-option-copy strong,
+.image-count-option-copy small,
 .quality-option-copy strong,
 .quality-option-copy small,
 .size-option-copy strong,
@@ -2094,12 +2228,18 @@
   text-overflow: ellipsis;
 }
 
+.image-count-option-copy strong,
 .quality-option-copy strong,
 .size-option-copy strong {
   font-size: 14px;
   font-weight: 700;
 }
 
+.image-count-option-copy strong {
+  font-weight: 400;
+}
+
+.image-count-option-copy small,
 .quality-option-copy small,
 .size-option-copy small {
   margin-top: 2px;

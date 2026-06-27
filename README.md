@@ -2,7 +2,7 @@
 
 简体中文 | [English](README.en.md)
 
-神笔马良 GPT Image Workbench 是一个面向团队内部私有部署的 AI 图片生成与图片编辑工作台，支持 ChatGPT 订阅账号、OpenAI 兼容接口和 CPA 代理等渠道，并可在官网额度、Codex 额度等多链路间调度，快速搭建团队级 AI 生图平台。
+神笔马良 GPT Image Workbench 是一个面向团队内部私有部署的 AI 图片生成与图片编辑工作台，支持 ChatGPT 订阅账号、OpenAI 兼容接口和 CPA 代理等渠道，并可在官网额度、Codex 额度等多链路间调度。
 
 ## ✨ 亮点功能
 
@@ -133,6 +133,46 @@ data/     本地运行数据目录，启动后自动生成
 | 源码运行包 | Windows / Linux / macOS | `shenbi-maliang-X.Y.Z-source-run.zip` | zip + 源码 | Windows 执行 `start-update.bat`；Linux/macOS 执行 `bash ./start.sh` |
 
 `shenbi-maliang-X.Y.Z-source-run.zip` 不包含 exe、`node_modules` 和构建产物，也可以手动执行 `bun install --frozen-lockfile`、`bun run build`、`bun run start`。GitHub Release 页面还会自动提供原始 `Source code (zip)` 和 `Source code (tar.gz)`；如果要查看完整仓库历史，建议直接 `git clone`。运行数据会自动创建到 `data/`，升级前请先备份 `data/`。
+
+## 🔄 发布版更新教程
+
+如果你使用任一 `portable.zip` 便携运行包部署，更新时优先使用同平台、同架构的新版本便携运行包，不要改用 `source-run` 源码运行包直接覆盖。
+
+推荐更新方式：
+
+1. 关闭正在运行的程序：Windows 为 `ShenbiMaliang.exe`，Linux/macOS 为 `shenbi-maliang`。
+2. 备份旧目录里的 `data/`，这里保存了用户、配置、账号池、图片、素材和历史记录。
+3. 解压新版 `portable.zip` 到临时目录。
+4. 从新版目录的 `shenbi-maliang/` 中复制需要更新的文件，覆盖到原来的部署目录。
+5. 按发布包对应方式启动原部署目录里的新版程序，确认能打开 `http://127.0.0.1:8787` 和 `/config`。
+6. 确认数据正常后，再删除临时解压目录。
+
+通常只需要替换这些运行必须项：
+
+- 平台可执行文件：Windows 为 `ShenbiMaliang.exe`，Linux/macOS 为 `shenbi-maliang`
+- `dist/`
+
+如果新版发布说明提到依赖更新，或者启动、上传、图片处理时出现 `sharp` / 原生模块相关错误，再替换：
+
+- `node_modules/`
+
+这些是随包附带的说明或辅助文件，不是便携版运行必须项，可按需同步：
+
+- `README.md`
+- `README.en.md`
+- `LICENSE`
+- `RUNNING.md`
+- `package.json`
+- `bun.lock`
+- `scripts/`
+
+这些内容不要删除、不要用新版空目录覆盖：
+
+- `data/`：本地数据库、后台配置、账号池、用户数据、生成图片、上传素材和遮罩文件都在这里。
+- `.env` 或你自己额外放置的环境变量、启动脚本、反向代理配置等本地部署文件。
+- 你手动保存的备份目录、日志目录或其它自定义文件。
+
+源码运行包 `shenbi-maliang-X.Y.Z-source-run.zip` 的更新逻辑不同：保留旧目录的 `data/` 和本地自定义配置，替换源码文件后执行 `start-update.bat`，或手动执行 `bun install --frozen-lockfile`、`bun run build`、`bun run start`。源码运行包里的 `node_modules/` 和 `dist/` 是运行时生成内容，不需要从旧版本手动复制。
 
 ## 🙏 鸣谢
 

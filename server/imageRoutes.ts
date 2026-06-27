@@ -7,7 +7,12 @@ import { recordCasePromptUsage } from "./caseUsage";
 import { appDb, getAll, getOne, run } from "./db";
 import { fileToDataUrl, saveProviderImageResults, snapshotImageReferences, type ImageReferenceSnapshotInput } from "./imageFiles";
 import { emitImageJobEvent, type ImageJobEventStatus } from "./imageJobEvents";
-import { ensureImageEditSuggestionsForImageWithTone } from "./imageEditSuggestions";
+import {
+  ensureImageEditSuggestionsForImageWithTone,
+  prepareImageEditSuggestionsForPrompt,
+  savePreparedImageEditSuggestionsForImages,
+  type PreparedImageEditSuggestions
+} from "./imageEditSuggestions";
 import { saveImageEditMaskDebugArtifacts } from "./imageEditDebug";
 import { imageEditMaskSnapshotDataUrl, normalizeImageEditMaskDataUrl, saveImageEditMaskSnapshot } from "./imageMasks";
 import { readImageDimensions } from "./imageDimensions";
@@ -147,42 +152,78 @@ async function applyImageFieldSuggestions(imageIds: string[], prompt?: string) {
   }
 }
 
-function warmImageEditSuggestionsInBackground(userId: string, imageIds: string[]) {
+async function ensureImageEditSuggestionsForImages(
+  userId: string,
+  imageIds: string[],
+  prepared?: PreparedImageEditSuggestions | null
+) {
   const ids = Array.from(new Set(imageIds.map((id) => id.trim()).filter(Boolean)));
   if (ids.length === 0) return;
 
-  setTimeout(() => {
-    void (async () => {
-      const preferences = userPreferences(userId);
-      if (!preferences.editSuggestionsEnabled) return;
-      const images = getAll<ImageRow>(
-        appDb,
-        `select * from images where user_id = ? and id in (${ids.map(() => "?").join(", ")})`,
-        userId,
-        ...ids
-      );
-      if (images.length === 0) return;
-      const promptHistories = imagePromptHistoriesByImageIds(images.map((image) => image.id));
-      const results = await Promise.allSettled(
-        images.map((image) => {
-          const promptHistory = promptHistories.get(image.id) ?? [image.prompt];
-          const originPrompt = promptHistory[0] ?? image.prompt;
-          return ensureImageEditSuggestionsForImageWithTone(
-            image,
-            originPrompt,
-            preferences.editSuggestionTone,
-            promptHistory
-          );
-        })
-      );
-      const rejected = results.filter((item): item is PromiseRejectedResult => item.status === "rejected");
-      if (rejected.length > 0) {
-        console.warn(`图片续改建议后台预生成失败：${rejected.length}/${images.length}`, rejected[0]?.reason);
-      }
-    })().catch((error) => {
-      console.warn("图片续改建议后台预生成任务失败", error);
-    });
-  }, 0);
+  try {
+    const preferences = userPreferences(userId);
+    if (!preferences.editSuggestionsEnabled) return;
+    if (prepared) {
+      await savePreparedImageEditSuggestionsForImages(userId, ids, prepared);
+      return;
+    }
+    const images = getAll<ImageRow>(
+      appDb,
+      `select * from images where user_id = ? and id in (${ids.map(() => "?").join(", ")})`,
+      userId,
+      ...ids
+    );
+    if (images.length === 0) return;
+    const promptHistories = imagePromptHistoriesByImageIds(images.map((image) => image.id));
+    const results = await Promise.allSettled(
+      images.map((image) => {
+        const promptHistory = promptHistories.get(image.id) ?? [image.prompt];
+        const originPrompt = promptHistory[0] ?? image.prompt;
+        return ensureImageEditSuggestionsForImageWithTone(
+          image,
+          originPrompt,
+          preferences.editSuggestionTone,
+          promptHistory
+        );
+      })
+    );
+    const rejected = results.filter((item): item is PromiseRejectedResult => item.status === "rejected");
+    if (rejected.length > 0) {
+      console.warn(`图片续改建议预生成失败：${rejected.length}/${images.length}`, rejected[0]?.reason);
+    }
+  } catch (error) {
+    console.warn("图片续改建议预生成任务失败", error);
+  }
+}
+
+function prepareImageEditSuggestionsForJob({
+  userId,
+  prompt,
+  kind,
+  promptHistory
+}: {
+  userId: string;
+  prompt: string;
+  kind: "generation" | "edit";
+  promptHistory: string[];
+}) {
+  const preferences = userPreferences(userId);
+  if (!preferences.editSuggestionsEnabled) return null;
+  const normalizedPromptHistory = promptHistory.map((item) => item.trim()).filter(Boolean);
+  const effectivePromptHistory = normalizedPromptHistory.length > 0 ? normalizedPromptHistory : [prompt];
+  return prepareImageEditSuggestionsForPrompt({
+    prompt,
+    originPrompt: effectivePromptHistory[0] ?? prompt,
+    promptHistory: effectivePromptHistory,
+    kind,
+    tone: preferences.editSuggestionTone
+  });
+}
+
+function editPromptHistoryForSourceImage(sourceImage: ImageRow | null, prompt: string) {
+  if (!sourceImage) return [prompt];
+  const sourceHistory = imagePromptHistoriesByImageIds([sourceImage.id]).get(sourceImage.id) ?? [sourceImage.prompt];
+  return [...sourceHistory, prompt].map((item) => item.trim()).filter(Boolean);
 }
 
 function isCpaProvider(provider: ProviderRow) {
@@ -949,6 +990,12 @@ api.post("/images/generate", async (c) => {
   const runGenerationJob = async () => {
     const savedImageIds: string[] = [];
     try {
+      const preparedEditSuggestions = prepareImageEditSuggestionsForJob({
+        userId: user.id,
+        prompt,
+        kind: "generation",
+        promptHistory: [prompt]
+      });
       const { provider: actualProvider, responseJson, savedImages, attemptNo, retryCount } = await saveProviderImagesWithRetry({
         providers,
         mode: "generation",
@@ -1010,6 +1057,7 @@ api.post("/images/generate", async (c) => {
         );
       }
       await applyImageFieldSuggestions(savedImageIds, prompt);
+      await ensureImageEditSuggestionsForImages(user.id, savedImageIds, preparedEditSuggestions);
       run(
         appDb,
         "update image_jobs set status = ?, result_image_id = ?, response_json = ?, auto_retry_count = ?, max_auto_retries = ?, succeeded_on_retry = ?, updated_at = ? where id = ?",
@@ -1023,7 +1071,6 @@ api.post("/images/generate", async (c) => {
         jobId
       );
       emitJobStatus(user.id, sessionId, jobId, "succeeded", "generation", { resultImageId: savedImageIds[0] ?? null });
-      warmImageEditSuggestionsInBackground(user.id, savedImageIds);
       return savedImageIds;
     } catch (error) {
       const message = error instanceof Error ? error.message : "生成失败";
@@ -1342,6 +1389,12 @@ api.post("/images/edit", async (c) => {
   const runEditJob = async () => {
   let responseJson: unknown = null;
   try {
+    const preparedEditSuggestions = prepareImageEditSuggestionsForJob({
+      userId: user.id,
+      prompt,
+      kind: "edit",
+      promptHistory: editPromptHistoryForSourceImage(primarySourceImage, prompt)
+    });
     const result = await saveProviderImagesWithRetry({
       providers,
       mode: "edit",
@@ -1407,8 +1460,10 @@ api.post("/images/edit", async (c) => {
         ...branchMetadata
       });
     }
-    await applyImageFieldSuggestions(savedImages.map((image) => image.id));
-    const resultImageId = savedImages[0]?.id ?? null;
+    const savedImageIds = savedImages.map((image) => image.id);
+    await applyImageFieldSuggestions(savedImageIds);
+    await ensureImageEditSuggestionsForImages(user.id, savedImageIds, preparedEditSuggestions);
+    const resultImageId = savedImageIds[0] ?? null;
     run(
       appDb,
       "update image_jobs set status = ?, result_image_id = ?, response_json = ?, auto_retry_count = ?, max_auto_retries = ?, succeeded_on_retry = ?, updated_at = ? where id = ?",
@@ -1422,7 +1477,6 @@ api.post("/images/edit", async (c) => {
       jobId
     );
     emitJobStatus(user.id, sessionId, jobId, "succeeded", "edit", { resultImageId });
-    warmImageEditSuggestionsInBackground(user.id, savedImages.map((image) => image.id));
     return;
   } catch (error) {
     const message = error instanceof Error ? error.message : "编辑失败";
@@ -1520,6 +1574,12 @@ api.post("/image-jobs/:id/retry", async (c) => {
   try {
     if (job.type === "generation") {
       const savedImageIds: string[] = [];
+      const preparedEditSuggestions = prepareImageEditSuggestionsForJob({
+        userId: user.id,
+        prompt: job.prompt,
+        kind: "generation",
+        promptHistory: [job.prompt]
+      });
       const { provider: actualProvider, responseJson, savedImages, attemptNo, retryCount } = await saveProviderImagesWithRetry({
         providers,
         mode: "generation",
@@ -1580,6 +1640,7 @@ api.post("/image-jobs/:id/retry", async (c) => {
         );
       }
       await applyImageFieldSuggestions(savedImageIds, job.prompt);
+      await ensureImageEditSuggestionsForImages(user.id, savedImageIds, preparedEditSuggestions);
       run(
         appDb,
         "update image_jobs set status = ?, result_image_id = ?, response_json = ?, auto_retry_count = ?, manual_retry_count = ?, max_auto_retries = ?, succeeded_on_retry = 1, updated_at = ? where id = ?",
@@ -1593,7 +1654,6 @@ api.post("/image-jobs/:id/retry", async (c) => {
         job.id
       );
       emitJobStatus(user.id, retrySessionId, job.id, "succeeded", "generation", { resultImageId: savedImageIds[0] ?? null });
-      warmImageEditSuggestionsInBackground(user.id, savedImageIds);
       return;
     }
 
@@ -1637,6 +1697,12 @@ api.post("/image-jobs/:id/retry", async (c) => {
       images: imageUrls.map((image_url) => ({ image_url }))
     };
     const primarySourceImage = validSourceImages[0] ?? null;
+    const preparedEditSuggestions = prepareImageEditSuggestionsForJob({
+      userId: user.id,
+      prompt: job.prompt,
+      kind: "edit",
+      promptHistory: editPromptHistoryForSourceImage(primarySourceImage, job.prompt)
+    });
     const { provider: actualProvider, responseJson, savedImages, attemptNo, retryCount } = await saveProviderImagesWithRetry({
       providers,
       mode: "edit",
@@ -1696,8 +1762,10 @@ api.post("/image-jobs/:id/retry", async (c) => {
         ...branchMetadata
       });
     }
-    await applyImageFieldSuggestions(savedImages.map((image) => image.id));
-    const resultImageId = savedImages[0]?.id ?? null;
+    const savedImageIds = savedImages.map((image) => image.id);
+    await applyImageFieldSuggestions(savedImageIds);
+    await ensureImageEditSuggestionsForImages(user.id, savedImageIds, preparedEditSuggestions);
+    const resultImageId = savedImageIds[0] ?? null;
     run(
       appDb,
       "update image_jobs set status = ?, result_image_id = ?, response_json = ?, auto_retry_count = ?, manual_retry_count = ?, max_auto_retries = ?, succeeded_on_retry = 1, updated_at = ? where id = ?",
@@ -1711,7 +1779,6 @@ api.post("/image-jobs/:id/retry", async (c) => {
       job.id
     );
     emitJobStatus(user.id, retrySessionId, job.id, "succeeded", "edit", { resultImageId });
-    warmImageEditSuggestionsInBackground(user.id, savedImages.map((image) => image.id));
     return;
   } catch (error) {
     const message = errorMessage(error, job.type === "edit" ? "编辑失败" : "生成失败");

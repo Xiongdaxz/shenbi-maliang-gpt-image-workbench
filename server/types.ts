@@ -172,6 +172,24 @@ export type UserPreferencesRow = {
   updated_at: string;
 };
 
+export type PromptColorSchemeRow = {
+  id: string;
+  user_id: string;
+  builtin_key: string;
+  name: string;
+  description: string;
+  category: string;
+  colors_json: string;
+  gradients_json: string;
+  prompt: string;
+  visible: number;
+  sort_order: number;
+  is_builtin: number;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string;
+};
+
 export type AssetSpace = "private" | "shared";
 export type AssetUploadMode = AssetSpace | "private_shared";
 export type AssetShareStatus = "none" | "pending" | "approved" | "rejected";

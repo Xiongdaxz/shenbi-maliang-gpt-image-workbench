@@ -43,6 +43,7 @@ const SIDEBAR_WIDTH_ANIMATION_MS = 200;
 const SESSION_GROUP_COLLAPSE_STORAGE_KEY = "gpt-image.sidebar.session-groups.collapsed";
 const USERNAME_RULE_MESSAGE =
   "用户名支持中文、英文、数字、单个空格、下划线和短横线，长度 2-20 个字符，不支持首尾空格或连续空格";
+const IMAGE_EDIT_SUGGESTIONS_STALE_MS = 5 * 60 * 1000;
 type SidebarMotionState = "expanded" | "collapsing" | "collapsed" | "expanding";
 type SessionGroupKey = "pinned" | "recent";
 type SessionGroupCollapseState = Record<SessionGroupKey, boolean>;
@@ -931,9 +932,22 @@ export function WorkbenchShell({ user }: { user: User }) {
     return updated;
   }, [queryClient]);
 
+  const prefetchImageEditSuggestions = useCallback((imageId: string | null | undefined) => {
+    const normalizedImageId = imageId?.trim();
+    const editSuggestionsEnabled = user.preferences?.editSuggestionsEnabled !== false;
+    if (!normalizedImageId || !editSuggestionsEnabled) return;
+    const editSuggestionTone = user.preferences?.editSuggestionTone ?? "default";
+    void queryClient.prefetchQuery({
+      queryKey: ["image-edit-suggestions", normalizedImageId, editSuggestionTone, editSuggestionsEnabled],
+      queryFn: () => api.imageEditSuggestions(normalizedImageId),
+      staleTime: IMAGE_EDIT_SUGGESTIONS_STALE_MS
+    });
+  }, [queryClient, user.preferences?.editSuggestionTone, user.preferences?.editSuggestionsEnabled]);
+
   const handleImageJobEvent = useCallback((payload: ImageJobEventPayload) => {
     const sessionId = payload.sessionId.trim();
     if (!sessionId) return;
+    if (payload.status === "succeeded") prefetchImageEditSuggestions(payload.resultImageId);
     if (payload.status === "running") {
       markSessionGenerationRunning(sessionId);
     } else if (payload.status === "succeeded") {
@@ -955,6 +969,7 @@ export function WorkbenchShell({ user }: { user: User }) {
     clearSessionGenerationStatus,
     markSessionGenerationCompleted,
     markSessionGenerationRunning,
+    prefetchImageEditSuggestions,
     queryClient,
     refreshSessionsNonCancel,
     updateSessionImageJobFromEvent

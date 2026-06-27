@@ -467,7 +467,7 @@
   position: fixed;
   left: 50%;
   top: 18px;
-  z-index: 260;
+  z-index: 360;
   display: grid;
   justify-items: center;
   gap: 6px;

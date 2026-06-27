@@ -19,6 +19,10 @@ type ImageEditSuggestionResult = {
   suggestions: PublicImageEditSuggestion[];
   generated: boolean;
 };
+export type PreparedImageEditSuggestions = {
+  preferenceKey: EditSuggestionTone;
+  suggestions: Promise<PromptEditSuggestion[]>;
+};
 const inFlightEditSuggestions = new Map<string, Promise<ImageEditSuggestionResult>>();
 const LEGACY_EDIT_SUGGESTION_LABELS = new Set([
   "增强光影层次",
@@ -92,6 +96,69 @@ function shouldRefreshStoredSuggestions(suggestions: PromptEditSuggestion[]) {
 
 export async function ensureImageEditSuggestionsForImage(image: ImageRow, originPrompt = "") {
   return ensureImageEditSuggestionsForImageWithTone(image, originPrompt, "default");
+}
+
+export function prepareImageEditSuggestionsForPrompt({
+  prompt,
+  originPrompt = "",
+  tone = "default",
+  promptHistory = [],
+  kind = ""
+}: {
+  prompt: string;
+  originPrompt?: string;
+  tone?: EditSuggestionTone;
+  promptHistory?: string[];
+  kind?: string;
+}): PreparedImageEditSuggestions {
+  const preferenceKey = normalizeEditSuggestionTone(tone);
+  return {
+    preferenceKey,
+    suggestions: generatePromptEditSuggestions({
+      prompt,
+      originPrompt,
+      promptHistory,
+      kind,
+      tone: preferenceKey
+    })
+  };
+}
+
+export async function savePreparedImageEditSuggestionsForImages(
+  userId: string,
+  imageIds: string[],
+  prepared: PreparedImageEditSuggestions | null | undefined
+) {
+  const ids = Array.from(new Set(imageIds.map((id) => id.trim()).filter(Boolean)));
+  if (ids.length === 0 || !prepared) return false;
+  const suggestions = (await prepared.suggestions).slice(0, EDIT_SUGGESTION_COUNT);
+  const timestamp = now();
+  for (const imageId of ids) {
+    const existing = getOne<ImageEditSuggestionRow>(
+      appDb,
+      "select * from image_edit_suggestions where image_id = ? and user_id = ?",
+      imageId,
+      userId
+    );
+    run(
+      appDb,
+      `insert into image_edit_suggestions (
+        image_id, user_id, suggestions_json, preference_key, created_at, updated_at
+      ) values (?, ?, ?, ?, ?, ?)
+      on conflict(image_id) do update set
+        user_id = excluded.user_id,
+        suggestions_json = excluded.suggestions_json,
+        preference_key = excluded.preference_key,
+        updated_at = excluded.updated_at`,
+      imageId,
+      userId,
+      JSON.stringify(suggestions),
+      prepared.preferenceKey,
+      existing?.created_at ?? timestamp,
+      timestamp
+    );
+  }
+  return true;
 }
 
 export async function ensureImageEditSuggestionsForImageWithTone(

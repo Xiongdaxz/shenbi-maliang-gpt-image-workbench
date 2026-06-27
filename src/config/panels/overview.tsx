@@ -348,7 +348,7 @@ function StatisticsSummarySection({ data }: { data: ConfigStatistics }) {
         <StatCard label="请求数" value={data.summary.totalRequests} hint={`失败 ${numberLabel(data.summary.failedRequests)} · 重试 ${numberLabel(data.summary.retryRequests)}`} />
         <StatCard label="成功率" value={percentLabel(data.summary.successRate)} hint={`平均耗时 ${durationLabel(data.summary.averageDurationMs)}`} />
         <StatCard label="渠道数" value={data.summary.totalProviders} hint={`启用 ${numberLabel(data.summary.enabledProviders)}`} />
-        <StatCard label="可用图片账号" value={data.summary.availableAccounts} hint={`限流/异常 ${numberLabel(data.summary.limitedOrAbnormalAccounts)}`} />
+        <StatCard label="可用图片账号" value={data.summary.availableAccounts} hint={`Codex 限流/异常 ${numberLabel(data.summary.limitedOrAbnormalAccounts)}`} />
       </div>
       <StatisticsLineChart
         title="图片趋势"
@@ -592,7 +592,7 @@ function StatisticsAccountSection({ data }: { data: ConfigStatistics }) {
       <div className="statistics-card-grid compact">
         <StatCard label="账号总数" value={data.accounts.totals.total} />
         <StatCard label="正常" value={data.accounts.totals.normal} />
-        <StatCard label="限流" value={data.accounts.totals.limited} />
+        <StatCard label="Codex 限流" value={data.accounts.totals.limited} />
         <StatCard label="异常" value={data.accounts.totals.abnormal} />
         <StatCard label="禁用" value={data.accounts.totals.disabled} />
       </div>

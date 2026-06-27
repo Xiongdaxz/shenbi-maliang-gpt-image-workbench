@@ -97,7 +97,7 @@ type PromptTemplateFormDraftRow = {
   updated_at: string;
 };
 
-const DEFAULT_CONTENT_SEED_VERSION = "default-content-v4";
+const DEFAULT_CONTENT_SEED_VERSION = "default-content-v5";
 const PROMPT_TEMPLATE_HISTORY_PAGE_SIZE = 20;
 type PromptOptimizeStyle = string;
 
@@ -514,7 +514,169 @@ function promptImageFileText(file: Record<string, unknown>) {
   return meta ? `${name}（${meta}）` : name;
 }
 
+const defaultPromptTemplateColorOptions = [
+  { id: "commercial-ink-black", name: "品牌墨黑", role: "主色", hex: "#16181D" },
+  { id: "commercial-action-blue", name: "操作蓝", role: "主色", hex: "#2563EB" },
+  { id: "commercial-warm-orange", name: "暖橙", role: "辅助色", hex: "#F97316" },
+  { id: "commercial-cream-white", name: "奶油白", role: "背景色", hex: "#FFF7ED" },
+  { id: "commercial-mint-green", name: "松石绿", role: "点缀色", hex: "#14B8A6" },
+  { id: "commercial-rose-pink", name: "玫瑰粉", role: "点缀色", hex: "#F472B6" },
+  { id: "commercial-steel-gray", name: "银灰", role: "辅助色", hex: "#94A3B8" },
+  { id: "commercial-soft-gold", name: "柔金", role: "点缀色", hex: "#D4AF37" }
+];
+
+const defaultPromptTemplateGradientOptions = [
+  { id: "commercial-blue-purple", name: "科技蓝紫", role: "光效", colors: ["#2563EB", "#8B5CF6"] },
+  { id: "commercial-sunset-orange", name: "日落粉橙", role: "背景色", colors: ["#FB7185", "#F97316", "#FACC15"] },
+  { id: "commercial-black-gold", name: "黑金质感", role: "主视觉", colors: ["#151517", "#B8860B"] },
+  { id: "commercial-fresh-green", name: "清新青绿", role: "背景色", colors: ["#E0F2FE", "#14B8A6"] },
+  { id: "commercial-candy-pink-blue", name: "糖果粉蓝", role: "背景色", colors: ["#F9A8D4", "#93C5FD"] }
+];
+
+function normalizePromptTemplateHex(value: unknown) {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  const shortMatch = normalized.match(/^#?([0-9A-F]{3})$/);
+  if (shortMatch) {
+    return `#${shortMatch[1].split("").map((char) => `${char}${char}`).join("")}`;
+  }
+  const longMatch = normalized.match(/^#?([0-9A-F]{6})$/);
+  return longMatch ? `#${longMatch[1]}` : "";
+}
+
+function promptTemplateColorTokens(value: unknown) {
+  if (Array.isArray(value)) return value.map((item) => String(item ?? "").trim()).filter(Boolean);
+  return String(value ?? "")
+    .split(/[\n,，、;；]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function promptTemplateColorOptions(component: Record<string, unknown>) {
+  const rawOptions = Array.isArray(component.colorOptions)
+    ? component.colorOptions
+    : component.type === "color"
+      ? defaultPromptTemplateColorOptions
+      : [];
+  return rawOptions
+    .map((raw, index) => {
+      const option = asJsonObject(raw);
+      const hex = normalizePromptTemplateHex(option.hex);
+      if (!hex) return null;
+      const name = String(option.name ?? "").trim() || hex;
+      return {
+        id: String(option.id ?? "").trim() || `color-${index + 1}`,
+        name,
+        role: String(option.role ?? "").trim() || "颜色",
+        hex
+      };
+    })
+    .filter((option): option is { id: string; name: string; role: string; hex: string } => Boolean(option));
+}
+
+function promptTemplateGradientOptions(component: Record<string, unknown>) {
+  const rawOptions = Array.isArray(component.gradientOptions)
+    ? component.gradientOptions
+    : component.type === "color"
+      ? defaultPromptTemplateGradientOptions
+      : [];
+  return rawOptions
+    .map((raw, index) => {
+      const option = asJsonObject(raw);
+      const colors = asJsonArray(option.colors).map(normalizePromptTemplateHex).filter(Boolean);
+      if (colors.length === 0) return null;
+      const name = String(option.name ?? "").trim() || colors.join(" -> ");
+      return {
+        id: String(option.id ?? "").trim() || `gradient-${index + 1}`,
+        name,
+        role: String(option.role ?? "").trim() || "背景色系",
+        colors
+      };
+    })
+    .filter((option): option is { id: string; name: string; role: string; colors: string[] } => Boolean(option));
+}
+
+function uniquePromptTemplateColorValues(values: string[]) {
+  return Array.from(new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean)));
+}
+
+function normalizePromptTemplateColorValue(component: Record<string, unknown>, value: unknown) {
+  const colorOptions = promptTemplateColorOptions(component);
+  const gradientOptions = promptTemplateGradientOptions(component);
+  const colorLookup = new Map<string, string>();
+  const gradientLookup = new Map<string, string>();
+  for (const option of colorOptions) {
+    colorLookup.set(option.id, option.id);
+    colorLookup.set(option.name, option.id);
+    colorLookup.set(option.hex, option.id);
+  }
+  for (const option of gradientOptions) {
+    gradientLookup.set(option.id, option.id);
+    gradientLookup.set(option.name, option.id);
+  }
+
+  const colors: string[] = [];
+  const gradients: string[] = [];
+  const customColors: string[] = [];
+  const addToken = (token: string, preferred: "color" | "gradient" | "custom" = "color") => {
+    const text = String(token ?? "").trim();
+    if (!text) return;
+    const hex = normalizePromptTemplateHex(text);
+    if (preferred === "custom" && hex) {
+      customColors.push(hex);
+      return;
+    }
+    const colorId = colorLookup.get(hex || text);
+    if (colorId) {
+      colors.push(colorId);
+      return;
+    }
+    const gradientId = gradientLookup.get(text);
+    if (gradientId) {
+      gradients.push(gradientId);
+      return;
+    }
+    if (hex) customColors.push(hex);
+  };
+
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const record = asJsonObject(value);
+    promptTemplateColorTokens(record.colors).forEach((token) => addToken(token, "color"));
+    promptTemplateColorTokens(record.gradients).forEach((token) => addToken(token, "gradient"));
+    promptTemplateColorTokens(record.customColors).forEach((token) => addToken(token, "custom"));
+  } else {
+    promptTemplateColorTokens(value).forEach((token) => addToken(token));
+  }
+
+  return {
+    colors: uniquePromptTemplateColorValues(colors),
+    gradients: uniquePromptTemplateColorValues(gradients),
+    customColors: uniquePromptTemplateColorValues(customColors)
+  };
+}
+
+function promptTemplateColorValueText(component: Record<string, unknown>, value: unknown) {
+  const normalized = normalizePromptTemplateColorValue(component, value);
+  const colorById = new Map(promptTemplateColorOptions(component).map((option) => [option.id, option]));
+  const gradientById = new Map(promptTemplateGradientOptions(component).map((option) => [option.id, option]));
+  const parts: string[] = [];
+  for (const id of normalized.colors) {
+    const option = colorById.get(id);
+    if (option) parts.push(`${option.role || "颜色"}：${option.name} ${option.hex}`);
+  }
+  for (const id of normalized.gradients) {
+    const option = gradientById.get(id);
+    if (option) parts.push(`${option.role || "背景色系"}：${option.name} ${option.colors.join(" -> ")}`);
+  }
+  for (const hex of normalized.customColors) {
+    parts.push(`自定义色：${hex}`);
+  }
+  return parts.join("；");
+}
+
 function promptTemplateValueText(component: Record<string, unknown>, value: unknown) {
+  if (component.type === "color") {
+    return promptTemplateColorValueText(component, value);
+  }
   if (component.type === "image") {
     if (typeof value === "string") return value.trim() || String(component.defaultValue ?? "").trim();
     const imageValue = asJsonObject(value);
@@ -2069,68 +2231,6 @@ function defaultContentSeedKey(templateId: string) {
   return `${templateId}:${DEFAULT_CONTENT_SEED_VERSION}`;
 }
 
-function componentMigrationSignature(components: unknown) {
-  return asJsonArray(components).map((component) => {
-    const record = asJsonObject(component);
-    return {
-      id: String(record.id ?? ""),
-      type: String(record.type ?? ""),
-      label: String(record.label ?? ""),
-      placeholder: String(record.placeholder ?? ""),
-      defaultValue: String(record.defaultValue ?? ""),
-      helpText: String(record.helpText ?? ""),
-      slot: String(record.slot ?? ""),
-      sortOrder: Number(record.sortOrder ?? 0),
-      required: Boolean(record.required),
-      multiple: Boolean(record.multiple),
-      options: Array.isArray(record.options) ? record.options.map((option) => String(option ?? "")) : []
-    };
-  });
-}
-
-function componentsMatchLegacy(existingComponents: unknown, legacyComponents: unknown) {
-  const legacySignature = componentMigrationSignature(legacyComponents);
-  if (legacySignature.length === 0) return false;
-  return JSON.stringify(componentMigrationSignature(existingComponents)) === JSON.stringify(legacySignature);
-}
-
-function clonePresetComponents(presetComponents: PromptTemplatePreset["components"]) {
-  return presetComponents.map((component) => ({ ...asJsonObject(component) }));
-}
-
-function componentsWithPresetDefaults(
-  existingComponents: unknown,
-  presetComponents: PromptTemplatePreset["components"],
-  legacyComponents: PromptTemplatePreset["legacyComponents"] = []
-) {
-  const components = asJsonArray(existingComponents).map((component) => asJsonObject(component));
-  if (componentsMatchLegacy(components, legacyComponents)) {
-    return { changed: true, replace: true, components: clonePresetComponents(presetComponents) };
-  }
-  const presetById = new Map(presetComponents.map((component) => [String(component.id ?? ""), component]));
-  let changed = false;
-  const next = components.map((component) => {
-    const preset = presetById.get(String(component.id ?? ""));
-    const presetDefault = String(preset?.defaultValue ?? "").trim();
-    let nextComponent = component;
-    if (String(component.type ?? "") === "image") {
-      for (const field of ["label", "placeholder", "helpText", "defaultValue"]) {
-        const currentValue = String(nextComponent[field] ?? "");
-        if (currentValue.includes("参考图")) {
-          changed = true;
-          nextComponent = { ...nextComponent, [field]: currentValue.replaceAll("参考图", "素材") };
-        }
-      }
-    }
-    if (!presetDefault) return nextComponent;
-    const currentDefault = String(component.defaultValue ?? "").trim();
-    if (currentDefault) return nextComponent;
-    changed = true;
-    return { ...nextComponent, defaultValue: presetDefault };
-  });
-  return { changed, replace: false, components: next };
-}
-
 function ensureDefaultTemplateContentForUser(userId: string, template: PromptTemplatePreset) {
   const seedKey = defaultContentSeedKey(template.id);
   const seeded = getOne<{ seed_key: string }>(
@@ -2150,34 +2250,27 @@ function ensureDefaultTemplateContentForUser(userId: string, template: PromptTem
     template.category
   );
   if (row) {
-    const next = componentsWithPresetDefaults(safeJson(row.components_json, []), template.components, template.legacyComponents);
-    if (next.changed) {
-      if (next.replace) {
-        const currentDescription = String(row.description ?? "").trim();
-        const legacyDescriptions = new Set(template.legacyDescriptions ?? []);
-        const nextDescription = currentDescription && !legacyDescriptions.has(currentDescription) ? row.description : template.description;
-        run(
-          appDb,
-          "update prompt_templates set description = ?, components_json = ?, rules_json = ?, output_json = ?, updated_at = ? where id = ? and user_id = ?",
-          nextDescription,
-          JSON.stringify(next.components),
-          JSON.stringify(template.rules),
-          JSON.stringify(template.output),
-          timestamp,
-          row.id,
-          userId
-        );
-      } else {
-        run(
-          appDb,
-          "update prompt_templates set components_json = ?, updated_at = ? where id = ? and user_id = ?",
-          JSON.stringify(next.components),
-          timestamp,
-          row.id,
-          userId
-        );
-      }
-    }
+    run(
+      appDb,
+      `update prompt_templates
+       set description = ?,
+           icon = ?,
+           optimize_style = ?,
+           components_json = ?,
+           rules_json = ?,
+           output_json = ?,
+           updated_at = ?
+       where id = ? and user_id = ?`,
+      template.description,
+      template.icon,
+      "standard",
+      JSON.stringify(template.components),
+      JSON.stringify(template.rules),
+      JSON.stringify(template.output),
+      timestamp,
+      row.id,
+      userId
+    );
   }
   run(
     appDb,

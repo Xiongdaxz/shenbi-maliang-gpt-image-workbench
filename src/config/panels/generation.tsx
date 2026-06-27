@@ -98,7 +98,7 @@ import {
 
 const accountStatusLabels: Record<ImageAccount["status"], string> = {
   normal: "可用",
-  limited: "限流",
+  limited: "Codex 限流",
   abnormal: "异常",
   disabled: "禁用"
 };
@@ -459,7 +459,7 @@ function ImageAccountDialog({
               onChange={(value) => setForm({ ...form, status: value as ImageAccount["status"] })}
               options={[
                 { value: "normal", label: "可用" },
-                { value: "limited", label: "限流" },
+                { value: "limited", label: "Codex 限流" },
                 { value: "abnormal", label: "异常" },
                 { value: "disabled", label: "禁用" }
               ]}

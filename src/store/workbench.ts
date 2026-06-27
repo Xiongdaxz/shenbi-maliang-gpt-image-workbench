@@ -44,6 +44,9 @@ export type ComposerSessionDraft = {
   size: string;
   quality: string;
   promptInputOptimizeStyle: PromptTemplateOptimizeStyle;
+  promptColorSchemeIds: string[];
+  promptColorSchemeId: string;
+  promptColorSchemeInjection: string;
   promptTemplate: ComposerPromptTemplateDraft | null;
 };
 
@@ -121,14 +124,30 @@ function emptyComposerDraft(): ComposerSessionDraft {
     size: "",
     quality: "",
     promptInputOptimizeStyle: "standard",
+    promptColorSchemeIds: [],
+    promptColorSchemeId: "",
+    promptColorSchemeInjection: "",
     promptTemplate: null
   };
 }
 
 function normalizeComposerDraft(value: unknown): ComposerSessionDraft {
-  return {
+  const draft = {
     ...emptyComposerDraft(),
     ...(value && typeof value === "object" && !Array.isArray(value) ? value as Partial<ComposerSessionDraft> : {})
+  };
+  const rawIds = Array.isArray(draft.promptColorSchemeIds)
+    ? draft.promptColorSchemeIds
+    : String(draft.promptColorSchemeId || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter((item) => item && item !== "none");
+  const promptColorSchemeIds = Array.from(new Set(rawIds.map(String))).slice(0, 1);
+  return {
+    ...draft,
+    promptColorSchemeIds,
+    promptColorSchemeId: String(promptColorSchemeIds[0] || ""),
+    promptColorSchemeInjection: String(draft.promptColorSchemeInjection || "")
   };
 }
 
@@ -142,6 +161,8 @@ function hasComposerDraftContent(draft: ComposerSessionDraft) {
     || draft.size
     || draft.quality
     || draft.promptInputOptimizeStyle !== "standard"
+    || draft.promptColorSchemeIds.length > 0
+    || draft.promptColorSchemeInjection.trim()
     || draft.promptTemplate
   );
 }

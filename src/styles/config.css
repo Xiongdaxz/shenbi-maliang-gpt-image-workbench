@@ -3963,8 +3963,7 @@ td small {
 }
 
 .request-log-meta-cell {
-  display: grid;
-  gap: 3px;
+  min-width: 0;
 }
 
 .request-log-meta-cell strong,
@@ -3995,6 +3994,10 @@ td small {
 
 .request-log-meta-cell span {
   color: #111827;
+}
+
+.request-log-meta-cell > * + * {
+  margin-top: 3px;
 }
 
 .request-log-result-cell {

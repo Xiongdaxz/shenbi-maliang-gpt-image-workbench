@@ -526,6 +526,33 @@ export function initAppDb() {
   );
 
   appDb.run(`
+    create table if not exists prompt_color_schemes (
+      id text primary key,
+      user_id text not null,
+      builtin_key text not null default '',
+      name text not null,
+      description text not null default '',
+      category text not null default '',
+      colors_json text not null default '[]',
+      gradients_json text not null default '[]',
+      prompt text not null default '',
+      visible integer not null default 1,
+      sort_order integer not null default 0,
+      is_builtin integer not null default 0,
+      created_at text not null,
+      updated_at text not null,
+      deleted_at text not null default '',
+      foreign key (user_id) references users(id)
+    )
+  `);
+  if (!tableColumnExists(appDb, "prompt_color_schemes", "deleted_at")) {
+    appDb.run("alter table prompt_color_schemes add column deleted_at text not null default ''");
+  }
+  appDb.run("create index if not exists idx_prompt_color_schemes_user_sort on prompt_color_schemes(user_id, sort_order, created_at)");
+  appDb.run("create index if not exists idx_prompt_color_schemes_user_builtin on prompt_color_schemes(user_id, builtin_key)");
+  appDb.run("create index if not exists idx_prompt_color_schemes_user_deleted_sort on prompt_color_schemes(user_id, deleted_at, sort_order, created_at)");
+
+  appDb.run(`
     create table if not exists user_auth_sessions (
       id text primary key,
       user_id text not null,

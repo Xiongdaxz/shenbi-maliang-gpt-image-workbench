@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Image as ImageIcon, Minus, Plus, Ratio } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
+import { Check, ChevronDown, Image as ImageIcon, ImagePlus, Ratio } from "lucide-react";
 import { sizeOptionFromValue, type QualityOption, type SizeOption } from "../lib/imageOptions";
 
 function sizePreviewStyle(previewRatio?: string, box = 22) {
@@ -229,25 +230,86 @@ export function ImageCountStepper({
   max?: number;
 }) {
   const clamp = (nextValue: number) => (Number.isFinite(nextValue) ? Math.max(min, Math.min(max, nextValue)) : min);
-  const update = (nextValue: number) => onChange(clamp(nextValue));
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({ top: -10000, left: -10000, width: 112 });
+  const selectedValue = clamp(value || min);
+  const options = Array.from({ length: Math.max(0, max - min + 1) }, (_, index) => min + index);
+
+  function updateMenuPosition() {
+    const rect = wrapRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const width = 112;
+    const menuHeight = menuRef.current?.offsetHeight ?? 272;
+    const top = Math.max(12, rect.top - menuHeight - 8);
+    const maxLeft = Math.max(12, window.innerWidth - width - 12);
+    const left = Math.min(Math.max(12, rect.left), maxLeft);
+    setMenuStyle({ top, left, width });
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Node;
+      if (!wrapRef.current?.contains(target) && !menuRef.current?.contains(target)) setOpen(false);
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    updateMenuPosition();
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    const frame = window.requestAnimationFrame(updateMenuPosition);
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+      window.cancelAnimationFrame(frame);
+    };
+  }, [open]);
 
   return (
-    <div className="image-count-stepper" aria-label="生成数量" data-tooltip="生成数量，也可以在提示词中写：分别生成几张">
-      <span>数量</span>
-      <button type="button" onClick={() => update(value - 1)} disabled={value <= min} aria-label="减少生成数量">
-        <Minus size={15} />
+    <div className="size-picker image-count-stepper" ref={wrapRef}>
+      <button
+        type="button"
+        className="image-count-trigger"
+        data-tooltip="生成数量，也可以在提示词中写：分别生成几张"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((next) => !next)}
+      >
+        <span className="size-trigger-icon image-count-trigger-icon" aria-hidden="true">
+          <ImagePlus size={15} />
+        </span>
+        <span>数量 {selectedValue}</span>
+        <ChevronDown size={15} className={open ? "open" : ""} />
       </button>
-      <input
-        type="number"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(event) => update(Number.parseInt(event.target.value || String(min), 10))}
-        aria-label="生成数量"
-      />
-      <button type="button" onClick={() => update(value + 1)} disabled={value >= max} aria-label="增加生成数量">
-        <Plus size={15} />
-      </button>
+      {open ? createPortal(
+        <div ref={menuRef} className="size-picker-menu image-count-menu" role="listbox" style={menuStyle}>
+          {options.map((option) => (
+            <button
+              type="button"
+              key={option}
+              role="option"
+              aria-selected={option === selectedValue}
+              className={option === selectedValue ? "active" : ""}
+              onClick={() => {
+                onChange(option);
+                setOpen(false);
+              }}
+            >
+              <span className="image-count-option-copy">
+                <strong>{option} 张</strong>
+              </span>
+              {option === selectedValue ? <Check className="size-option-check" size={16} /> : <span />}
+            </button>
+          ))}
+        </div>,
+        document.body
+      ) : null}
     </div>
   );
 }

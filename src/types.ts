@@ -589,8 +589,22 @@ export type PromptTemplateVisibility = "private" | "shared";
 
 export type PromptTemplateLanguage = "zh" | "en" | "bilingual";
 
-export type PromptTemplateComponentType = "text" | "textarea" | "select" | "image" | "section";
+export type PromptTemplateComponentType = "text" | "textarea" | "select" | "image" | "color" | "section";
 export type PromptTemplateComponentWidth = "full" | "half";
+
+export type PromptTemplateColorOption = {
+  id: string;
+  name: string;
+  role: string;
+  hex: string;
+};
+
+export type PromptTemplateGradientOption = {
+  id: string;
+  name: string;
+  role: string;
+  colors: string[];
+};
 
 export type PromptTemplateComponent = {
   id: string;
@@ -605,6 +619,9 @@ export type PromptTemplateComponent = {
   icon?: string;
   width?: PromptTemplateComponentWidth;
   multiple?: boolean;
+  colorOptions?: PromptTemplateColorOption[];
+  gradientOptions?: PromptTemplateGradientOption[];
+  allowCustomColor?: boolean;
   sortOrder?: number;
 };
 
@@ -665,10 +682,17 @@ export type PromptTemplateImageValue = {
   files?: PromptTemplateImageFile[];
 };
 
+export type PromptTemplateColorValue = {
+  colors?: string[];
+  gradients?: string[];
+  customColors?: string[];
+};
+
 export type PromptTemplateFormValue =
   | string
   | string[]
-  | PromptTemplateImageValue;
+  | PromptTemplateImageValue
+  | PromptTemplateColorValue;
 
 export type PromptTemplateFormValues = Record<string, PromptTemplateFormValue>;
 

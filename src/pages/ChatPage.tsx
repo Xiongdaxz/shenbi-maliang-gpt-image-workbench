@@ -26,6 +26,7 @@ import { type AssetUploadMode } from "../lib/assets";
 import { APP_INTRO_SLIDES } from "../lib/featureIntroSlides";
 import { isDefaultCaseItemId } from "../lib/defaultCases";
 import { requestSizeFromSelection, type SizeOption } from "../lib/imageOptions";
+import { normalizePromptColorSchemeIds } from "../lib/promptColorSchemes";
 import { normalizePromptOptimizeStyle, sanitizePromptOptimizeStyleGroups } from "../lib/promptOptimizeStyles";
 import { getTimeGreeting } from "../lib/timeGreeting";
 import { workImageFromMessage } from "../lib/workImages";
@@ -53,6 +54,7 @@ type AssetModalTarget =
 const PROMPT_INPUT_OPTIMIZE_STYLE_STORAGE_KEY = "gpt-image.prompt-input-optimize-style";
 const MESSAGE_REVEAL_STAGGER_MS = 46;
 const MESSAGE_REVEAL_MAX_DELAY_MS = 414;
+const EMPTY_PROMPT_COLOR_SCHEMES: [] = [];
 const FALLBACK_IMAGE_EDIT_SUGGESTIONS: ImageEditSuggestion[] = [
   {
     id: "fallback-edit-suggestion-1",
@@ -214,13 +216,26 @@ function emptyComposerSessionDraft(): ComposerSessionDraft {
     size: "",
     quality: "",
     promptInputOptimizeStyle: "standard",
+    promptColorSchemeIds: [],
+    promptColorSchemeId: "",
+    promptColorSchemeInjection: "",
     promptTemplate: null
   };
 }
 
 function hasComposerDraftContent(draft: Pick<
   ComposerSessionDraft,
-  "draftPrompt" | "draftCaseUsage" | "selectedCaseMaterials" | "selectedAssets" | "imageCount" | "size" | "quality" | "promptInputOptimizeStyle"
+  "draftPrompt"
+  | "draftCaseUsage"
+  | "selectedCaseMaterials"
+  | "selectedAssets"
+  | "imageCount"
+  | "size"
+  | "quality"
+  | "promptInputOptimizeStyle"
+  | "promptColorSchemeIds"
+  | "promptColorSchemeId"
+  | "promptColorSchemeInjection"
 >) {
   return Boolean(
     draft.draftPrompt.trim()
@@ -231,6 +246,8 @@ function hasComposerDraftContent(draft: Pick<
     || draft.size
     || draft.quality
     || draft.promptInputOptimizeStyle !== "standard"
+    || draft.promptColorSchemeIds.length > 0
+    || draft.promptColorSchemeInjection.trim()
   );
 }
 
@@ -353,6 +370,7 @@ export function ChatPage({ user }: { user: User }) {
   const assets = useQuery({ queryKey: ["assets"], queryFn: () => api.assets() });
   const assetCategories = useQuery({ queryKey: ["asset-categories"], queryFn: api.assetCategories, enabled: Boolean(assetTarget) });
   const cases = useQuery({ queryKey: ["cases"], queryFn: () => api.cases() });
+  const promptColorSchemes = useQuery({ queryKey: ["prompt-color-schemes"], queryFn: () => api.promptColorSchemes() });
   const messages = useQuery({
     queryKey: ["messages", sessionId],
     queryFn: () => api.messages(sessionId!),
@@ -375,10 +393,20 @@ export function ChatPage({ user }: { user: User }) {
   const composerInstanceKey = sessionId ? composerScopeKey : `${COMPOSER_NEW_DRAFT_SCOPE_KEY}:${newChatResetKey}`;
   const currentComposerDraft = composerDrafts[composerScopeKey] ?? null;
   const currentPromptTemplateDraft = composerDrafts[composerScopeKey]?.promptTemplate ?? null;
+  const promptColorSchemeList = promptColorSchemes.data?.schemes ?? EMPTY_PROMPT_COLOR_SCHEMES;
   const currentPromptInputOptimizeStyle = normalizePromptOptimizeStyle(
     currentComposerDraft?.promptInputOptimizeStyle ?? initialPromptInputOptimizeStyleFromBrowser(),
     promptOptimizeStyleGroups
   );
+  const currentPromptColorSchemeIds = useMemo(() => (
+    promptColorSchemeList.length > 0
+      ? normalizePromptColorSchemeIds(currentComposerDraft?.promptColorSchemeIds ?? currentComposerDraft?.promptColorSchemeId, promptColorSchemeList).slice(0, 1)
+      : Array.isArray(currentComposerDraft?.promptColorSchemeIds)
+        ? currentComposerDraft.promptColorSchemeIds.slice(0, 1)
+        : []
+  ), [currentComposerDraft?.promptColorSchemeId, currentComposerDraft?.promptColorSchemeIds, promptColorSchemeList]);
+  const currentPromptColorSchemeIdsKey = currentPromptColorSchemeIds.join("\u0000");
+  const currentPromptColorSchemeInjection = currentComposerDraft?.promptColorSchemeInjection ?? "";
   const restoringComposerDraftScopeRef = useRef<string | null>(null);
   const hasRestoredComposerScopeRef = useRef(false);
   const handlePromptTemplateDraftChange = useCallback((promptTemplate: ComposerSessionDraft["promptTemplate"]) => {
@@ -386,6 +414,22 @@ export function ChatPage({ user }: { user: User }) {
   }, [composerScopeKey, upsertComposerDraft]);
   const handlePromptInputOptimizeStyleChange = useCallback((promptInputOptimizeStyle: ComposerSessionDraft["promptInputOptimizeStyle"]) => {
     upsertComposerDraft(composerScopeKey, { promptInputOptimizeStyle });
+  }, [composerScopeKey, upsertComposerDraft]);
+  const handlePromptColorSchemeChange = useCallback((state: { ids: string[]; injection: string; prompt: string }) => {
+    setDraftPrompt(state.prompt);
+    upsertComposerDraft(composerScopeKey, {
+      draftPrompt: state.prompt,
+      promptColorSchemeIds: state.ids,
+      promptColorSchemeId: state.ids[0] ?? "",
+      promptColorSchemeInjection: state.injection
+    });
+  }, [composerScopeKey, setDraftPrompt, upsertComposerDraft]);
+  const resetPromptColorScheme = useCallback(() => {
+    upsertComposerDraft(composerScopeKey, {
+      promptColorSchemeIds: [],
+      promptColorSchemeId: "",
+      promptColorSchemeInjection: ""
+    });
   }, [composerScopeKey, upsertComposerDraft]);
   const resetPromptInputOptimizeStyle = useCallback(() => {
     handlePromptInputOptimizeStyleChange("standard");
@@ -864,6 +908,7 @@ export function ChatPage({ user }: { user: User }) {
     setSelectedCaseMaterials([]);
     setMaterialPickerOpen(false);
     resetPromptInputOptimizeStyle();
+    resetPromptColorScheme();
     submit.mutate({
       clientRequestId,
       pendingScope,
@@ -938,10 +983,20 @@ export function ChatPage({ user }: { user: User }) {
       .find((message) => message.role === "assistant" && message.imageUrl && message.imageId);
     return latestAssistantImage ? workImageFromMessage(latestAssistantImage) : null;
   }, [currentScopeBusy, imageEditor, visibleBranchMessages]);
+  const latestCompletedImageJobImageId = useMemo(() => {
+    if (currentScopeBusy || imageEditor) return "";
+    for (let index = imageJobs.length - 1; index >= 0; index -= 1) {
+      const job = imageJobs[index];
+      if ((job.branchId?.trim() || MAIN_CHAT_BRANCH_ID) !== activeChatBranchId) continue;
+      if (job.status === "succeeded" && job.resultImageId?.trim()) return job.resultImageId.trim();
+    }
+    return "";
+  }, [activeChatBranchId, currentScopeBusy, imageEditor, imageJobs]);
+  const editSuggestionImageId = latestEditSuggestionImage?.id ?? latestCompletedImageJobImageId;
   const editSuggestionsQuery = useQuery({
-    queryKey: ["image-edit-suggestions", latestEditSuggestionImage?.id ?? "", editSuggestionTone, editSuggestionsEnabled],
-    queryFn: () => api.imageEditSuggestions(latestEditSuggestionImage?.id ?? ""),
-    enabled: Boolean(editSuggestionsEnabled && latestEditSuggestionImage && !currentScopeBusy && !imageEditor),
+    queryKey: ["image-edit-suggestions", editSuggestionImageId, editSuggestionTone, editSuggestionsEnabled],
+    queryFn: () => api.imageEditSuggestions(editSuggestionImageId),
+    enabled: Boolean(editSuggestionsEnabled && editSuggestionImageId && !currentScopeBusy && !imageEditor),
     staleTime: 5 * 60 * 1000
   });
   const composerEditSuggestions = useMemo(() => {
@@ -951,7 +1006,12 @@ export function ChatPage({ user }: { user: User }) {
     return editSuggestionsQuery.isError ? fallbackImageEditSuggestionsForImage(latestEditSuggestionImage) : [];
   }, [currentScopeBusy, editSuggestionsEnabled, editSuggestionsQuery.data?.suggestions, editSuggestionsQuery.isError, imageEditor, latestEditSuggestionImage]);
   const composerEditSuggestionsLoading = Boolean(
-    editSuggestionsEnabled && latestEditSuggestionImage && editSuggestionsQuery.isLoading && !editSuggestionsQuery.isError
+    editSuggestionsEnabled
+      && editSuggestionImageId
+      && !currentScopeBusy
+      && !imageEditor
+      && !editSuggestionsQuery.isError
+      && (editSuggestionsQuery.isLoading || !latestEditSuggestionImage)
   );
   const showComposerEditSuggestions = composerEditSuggestionsLoading || composerEditSuggestions.length > 0;
   const applyEditSuggestion = useCallback((suggestion: ImageEditSuggestion) => {
@@ -963,10 +1023,12 @@ export function ChatPage({ user }: { user: User }) {
     setMaterialPickerOpen(false);
     setCasePickerOpen(false);
     resetPromptInputOptimizeStyle();
+    resetPromptColorScheme();
     window.setTimeout(() => textareaRef.current?.focus(), 0);
   }, [
     currentScopeBusy,
     latestEditSuggestionImage,
+    resetPromptColorScheme,
     resetPromptInputOptimizeStyle,
     setDraftPrompt,
     setEditImage,
@@ -995,7 +1057,10 @@ export function ChatPage({ user }: { user: User }) {
       imageCount,
       size,
       quality,
-      promptInputOptimizeStyle: currentPromptInputOptimizeStyle
+      promptInputOptimizeStyle: currentPromptInputOptimizeStyle,
+      promptColorSchemeIds: currentPromptColorSchemeIds,
+      promptColorSchemeId: currentPromptColorSchemeIds[0] ?? "",
+      promptColorSchemeInjection: currentPromptColorSchemeInjection
     };
     const shouldUseHandoffDraft = !storedDraft
       && !hasRestoredComposerScopeRef.current
@@ -1041,9 +1106,25 @@ export function ChatPage({ user }: { user: User }) {
       imageCount,
       size,
       quality,
-      promptInputOptimizeStyle: currentPromptInputOptimizeStyle
+      promptInputOptimizeStyle: currentPromptInputOptimizeStyle,
+      promptColorSchemeIds: currentPromptColorSchemeIds,
+      promptColorSchemeId: currentPromptColorSchemeIds[0] ?? "",
+      promptColorSchemeInjection: currentPromptColorSchemeInjection
     });
-  }, [composerScopeKey, currentPromptInputOptimizeStyle, draftCaseUsage, draftPrompt, imageCount, quality, selectedAssets, selectedCaseMaterials, size, upsertComposerDraft]);
+  }, [
+    composerScopeKey,
+    currentPromptColorSchemeIdsKey,
+    currentPromptColorSchemeInjection,
+    currentPromptInputOptimizeStyle,
+    draftCaseUsage,
+    draftPrompt,
+    imageCount,
+    quality,
+    selectedAssets,
+    selectedCaseMaterials,
+    size,
+    upsertComposerDraft
+  ]);
 
   useEffect(() => {
     if (sessionId || !newChatPromptOptimizeRequest) return;
@@ -1124,6 +1205,7 @@ export function ChatPage({ user }: { user: User }) {
     setSelectedCaseMaterials([]);
     setMaterialPickerOpen(false);
     resetPromptInputOptimizeStyle();
+    resetPromptColorScheme();
     submit.mutate({
       clientRequestId,
       pendingScope,
@@ -1330,6 +1412,9 @@ export function ChatPage({ user }: { user: User }) {
   });
 
   const showStarter = !sessionId && messageList.length === 0;
+  const composerPlaceholder = sessionId || messageList.length > 0 || composerPreviews.length > 0
+    ? "描述你想调整的地方，或继续补充生成要求"
+    : "描述你想生成的图片";
   const branchSwitchOptions = useMemo(() => {
     const switchItem = renderItems.find((item) => item.type === "thread");
     if (
@@ -1534,9 +1619,12 @@ export function ChatPage({ user }: { user: User }) {
         editSuggestionsLoading={composerEditSuggestionsLoading}
         error={latestVisibleFailedJob ? "" : error}
         materialPickerOpen={materialPickerOpen && !imageEditor}
-        placeholder={editImage || selectedCaseMaterials.length > 0 ? "描述你想怎么修改这张图" : "描述你想生成的图片"}
+        placeholder={composerPlaceholder}
         previews={composerPreviews}
         imageCount={imageCount}
+        promptColorSchemes={promptColorSchemeList}
+        promptColorSchemeIds={currentPromptColorSchemeIds}
+        promptColorSchemeInjection={currentPromptColorSchemeInjection}
         promptInputOptimizeStyle={currentPromptInputOptimizeStyle}
         promptOptimizeCustomInstruction={promptOptimizeCustomInstruction}
         promptOptimizeStyleGroups={promptOptimizeStyleGroups}
@@ -1561,6 +1649,7 @@ export function ChatPage({ user }: { user: User }) {
           setMaterialPickerOpen(false);
           setCasePickerOpen(true);
         }}
+        onPromptColorSchemeChange={handlePromptColorSchemeChange}
         onPromptInputOptimizeStyleChange={handlePromptInputOptimizeStyleChange}
         onPromptOptimizeCustomInstructionChange={schedulePromptOptimizeCustomInstructionSave}
         onPromptTemplateDraftChange={handlePromptTemplateDraftChange}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Archive, Check, Database, Github, KeyRound, Monitor, Moon, Palette, Pencil, Settings, Smile, Sun, Trash2, UserRound, X } from "lucide-react";
+import { Archive, Database, Github, KeyRound, Monitor, Moon, Palette, Pencil, Settings, Smile, Sun, Trash2, UserRound, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api } from "../../api";
 import { cx } from "../../lib/cx";
@@ -8,8 +8,9 @@ import { useAppearanceMode } from "../../hooks/useAppearanceMode";
 import type { AppearanceMode } from "../../lib/appearance";
 import { sanitizePromptOptimizeStyleGroups } from "../../lib/promptOptimizeStyles";
 import type { EditSuggestionTone, User, UserPreferences } from "../../types";
-import { useToast } from "../../ui";
+import { CustomSelect, useToast } from "../../ui";
 import { MarkdownView } from "../MarkdownView";
+import { PromptColorSchemeSettingsDialog } from "../PromptColorSchemeSettingsDialog";
 import { PromptOptimizeStyleSettingsDialog } from "../PromptOptimizeStyleSettingsDialog";
 
 type SettingsSectionId = "general" | "personalization" | "account" | "data" | "about";
@@ -87,12 +88,18 @@ export function AppSettingsDialog({
 }: AppSettingsDialogProps) {
   const [activeSection, setActiveSection] = useState<SettingsSectionId>("general");
   const [promptStyleSettingsOpen, setPromptStyleSettingsOpen] = useState(false);
+  const [promptColorSchemeSettingsOpen, setPromptColorSchemeSettingsOpen] = useState(false);
   const { mode: appearanceMode, setMode: setAppearanceMode } = useAppearanceMode();
   const { showToast } = useToast();
   const changelog = useQuery({
     queryKey: ["changelog"],
     queryFn: api.changelog,
     enabled: open && activeSection === "about"
+  });
+  const promptColorSchemes = useQuery({
+    queryKey: ["prompt-color-schemes"],
+    queryFn: () => api.promptColorSchemes(),
+    enabled: open && (activeSection === "personalization" || promptColorSchemeSettingsOpen)
   });
 
   useEffect(() => {
@@ -114,6 +121,8 @@ export function AppSettingsDialog({
   const toneDisabled = !preferences.editSuggestionsEnabled;
   const promptStyleGroupCount = preferences.promptOptimizeStyleGroups.length;
   const promptSubStyleCount = preferences.promptOptimizeStyleGroups.reduce((total, group) => total + (group.children?.length ?? 0), 0);
+  const colorSchemeList = promptColorSchemes.data?.schemes ?? [];
+  const visibleColorSchemeCount = colorSchemeList.filter((scheme) => scheme.visible).length;
 
   return (
     <div
@@ -203,58 +212,36 @@ export function AppSettingsDialog({
               <div className="settings-row settings-preference-row">
                 <div>
                   <strong>续改建议</strong>
-                  <span>控制对话输入框上方的 3 条图片续改建议</span>
+                  <span>控制对话输入框上方的 3 条图片续改建议，选择新建议的生成倾向</span>
                 </div>
-                <button
-                  className={cx("settings-switch-control", preferences.editSuggestionsEnabled && "checked")}
-                  type="button"
-                  role="switch"
-                  aria-checked={preferences.editSuggestionsEnabled}
-                  aria-label="续改建议"
-                  onClick={() => onPreferencesChange({ editSuggestionsEnabled: !preferences.editSuggestionsEnabled })}
-                >
-                  <span className="settings-switch-track" aria-hidden="true">
-                    <span className="settings-switch-thumb" />
-                  </span>
-                </button>
+                <div className="settings-edit-suggestions-control">
+                  <button
+                    className={cx("settings-switch-control", preferences.editSuggestionsEnabled && "checked")}
+                    type="button"
+                    role="switch"
+                    aria-checked={preferences.editSuggestionsEnabled}
+                    aria-label="续改建议"
+                    onClick={() => onPreferencesChange({ editSuggestionsEnabled: !preferences.editSuggestionsEnabled })}
+                  >
+                    <span className="settings-switch-track" aria-hidden="true">
+                      <span className="settings-switch-thumb" />
+                    </span>
+                  </button>
+                  <CustomSelect
+                    value={preferences.editSuggestionTone}
+                    options={editSuggestionToneOptions}
+                    onChange={(value) => {
+                      const nextTone = editSuggestionToneOptions.find((option) => option.value === value)?.value;
+                      if (!nextTone || nextTone === preferences.editSuggestionTone) return;
+                      onPreferencesChange({ editSuggestionTone: nextTone });
+                    }}
+                    disabled={toneDisabled}
+                    className="settings-edit-suggestion-select"
+                    menuClassName="settings-edit-suggestion-menu"
+                    menuWidth={300}
+                  />
+                </div>
               </div>
-              {preferences.editSuggestionsEnabled ? (
-                <div className="settings-row settings-preference-tone-row">
-                  <div>
-                    <strong>建议倾向</strong>
-                    <span>影响新生成的续改建议内容，默认就是当前效果</span>
-                  </div>
-                  <div className={cx("settings-tone-options", toneDisabled && "disabled")} role="radiogroup" aria-label="续改建议倾向">
-                    {editSuggestionToneOptions.map((option) => {
-                      const active = option.value === preferences.editSuggestionTone;
-                      return (
-                        <button
-                          key={option.value}
-                          className={cx("settings-tone-option", active && "active")}
-                          type="button"
-                          role="radio"
-                          aria-checked={active}
-                          disabled={toneDisabled}
-                          onClick={() => {
-                            if (toneDisabled || active) return;
-                            onPreferencesChange({ editSuggestionTone: option.value });
-                          }}
-                        >
-                          <span className="settings-tone-option-head">
-                            <strong>{option.label}</strong>
-                            {active ? (
-                              <span className="settings-tone-check" aria-hidden="true">
-                                <Check size={14} strokeWidth={2.5} />
-                              </span>
-                            ) : null}
-                          </span>
-                          <span>{option.description}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
               <div className="settings-row settings-prompt-styles-entry">
                 <div>
                   <strong>AI 优化风格</strong>
@@ -265,6 +252,16 @@ export function AppSettingsDialog({
                 <button className="secondary-btn" type="button" onClick={() => setPromptStyleSettingsOpen(true)}>
                   <Settings size={15} />
                   管理风格
+                </button>
+              </div>
+              <div className="settings-row settings-prompt-styles-entry">
+                <div>
+                  <strong>色系选择</strong>
+                  <span>{visibleColorSchemeCount} 个可用色系；选择后会注入到对话页提示词</span>
+                </div>
+                <button className="secondary-btn" type="button" onClick={() => setPromptColorSchemeSettingsOpen(true)}>
+                  <Palette size={15} />
+                  管理色系
                 </button>
               </div>
             </div>
@@ -406,8 +403,11 @@ export function AppSettingsDialog({
         onClose={() => setPromptStyleSettingsOpen(false)}
         onSave={(nextGroups) => {
           onPreferencesChange({ promptOptimizeStyleGroups: nextGroups });
-          setPromptStyleSettingsOpen(false);
         }}
+      />
+      <PromptColorSchemeSettingsDialog
+        open={promptColorSchemeSettingsOpen}
+        onClose={() => setPromptColorSchemeSettingsOpen(false)}
       />
     </div>
   );

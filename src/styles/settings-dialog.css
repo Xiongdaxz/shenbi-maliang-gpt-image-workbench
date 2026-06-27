@@ -270,109 +270,69 @@
   transform: translateX(18px);
 }
 
-.settings-preference-tone-row {
-  grid-template-columns: 1fr;
-  align-items: start;
+.settings-edit-suggestions-control {
+  width: auto;
+  display: grid;
+  grid-template-columns: auto max-content;
+  align-items: center;
+  justify-self: end;
   gap: 10px;
-  padding: 14px 0 16px;
 }
 
-.settings-tone-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+.settings-edit-suggestion-select {
+  width: max-content;
 }
 
-.settings-tone-options.disabled {
-  opacity: 0.54;
-}
-
-.settings-tone-option {
-  position: relative;
-  min-width: 0;
-  min-height: 78px;
-  display: grid;
-  align-content: start;
-  gap: 4px;
-  border: 1px solid var(--app-border-strong);
-  border-radius: 8px;
-  background: var(--app-input-bg);
-  color: var(--app-text);
-  padding: 10px 42px 10px 12px;
-  text-align: left;
-  transition:
-    border-color 160ms ease,
-    background 160ms ease,
-    color 160ms ease;
-}
-
-.settings-tone-option:hover {
-  border-color: var(--control-focus-border);
-  background: var(--button-default-hover-bg);
-}
-
-.settings-tone-option:disabled {
-  cursor: not-allowed;
-}
-
-.settings-tone-option:disabled:hover {
-  border-color: var(--app-border-strong);
-  background: var(--app-input-bg);
-}
-
-.settings-tone-option.active {
-  border-color: var(--button-primary-bg);
-  background: var(--control-selected-bg);
-}
-
-.settings-tone-option.active:disabled {
-  border-color: var(--app-border-strong);
-  background: var(--app-input-bg);
-}
-
-.settings-tone-option strong {
-  overflow: visible;
-  color: inherit;
-  white-space: normal;
-  text-overflow: clip;
-}
-
-.settings-tone-option-head {
-  display: block;
-  color: inherit;
-}
-
-.settings-tone-check {
-  position: absolute;
-  top: 10px;
-  right: 12px;
-  width: 22px;
-  height: 22px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--app-border-strong);
+.settings-edit-suggestion-select .custom-select-trigger {
+  width: auto;
+  min-width: 86px;
+  min-height: 32px;
+  height: 32px;
+  grid-template-columns: max-content 14px;
+  justify-content: center;
+  gap: 6px;
+  border-color: transparent;
   border-radius: 999px;
-  background: var(--app-surface);
-  color: transparent;
+  background: transparent;
+  padding: 6px 10px 6px 12px;
+  box-shadow: none;
 }
 
-.settings-tone-option.active .settings-tone-check {
-  border-color: var(--button-primary-bg);
-  background: var(--button-primary-bg);
-  color: var(--button-primary-text);
+.settings-edit-suggestion-select .custom-select-trigger:hover,
+.settings-edit-suggestion-select .custom-select-trigger:focus,
+.settings-edit-suggestion-select .custom-select-trigger[aria-expanded="true"] {
+  border-color: transparent;
+  background: var(--button-default-hover-bg);
+  box-shadow: none;
 }
 
-.settings-tone-option.active:disabled .settings-tone-check {
-  border-color: var(--app-border-strong);
-  background: var(--app-border-strong);
-  color: var(--button-primary-text);
+.settings-edit-suggestion-select .custom-select-label {
+  font-weight: 600;
 }
 
-.settings-tone-option > span:not(.settings-tone-option-head) {
-  color: var(--app-muted);
-  font-size: 12px;
-  line-height: 17px;
-  white-space: normal;
+.settings-edit-suggestion-select .custom-select-trigger > svg {
+  width: 14px;
+  height: 14px;
+}
+
+.settings-edit-suggestion-menu button {
+  min-height: 46px;
+}
+
+.settings-edit-suggestion-menu .custom-select-option-main {
+  min-width: 0;
+  align-items: flex-start;
+}
+
+.settings-edit-suggestion-menu .custom-select-option-text {
+  min-width: 0;
+}
+
+.settings-edit-suggestion-menu small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-prompt-styles-entry {
@@ -923,7 +883,9 @@
     min-width: 0;
   }
 
-  .settings-tone-options {
-    grid-template-columns: 1fr;
+  .settings-edit-suggestions-control {
+    width: 100%;
+    grid-template-columns: auto max-content;
+    justify-self: stretch;
   }
 }

@@ -3,10 +3,19 @@ import { ArrowUp, BrushCleaning, ImageIcon, Lightbulb, Plus, RotateCw, Sparkles,
 import { ImageLightbox, type ImageLightboxState } from "../ImageLightbox";
 import { MaterialPickerDrawer } from "../MaterialPicker";
 import { ImageCountStepper, QualityPicker, SizePicker } from "../ImageOptionPickers";
+import { PromptColorSchemeSelect } from "../PromptColorSchemeSelect";
 import { PromptOptimizeStyleSelect } from "../PromptOptimizeStyleSelect";
 import { PromptTemplateComposerPanel } from "./PromptTemplateComposerPanel";
-import { api, type PromptTemplateOptimizeStyle } from "../../api";
+import { api, type PromptColorScheme, type PromptTemplateOptimizeStyle } from "../../api";
 import { cx } from "../../lib/cx";
+import {
+  applyPromptColorSchemeInjection,
+  normalizePromptColorSchemeIds,
+  promptCustomColorSchemeHexFromInjection,
+  promptCustomColorSchemeInjectionText,
+  promptColorSchemesByIds,
+  promptColorSchemesInjectionText
+} from "../../lib/promptColorSchemes";
 import {
   isPromptOptimizeSeriesStyle,
   normalizePromptOptimizeStyle,
@@ -45,6 +54,9 @@ type ChatComposerProps = {
   placeholder: string;
   previews: ChatComposerPreview[];
   imageCount: number;
+  promptColorSchemes: PromptColorScheme[];
+  promptColorSchemeIds: string[];
+  promptColorSchemeInjection?: string;
   promptInputOptimizeStyle: PromptTemplateOptimizeStyle;
   promptOptimizeCustomInstruction?: string;
   promptOptimizeStyleGroups: PromptOptimizeStyleGroup[];
@@ -67,6 +79,7 @@ type ChatComposerProps = {
   onToggleAsset: (asset: AssetItem) => void;
   onOpenCasePicker: () => void;
   onToggleMaterialPicker: () => void;
+  onPromptColorSchemeChange?: (state: { ids: string[]; injection: string; prompt: string }) => void;
   onPromptInputOptimizeStyleChange?: (value: PromptTemplateOptimizeStyle) => void;
   onPromptOptimizeCustomInstructionChange?: (value: string) => void;
   onPromptTemplateDraftChange?: (draft: ComposerPromptTemplateDraft | null) => void;
@@ -126,6 +139,9 @@ export function ChatComposer({
   placeholder,
   previews,
   imageCount,
+  promptColorSchemes,
+  promptColorSchemeIds,
+  promptColorSchemeInjection = "",
   promptInputOptimizeStyle,
   promptOptimizeCustomInstruction = "",
   promptOptimizeStyleGroups,
@@ -148,6 +164,7 @@ export function ChatComposer({
   onToggleAsset,
   onOpenCasePicker,
   onToggleMaterialPicker,
+  onPromptColorSchemeChange,
   onPromptInputOptimizeStyleChange,
   onPromptOptimizeCustomInstructionChange,
   onPromptTemplateDraftChange,
@@ -187,6 +204,10 @@ export function ChatComposer({
   const promptOptimizationLoading = promptTemplateLoading || promptInputOptimizePending;
   const promptTextareaLoading = (promptTemplateLoading && !promptTemplateStreaming) || (promptInputOptimizePending && !promptInputOptimizeStreaming);
   const optimizeStyleOption = promptOptimizeStyleOption(promptInputOptimizeStyle, promptOptimizeStyleGroups);
+  const normalizedPromptColorSchemeIds = normalizePromptColorSchemeIds(promptColorSchemeIds, promptColorSchemes).slice(0, 1);
+  const promptColorSchemeCustomHex = normalizedPromptColorSchemeIds.length === 0
+    ? promptCustomColorSchemeHexFromInjection(promptColorSchemeInjection)
+    : "";
   const hasDraftPrompt = Boolean(draftPrompt.trim());
   const hasClearableInput = hasDraftPrompt || selectedAssets.length > 0;
   const clearInputLabel = selectedAssets.length > 0 ? "清空输入内容和素材" : "清空输入内容";
@@ -607,6 +628,7 @@ export function ChatComposer({
     resetInputOptimizationState();
     closeSlashMenuWithoutChangingPrompt();
     onPromptInputOptimizeStyleChange?.("standard");
+    onPromptColorSchemeChange?.({ ids: [], injection: "", prompt: "" });
     if (imageCount !== 1) onImageCountChange(1);
     onDraftPromptChange("");
     if (selectedAssets.length > 0) onSelectedAssetsChange([]);
@@ -642,6 +664,49 @@ export function ChatComposer({
       return;
     }
     if (shouldAutoOptimize) void optimizeCurrentPrompt(nextOptimizeStyle, sourcePrompt, nextImageCount);
+  }
+
+  function updatePromptColorSchemes(value: string[]) {
+    if (promptOptimizationLoading) return;
+    const nextIds = normalizePromptColorSchemeIds(value, promptColorSchemes).slice(0, 1);
+    const nextSchemes = promptColorSchemesByIds(nextIds, promptColorSchemes);
+    const nextInjection = promptColorSchemesInjectionText(nextSchemes);
+    const currentPrompt = textareaRef.current?.value ?? draftPrompt;
+    const result = applyPromptColorSchemeInjection(currentPrompt, promptColorSchemeInjection, nextInjection);
+    stopPromptTemplateTyping();
+    resetInputOptimizationState();
+    closeSlashMenuWithoutChangingPrompt();
+    onDraftPromptChange(result.prompt);
+    onPromptColorSchemeChange?.({ ids: nextIds, injection: nextInjection, prompt: result.prompt });
+    window.setTimeout(() => textareaRef.current?.focus(), 0);
+  }
+
+  function updatePromptCustomColorScheme(hex: string) {
+    if (promptOptimizationLoading) return;
+    const nextInjection = promptCustomColorSchemeInjectionText(hex);
+    if (!nextInjection) return;
+    const currentPrompt = textareaRef.current?.value ?? draftPrompt;
+    const result = applyPromptColorSchemeInjection(currentPrompt, promptColorSchemeInjection, nextInjection);
+    stopPromptTemplateTyping();
+    resetInputOptimizationState();
+    closeSlashMenuWithoutChangingPrompt();
+    onDraftPromptChange(result.prompt);
+    onPromptColorSchemeChange?.({ ids: [], injection: nextInjection, prompt: result.prompt });
+    window.setTimeout(() => textareaRef.current?.focus(), 0);
+  }
+
+  function applyPromptTemplatePrompt(prompt: string) {
+    if (!promptColorSchemeInjection.trim()) {
+      onDraftPromptChange(prompt);
+      return;
+    }
+    const result = applyPromptColorSchemeInjection(prompt, promptColorSchemeInjection, promptColorSchemeInjection);
+    onDraftPromptChange(result.prompt);
+    onPromptColorSchemeChange?.({
+      ids: normalizedPromptColorSchemeIds,
+      injection: promptColorSchemeInjection,
+      prompt: result.prompt
+    });
   }
 
   function submitPrompt() {
@@ -689,7 +754,7 @@ export function ChatComposer({
           key={composerInstanceKey}
           selectedAssets={selectedAssets}
           onSelectedAssetsChange={onSelectedAssetsChange}
-          onApplyPrompt={onDraftPromptChange}
+          onApplyPrompt={applyPromptTemplatePrompt}
           onClose={closePromptTemplatePanel}
           collapseSignal={promptTemplateCollapseSignal}
           onPromptLoadingChange={setPromptTemplateLoading}
@@ -825,6 +890,20 @@ export function ChatComposer({
           <SizePicker value={size} options={sizeOptions} onChange={onSizeChange} />
           <QualityPicker value={quality} options={qualityOptions} onChange={onQualityChange} />
           <ImageCountStepper value={imageCount} onChange={onImageCountChange} />
+          <span className="composer-prompt-template-style-tooltip composer-prompt-template-color-control" data-tooltip="色系选择">
+            <PromptColorSchemeSelect
+              value={normalizedPromptColorSchemeIds}
+              schemes={promptColorSchemes}
+              onChange={updatePromptColorSchemes}
+              customColorHex={promptColorSchemeCustomHex}
+              onCustomColorSelect={updatePromptCustomColorScheme}
+              disabled={promptOptimizationLoading}
+              className="composer-prompt-template-color-select"
+              menuClassName="composer-prompt-template-color-menu"
+              menuPlacement="top"
+              menuWidth={340}
+            />
+          </span>
           <span className="composer-prompt-template-action-slot" ref={setPromptTemplateActionSlot}>
             {!promptTemplateOptimizeControlVisible ? (
               <>

@@ -135,6 +135,7 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-quick-m
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-panel,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-collapsed,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-category-select-menu,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-menu,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .custom-select-menu,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .search-modal {
   border-color: var(--app-border-muted);
@@ -730,47 +731,16 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-space-opti
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .settings-switch-track,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .settings-tone-option,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .settings-tone-check {
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .settings-switch-track {
   border-color: var(--app-border-strong);
   background: var(--app-input-bg);
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .settings-tone-check {
-  color: transparent;
-}
-
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .settings-switch-control.checked .settings-switch-track,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .settings-tone-option.active .settings-tone-check {
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .settings-switch-control.checked .settings-switch-track {
   border-color: var(--button-primary-bg);
   background: var(--button-primary-bg);
   color: var(--button-primary-text);
-}
-
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .settings-tone-option:hover {
-  border-color: var(--button-primary-bg);
-  background: var(--app-selected-bg);
-}
-
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .settings-tone-option:disabled:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .settings-tone-option.active:disabled {
-  border-color: var(--app-border-strong);
-  background: var(--app-input-bg);
-  box-shadow: none;
-}
-
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .settings-tone-option.active:disabled .settings-tone-check {
-  border-color: var(--app-border-strong);
-  background: var(--app-border-strong);
-  color: var(--button-primary-text);
-}
-
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .settings-tone-option.active {
-  border-color: var(--button-primary-bg);
-  background: var(--app-selected-bg);
-  box-shadow: inset 0 0 0 1px var(--button-primary-bg);
 }
 
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .toast-card,
@@ -789,10 +759,11 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .toast-card.error
 
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-search,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-optimize-control,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-color-select .custom-select-trigger,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-result-select-trigger,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .size-picker-trigger,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .quality-picker-trigger,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-count-stepper {
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-count-trigger {
   border-color: var(--button-default-border);
   background: var(--button-default-bg);
   color: var(--app-text);
@@ -822,9 +793,7 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .size-trigger-icon,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .size-option-icon,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .quality-trigger-icon,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-count-stepper > span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-count-stepper button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-count-stepper input,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-count-trigger-icon,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-optimize-submit,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-undo-submit,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-clear-submit,
@@ -841,7 +810,13 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-result-
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .size-picker-trigger small,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .size-picker-trigger svg,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .quality-picker-trigger svg,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-count-trigger svg,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-color-select .custom-select-trigger > svg,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-color-select .custom-select-value > svg,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-optimize-submit svg,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-optimize-control .custom-select-trigger > svg,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .quality-option-copy small,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-count-option-copy small,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .size-option-copy small,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .material-grid span,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .history-list span {
@@ -869,8 +844,7 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .size-picker-menu
 }
 
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-result-select-menu button:disabled,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-result-select-menu button:disabled small,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-count-stepper button:disabled {
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-result-select-menu button:disabled small {
   color: var(--app-subtle);
 }
 
@@ -1275,6 +1249,10 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-upload-
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-upload-pick:focus-within,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-multi-select-menu button:hover,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-multi-select-menu button.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-option:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-gradient-option:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-option.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-gradient-option.active,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .component-drag-handle:hover,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-property-tabs button:hover {
   border-color: var(--app-border-strong);
@@ -1318,6 +1296,10 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-setting
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .component-settings-card .template-setting-label,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-meta-card .template-setting-label,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .component-select-button,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-chip,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-option,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-gradient-option,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-color-settings-head strong,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .result-block pre,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-diff-switch.active,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .result-block-action .result-block-action-group .prompt-optimize-style-select .custom-select-trigger {
@@ -1332,6 +1314,15 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-preview
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-field small,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-upload-pick small,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-upload-item span,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-placeholder,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-summary.placeholder,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-section > span,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-option small,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-gradient-option small,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-empty,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-color-settings-tip,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-color-settings-head strong span,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-gradient-stop-add span,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-builder-head span,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-editor-preview-head span,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .component-list small,
@@ -1346,10 +1337,53 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-field i
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-field textarea,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-settings-card input,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-settings-card textarea,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-selected,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-checkbox input {
   border-color: var(--app-border-strong);
   background: var(--app-input-bg);
   color: var(--app-text);
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-chip,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-option,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-gradient-option,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-color-settings,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-color-settings-head button,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-color-swatch-picker,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-gradient-stop,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-color-setting-row button {
+  border-color: var(--app-border);
+  background: var(--app-card-bg);
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-chip button {
+  color: var(--app-muted);
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-chip button:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-color-settings-head button:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-color-setting-row .template-gradient-stop-add:hover:not(:disabled) {
+  background: var(--app-hover-bg);
+  color: var(--app-text);
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-color-settings-head button:disabled,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-color-setting-row button:disabled {
+  border-color: var(--app-border);
+  background: var(--app-surface-soft);
+  color: var(--app-subtle);
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-custom button:not(:disabled) {
+  border-color: var(--button-primary-bg);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-custom button:disabled {
+  border-color: var(--app-border);
+  background: var(--app-surface-soft);
+  color: var(--app-subtle);
 }
 
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-multi-select-menu,

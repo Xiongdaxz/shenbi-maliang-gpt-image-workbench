@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, Eye, EyeOff, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
 import { cx } from "../lib/cx";
+import { ConfirmDialog } from "../ui";
 import {
   cloneDefaultPromptOptimizeStyleGroups,
   createPromptOptimizeStyleValue,
@@ -32,6 +33,8 @@ export function PromptOptimizeStyleSettingsDialog({
   const savedGroups = useMemo(() => sanitizePromptOptimizeStyleGroups(groups), [groups]);
   const [draft, setDraft] = useState<PromptOptimizeStyleGroup[]>(() => savedGroups);
   const [activeGroupValue, setActiveGroupValue] = useState(savedGroups[0]?.value ?? "");
+  const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -41,6 +44,13 @@ export function PromptOptimizeStyleSettingsDialog({
       nextGroups.some((group) => group.value === current) ? current : nextGroups[0]?.value ?? ""
     ));
   }, [groups, open]);
+
+  useEffect(() => {
+    if (!open) {
+      setRestoreConfirmOpen(false);
+      setCloseConfirmOpen(false);
+    }
+  }, [open]);
 
   if (!open) return null;
 
@@ -139,11 +149,19 @@ export function PromptOptimizeStyleSettingsDialog({
     setActiveGroupValue(defaults[0]?.value ?? "");
   }
 
+  function requestClose() {
+    if (dirty) {
+      setCloseConfirmOpen(true);
+      return;
+    }
+    onClose();
+  }
+
   return createPortal(
     <div
       className="prompt-style-settings-backdrop"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget) requestClose();
       }}
     >
       <section className="prompt-style-settings-dialog" role="dialog" aria-modal="true" aria-label="AI 优化风格设置">
@@ -152,7 +170,7 @@ export function PromptOptimizeStyleSettingsDialog({
             <strong>AI 优化风格</strong>
             <span>左侧管理主风格，右侧配置选中主风格和子风格。</span>
           </div>
-          <button className="settings-close-btn" type="button" onClick={onClose} aria-label="关闭">
+          <button className="settings-close-btn" type="button" onClick={requestClose} aria-label="关闭">
             <X size={16} />
           </button>
         </header>
@@ -369,11 +387,11 @@ export function PromptOptimizeStyleSettingsDialog({
             <small>{styleDescription(activeGroup?.description, "选择左侧主风格后配置它的子风格。")}</small>
           </div>
           <div className="prompt-style-footer-actions">
-            <button className="secondary-btn" type="button" onClick={restoreDefaults}>
+            <button className="secondary-btn" type="button" onClick={() => setRestoreConfirmOpen(true)}>
               <RotateCcw size={15} />
               恢复默认
             </button>
-            <button className="secondary-btn" type="button" onClick={onClose}>
+            <button className="secondary-btn" type="button" onClick={requestClose}>
               取消
             </button>
             <button className="primary-btn" type="button" onClick={() => onSave(normalizedDraft)} disabled={!dirty || saving}>
@@ -383,6 +401,35 @@ export function PromptOptimizeStyleSettingsDialog({
           </div>
         </footer>
       </section>
+      <ConfirmDialog
+        open={restoreConfirmOpen}
+        title="恢复默认 AI 优化风格"
+        description="将把 AI 优化风格恢复为系统默认列表，当前未保存的风格修改会被替换。确认继续吗？"
+        confirmText="恢复默认"
+        backdropClassName="modal-backdrop-top"
+        onCancel={() => setRestoreConfirmOpen(false)}
+        onConfirm={() => {
+          restoreDefaults();
+          setRestoreConfirmOpen(false);
+        }}
+      />
+      <ConfirmDialog
+        open={closeConfirmOpen}
+        title="保存 AI 优化风格修改？"
+        description="当前 AI 优化风格有未保存修改。保存后关闭会写入当前配置；只关闭会丢弃这些修改。"
+        confirmText="保存并关闭"
+        cancelText="只关闭"
+        backdropClassName="modal-backdrop-top"
+        onCancel={() => {
+          setCloseConfirmOpen(false);
+          onClose();
+        }}
+        onConfirm={() => {
+          onSave(normalizedDraft);
+          setCloseConfirmOpen(false);
+          onClose();
+        }}
+      />
     </div>,
     document.body
   );

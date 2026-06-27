@@ -113,6 +113,7 @@ import type { LucideIcon } from "lucide-react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, type PromptTemplateExportDownload, type PromptTemplateOptimizeStyle, type PromptTemplatePayload } from "../api";
 import { PromptOptimizeStyleSelect } from "../components/PromptOptimizeStyleSelect";
+import { PromptTemplateColorPicker } from "../components/PromptTemplateColorPicker";
 import { SearchHistoryInput } from "../components/SearchHistoryInput";
 import { copyTextToClipboard } from "../lib/clipboard";
 import { cx } from "../lib/cx";
@@ -123,8 +124,12 @@ import {
 } from "../lib/promptOptimizeStyles";
 import {
   buildBasePrompt,
+  defaultPromptTemplateColorOptions,
+  defaultPromptTemplateGradientOptions,
   duplicatePromptTemplateComponent,
   initialPromptTemplateFormValues,
+  normalizePromptTemplateColorValue,
+  normalizePromptTemplateHex,
   promptTemplateDefaultValues,
   promptTemplateSignature,
   sortedPromptTemplateComponents
@@ -133,10 +138,12 @@ import { useWorkbench } from "../store/workbench";
 import type {
   AssetItem,
   PromptTemplate,
+  PromptTemplateColorOption,
   PromptTemplateComponent,
   PromptTemplateComponentWidth,
   PromptTemplateComponentType,
   PromptTemplateFormValues,
+  PromptTemplateGradientOption,
   PromptTemplateImageFile,
   PromptTemplateImageValue,
   PromptTemplateResult,
@@ -153,11 +160,22 @@ type PromptDialogState =
 type UsePromptTarget = "base" | "ai";
 type PromptDisplayLanguage = "zh" | "en";
 type PromptTemplateImageFileWithSource = PromptTemplateImageFile & { sourceFile?: File };
+const PROMPT_TEMPLATE_COLOR_OPTION_LIMIT = 12;
+const PROMPT_TEMPLATE_GRADIENT_OPTION_LIMIT = 12;
+const PROMPT_TEMPLATE_GRADIENT_COLOR_LIMIT = 5;
+const PROMPT_TEMPLATE_GRADIENT_COLOR_MIN = 2;
+const PROMPT_TEMPLATE_DEFAULT_GRADIENT_COLORS = ["#151517", "#D4AF37", "#FFFFFF", "#F97316", "#7DD3FC"];
 
 const PROMPT_RESULT_WIDTH_STORAGE_KEY = "prompt-template-result-panel-width";
 const PROMPT_RESULT_MIN_WIDTH = 330;
 const PROMPT_RESULT_MAX_WIDTH = 760;
 const PROMPT_RESULT_DEFAULT_WIDTH = PROMPT_RESULT_MAX_WIDTH;
+const PROMPT_EDITOR_PROPERTY_WIDTH_STORAGE_KEY = "prompt-template-editor-property-width";
+const PROMPT_EDITOR_PROPERTY_MIN_WIDTH = 390;
+const PROMPT_EDITOR_PROPERTY_MAX_WIDTH = 720;
+const PROMPT_EDITOR_PROPERTY_DEFAULT_WIDTH = PROMPT_EDITOR_PROPERTY_MIN_WIDTH;
+const PROMPT_EDITOR_PREVIEW_MIN_WIDTH = 460;
+const PROMPT_EDITOR_COLUMN_GAP = 12;
 const PROMPT_TEMPLATE_THUMB_MAX_SIZE = 320;
 const PROMPT_DIFF_MAX_CELLS = 160000;
 const PROMPT_TEMPLATE_HISTORY_PAGE_SIZE = 20;
@@ -350,6 +368,7 @@ const componentTypeOptions: Array<{ value: PromptTemplateComponentType; label: s
   { value: "text", label: "短输入框", description: "单行文本" },
   { value: "textarea", label: "长文本框", description: "多行描述" },
   { value: "select", label: "下拉框", description: "固定选项" },
+  { value: "color", label: "色彩选择", description: "多选色卡和渐变" },
   { value: "image", label: "素材", description: "上传素材并填写备注，不做识图" },
   { value: "section", label: "分组标题", description: "组织表单结构" }
 ];
@@ -709,6 +728,8 @@ function mergePromptTemplateFormValues(template: PromptTemplate, value: unknown)
     const currentValue = source[component.id];
     if (component.type === "image") {
       next[component.id] = normalizePromptTemplateImageValue(currentValue);
+    } else if (component.type === "color") {
+      next[component.id] = normalizePromptTemplateColorValue(currentValue, component);
     } else if (component.type === "select" && component.multiple) {
       next[component.id] = Array.isArray(currentValue) ? currentValue.map((item) => String(item)) : promptTemplateDefaultValues(String(currentValue ?? ""), component.options);
     } else {
@@ -722,6 +743,7 @@ function promptTemplateFormValuesForStorage(formValues: PromptTemplateFormValues
   return Object.fromEntries(
     Object.entries(formValues).map(([key, value]) => {
       if (!value || typeof value !== "object" || Array.isArray(value)) return [key, value];
+      if ("colors" in value || "gradients" in value || "customColors" in value) return [key, value];
       const imageValue = value as PromptTemplateImageValue;
       return [
         key,
@@ -827,6 +849,267 @@ function PromptTemplateMultiSelect({
   );
 }
 
+function editableColorOptions(component: PromptTemplateComponent) {
+  const source = Array.isArray(component.colorOptions) ? component.colorOptions : defaultPromptTemplateColorOptions;
+  return source.map((option, index) => ({
+    id: String(option.id ?? "").trim() || `color-${index + 1}`,
+    name: String(option.name ?? "").trim(),
+    role: String(option.role ?? "").trim(),
+    hex: String(option.hex ?? "").trim()
+  }));
+}
+
+function editableGradientOptions(component: PromptTemplateComponent) {
+  const source = Array.isArray(component.gradientOptions) ? component.gradientOptions : defaultPromptTemplateGradientOptions;
+  return source.map((option, index) => ({
+    id: String(option.id ?? "").trim() || `gradient-${index + 1}`,
+    name: String(option.name ?? "").trim(),
+    role: String(option.role ?? "").trim(),
+    colors: Array.isArray(option.colors) ? option.colors.map((color) => String(color ?? "").trim()) : []
+  }));
+}
+
+function newColorOption(): PromptTemplateColorOption {
+  const stamp = Date.now().toString(36);
+  return { id: `color-${stamp}`, name: "", role: "", hex: "#151517" };
+}
+
+function newGradientOption(): PromptTemplateGradientOption {
+  const stamp = Date.now().toString(36);
+  return { id: `gradient-${stamp}`, name: "", role: "背景色系", colors: PROMPT_TEMPLATE_DEFAULT_GRADIENT_COLORS.slice(0, PROMPT_TEMPLATE_GRADIENT_COLOR_MIN) };
+}
+
+function editableGradientColors(colors: string[]) {
+  const values = Array.isArray(colors) ? colors.map((color) => String(color ?? "").trim()).filter(Boolean) : [];
+  if (values.length >= PROMPT_TEMPLATE_GRADIENT_COLOR_MIN) return values;
+  return [
+    ...values,
+    ...PROMPT_TEMPLATE_DEFAULT_GRADIENT_COLORS.slice(values.length, PROMPT_TEMPLATE_GRADIENT_COLOR_MIN)
+  ];
+}
+
+function colorPreviewStyle(hex: string): CSSProperties {
+  return { background: normalizePromptTemplateHex(hex) || "#f3f4f6" };
+}
+
+function gradientPreviewStyle(option: PromptTemplateGradientOption): CSSProperties {
+  const colors = option.colors.map(normalizePromptTemplateHex).filter(Boolean);
+  return { background: colors.length > 0 ? `linear-gradient(90deg, ${colors.join(", ")})` : "#f3f4f6" };
+}
+
+function colorOptionListStyle(count: number): CSSProperties {
+  if (count <= 0) return {};
+  return { height: Math.min(count * 41 + 1, 206) };
+}
+
+function gradientOptionListStyle(count: number): CSSProperties {
+  if (count <= 0) return {};
+  return { height: Math.min(count * 112 + 1, 334) };
+}
+
+function ColorComponentSettings({
+  component,
+  onPatch
+}: {
+  component: PromptTemplateComponent;
+  onPatch: (patch: Partial<PromptTemplateComponent>) => void;
+}) {
+  const colorOptions = editableColorOptions(component);
+  const gradientOptions = editableGradientOptions(component);
+  const canAddColorOption = colorOptions.length < PROMPT_TEMPLATE_COLOR_OPTION_LIMIT;
+  const canAddGradientOption = gradientOptions.length < PROMPT_TEMPLATE_GRADIENT_OPTION_LIMIT;
+
+  function patchColorOption(index: number, patch: Partial<PromptTemplateColorOption>) {
+    onPatch({
+      colorOptions: colorOptions.map((option, optionIndex) => optionIndex === index ? { ...option, ...patch } : option)
+    });
+  }
+
+  function patchGradientOption(index: number, patch: Partial<PromptTemplateGradientOption>) {
+    onPatch({
+      gradientOptions: gradientOptions.map((option, optionIndex) => optionIndex === index ? { ...option, ...patch } : option)
+    });
+  }
+
+  function patchGradientColor(optionIndex: number, colorIndex: number, color: string) {
+    const option = gradientOptions[optionIndex];
+    if (!option) return;
+    const colors = editableGradientColors(option.colors);
+    colors[colorIndex] = color;
+    patchGradientOption(optionIndex, { colors });
+  }
+
+  function addGradientColor(optionIndex: number) {
+    const option = gradientOptions[optionIndex];
+    if (!option) return;
+    const colors = editableGradientColors(option.colors);
+    if (colors.length >= PROMPT_TEMPLATE_GRADIENT_COLOR_LIMIT) return;
+    patchGradientOption(optionIndex, { colors: [...colors, PROMPT_TEMPLATE_DEFAULT_GRADIENT_COLORS[colors.length % PROMPT_TEMPLATE_DEFAULT_GRADIENT_COLORS.length]] });
+  }
+
+  function removeGradientColor(optionIndex: number, colorIndex: number) {
+    const option = gradientOptions[optionIndex];
+    if (!option) return;
+    const colors = editableGradientColors(option.colors);
+    if (colors.length <= PROMPT_TEMPLATE_GRADIENT_COLOR_MIN) return;
+    patchGradientOption(optionIndex, { colors: colors.filter((_, index) => index !== colorIndex) });
+  }
+
+  return (
+    <>
+      <label className="template-checkbox">
+        <input
+          type="checkbox"
+          checked={component.allowCustomColor !== false}
+          onChange={(event) => onPatch({ allowCustomColor: event.target.checked })}
+        />
+        允许填写自定义 HEX
+      </label>
+      <div className="template-color-settings wide">
+        <div className="template-color-settings-head">
+          <strong>单色色卡 <span>{colorOptions.length}/{PROMPT_TEMPLATE_COLOR_OPTION_LIMIT}</span></strong>
+          <button
+            type="button"
+            onClick={() => {
+              if (!canAddColorOption) return;
+              onPatch({ colorOptions: [...colorOptions, newColorOption()] });
+            }}
+            disabled={!canAddColorOption}
+            title={canAddColorOption ? "新增色卡" : `最多添加 ${PROMPT_TEMPLATE_COLOR_OPTION_LIMIT} 个色卡`}
+          >
+            <Plus size={14} />
+            新增色卡
+          </button>
+        </div>
+        <small className="template-color-settings-tip">名称描述颜色，用途写主色/辅助/点缀；HEX 可手填或点色块。</small>
+        <div className="template-color-setting-list color-options" style={colorOptionListStyle(colorOptions.length)}>
+          {colorOptions.map((option, index) => (
+            <div className="template-color-setting-row" key={option.id}>
+              <label className="template-color-swatch-picker" style={colorPreviewStyle(option.hex)} title="点击选择颜色">
+                <input
+                  type="color"
+                  value={normalizePromptTemplateHex(option.hex) || "#151517"}
+                  aria-label="选择色卡颜色"
+                  onChange={(event) => patchColorOption(index, { hex: event.target.value })}
+                />
+              </label>
+              <input
+                aria-label="色彩名称"
+                placeholder="名称，如：品牌黑"
+                value={option.name}
+                onChange={(event) => patchColorOption(index, { name: event.target.value })}
+              />
+              <input
+                aria-label="色彩用途"
+                placeholder="用途，如：主色"
+                value={option.role}
+                onChange={(event) => patchColorOption(index, { role: event.target.value })}
+              />
+              <input
+                aria-label="色值"
+                placeholder="#151517"
+                value={option.hex}
+                onChange={(event) => patchColorOption(index, { hex: event.target.value })}
+              />
+              <button type="button" aria-label="删除色卡" onClick={() => onPatch({ colorOptions: colorOptions.filter((_, optionIndex) => optionIndex !== index) })}>
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+          {colorOptions.length === 0 ? <small>暂无单色色卡</small> : null}
+        </div>
+      </div>
+      <div className="template-color-settings wide">
+        <div className="template-color-settings-head">
+          <strong>渐变组合 <span>{gradientOptions.length}/{PROMPT_TEMPLATE_GRADIENT_OPTION_LIMIT}</span></strong>
+          <button
+            type="button"
+            onClick={() => {
+              if (!canAddGradientOption) return;
+              onPatch({ gradientOptions: [...gradientOptions, newGradientOption()] });
+            }}
+            disabled={!canAddGradientOption}
+            title={canAddGradientOption ? "新增渐变" : `最多添加 ${PROMPT_TEMPLATE_GRADIENT_OPTION_LIMIT} 个渐变`}
+          >
+            <Plus size={14} />
+            新增渐变
+          </button>
+        </div>
+        <small className="template-color-settings-tip">用途建议写背景、光效、氛围或质感，色阶可点击色块选择。</small>
+        <div className="template-color-setting-list gradient-options" style={gradientOptionListStyle(gradientOptions.length)}>
+          {gradientOptions.map((option, index) => {
+            const colors = editableGradientColors(option.colors);
+            const canAddGradientColor = colors.length < PROMPT_TEMPLATE_GRADIENT_COLOR_LIMIT;
+            const canRemoveGradientColor = colors.length > PROMPT_TEMPLATE_GRADIENT_COLOR_MIN;
+            return (
+              <div className="template-color-setting-row gradient" key={option.id}>
+                <i className="template-gradient-preview" style={gradientPreviewStyle({ ...option, colors })} />
+                <input
+                  aria-label="渐变名称"
+                  placeholder="名称，如：黑金高级"
+                  value={option.name}
+                  onChange={(event) => patchGradientOption(index, { name: event.target.value })}
+                />
+                <input
+                  aria-label="渐变用途"
+                  placeholder="用途，如：海报背景"
+                  value={option.role}
+                  onChange={(event) => patchGradientOption(index, { role: event.target.value })}
+                />
+                <button type="button" aria-label="删除渐变" onClick={() => onPatch({ gradientOptions: gradientOptions.filter((_, optionIndex) => optionIndex !== index) })}>
+                  <Trash2 size={14} />
+                </button>
+                <div className="template-gradient-stop-list" aria-label="渐变色阶">
+                  {colors.map((color, colorIndex) => (
+                    <div className="template-gradient-stop" key={`${option.id}-${colorIndex}`}>
+                      <label className="template-color-swatch-picker template-gradient-stop-picker" style={colorPreviewStyle(color)} title="点击选择渐变色">
+                        <input
+                          type="color"
+                          value={normalizePromptTemplateHex(color) || PROMPT_TEMPLATE_DEFAULT_GRADIENT_COLORS[colorIndex % PROMPT_TEMPLATE_DEFAULT_GRADIENT_COLORS.length]}
+                          aria-label={`选择第 ${colorIndex + 1} 个渐变色`}
+                          onChange={(event) => patchGradientColor(index, colorIndex, event.target.value)}
+                        />
+                      </label>
+                      <input
+                        aria-label={`第 ${colorIndex + 1} 个渐变色值`}
+                        placeholder="#151517"
+                        value={color}
+                        onChange={(event) => patchGradientColor(index, colorIndex, event.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="template-gradient-stop-remove"
+                        aria-label="删除渐变色阶"
+                        disabled={!canRemoveGradientColor}
+                        title={canRemoveGradientColor ? "删除色阶" : `渐变至少保留 ${PROMPT_TEMPLATE_GRADIENT_COLOR_MIN} 个颜色`}
+                        onClick={() => removeGradientColor(index, colorIndex)}
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="template-gradient-stop-add"
+                    disabled={!canAddGradientColor}
+                    title={canAddGradientColor ? "新增色阶" : `最多添加 ${PROMPT_TEMPLATE_GRADIENT_COLOR_LIMIT} 个色阶`}
+                    onClick={() => addGradientColor(index)}
+                  >
+                    <Plus size={12} />
+                    色阶
+                    <span>{colors.length}/{PROMPT_TEMPLATE_GRADIENT_COLOR_LIMIT}</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {gradientOptions.length === 0 ? <small>暂无渐变组合</small> : null}
+        </div>
+      </div>
+    </>
+  );
+}
+
 function iconFor(name: string) {
   return iconMap[name] ?? Sparkles;
 }
@@ -859,6 +1142,9 @@ function newComponent(type: PromptTemplateComponentType): PromptTemplateComponen
     label: option?.label ?? "组件",
     placeholder: type === "text" || type === "textarea" ? "填写内容" : "",
     options: type === "select" ? ["选项一", "选项二"] : [],
+    colorOptions: type === "color" ? defaultPromptTemplateColorOptions : undefined,
+    gradientOptions: type === "color" ? defaultPromptTemplateGradientOptions : undefined,
+    allowCustomColor: type === "color" ? true : undefined,
     slot: type === "section" ? "" : `${type}_${stamp}`,
     icon: "",
     width: defaultComponentWidth(type),
@@ -902,7 +1188,10 @@ function payloadFromTemplate(template: PromptTemplate): PromptTemplatePayload {
       ...component,
       sortOrder: (index + 1) * 10,
       width: componentWidth(component),
-      options: component.type === "select" ? component.options ?? [] : component.options
+      options: component.type === "select" ? component.options ?? [] : component.options,
+      colorOptions: component.type === "color" ? component.colorOptions ?? defaultPromptTemplateColorOptions : component.colorOptions,
+      gradientOptions: component.type === "color" ? component.gradientOptions ?? defaultPromptTemplateGradientOptions : component.gradientOptions,
+      allowCustomColor: component.type === "color" ? component.allowCustomColor !== false : component.allowCustomColor
     })),
     rules: template.rules,
     output: {
@@ -1015,6 +1304,17 @@ function templateWorkbenchSearch(scope: TemplateScope, keyword: string, template
 
 function storedPromptResultWidth() {
   return PROMPT_RESULT_DEFAULT_WIDTH;
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function storedPromptEditorPropertyWidth() {
+  if (typeof window === "undefined") return PROMPT_EDITOR_PROPERTY_DEFAULT_WIDTH;
+  const rawValue = Number(window.localStorage.getItem(PROMPT_EDITOR_PROPERTY_WIDTH_STORAGE_KEY));
+  if (!Number.isFinite(rawValue)) return PROMPT_EDITOR_PROPERTY_DEFAULT_WIDTH;
+  return clampNumber(rawValue, PROMPT_EDITOR_PROPERTY_MIN_WIDTH, PROMPT_EDITOR_PROPERTY_MAX_WIDTH);
 }
 
 export function PromptTemplatesPage() {
@@ -2646,6 +2946,19 @@ function TemplatePreview({
             </label>
           );
         }
+        if (component.type === "color") {
+          return (
+            <label className={componentClassName(component, "template-field")} key={component.id} onClick={() => selectComponent(component.id)}>
+              <span>{component.label}{component.required ? <b>*</b> : null}</span>
+              <PromptTemplateColorPicker
+                component={component}
+                value={value}
+                onChange={(next) => patchValue(component.id, next)}
+              />
+              {component.helpText ? <small>{component.helpText}</small> : null}
+            </label>
+          );
+        }
         if (component.type === "image") {
           const imageValue = (typeof value === "object" && value ? value : {}) as PromptTemplateImageValue;
           const imageFiles = Array.isArray(imageValue.files) ? imageValue.files : [];
@@ -2775,7 +3088,10 @@ function TemplateEditor({
 }) {
   const [draggingComponentId, setDraggingComponentId] = useState("");
   const [dragOverComponentId, setDragOverComponentId] = useState("");
+  const [propertyPanelWidth, setPropertyPanelWidth] = useState(storedPromptEditorPropertyWidth);
+  const [resizingPropertyPanel, setResizingPropertyPanel] = useState(false);
   const draggingComponentIdRef = useRef("");
+  const editorRef = useRef<HTMLDivElement | null>(null);
   const components = sortedPromptTemplateComponents(template.components);
   const [propertyTab, setPropertyTab] = useState<PropertyTab>("template");
   const manualNegativePrompt = String(template.rules.negativePrompt ?? "");
@@ -2788,6 +3104,10 @@ function TemplateEditor({
   useEffect(() => {
     setPropertyTab("template");
   }, [template.id]);
+
+  useEffect(() => {
+    window.localStorage.setItem(PROMPT_EDITOR_PROPERTY_WIDTH_STORAGE_KEY, String(Math.round(propertyPanelWidth)));
+  }, [propertyPanelWidth]);
 
   function selectComponentForEdit(id: string) {
     onSelectComponent(id);
@@ -2859,8 +3179,49 @@ function TemplateEditor({
     }
   }
 
+  function beginPropertyPanelResize(event: PointerEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    const editor = editorRef.current;
+    const editorRect = editor?.getBoundingClientRect();
+    if (!editor || !editorRect) return;
+    const builderWidth = editor.querySelector<HTMLElement>(".template-builder-panel")?.getBoundingClientRect().width ?? 330;
+    const availableMaxWidth = editorRect.width
+      - builderWidth
+      - PROMPT_EDITOR_PREVIEW_MIN_WIDTH
+      - PROMPT_EDITOR_COLUMN_GAP * 2;
+    const maxWidth = Math.max(
+      PROMPT_EDITOR_PROPERTY_MIN_WIDTH,
+      Math.min(PROMPT_EDITOR_PROPERTY_MAX_WIDTH, availableMaxWidth)
+    );
+    const startX = event.clientX;
+    const startWidth = clampNumber(propertyPanelWidth, PROMPT_EDITOR_PROPERTY_MIN_WIDTH, maxWidth);
+    setResizingPropertyPanel(true);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const handleMove = (moveEvent: globalThis.PointerEvent) => {
+      const nextWidth = clampNumber(startWidth + moveEvent.clientX - startX, PROMPT_EDITOR_PROPERTY_MIN_WIDTH, maxWidth);
+      setPropertyPanelWidth(nextWidth);
+    };
+    const finish = () => {
+      setResizingPropertyPanel(false);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+    };
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
+  }
+
   return (
-    <div className="template-editor">
+    <div
+      className={cx("template-editor", resizingPropertyPanel && "resizing-property-panel")}
+      ref={editorRef}
+      style={{ "--template-editor-property-width": `${propertyPanelWidth}px` } as CSSProperties}
+    >
       <aside className="template-builder-panel">
         <div className="template-builder-section">
           <div className="template-builder-head">
@@ -2959,10 +3320,20 @@ function TemplateEditor({
                   options={componentTypeOptions}
                   onChange={(type) => {
                     const nextType = type as PromptTemplateComponentType;
-                    onPatchComponent(selectedComponent.id, {
+                    const patch: Partial<PromptTemplateComponent> = {
                       type: nextType,
-                      width: nextType === "section" ? "full" : componentWidth(selectedComponent)
-                    });
+                      width: nextType === "section" || nextType === "color"
+                        ? "full"
+                        : selectedComponent.type === "section"
+                          ? defaultComponentWidth(nextType)
+                          : componentWidth(selectedComponent)
+                    };
+                    if (nextType === "color") {
+                      patch.colorOptions = selectedComponent.colorOptions ?? defaultPromptTemplateColorOptions;
+                      patch.gradientOptions = selectedComponent.gradientOptions ?? defaultPromptTemplateGradientOptions;
+                      patch.allowCustomColor = selectedComponent.allowCustomColor ?? true;
+                    }
+                    onPatchComponent(selectedComponent.id, patch);
                   }}
                 />
               </label>
@@ -3018,6 +3389,12 @@ function TemplateEditor({
                     允许多选
                   </label>
                 </>
+              ) : null}
+              {selectedComponent.type === "color" ? (
+                <ColorComponentSettings
+                  component={selectedComponent}
+                  onPatch={(patch) => onPatchComponent(selectedComponent.id, patch)}
+                />
               ) : null}
               <label className="template-setting-field wide">
                 <span className="template-setting-label">填写说明</span>
@@ -3097,6 +3474,15 @@ function TemplateEditor({
           </div>
         )}
       </aside>
+      <button
+        className="template-editor-property-resize-handle"
+        type="button"
+        aria-label="拖动调整组件属性宽度"
+        title="拖动调整组件属性宽度"
+        onPointerDown={beginPropertyPanelResize}
+      >
+        <span />
+      </button>
       <div className="template-editor-preview-panel">
         <div className="template-editor-preview-head">
           <div>

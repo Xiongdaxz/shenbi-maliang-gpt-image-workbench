@@ -6,6 +6,8 @@ export {
   type GenerateImagePayload,
   type LoginAssets,
   type PublicBranding,
+  type PromptColorScheme,
+  type PromptColorSchemePayload,
   type PromptTemplateExportDownload,
   type PromptTemplateOptimizePayload,
   type PromptTemplateOptimizeStyle,

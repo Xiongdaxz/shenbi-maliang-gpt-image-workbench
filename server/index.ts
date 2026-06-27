@@ -73,6 +73,7 @@ import { registerChangelogRoutes } from "./changelogRoutes";
 import { registerFileRoutes } from "./fileRoutes";
 import { registerImageRoutes } from "./imageRoutes";
 import { registerPromptOptimizerRoutes } from "./promptOptimizerRoutes";
+import { registerPromptColorSchemeRoutes } from "./promptColorSchemeRoutes";
 import { registerPromptReferenceLinkRoutes } from "./promptReferenceLinkRoutes";
 import { registerPromptTemplateRoutes } from "./promptTemplateRoutes";
 import { registerSearchHistoryRoutes } from "./searchHistoryRoutes";
@@ -274,6 +275,7 @@ registerFileRoutes(api);
 registerCaseRoutes(api);
 
 registerPromptReferenceLinkRoutes(api);
+registerPromptColorSchemeRoutes(api);
 
 registerPromptTemplateRoutes(api);
 
@@ -2428,7 +2430,7 @@ function statisticsRouteMode(routeMode: string) {
 
 function accountStatusLabel(status: string) {
   if (status === "normal") return "正常";
-  if (status === "limited") return "限流";
+  if (status === "limited") return "Codex 限流";
   if (status === "abnormal") return "异常";
   if (status === "disabled") return "禁用";
   return status || "未知";

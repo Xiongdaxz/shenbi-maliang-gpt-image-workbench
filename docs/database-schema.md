@@ -386,6 +386,26 @@
 | `metadata_fetched_at` | 元数据抓取时间 |
 | `created_at` / `updated_at` | 创建和更新时间 |
 
+### prompt_color_schemes
+
+对话页“色系选择”库。系统默认色系和用户自建色系都按用户保存为独立行，设置页个性化中维护；对话页可多选色系，选择时只把结构化色彩要求注入当前提示词，不主动触发 AI 优化。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 色系 ID |
+| `user_id` | 所属用户 |
+| `builtin_key` | 系统默认色系键；用户自建为空 |
+| `name` / `description` / `category` | 色系名称、适用场景和分类 |
+| `colors_json` | 单色色卡 JSON，包含名称、用途和 HEX |
+| `gradients_json` | 渐变组合 JSON，包含名称、用途和多个 HEX |
+| `prompt` | 注入提示词时追加的补充要求 |
+| `visible` | 是否在对话页选择器中显示，`0` 隐藏、`1` 显示 |
+| `sort_order` | 同分类排序 |
+| `is_builtin` | 是否系统默认色系，`0` 自建、`1` 默认 |
+| `created_at` / `updated_at` | 创建和更新时间 |
+
+默认色系由接口按用户补齐；“恢复默认”只重置 `is_builtin = 1` 的行，用户自建色系不受影响。
+
 ### prompt_templates
 
 创作提示词表单模板。
@@ -398,10 +418,12 @@
 | `name` / `description` / `category` | 模板名称、说明和分类 |
 | `icon` | 模板图标 |
 | `optimize_style` | 该模板默认 AI 优化风格。支持主风格：`standard` 标准、`realistic` 写实、`cinematic` 电影、`anime` 动漫、`artistic` 艺术、`commercial` 商业、`series` 组图、`composition` 构图、`detailed` 细节、`creative` 创意；也支持 `主风格:子风格`，例如 `cinematic:cyberpunk`、`anime:ghibli`、`series:logo-design`、`composition:rule-of-thirds` |
-| `components_json` | 表单组件 JSON |
+| `components_json` | 表单组件 JSON；组件类型支持 `text`、`textarea`、`select`、`image`、`color`、`section`，其中 `color` 可保存 `colorOptions`、`gradientOptions`、`allowCustomColor` |
 | `rules_json` | 基础提示词拼接规则 JSON |
 | `output_json` | 输出配置 JSON |
 | `created_at` / `updated_at` | 创建和更新时间 |
+
+内置默认模板也使用同一张表保存。默认模板的内容版本通过 `prompt_template_default_seeds` 控制；当默认内容种子升级时，历史默认模板会按新版预设重置 `description`、`icon`、`optimize_style`、`components_json`、`rules_json`、`output_json`，但保留模板 `id`、创建时间、共享状态和历史结果引用。新版默认模板可内置 `color` 色彩选择组件，无需数据库迁移。
 
 ### prompt_template_form_drafts
 
@@ -411,7 +433,7 @@
 | --- | --- |
 | `template_id` | 表单模板 ID |
 | `user_id` | 填写用户 ID |
-| `form_values_json` | 当前填写的表单值 JSON，包含文本、下拉选项和素材字段引用信息 |
+| `form_values_json` | 当前填写的表单值 JSON，包含文本、下拉选项、色彩选择和素材字段引用信息 |
 | `created_at` / `updated_at` | 创建和更新时间 |
 
 ### prompt_template_base_translations
@@ -707,7 +729,7 @@
 | `remote_name` | CPA 远端文件名 |
 | `channel_id` | 关联渠道 |
 | `email` / `account_type` | 账号邮箱和套餐类型 |
-| `status` | 账号状态：`normal` 正常、`limited` 限流、`abnormal` 异常、`disabled` 禁用 |
+| `status` | 账号状态：`normal` 正常、`limited` Codex 限流、`abnormal` 异常、`disabled` 禁用 |
 | `quota` / `used_quota` | 旧额度字段 |
 | `usage_success_count` / `usage_failure_count` | 本地成功和失败计数 |
 | `usage_recent_requests` | 最近请求 JSON |

@@ -100,6 +100,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { api, type PromptTemplateOptimizeStyle } from "../../api";
 import { PromptOptimizeStyleSelect } from "../PromptOptimizeStyleSelect";
+import { PromptTemplateColorPicker } from "../PromptTemplateColorPicker";
 import { cx } from "../../lib/cx";
 import {
   normalizePromptOptimizeStyle,
@@ -111,6 +112,7 @@ import type { ComposerPromptResultKey, ComposerPromptTemplatePanelDraft } from "
 import {
   buildBasePrompt,
   initialPromptTemplateFormValues,
+  normalizePromptTemplateColorValue,
   promptTemplateDefaultValues,
   promptTemplateSignature,
   sortedPromptTemplateComponents
@@ -317,7 +319,12 @@ function mergePromptTemplateFormValues(template: PromptTemplate, value: unknown)
   const next: PromptTemplateFormValues = { ...defaults };
   for (const component of template.components) {
     if (component.type === "section") continue;
-    if (source[component.id] !== undefined) next[component.id] = source[component.id];
+    if (source[component.id] === undefined) continue;
+    if (component.type === "color") {
+      next[component.id] = normalizePromptTemplateColorValue(source[component.id], component);
+    } else {
+      next[component.id] = source[component.id];
+    }
   }
   return next;
 }
@@ -326,6 +333,7 @@ function promptTemplateFormValuesForStorage(formValues: PromptTemplateFormValues
   return Object.fromEntries(
     Object.entries(formValues).map(([key, value]) => {
       if (!value || typeof value !== "object" || Array.isArray(value)) return [key, value];
+      if ("colors" in value || "gradients" in value || "customColors" in value) return [key, value];
       const imageValue = value as PromptTemplateImageValue;
       return [
         key,
@@ -1401,6 +1409,19 @@ function PromptTemplateMiniForm({
                   onChange={(next) => patchValue(component.id, next)}
                 />
               )}
+              {component.helpText ? <small>{component.helpText}</small> : null}
+            </label>
+          );
+        }
+        if (component.type === "color") {
+          return (
+            <label className={cx("template-field", componentLayoutClass(component))} key={component.id}>
+              <span>{component.label}{component.required ? <b>*</b> : null}</span>
+              <PromptTemplateColorPicker
+                component={component}
+                value={value}
+                onChange={(next) => patchValue(component.id, next)}
+              />
               {component.helpText ? <small>{component.helpText}</small> : null}
             </label>
           );
