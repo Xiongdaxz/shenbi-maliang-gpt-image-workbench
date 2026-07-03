@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Eye, EyeOff, LockKeyhole, Mail, Moon, RefreshCw, ShieldCheck, Sun, UserRound } from "lucide-react";
 import { api, type LoginAssets } from "../api";
 import { cx } from "../lib/cx";
+import { useI18n } from "../i18n";
 import { DEFAULT_SITE_NAME } from "../lib/branding";
 import { useToast } from "../ui";
 import {
@@ -44,6 +45,7 @@ function isRegisterEmail(value: string) {
 export function LoginPage() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const { t } = useI18n();
   const initialLoginTheme = readLoginThemePreference();
   const [rememberedLogin] = useState(readRememberedLogin);
   const [mode, setMode] = useState<LoginMode>("login");
@@ -97,20 +99,20 @@ export function LoginPage() {
   const sendRegisterCode = useMutation({
     mutationFn: () => {
       const email = normalizeRegisterEmail(registerEmail);
-      if (!isRegisterEmail(email)) throw new Error("请输入正确的邮箱");
+      if (!isRegisterEmail(email)) throw new Error(t("login.invalidEmail"));
       return api.sendRegisterCode(email);
     },
     onSuccess: (data) => {
       setRegisterCooldown(data.cooldownSeconds);
-      showToast("验证码已发送");
+      showToast(t("login.codeSent"));
     }
   });
   const register = useMutation({
     mutationFn: () => {
-      if (registerPassword.length < 6) throw new Error("密码至少 6 位");
-      if (registerPassword !== registerConfirmPassword) throw new Error("两次输入的密码不一致");
+      if (registerPassword.length < 6) throw new Error(t("login.passwordTooShort"));
+      if (registerPassword !== registerConfirmPassword) throw new Error(t("login.passwordMismatch"));
       const email = normalizeRegisterEmail(registerEmail);
-      if (!isRegisterEmail(email)) throw new Error("请输入正确的邮箱");
+      if (!isRegisterEmail(email)) throw new Error(t("login.invalidEmail"));
       return api.register({
         email,
         code: registerCode,
@@ -125,20 +127,20 @@ export function LoginPage() {
   const sendPasswordResetCode = useMutation({
     mutationFn: () => {
       const email = normalizeRegisterEmail(resetEmail);
-      if (!isRegisterEmail(email)) throw new Error("请输入正确的邮箱");
+      if (!isRegisterEmail(email)) throw new Error(t("login.invalidEmail"));
       return api.sendPasswordResetCode(email);
     },
     onSuccess: (data) => {
       setResetCooldown(data.cooldownSeconds);
-      showToast("验证码已发送");
+      showToast(t("login.codeSent"));
     }
   });
   const passwordReset = useMutation({
     mutationFn: () => {
-      if (resetPassword.length < 6) throw new Error("密码至少 6 位");
-      if (resetPassword !== resetConfirmPassword) throw new Error("两次输入的密码不一致");
+      if (resetPassword.length < 6) throw new Error(t("login.passwordTooShort"));
+      if (resetPassword !== resetConfirmPassword) throw new Error(t("login.passwordMismatch"));
       const email = normalizeRegisterEmail(resetEmail);
-      if (!isRegisterEmail(email)) throw new Error("请输入正确的邮箱");
+      if (!isRegisterEmail(email)) throw new Error(t("login.invalidEmail"));
       return api.resetPasswordByEmail({
         email,
         code: resetCode,
@@ -150,7 +152,7 @@ export function LoginPage() {
       setMode("login");
       setAccount(normalizeRegisterEmail(resetEmail));
       setPassword("");
-      showToast("密码已重置，请重新登录");
+      showToast(t("login.resetSuccess"));
     }
   });
   const clearTitleTimers = () => {
@@ -412,7 +414,7 @@ export function LoginPage() {
           <img src={burnLayer.image} alt="" draggable={false} />
         </span>
       ) : null}
-      <div className="login-theme-switch" aria-label="登录页主题和背景切换">
+      <div className="login-theme-switch" aria-label={t("login.themeSwitch")}>
         <button
           className={cx(loginTheme === "light" && "active")}
           type="button"
@@ -420,7 +422,7 @@ export function LoginPage() {
           onClick={() => selectLoginTheme("light")}
         >
           <Sun size={15} aria-hidden="true" />
-          <span>浅色系</span>
+          <span>{t("login.lightTheme")}</span>
         </button>
         <button
           className={cx(loginTheme === "dark" && "active")}
@@ -429,11 +431,11 @@ export function LoginPage() {
           onClick={() => selectLoginTheme("dark")}
         >
           <Moon size={15} aria-hidden="true" />
-          <span>暗色系</span>
+          <span>{t("login.darkTheme")}</span>
         </button>
-        <button type="button" aria-label="随机切换登录背景" onClick={randomizeLoginBackground}>
+        <button type="button" aria-label={t("login.randomBackground")} onClick={randomizeLoginBackground}>
           <RefreshCw size={15} aria-hidden="true" />
-          <span>切换背景</span>
+          <span>{t("login.randomBackground")}</span>
         </button>
       </div>
       <div className="login-side">
@@ -451,13 +453,13 @@ export function LoginPage() {
             <div
               className={cx("login-mode-tabs", mode === "register" && "is-register", mode === "reset" && "is-reset")}
               role="tablist"
-              aria-label="账号入口"
+              aria-label={t("login.modeTabs")}
             >
               <button className={cx(mode === "login" && "active")} type="button" onClick={() => switchLoginMode("login")}>
-                登录
+                {t("login.login")}
               </button>
               <button className={cx(mode === "register" && "active")} type="button" onClick={() => switchLoginMode("register")}>
-                注册
+                {t("login.register")}
               </button>
             </div>
           ) : null}
@@ -471,20 +473,20 @@ export function LoginPage() {
               className="login-form"
             >
               <label className="login-field">
-                <span className="visually-hidden">账号</span>
+                <span className="visually-hidden">{t("login.account")}</span>
                 <span className="login-input-shell">
                   <UserRound size={21} className="login-input-icon" aria-hidden="true" />
                   <input
                     value={account}
                     onChange={(event) => setAccount(event.target.value)}
-                    placeholder="邮箱 / 账号"
+                    placeholder={t("login.accountPlaceholder")}
                     autoComplete="username"
                     autoFocus
                   />
                 </span>
               </label>
               <label className="login-field">
-                <span className="visually-hidden">密码</span>
+                <span className="visually-hidden">{t("login.password")}</span>
                 <span className="login-input-shell">
                   <LockKeyhole size={20} className="login-input-icon" aria-hidden="true" />
                   <input
@@ -492,13 +494,13 @@ export function LoginPage() {
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     type={passwordVisible ? "text" : "password"}
-                    placeholder="请输入密码"
+                    placeholder={t("login.passwordPlaceholder")}
                     autoComplete="current-password"
                   />
                   <button
                     className="login-password-toggle"
                     type="button"
-                    aria-label={passwordVisible ? "隐藏密码" : "显示密码"}
+                    aria-label={passwordVisible ? t("login.hidePassword") : t("login.showPassword")}
                     aria-pressed={passwordVisible}
                     onClick={() => setPasswordVisible((value) => !value)}
                   >
@@ -520,15 +522,15 @@ export function LoginPage() {
                   <span className="remember-check" aria-hidden="true">
                     {rememberPassword ? <Check size={13} /> : null}
                   </span>
-                  <span>记住密码</span>
+                  <span>{t("login.rememberPassword")}</span>
                 </label>
                 <button className="forgot-password-link" type="button" onClick={() => switchLoginMode("reset")}>
-                  忘记密码
+                  {t("login.forgotPassword")}
                 </button>
               </div>
               {login.error ? <div className="form-error">{login.error.message}</div> : null}
               <button className="primary-btn login-submit" disabled={login.isPending}>
-                {login.isPending ? "登录中..." : "登录"}
+                {login.isPending ? t("login.loggingIn") : t("login.login")}
               </button>
             </form>
           ) : null}
@@ -541,13 +543,13 @@ export function LoginPage() {
               className="login-form login-form-compact"
             >
               <label className="login-field">
-                <span className="visually-hidden">邮箱</span>
+                <span className="visually-hidden">{t("login.email")}</span>
                 <span className="login-input-shell">
                   <Mail size={20} className="login-input-icon" aria-hidden="true" />
                   <input
                     value={registerEmail}
                     onChange={(event) => setRegisterEmail(event.target.value)}
-                    placeholder="请输入邮箱"
+                    placeholder={t("login.emailPlaceholder")}
                     autoComplete="email"
                     inputMode="email"
                     autoFocus
@@ -555,22 +557,22 @@ export function LoginPage() {
                 </span>
               </label>
               <label className="login-field">
-                <span className="visually-hidden">验证码</span>
+                <span className="visually-hidden">{t("login.code")}</span>
                 <span className="login-input-shell">
                   <ShieldCheck size={20} className="login-input-icon" aria-hidden="true" />
-                  <input value={registerCode} onChange={(event) => setRegisterCode(event.target.value)} placeholder="验证码" inputMode="numeric" />
+                  <input value={registerCode} onChange={(event) => setRegisterCode(event.target.value)} placeholder={t("login.code")} inputMode="numeric" />
                   <button
                     className="login-code-button"
                     type="button"
                     disabled={sendRegisterCode.isPending || registerCooldown > 0 || !registerEmail.trim()}
                     onClick={() => sendRegisterCode.mutate()}
                   >
-                    {registerCooldown > 0 ? `${registerCooldown}s` : sendRegisterCode.isPending ? "发送中" : "获取验证码"}
+                    {registerCooldown > 0 ? `${registerCooldown}s` : sendRegisterCode.isPending ? t("login.sending") : t("login.getCode")}
                   </button>
                 </span>
               </label>
               <label className="login-field">
-                <span className="visually-hidden">密码</span>
+                <span className="visually-hidden">{t("login.password")}</span>
                 <span className="login-input-shell">
                   <LockKeyhole size={20} className="login-input-icon" aria-hidden="true" />
                   <input
@@ -578,13 +580,13 @@ export function LoginPage() {
                     value={registerPassword}
                     onChange={(event) => setRegisterPassword(event.target.value)}
                     type={registerPasswordVisible ? "text" : "password"}
-                    placeholder="设置密码，至少 6 位"
+                    placeholder={t("login.registerPasswordPlaceholder")}
                     autoComplete="new-password"
                   />
                   <button
                     className="login-password-toggle"
                     type="button"
-                    aria-label={registerPasswordVisible ? "隐藏密码" : "显示密码"}
+                    aria-label={registerPasswordVisible ? t("login.hidePassword") : t("login.showPassword")}
                     aria-pressed={registerPasswordVisible}
                     onClick={() => setRegisterPasswordVisible((value) => !value)}
                   >
@@ -593,7 +595,7 @@ export function LoginPage() {
                 </span>
               </label>
               <label className="login-field">
-                <span className="visually-hidden">确认密码</span>
+                <span className="visually-hidden">{t("login.confirmPassword")}</span>
                 <span className="login-input-shell">
                   <LockKeyhole size={20} className="login-input-icon" aria-hidden="true" />
                   <input
@@ -601,13 +603,13 @@ export function LoginPage() {
                     value={registerConfirmPassword}
                     onChange={(event) => setRegisterConfirmPassword(event.target.value)}
                     type={registerConfirmPasswordVisible ? "text" : "password"}
-                    placeholder="再次输入密码"
+                    placeholder={t("login.confirmPasswordPlaceholder")}
                     autoComplete="new-password"
                   />
                   <button
                     className="login-password-toggle"
                     type="button"
-                    aria-label={registerConfirmPasswordVisible ? "隐藏密码" : "显示密码"}
+                    aria-label={registerConfirmPasswordVisible ? t("login.hidePassword") : t("login.showPassword")}
                     aria-pressed={registerConfirmPasswordVisible}
                     onClick={() => setRegisterConfirmPasswordVisible((value) => !value)}
                   >
@@ -618,7 +620,7 @@ export function LoginPage() {
               {sendRegisterCode.error ? <div className="form-error">{sendRegisterCode.error.message}</div> : null}
               {register.error ? <div className="form-error">{register.error.message}</div> : null}
               <button className="primary-btn login-submit" disabled={register.isPending}>
-                {register.isPending ? "注册中..." : "注册并进入"}
+                {register.isPending ? t("login.registering") : t("login.registerSubmit")}
               </button>
             </form>
           ) : null}
@@ -631,16 +633,16 @@ export function LoginPage() {
               className="login-form login-form-compact"
             >
               <button className="forgot-password-link login-back-link" type="button" onClick={() => switchLoginMode("login")}>
-                返回登录
+                {t("login.backToLogin")}
               </button>
               <label className="login-field">
-                <span className="visually-hidden">邮箱</span>
+                <span className="visually-hidden">{t("login.email")}</span>
                 <span className="login-input-shell">
                   <Mail size={20} className="login-input-icon" aria-hidden="true" />
                   <input
                     value={resetEmail}
                     onChange={(event) => setResetEmail(event.target.value)}
-                    placeholder="请输入注册邮箱"
+                    placeholder={t("login.resetEmailPlaceholder")}
                     autoComplete="email"
                     inputMode="email"
                     autoFocus
@@ -648,38 +650,38 @@ export function LoginPage() {
                 </span>
               </label>
               <label className="login-field">
-                <span className="visually-hidden">验证码</span>
+                <span className="visually-hidden">{t("login.code")}</span>
                 <span className="login-input-shell">
                   <ShieldCheck size={20} className="login-input-icon" aria-hidden="true" />
-                  <input value={resetCode} onChange={(event) => setResetCode(event.target.value)} placeholder="邮箱验证码" inputMode="numeric" />
+                  <input value={resetCode} onChange={(event) => setResetCode(event.target.value)} placeholder={t("login.emailCode")} inputMode="numeric" />
                   <button
                     className="login-code-button"
                     type="button"
                     disabled={sendPasswordResetCode.isPending || resetCooldown > 0 || !resetEmail.trim()}
                     onClick={() => sendPasswordResetCode.mutate()}
                   >
-                    {resetCooldown > 0 ? `${resetCooldown}s` : sendPasswordResetCode.isPending ? "发送中" : "获取验证码"}
+                    {resetCooldown > 0 ? `${resetCooldown}s` : sendPasswordResetCode.isPending ? t("login.sending") : t("login.getCode")}
                   </button>
                 </span>
               </label>
               <label className="login-field">
-                <span className="visually-hidden">新密码</span>
+                <span className="visually-hidden">{t("login.newPassword")}</span>
                 <span className="login-input-shell">
                   <LockKeyhole size={20} className="login-input-icon" aria-hidden="true" />
-                  <input className="login-password-input" value={resetPassword} onChange={(event) => setResetPassword(event.target.value)} type="password" placeholder="设置新密码，至少 6 位" autoComplete="new-password" />
+                  <input className="login-password-input" value={resetPassword} onChange={(event) => setResetPassword(event.target.value)} type="password" placeholder={t("login.resetPasswordPlaceholder")} autoComplete="new-password" />
                 </span>
               </label>
               <label className="login-field">
-                <span className="visually-hidden">确认新密码</span>
+                <span className="visually-hidden">{t("login.confirmResetPassword")}</span>
                 <span className="login-input-shell">
                   <LockKeyhole size={20} className="login-input-icon" aria-hidden="true" />
-                  <input className="login-password-input" value={resetConfirmPassword} onChange={(event) => setResetConfirmPassword(event.target.value)} type="password" placeholder="再次输入新密码" autoComplete="new-password" />
+                  <input className="login-password-input" value={resetConfirmPassword} onChange={(event) => setResetConfirmPassword(event.target.value)} type="password" placeholder={t("login.confirmResetPasswordPlaceholder")} autoComplete="new-password" />
                 </span>
               </label>
               {sendPasswordResetCode.error ? <div className="form-error">{sendPasswordResetCode.error.message}</div> : null}
               {passwordReset.error ? <div className="form-error">{passwordReset.error.message}</div> : null}
               <button className="primary-btn login-submit" disabled={passwordReset.isPending}>
-                {passwordReset.isPending ? "重置中..." : "重置密码"}
+                {passwordReset.isPending ? t("login.resetting") : t("login.resetPassword")}
               </button>
             </form>
           ) : null}

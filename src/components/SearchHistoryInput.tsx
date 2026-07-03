@@ -3,6 +3,7 @@ import type { KeyboardEvent, ReactNode, Ref } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Clock, Trash2, X } from "lucide-react";
 import { api } from "../api";
+import { useI18n, type Translate } from "../i18n";
 import { cx } from "../lib/cx";
 import type { SearchHistoryScope } from "../types";
 
@@ -26,26 +27,27 @@ function setForwardedRef<T>(ref: Ref<T> | undefined, value: T | null) {
   if (ref) ref.current = value;
 }
 
-function formatRelativeTime(value: string) {
+function formatRelativeTime(value: string, t: Translate) {
   const time = new Date(value).getTime();
   if (!Number.isFinite(time)) return "";
   const diffSeconds = Math.max(0, Math.floor((Date.now() - time) / 1000));
-  if (diffSeconds < 60) return "刚刚";
+  if (diffSeconds < 60) return t("searchHistory.justNow");
   const diffMinutes = Math.floor(diffSeconds / 60);
-  if (diffMinutes < 60) return `${diffMinutes}分钟前`;
+  if (diffMinutes < 60) return t("searchHistory.minutesAgo", { count: diffMinutes });
   const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours}小时前`;
+  if (diffHours < 24) return t("searchHistory.hoursAgo", { count: diffHours });
   const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 30) return `${diffDays}天前`;
+  if (diffDays < 30) return t("searchHistory.daysAgo", { count: diffDays });
   const diffMonths = Math.floor(diffDays / 30);
-  if (diffMonths < 12) return `${diffMonths}个月前`;
-  return `${Math.floor(diffMonths / 12)}年前`;
+  if (diffMonths < 12) return t("searchHistory.monthsAgo", { count: diffMonths });
+  return t("searchHistory.yearsAgo", { count: Math.floor(diffMonths / 12) });
 }
 
 export const SearchHistoryInput = forwardRef<HTMLInputElement, SearchHistoryInputProps>(function SearchHistoryInput(
   { scope, value, onChange, placeholder, ariaLabel, autoFocus, className, icon, onKeyDown },
   forwardedRef
 ) {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -168,8 +170,8 @@ export const SearchHistoryInput = forwardRef<HTMLInputElement, SearchHistoryInpu
       <button
         type="button"
         className="search-history-input-clear"
-        aria-label="清除搜索内容"
-        title="清除"
+        aria-label={t("searchHistory.clearInput")}
+        title={t("common.clear")}
         tabIndex={inputValue ? 0 : -1}
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => {
@@ -184,9 +186,9 @@ export const SearchHistoryInput = forwardRef<HTMLInputElement, SearchHistoryInpu
         <X size={14} />
       </button>
       {shouldShowMenu ? (
-        <div className="search-history-menu" role="listbox" aria-label="搜索历史记录">
+        <div className="search-history-menu" role="listbox" aria-label={t("searchHistory.records")}>
           <div className="search-history-menu-head">
-            <span>搜索历史</span>
+            <span>{t("searchHistory.title")}</span>
             <div className="search-history-menu-actions">
               <button
                 type="button"
@@ -196,13 +198,13 @@ export const SearchHistoryInput = forwardRef<HTMLInputElement, SearchHistoryInpu
                 disabled={clearHistory.isPending}
               >
                 <Trash2 size={13} />
-                清空全部
+                {t("searchHistory.clearAll")}
               </button>
               <button
                 type="button"
                 className="search-history-close"
-                aria-label="关闭搜索历史"
-                title="关闭"
+                aria-label={t("searchHistory.close")}
+                title={t("common.close")}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => setOpen(false)}
               >
@@ -228,13 +230,13 @@ export const SearchHistoryInput = forwardRef<HTMLInputElement, SearchHistoryInpu
                 >
                   <Clock size={15} />
                   <span>{item.keyword}</span>
-                  <time>{formatRelativeTime(item.searchedAt)}</time>
+                  <time>{formatRelativeTime(item.searchedAt, t)}</time>
                 </button>
                 <button
                   type="button"
                   className="search-history-delete"
-                  aria-label={`删除搜索记录：${item.keyword}`}
-                  title="删除记录"
+                  aria-label={t("searchHistory.deleteRecord", { keyword: item.keyword })}
+                  title={t("searchHistory.delete")}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => deleteHistory.mutate(item.id)}
                   disabled={deleteHistory.isPending}

@@ -1,0 +1,85 @@
+html[data-locale-dir="rtl"] .rtl-text,
+html[data-locale-dir="rtl"] .settings-row > div:not(.settings-account-main, .settings-edit-suggestions-control) > strong,
+html[data-locale-dir="rtl"] .settings-row > div:not(.settings-account-main, .settings-edit-suggestions-control) > span,
+html[data-locale-dir="rtl"] .settings-account-text > strong,
+html[data-locale-dir="rtl"] .settings-account-text > span,
+html[data-locale-dir="rtl"] .settings-content h2,
+html[data-locale-dir="rtl"] .settings-nav-item span,
+html[data-locale-dir="rtl"] .main-nav .nav-item span,
+html[data-locale-dir="rtl"] .main-nav-actions .nav-item span,
+html[data-locale-dir="rtl"] .recent-title,
+html[data-locale-dir="rtl"] .session-group-title h2,
+html[data-locale-dir="rtl"] .user-footer-name strong,
+html[data-locale-dir="rtl"] .user-footer-name span,
+html[data-locale-dir="rtl"] .user-info-card-head strong,
+html[data-locale-dir="rtl"] .user-info-card-head > div > span,
+html[data-locale-dir="rtl"] .user-info-action span,
+html[data-locale-dir="rtl"] .custom-select-label,
+html[data-locale-dir="rtl"] .custom-select-option-text strong,
+html[data-locale-dir="rtl"] .custom-select-option-text small,
+html[data-locale-dir="rtl"] .toast {
+  direction: rtl;
+  unicode-bidi: plaintext;
+}
+
+html[data-locale-dir="rtl"] .page-header h1,
+html[data-locale-dir="rtl"] .page-header p,
+html[data-locale-dir="rtl"] .chat-topbar h1,
+html[data-locale-dir="rtl"] .chat-topbar p,
+html[data-locale-dir="rtl"] .login-panel h1,
+html[data-locale-dir="rtl"] .login-panel p,
+html[data-locale-dir="rtl"] .modal h3,
+html[data-locale-dir="rtl"] .modal p {
+  direction: ltr;
+  text-align: left;
+  unicode-bidi: plaintext;
+}
+
+html[data-locale-dir="rtl"] .library-empty-state-copy h2,
+html[data-locale-dir="rtl"] .library-empty-state-copy p,
+html[data-locale-dir="rtl"] .prompt-template-empty span,
+html[data-locale-dir="rtl"] .prompt-template-list-empty {
+  direction: ltr;
+  unicode-bidi: plaintext;
+}
+
+html[data-locale-dir="rtl"] .settings-modal,
+html[data-locale-dir="rtl"] .settings-row,
+html[data-locale-dir="rtl"] .settings-account-main,
+html[data-locale-dir="rtl"] .settings-edit-suggestions-control {
+  direction: ltr;
+}
+
+html[data-locale-dir="rtl"] .settings-row > div:not(.settings-account-main, .settings-edit-suggestions-control) > strong,
+html[data-locale-dir="rtl"] .settings-row > div:not(.settings-account-main, .settings-edit-suggestions-control) > span,
+html[data-locale-dir="rtl"] .settings-account-text > strong,
+html[data-locale-dir="rtl"] .settings-account-text > span {
+  direction: ltr;
+  text-align: left;
+  unicode-bidi: plaintext;
+}
+
+html[data-locale-dir="rtl"] .settings-switch-control,
+html[data-locale-dir="rtl"] .settings-switch-track,
+html[data-locale-dir="rtl"] .settings-switch-thumb {
+  direction: ltr;
+  unicode-bidi: normal;
+}
+
+html[data-locale-dir="rtl"] input,
+html[data-locale-dir="rtl"] textarea,
+html[data-locale-dir="rtl"] .prompt-input {
+  direction: rtl;
+  text-align: right;
+  unicode-bidi: plaintext;
+}
+
+html[data-locale-dir="rtl"] input[type="email"],
+html[data-locale-dir="rtl"] input[type="url"],
+html[data-locale-dir="rtl"] code,
+html[data-locale-dir="rtl"] pre,
+html[data-locale-dir="rtl"] kbd,
+html[data-locale-dir="rtl"] samp {
+  direction: ltr;
+  text-align: left;
+}

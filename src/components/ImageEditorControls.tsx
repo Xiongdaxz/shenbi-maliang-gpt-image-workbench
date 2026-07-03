@@ -24,6 +24,7 @@ import { ImageDownloadMenu } from "./ImageDownloadMenu";
 import { ImageLightbox, type ImageLightboxState } from "./ImageLightbox";
 import { EditorSizePicker } from "./ImageOptionPickers";
 import { MaterialPickerDrawer } from "./MaterialPicker";
+import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import type { SizeOption } from "../lib/imageOptions";
 import {
@@ -105,48 +106,49 @@ export function ImageEditorTopbar({
   onShareImage,
   onUndoStroke
 }: ImageEditorTopbarProps) {
+  const { t } = useI18n();
   return (
     <header className="image-editor-topbar">
       <div className="image-editor-title">
-        <button type="button" className="editor-icon-btn" onClick={selectionMode ? onExitSelectionMode : onClose} aria-label="关闭">
+        <button type="button" className="editor-icon-btn" onClick={selectionMode ? onExitSelectionMode : onClose} aria-label={t("common.close")}>
           <X size={20} />
         </button>
-        <span>{selectionMode ? "编辑选择" : activeImage.prompt || "图片编辑"}</span>
+        <span>{selectionMode ? t("imageEditor.selectionTitle") : activeImage.prompt || t("imageEditor.title")}</span>
       </div>
       {!selectionMode && showPreviewControls ? (
-        <div className="image-editor-preview-tools" aria-label="图片预览工具">
-          <button type="button" className="image-editor-preview-tool" onClick={onPreviewRotateLeft} disabled={isSubmitting} aria-label="向左旋转" title="向左旋转">
+        <div className="image-editor-preview-tools" aria-label={t("imagePreview.tools")}>
+          <button type="button" className="image-editor-preview-tool" onClick={onPreviewRotateLeft} disabled={isSubmitting} aria-label={t("imagePreview.rotateLeft")} title={t("imagePreview.rotateLeft")}>
             <RotateCcw size={16} />
           </button>
-          <button type="button" className="image-editor-preview-tool" onClick={onPreviewRotateRight} disabled={isSubmitting} aria-label="向右旋转" title="向右旋转">
+          <button type="button" className="image-editor-preview-tool" onClick={onPreviewRotateRight} disabled={isSubmitting} aria-label={t("imagePreview.rotateRight")} title={t("imagePreview.rotateRight")}>
             <RotateCw size={16} />
           </button>
-          <button type="button" className="image-editor-preview-tool" onClick={onPreviewZoomOut} disabled={isSubmitting} aria-label="缩小" title="缩小">
+          <button type="button" className="image-editor-preview-tool" onClick={onPreviewZoomOut} disabled={isSubmitting} aria-label={t("imagePreview.zoomOut")} title={t("imagePreview.zoomOut")}>
             <ZoomOut size={16} />
           </button>
           <span className="image-editor-preview-zoom">{previewZoomLabel ?? "100%"}</span>
-          <button type="button" className="image-editor-preview-tool" onClick={onPreviewZoomIn} disabled={isSubmitting} aria-label="放大" title="放大">
+          <button type="button" className="image-editor-preview-tool" onClick={onPreviewZoomIn} disabled={isSubmitting} aria-label={t("imagePreview.zoomIn")} title={t("imagePreview.zoomIn")}>
             <ZoomIn size={16} />
           </button>
-          <button type="button" className="image-editor-preview-tool text" onClick={onPreviewReset} disabled={isSubmitting} aria-label="重置预览" title="重置预览">
+          <button type="button" className="image-editor-preview-tool text" onClick={onPreviewReset} disabled={isSubmitting} aria-label={t("imagePreview.reset")} title={t("imagePreview.reset")}>
             <RefreshCw size={15} />
-            重置
+            {t("imagePreview.resetShort")}
           </button>
-          <button type="button" className="image-editor-preview-tool text" onClick={onPreviewOriginalSize} disabled={isSubmitting} aria-label="原始尺寸" title="原始尺寸">
+          <button type="button" className="image-editor-preview-tool text" onClick={onPreviewOriginalSize} disabled={isSubmitting} aria-label={t("imagePreview.originalSize")} title={t("imagePreview.originalSize")}>
             <Maximize2 size={15} />
-            原始尺寸{previewOriginalSizeLabel ? ` ${previewOriginalSizeLabel}` : ""}
+            {previewOriginalSizeLabel ? t("imagePreview.originalSizeWithLabel", { label: previewOriginalSizeLabel }) : t("imagePreview.originalSize")}
           </button>
         </div>
       ) : null}
       {selectionMode ? (
         <div className="image-editor-actions">
-          <button type="button" className="editor-icon-btn" onClick={onUndoStroke} disabled={strokeCount === 0 || isSubmitting} aria-label="撤销">
+          <button type="button" className="editor-icon-btn" onClick={onUndoStroke} disabled={strokeCount === 0 || isSubmitting} aria-label={t("imageEditor.undo")}>
             <Undo2 size={19} />
           </button>
-          <button type="button" className="editor-icon-btn" onClick={onRedoStroke} disabled={redoStrokeCount === 0 || isSubmitting} aria-label="重做">
+          <button type="button" className="editor-icon-btn" onClick={onRedoStroke} disabled={redoStrokeCount === 0 || isSubmitting} aria-label={t("imageEditor.redo")}>
             <Redo2 size={19} />
           </button>
-          <button type="button" className="editor-icon-btn" onClick={onClearSelection} disabled={!hasSelection || isSubmitting} aria-label="清空">
+          <button type="button" className="editor-icon-btn" onClick={onClearSelection} disabled={!hasSelection || isSubmitting} aria-label={t("common.clear")}>
             <Trash2 size={18} />
           </button>
           <label className="brush-size-control">
@@ -156,7 +158,7 @@ export function ImageEditorTopbar({
               className="brush-step-btn"
               onClick={() => onAdjustBrushSize(-BRUSH_SIZE_STEP)}
               disabled={brushSize <= BRUSH_MIN_SIZE || isSubmitting}
-              aria-label="减小画笔"
+              aria-label={t("imageEditor.decreaseBrush")}
             >
               <Minus size={14} />
             </button>
@@ -174,32 +176,32 @@ export function ImageEditorTopbar({
               className="brush-step-btn"
               onClick={() => onAdjustBrushSize(BRUSH_SIZE_STEP)}
               disabled={brushSize >= BRUSH_MAX_SIZE || isSubmitting}
-              aria-label="增大画笔"
+              aria-label={t("imageEditor.increaseBrush")}
             >
               <Plus size={14} />
             </button>
             <span>{brushSize}px</span>
           </label>
           <button type="button" className="editor-text-btn" onClick={onExitSelectionMode} disabled={isSubmitting}>
-            取消
+            {t("common.cancel")}
           </button>
         </div>
       ) : (
         <div className="image-editor-actions">
           <button type="button" className="editor-text-btn" onClick={onEnterSelectionMode} disabled={isSubmitting}>
             <Brush size={17} />
-            选择
+            {t("imageEditor.select")}
           </button>
           <EditorSizePicker value={selectedSize} options={sizeOptions} onSelect={onPickSize} />
-          <button type="button" className="editor-round-btn" onClick={onShareImage} aria-label="分享">
+          <button type="button" className="editor-round-btn" onClick={onShareImage} aria-label={t("imageEditor.share")}>
             <Share2 size={18} />
           </button>
           <ImageDownloadMenu
             source={{ type: "image", id: activeImage.id }}
             className="editor-round-btn"
             iconSize={18}
-            ariaLabel="下载"
-            title="下载"
+            ariaLabel={t("imageEditor.download")}
+            title={t("imageEditor.download")}
             placement="bottom-end"
           />
         </div>
@@ -227,9 +229,10 @@ export function ImageEditorRail({
   onSelectByOffset,
   onSelectImage
 }: ImageEditorRailProps) {
+  const { t } = useI18n();
   return (
     <aside className="image-editor-rail">
-      <button type="button" className="thumb-step-btn" onClick={() => onSelectByOffset(-1)} disabled={activeIndex <= 0} aria-label="上一张">
+      <button type="button" className="thumb-step-btn" onClick={() => onSelectByOffset(-1)} disabled={activeIndex <= 0} aria-label={t("imagePreview.previous")}>
         <ChevronUp size={17} />
       </button>
       <div className="image-editor-thumbs" ref={thumbListRef}>
@@ -240,7 +243,7 @@ export function ImageEditorRail({
             ref={image.id === activeImage.id ? activeThumbRef : undefined}
             className={cx(image.id === activeImage.id && "active")}
             onClick={() => onSelectImage(image)}
-            aria-label="选择图片"
+            aria-label={t("imageEditor.selectImage")}
           >
             <img src={image.thumbnailUrl || image.previewUrl || image.url} alt={image.prompt} />
           </button>
@@ -251,11 +254,11 @@ export function ImageEditorRail({
         className="thumb-step-btn"
         onClick={() => onSelectByOffset(1)}
         disabled={activeIndex >= images.length - 1}
-        aria-label="下一张"
+        aria-label={t("imagePreview.next")}
       >
         <ChevronDown size={17} />
       </button>
-      <span className="image-editor-count">共 {images.length} 张</span>
+      <span className="image-editor-count">{t("pages.images.count", { count: images.length })}</span>
     </aside>
   );
 }
@@ -293,6 +296,7 @@ export function ImageEditorComposer({
   onToggleAsset,
   onToggleMaterialPicker
 }: ImageEditorComposerProps) {
+  const { t } = useI18n();
   const [previewState, setPreviewState] = useState<ImageLightboxState | null>(null);
   const [quickMenuOpen, setQuickMenuOpen] = useState(false);
   const quickMenuRef = useRef<HTMLDivElement | null>(null);
@@ -358,11 +362,11 @@ export function ImageEditorComposer({
                   type="button"
                   className="composer-preview-open"
                   onClick={() => setPreviewState({ items: previewItems, index })}
-                  aria-label={`预览${preview.name}`}
+                  aria-label={t("composer.previewNamed", { name: preview.name })}
                 >
                   <img src={preview.url} alt={preview.name} />
                 </button>
-                <button type="button" className="composer-preview-remove" onClick={preview.onRemove} aria-label={`移除${preview.name}`}>
+                <button type="button" className="composer-preview-remove" onClick={preview.onRemove} aria-label={t("composer.removeNamed", { name: preview.name })}>
                   <X size={15} />
                 </button>
               </figure>
@@ -375,28 +379,28 @@ export function ImageEditorComposer({
               type="button"
               className="editor-composer-tool composer-tool-btn"
               onClick={() => setQuickMenuOpen((open) => !open)}
-              aria-label="添加素材"
+              aria-label={t("imageEditor.addMaterial")}
               aria-expanded={quickMenuOpen}
-              data-tooltip="添加素材"
+              data-tooltip={t("imageEditor.addMaterial")}
             >
               <Plus size={24} strokeWidth={2} />
             </button>
             {quickMenuOpen ? (
-              <div className="composer-quick-menu editor-composer-quick-menu" role="menu" aria-label="编辑素材选项">
+              <div className="composer-quick-menu editor-composer-quick-menu" role="menu" aria-label={t("imageEditor.materialOptions")}>
                 <button type="button" role="menuitem" onClick={selectMaterialPicker}>
                   <ImageIcon size={17} />
-                  <strong>素材库</strong>
+                  <strong>{t("composer.assets")}</strong>
                 </button>
                 <button type="button" role="menuitem" onClick={selectCasePicker}>
                   <Lightbulb size={17} />
-                  <strong>灵感空间</strong>
+                  <strong>{t("composer.inspiration")}</strong>
                 </button>
               </div>
             ) : null}
           </div>
         </div>
-        <input value={prompt} onChange={(event) => onPromptChange(event.target.value)} onFocus={focusEditorInput} placeholder="描述编辑" />
-        <button type="submit" className="editor-send-btn" disabled={isSubmitting || !prompt.trim()} aria-label="发送">
+        <input value={prompt} onChange={(event) => onPromptChange(event.target.value)} onFocus={focusEditorInput} placeholder={t("imageEditor.promptPlaceholder")} />
+        <button type="submit" className="editor-send-btn" disabled={isSubmitting || !prompt.trim()} aria-label={t("composer.send")}>
           <ArrowUp size={22} />
         </button>
       </form>

@@ -9,6 +9,7 @@ import {
 import { logModelRequest } from "./auditLog";
 import type { EditSuggestionTone } from "./userPreferences";
 import { normalizePath, safeJson } from "./utils";
+import { DEFAULT_LOCALE, LOCALE_CODES, type LocaleCode } from "../src/i18n/locales";
 
 type PromptModelMessage = {
   role: "system" | "user" | "assistant";
@@ -56,6 +57,7 @@ const PROMPT_CATEGORY_SELECTION_TIMEOUT_MS = 20 * 1000;
 const PROMPT_EDIT_SUGGESTION_TIMEOUT_MS = 20 * 1000;
 const MAX_CASE_STYLE_SELECTION_COUNT = 2;
 const EDIT_SUGGESTION_COUNT = 3;
+export type PromptEditSuggestionLocale = LocaleCode;
 export const FALLBACK_PROMPT_EDIT_SUGGESTIONS: PromptEditSuggestion[] = [
   {
     label: "强化视觉焦点",
@@ -70,6 +72,293 @@ export const FALLBACK_PROMPT_EDIT_SUGGESTIONS: PromptEditSuggestion[] = [
     prompt: "保留整体构图，针对最容易出错的文字、边缘、材质或表情做局部精修，让画面更干净可信。"
   }
 ];
+const EDIT_SUGGESTION_LOCALE_CODES = new Set<string>(LOCALE_CODES);
+const FALLBACK_PROMPT_EDIT_SUGGESTIONS_BY_LOCALE: Record<PromptEditSuggestionLocale, PromptEditSuggestion[]> = {
+  "zh-CN": FALLBACK_PROMPT_EDIT_SUGGESTIONS,
+  "zh-TW": [
+    {
+      label: "強化視覺焦點",
+      prompt: "保留目前主體，選出畫面最重要的資訊或物件，透過位置、光影和留白讓它更醒目。"
+    },
+    {
+      label: "補真實場景",
+      prompt: "保留目前風格，把主體放進更具體的使用場景，加入 1-2 個能說明用途的道具或環境細節。"
+    },
+    {
+      label: "精修關鍵細節",
+      prompt: "保留整體構圖，針對最容易出錯的文字、邊緣、材質或表情做局部精修，讓畫面更乾淨可信。"
+    }
+  ],
+  "en-US": [
+    {
+      label: "Strengthen focal point",
+      prompt: "Keep the current subject, choose the most important message or object, and use placement, lighting, and whitespace to make it stand out."
+    },
+    {
+      label: "Add real context",
+      prompt: "Keep the current style and place the subject in a more specific use scene with 1-2 props or environmental details."
+    },
+    {
+      label: "Refine key details",
+      prompt: "Keep the overall composition and retouch the most fragile text, edges, materials, or expressions so the image feels cleaner and more credible."
+    }
+  ],
+  "ja-JP": [
+    {
+      label: "焦点を強める",
+      prompt: "現在の主体を保ち、最も重要な情報や物を選び、配置、光、余白でより目立つように調整してください。"
+    },
+    {
+      label: "実用場面を足す",
+      prompt: "現在のスタイルを保ち、主体をより具体的な使用シーンに置き、用途が伝わる小物や環境要素を 1-2 個追加してください。"
+    },
+    {
+      label: "重要部分を整える",
+      prompt: "全体の構図を保ち、文字、輪郭、素材感、表情など崩れやすい部分を局所的に整えて、より自然で信頼感のある画面にしてください。"
+    }
+  ],
+  "ko-KR": [
+    {
+      label: "시선 중심 강화",
+      prompt: "현재 주체는 유지하고 가장 중요한 정보나 오브젝트를 정한 뒤 위치, 조명, 여백으로 더 눈에 띄게 조정하세요."
+    },
+    {
+      label: "실제 사용 장면 추가",
+      prompt: "현재 스타일을 유지하면서 주체를 더 구체적인 사용 장면에 배치하고 용도를 설명하는 소품이나 환경 디테일을 1-2개 추가하세요."
+    },
+    {
+      label: "핵심 디테일 보정",
+      prompt: "전체 구도는 유지하고 텍스트, 가장자리, 재질, 표정처럼 어색해지기 쉬운 부분을 부분적으로 다듬어 더 깔끔하고 신뢰감 있게 만드세요."
+    }
+  ],
+  "es-ES": [
+    {
+      label: "Reforzar el foco",
+      prompt: "Mantén el sujeto actual, elige el mensaje u objeto más importante y usa posición, luz y espacio para hacerlo más visible."
+    },
+    {
+      label: "Añadir contexto real",
+      prompt: "Mantén el estilo actual y coloca el sujeto en una escena de uso más concreta con 1 o 2 accesorios o detalles del entorno."
+    },
+    {
+      label: "Pulir detalles clave",
+      prompt: "Mantén la composición general y retoca textos, bordes, materiales o expresiones delicadas para que la imagen se vea más limpia y creíble."
+    }
+  ],
+  "fr-FR": [
+    {
+      label: "Renforcer le focus",
+      prompt: "Gardez le sujet actuel, choisissez le message ou l'objet le plus important, puis utilisez placement, lumière et espace pour le rendre plus visible."
+    },
+    {
+      label: "Ajouter un contexte réel",
+      prompt: "Gardez le style actuel et placez le sujet dans une scène d'usage plus précise avec 1 ou 2 accessoires ou détails d'environnement."
+    },
+    {
+      label: "Affiner les détails clés",
+      prompt: "Gardez la composition générale et retouchez les textes, contours, matières ou expressions fragiles pour une image plus propre et crédible."
+    }
+  ],
+  "de-DE": [
+    {
+      label: "Fokus stärken",
+      prompt: "Behalte das aktuelle Hauptmotiv bei, wähle die wichtigste Information oder das wichtigste Objekt und betone es durch Position, Licht und Freiraum."
+    },
+    {
+      label: "Realen Kontext ergänzen",
+      prompt: "Behalte den aktuellen Stil bei und setze das Motiv in eine konkretere Nutzungsszene mit 1-2 passenden Requisiten oder Umgebungsdetails."
+    },
+    {
+      label: "Kerndetails verfeinern",
+      prompt: "Behalte die Gesamtkomposition bei und retuschiere empfindliche Texte, Kanten, Materialien oder Gesichtsausdrücke für ein saubereres, glaubwürdigeres Bild."
+    }
+  ],
+  "pt-BR": [
+    {
+      label: "Reforçar o foco",
+      prompt: "Mantenha o sujeito atual, escolha a mensagem ou objeto mais importante e use posição, luz e respiro para destacá-lo melhor."
+    },
+    {
+      label: "Adicionar contexto real",
+      prompt: "Mantenha o estilo atual e coloque o sujeito em uma cena de uso mais concreta com 1 ou 2 acessórios ou detalhes de ambiente."
+    },
+    {
+      label: "Refinar detalhes-chave",
+      prompt: "Mantenha a composição geral e retoque textos, bordas, materiais ou expressões frágeis para a imagem ficar mais limpa e confiável."
+    }
+  ],
+  "ru-RU": [
+    {
+      label: "Усилить фокус",
+      prompt: "Сохраните текущий главный объект, выберите самое важное сообщение или деталь и выделите ее композицией, светом и свободным пространством."
+    },
+    {
+      label: "Добавить реальный контекст",
+      prompt: "Сохраните текущий стиль и поместите объект в более конкретную сцену использования, добавив 1-2 предмета или детали окружения."
+    },
+    {
+      label: "Уточнить ключевые детали",
+      prompt: "Сохраните общую композицию и аккуратно доработайте текст, края, материалы или выражения, чтобы изображение выглядело чище и достовернее."
+    }
+  ],
+  "fa-IR": [
+    {
+      label: "تقویت نقطه کانونی",
+      prompt: "سوژه فعلی را حفظ کنید، مهم ترین پیام یا شیء را انتخاب کنید و با جایگذاری، نور و فضای خالی آن را برجسته تر کنید."
+    },
+    {
+      label: "افزودن زمینه واقعی",
+      prompt: "سبک فعلی را حفظ کنید و سوژه را در یک موقعیت کاربردی مشخص تر قرار دهید، همراه با 1 یا 2 وسیله یا جزئیات محیطی."
+    },
+    {
+      label: "اصلاح جزئیات کلیدی",
+      prompt: "ترکیب کلی را حفظ کنید و متن، لبه ها، جنس مواد یا حالت چهره را که ممکن است ناهماهنگ باشد اصلاح کنید تا تصویر تمیزتر و قابل اعتمادتر شود."
+    }
+  ]
+};
+
+export function normalizePromptEditSuggestionLocale(
+  value: unknown,
+  fallback: PromptEditSuggestionLocale = DEFAULT_LOCALE
+): PromptEditSuggestionLocale {
+  const text = String(value ?? "").trim();
+  return EDIT_SUGGESTION_LOCALE_CODES.has(text) ? (text as PromptEditSuggestionLocale) : fallback;
+}
+
+export function fallbackPromptEditSuggestionsForLocale(locale: unknown = DEFAULT_LOCALE): PromptEditSuggestion[] {
+  const normalizedLocale = normalizePromptEditSuggestionLocale(locale);
+  return (FALLBACK_PROMPT_EDIT_SUGGESTIONS_BY_LOCALE[normalizedLocale] ?? FALLBACK_PROMPT_EDIT_SUGGESTIONS).map((item) => ({
+    label: item.label,
+    prompt: item.prompt
+  }));
+}
+
+function editSuggestionFallbackLabel(locale: PromptEditSuggestionLocale) {
+  return fallbackPromptEditSuggestionsForLocale(locale)[0]?.label ?? FALLBACK_PROMPT_EDIT_SUGGESTIONS[0].label;
+}
+
+function editSuggestionLabelMaxLength(locale: PromptEditSuggestionLocale) {
+  if (locale === "zh-CN" || locale === "zh-TW") return 14;
+  if (locale === "ja-JP" || locale === "ko-KR") return 18;
+  if (locale === "fa-IR") return 34;
+  return 32;
+}
+
+const EDIT_SUGGESTION_OUTPUT_RULES: Record<PromptEditSuggestionLocale, {
+  language: string;
+  labelRule: string;
+  promptRule: string;
+  example: PromptEditSuggestion;
+}> = {
+  "zh-CN": {
+    language: "简体中文",
+    labelRule: "6 到 14 个中文字符",
+    promptRule: "一句中文编辑指令，30 到 70 字",
+    example: {
+      label: "补标题与报名区",
+      prompt: "保留旅游海报主视觉，在顶部加入更醒目的目的地标题，底部补日期、地点和一个轻量报名按钮。"
+    }
+  },
+  "zh-TW": {
+    language: "繁體中文",
+    labelRule: "6 到 14 個繁體中文字符",
+    promptRule: "一句繁體中文編輯指令，30 到 70 字",
+    example: {
+      label: "補標題與報名區",
+      prompt: "保留旅遊海報主視覺，在頂部加入更醒目的目的地標題，底部補日期、地點和一個輕量報名按鈕。"
+    }
+  },
+  "en-US": {
+    language: "English",
+    labelRule: "2 to 5 concise words",
+    promptRule: "one clear English edit instruction, 14 to 32 words",
+    example: {
+      label: "Add title and CTA",
+      prompt: "Keep the travel poster hero image, add a stronger destination title at the top, and place date, location, and a light CTA at the bottom."
+    }
+  },
+  "ja-JP": {
+    language: "日本語",
+    labelRule: "6 to 18 concise Japanese characters",
+    promptRule: "one clear Japanese edit instruction, 25 to 70 characters",
+    example: {
+      label: "タイトルと申込欄を追加",
+      prompt: "旅行ポスターのメインビジュアルを保ち、上部に目的地タイトル、下部に日付、場所、軽い申込ボタンを追加してください。"
+    }
+  },
+  "ko-KR": {
+    language: "한국어",
+    labelRule: "6 to 18 concise Korean characters",
+    promptRule: "one clear Korean edit instruction, 25 to 70 characters",
+    example: {
+      label: "제목과 신청 영역 추가",
+      prompt: "여행 포스터의 메인 비주얼은 유지하고 상단에 목적지 제목, 하단에 날짜, 장소, 가벼운 신청 버튼을 추가하세요."
+    }
+  },
+  "es-ES": {
+    language: "Español",
+    labelRule: "2 to 6 concise Spanish words",
+    promptRule: "one clear Spanish edit instruction, 14 to 34 words",
+    example: {
+      label: "Añadir título y reserva",
+      prompt: "Mantén la imagen principal del cartel de viaje, añade un destino más visible arriba y coloca fecha, lugar y botón ligero abajo."
+    }
+  },
+  "fr-FR": {
+    language: "Français",
+    labelRule: "2 to 6 concise French words",
+    promptRule: "one clear French edit instruction, 14 to 34 words",
+    example: {
+      label: "Ajouter titre et action",
+      prompt: "Gardez le visuel principal du poster de voyage, ajoutez un titre de destination plus visible en haut, puis date, lieu et bouton léger en bas."
+    }
+  },
+  "de-DE": {
+    language: "Deutsch",
+    labelRule: "2 to 6 concise German words",
+    promptRule: "one clear German edit instruction, 14 to 34 words",
+    example: {
+      label: "Titel und Aktion ergänzen",
+      prompt: "Behalte das Reiseplakat-Motiv bei, setze oben einen stärkeren Reiseziel-Titel und unten Datum, Ort sowie einen dezenten Aktionsbutton."
+    }
+  },
+  "pt-BR": {
+    language: "Português (Brasil)",
+    labelRule: "2 to 6 concise Brazilian Portuguese words",
+    promptRule: "one clear Brazilian Portuguese edit instruction, 14 to 34 words",
+    example: {
+      label: "Adicionar título e ação",
+      prompt: "Mantenha o visual principal do pôster de viagem, adicione um título de destino mais forte no topo e data, local e botão leve embaixo."
+    }
+  },
+  "ru-RU": {
+    language: "Русский",
+    labelRule: "2 to 6 concise Russian words",
+    promptRule: "one clear Russian edit instruction, 14 to 34 words",
+    example: {
+      label: "Добавить заголовок и кнопку",
+      prompt: "Сохраните главный визуал туристического постера, добавьте заметный заголовок направления сверху, а снизу дату, место и легкую кнопку записи."
+    }
+  },
+  "fa-IR": {
+    language: "فارسی",
+    labelRule: "2 to 6 concise Persian words",
+    promptRule: "one clear Persian edit instruction, 14 to 34 words",
+    example: {
+      label: "افزودن عنوان و اقدام",
+      prompt: "تصویر اصلی پوستر سفر را حفظ کنید، بالای تصویر عنوان مقصد را برجسته تر کنید و پایین تصویر تاریخ، مکان و دکمه اقدام سبک اضافه کنید."
+    }
+  }
+};
+
+function editSuggestionOutputInstruction(locale: PromptEditSuggestionLocale) {
+  const rule = EDIT_SUGGESTION_OUTPUT_RULES[locale] ?? EDIT_SUGGESTION_OUTPUT_RULES[DEFAULT_LOCALE];
+  return [
+    `输出语言必须是 ${rule.language}。label 和 prompt 都必须使用 ${rule.language}，不要混入其他语言。`,
+    `label 为 ${rule.labelRule}，具体但简短；prompt 为 ${rule.promptRule}，必须包含 2 个以上可执行细节。`,
+    `只输出 JSON，格式为 ${JSON.stringify({ suggestions: [rule.example] })}。`
+  ].join("\n");
+}
 const FALLBACK_CHINESE_USERNAMES = [
   "星柚",
   "云栗",
@@ -438,9 +727,11 @@ function normalizeGeneratedCategoryIds(value: string, options: PromptCategoryOpt
   return selected.slice(0, maxCount);
 }
 
-function normalizeEditSuggestionLabel(label: unknown, prompt: string) {
+function normalizeEditSuggestionLabel(label: unknown, prompt: string, locale: PromptEditSuggestionLocale = DEFAULT_LOCALE) {
   const cleaned = cleanGeneratedEditSuggestionText(label).replace(/[。！？!?；;，,、：:]+$/g, "").trim();
-  return truncateTitle(cleaned || fallbackTitleFromPrompt(prompt, "继续优化", 14), 14) || "继续优化";
+  const fallback = editSuggestionFallbackLabel(locale);
+  const maxLength = editSuggestionLabelMaxLength(locale);
+  return truncateTitle(cleaned || fallbackTitleFromPrompt(prompt, fallback, maxLength), maxLength) || fallback;
 }
 
 function normalizeEditSuggestionPrompt(value: unknown) {
@@ -458,7 +749,8 @@ function isGenericEditSuggestion(label: string, prompt: string) {
   return !hasConcreteDetail;
 }
 
-function normalizeGeneratedEditSuggestions(value: string) {
+function normalizeGeneratedEditSuggestions(value: string, locale: unknown = DEFAULT_LOCALE) {
+  const suggestionLocale = normalizePromptEditSuggestionLocale(locale);
   const parsed = safeJson<unknown>(cleanJsonLikeModelOutput(value), null);
   const record = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
   const rawItems = Array.isArray(parsed)
@@ -476,7 +768,7 @@ function normalizeGeneratedEditSuggestions(value: string) {
       typeof item === "string" ? item : itemRecord.prompt ?? itemRecord.instruction ?? itemRecord.text ?? itemRecord.content
     );
     if (!prompt) continue;
-    const label = normalizeEditSuggestionLabel(itemRecord.label ?? itemRecord.title ?? itemRecord.name, prompt);
+    const label = normalizeEditSuggestionLabel(itemRecord.label ?? itemRecord.title ?? itemRecord.name, prompt, suggestionLocale);
     if (isGenericEditSuggestion(label, prompt)) continue;
     const key = `${label}\u0000${prompt}`;
     if (seen.has(key)) continue;
@@ -484,7 +776,7 @@ function normalizeGeneratedEditSuggestions(value: string) {
     suggestions.push({ label, prompt });
     if (suggestions.length >= EDIT_SUGGESTION_COUNT) break;
   }
-  for (const fallback of FALLBACK_PROMPT_EDIT_SUGGESTIONS) {
+  for (const fallback of fallbackPromptEditSuggestionsForLocale(suggestionLocale)) {
     if (suggestions.length >= EDIT_SUGGESTION_COUNT) break;
     const key = `${fallback.label}\u0000${fallback.prompt}`;
     if (seen.has(key)) continue;
@@ -521,13 +813,15 @@ function promptSubject(prompt: string) {
   return fallbackTitleFromPrompt(prompt, "当前主题", 12).replace(/[「」]/g, "").trim() || "当前主题";
 }
 
-function fallbackPromptEditSuggestionsForPrompt(prompt: string): PromptEditSuggestion[] {
+function fallbackPromptEditSuggestionsForPrompt(prompt: string, locale: unknown = DEFAULT_LOCALE): PromptEditSuggestion[] {
+  const suggestionLocale = normalizePromptEditSuggestionLocale(locale);
+  if (suggestionLocale !== "zh-CN") return fallbackPromptEditSuggestionsForLocale(suggestionLocale);
   const normalizedPrompt = prompt.replace(/\s+/g, " ").trim().toLowerCase();
   const subject = promptSubject(normalizedPrompt);
   const suggestions: PromptEditSuggestion[] = [];
   const seen = new Set<string>();
   const add = (label: string, editPrompt: string) => {
-    const normalizedLabel = normalizeEditSuggestionLabel(label, editPrompt);
+    const normalizedLabel = normalizeEditSuggestionLabel(label, editPrompt, suggestionLocale);
     const normalizedEditPrompt = normalizeEditSuggestionPrompt(editPrompt);
     if (!normalizedLabel || !normalizedEditPrompt) return;
     const key = `${normalizedLabel}\u0000${normalizedEditPrompt}`;
@@ -578,7 +872,7 @@ function fallbackPromptEditSuggestionsForPrompt(prompt: string): PromptEditSugge
     add("做明信片边框", `保留「${subject}」景点识别，加入明信片式白边、邮戳、手写地名和局部小插画。`);
   }
 
-  for (const fallback of FALLBACK_PROMPT_EDIT_SUGGESTIONS) {
+  for (const fallback of fallbackPromptEditSuggestionsForLocale(suggestionLocale)) {
     if (suggestions.length >= EDIT_SUGGESTION_COUNT) break;
     add(fallback.label, fallback.prompt);
   }
@@ -778,14 +1072,17 @@ export async function generatePromptEditSuggestions({
   originPrompt = "",
   promptHistory = [],
   kind = "",
-  tone = "default"
+  tone = "default",
+  language = DEFAULT_LOCALE
 }: {
   prompt: string;
   originPrompt?: string;
   promptHistory?: string[];
   kind?: string;
   tone?: EditSuggestionTone;
+  language?: unknown;
 }) {
+  const suggestionLocale = normalizePromptEditSuggestionLocale(language);
   const normalizedPrompt = prompt.replace(/\s+/g, " ").trim();
   const normalizedOriginPrompt = originPrompt.replace(/\s+/g, " ").trim();
   const normalizedPromptHistory = promptHistory
@@ -798,7 +1095,8 @@ export async function generatePromptEditSuggestions({
     .slice(-6)
     .map((item, index) => `${index + 1}. ${Array.from(item).slice(0, 240).join("")}`);
   const fallback = fallbackPromptEditSuggestionsForPrompt(
-    [initialPrompt, ...editHistory, currentPrompt].filter(Boolean).join("\n")
+    [initialPrompt, ...editHistory, currentPrompt].filter(Boolean).join("\n"),
+    suggestionLocale
   );
   const provider = activePromptProvider();
   if (!provider) return fallback;
@@ -810,7 +1108,8 @@ export async function generatePromptEditSuggestions({
           role: "system",
           content:
             [
-              "你是 AI 图片续改建议策划。用户刚得到一张图片，你要基于当前图片提示词给 3 条可以直接执行的下一步编辑建议。不要输出抽象方向，不要只写“优化构图、提升质感、增强氛围、做成海报”这类空泛话。每条建议都必须落到真实可编辑细节：具体加什么元素、放在画面哪里、文字/版式怎么排、保留什么主体、改动什么局部。三条建议必须是不同设计路线，例如信息层级、视觉元素、场景氛围、版式结构、用途转化、局部细节、风格包装里选三种。遇到海报/攻略/信息图/封面/banner 等版式型图片时，先判断它最需要强化的是信息表达、视觉焦点、阅读顺序、使用场景还是情绪包装，再自由给出具体改法，不要为了套版式元素而固定使用主副标题、编号、卡片等模板。label 为 6 到 14 个中文字符，具体但简短；prompt 为一句中文编辑指令，30 到 70 字，必须包含 2 个以上可执行细节。不要写成重新生成新图，不要要求上传图片，不要解释。只输出 JSON，格式为 {\"suggestions\":[{\"label\":\"补标题与报名区\",\"prompt\":\"保留旅游海报主视觉，在顶部加入更醒目的目的地标题，底部补日期、地点和一个轻量报名按钮。\"}]}。",
+              "你是 AI 图片续改建议策划。用户刚得到一张图片，你要基于当前图片提示词给 3 条可以直接执行的下一步编辑建议。不要输出抽象方向，不要只写“优化构图、提升质感、增强氛围、做成海报”这类空泛话。每条建议都必须落到真实可编辑细节：具体加什么元素、放在画面哪里、文字/版式怎么排、保留什么主体、改动什么局部。三条建议必须是不同设计路线，例如信息层级、视觉元素、场景氛围、版式结构、用途转化、局部细节、风格包装里选三种。遇到海报/攻略/信息图/封面/banner 等版式型图片时，先判断它最需要强化的是信息表达、视觉焦点、阅读顺序、使用场景还是情绪包装，再自由给出具体改法，不要为了套版式元素而固定使用主副标题、编号、卡片等模板。不要写成重新生成新图，不要要求上传图片，不要解释。",
+              editSuggestionOutputInstruction(suggestionLocale),
               editSuggestionToneInstruction(tone)
             ].filter(Boolean).join("\n")
         },
@@ -819,6 +1118,7 @@ export async function generatePromptEditSuggestions({
           content: [
             `图片类型：${kind === "edit" ? "编辑图" : "生成图"}`,
             `建议倾向：${editSuggestionToneLabel(tone)}`,
+            `输出语言：${EDIT_SUGGESTION_OUTPUT_RULES[suggestionLocale].language}`,
             `最初生成提示词：${Array.from(initialPrompt).slice(0, 1200).join("")}`,
             historyLines.length > 0 ? `中间编辑提示词：\n${historyLines.join("\n")}` : "",
             `当前图片提示词：${Array.from(currentPrompt).slice(0, 1200).join("")}`,
@@ -829,7 +1129,7 @@ export async function generatePromptEditSuggestions({
       0.72,
       PROMPT_EDIT_SUGGESTION_TIMEOUT_MS
     );
-    return normalizeGeneratedEditSuggestions(content);
+    return normalizeGeneratedEditSuggestions(content, suggestionLocale);
   } catch (error) {
     console.warn("图片续改建议自动生成失败", error);
     return fallback;

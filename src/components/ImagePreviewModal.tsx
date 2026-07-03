@@ -6,6 +6,7 @@ import {
   ImagePreviewToolbar,
   ReferenceLightbox
 } from "./ImagePreviewControls";
+import { useI18n } from "../i18n";
 import { copyTextToClipboard } from "../lib/clipboard";
 import { formatImageFileSize } from "../lib/format";
 import type { CaseGroupImage, ImageReferenceItem } from "../types";
@@ -87,6 +88,7 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
   renderActions
 }: ImagePreviewModalProps<TItem>) {
   const { showToast } = useToast();
+  const { t } = useI18n();
   const previewItem = items[index] ?? null;
   const [previewGroupImageIndex, setPreviewGroupImageIndex] = useState(0);
   const [previewZoom, setPreviewZoom] = useState(1);
@@ -272,7 +274,7 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
     const description = previewDisplayItem?.description?.trim();
     if (!description) return;
     const copied = await copyTextToClipboard(description);
-    showToast(copied ? "文案已复制" : "复制失败", copied ? "success" : "error");
+    showToast(copied ? t("imagePreview.copySuccess") : t("imagePreview.copyFailed"), copied ? "success" : "error");
   };
 
   const clampPreviewPan = (pan: { x: number; y: number }) => ({
@@ -546,7 +548,7 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
   return (
     <div className="case-preview-backdrop">
       <section className={previewDragging ? "case-preview-modal is-preview-dragging" : "case-preview-modal"} aria-label={ariaLabel}>
-        <button className="case-preview-close" type="button" onClick={closePreview} aria-label="关闭预览">
+        <button className="case-preview-close" type="button" onClick={closePreview} aria-label={t("imagePreview.close")}>
           <X size={18} />
         </button>
         <ImagePreviewStage

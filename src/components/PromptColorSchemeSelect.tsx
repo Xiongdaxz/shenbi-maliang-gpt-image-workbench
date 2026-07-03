@@ -1,6 +1,7 @@
 import { useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Palette, X } from "lucide-react";
+import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import {
   normalizePromptColorSchemeHex,
@@ -51,6 +52,7 @@ export function PromptColorSchemeSelect({
   customColorHex,
   onCustomColorSelect
 }: PromptColorSchemeSelectProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [menuScrolling, setMenuScrolling] = useState(false);
   const [customColorPickerOpen, setCustomColorPickerOpen] = useState(false);
@@ -69,11 +71,11 @@ export function PromptColorSchemeSelect({
   const categories = useMemo(() => {
     const map = new Map<string, PromptColorScheme[]>();
     for (const scheme of visibleSchemes) {
-      const key = scheme.category || "自定义";
+      const key = scheme.category || t("promptColorScheme.customCategory");
       map.set(key, [...(map.get(key) ?? []), scheme]);
     }
     return Array.from(map.entries());
-  }, [visibleSchemes]);
+  }, [t, visibleSchemes]);
   const showCustomColorOnly = categories.length === 0 && Boolean(onCustomColorSelect);
   const previewItems = selectedSchemes.length > 0
     ? selectedPreviewItems(selectedSchemes)
@@ -81,15 +83,15 @@ export function PromptColorSchemeSelect({
       ? [{ id: "custom-color", style: { background: normalizedCustomColorHex } }]
       : [];
   const triggerLabel = selectedSchemes.length === 0
-    ? normalizedCustomColorHex || "色系"
+    ? normalizedCustomColorHex || t("promptColorScheme.label")
     : selectedSchemes[0].name;
   const hasSelection = selectedIds.length > 0 || Boolean(normalizedCustomColorHex);
   const showTriggerLabel = previewItems.length === 0 || Boolean(normalizedCustomColorHex);
   const triggerTitle = selectedSchemes.length > 0
-    ? selectedSchemes.map((scheme) => scheme.name).join("、")
+    ? selectedSchemes.map((scheme) => scheme.name).join(t("common.listSeparator"))
     : normalizedCustomColorHex
-      ? `自定义色 ${normalizedCustomColorHex}`
-      : "未选择色系";
+      ? t("promptColorScheme.customColorTitle", { color: normalizedCustomColorHex })
+      : t("promptColorScheme.noSelection");
   const customColorInputValue = normalizedCustomColorHex || "#2563EB";
 
   function closeCustomColorPicker() {
@@ -239,8 +241,8 @@ export function PromptColorSchemeSelect({
             type="button"
             className="prompt-color-scheme-clear"
             disabled={disabled}
-            aria-label="清空色系"
-            title="清空色系"
+            aria-label={t("promptColorScheme.clear")}
+            title={t("promptColorScheme.clear")}
             onClick={clearSelection}
           >
             <X size={14} aria-hidden="true" />
@@ -250,8 +252,8 @@ export function PromptColorSchemeSelect({
             type="button"
             className="prompt-color-scheme-caret"
             disabled={disabled}
-            aria-label={open ? "收起色系选择" : "展开色系选择"}
-            title={open ? "收起色系选择" : "展开色系选择"}
+            aria-label={open ? t("promptColorScheme.collapse") : t("promptColorScheme.expand")}
+            title={open ? t("promptColorScheme.collapse") : t("promptColorScheme.expand")}
             onClick={toggleMenu}
           >
             <ChevronDown size={16} className={open ? "open" : ""} aria-hidden="true" />
@@ -316,7 +318,7 @@ export function PromptColorSchemeSelect({
                 className="prompt-color-scheme-custom-input"
                 type="color"
                 value={customColorInputValue}
-                aria-label="选择自定义色"
+                aria-label={t("promptColorScheme.pickCustom")}
                 tabIndex={-1}
                 onChange={(event) => handleCustomColorChange(event.currentTarget.value)}
                 onBlur={() => setCustomColorPickerOpen(false)}
@@ -327,7 +329,7 @@ export function PromptColorSchemeSelect({
                 onClick={openCustomColorPicker}
               >
                 <Palette size={14} aria-hidden="true" />
-                <span>自选颜色</span>
+                <span>{t("promptColorScheme.customButton")}</span>
               </button>
             </div>
           ) : null}

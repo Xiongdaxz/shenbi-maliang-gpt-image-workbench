@@ -1,4 +1,5 @@
 import { ArchiveRestore, MessageCircle, Trash2, X } from "lucide-react";
+import { useI18n } from "../../i18n";
 import type { ChatSession } from "../../types";
 
 type ArchivedChatsDialogProps = {
@@ -13,9 +14,9 @@ type ArchivedChatsDialogProps = {
   onDelete: (session: ChatSession) => void;
 };
 
-function formatArchivedDate(value: string) {
+function formatArchivedDate(value: string, locale: string) {
   if (!value) return "";
-  return new Intl.DateTimeFormat("zh-CN", {
+  return new Intl.DateTimeFormat(locale, {
     year: "numeric",
     month: "long",
     day: "numeric"
@@ -33,6 +34,7 @@ export function ArchivedChatsDialog({
   onRestoreAll,
   onDelete
 }: ArchivedChatsDialogProps) {
+  const { resolvedLanguage, t } = useI18n();
   if (!open) return null;
 
   return (
@@ -42,9 +44,9 @@ export function ArchivedChatsDialog({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <section className="archived-chats-modal" role="dialog" aria-modal="true" aria-label="已归档的聊天">
+      <section className="archived-chats-modal" role="dialog" aria-modal="true" aria-label={t("settings.data.archivedChats")}>
         <header>
-          <h3>已归档的聊天</h3>
+          <h3>{t("settings.data.archivedChats")}</h3>
           <div className="archived-chat-head-actions">
             <button
               className="secondary-btn"
@@ -53,21 +55,21 @@ export function ArchivedChatsDialog({
               onClick={onRestoreAll}
             >
               <ArchiveRestore size={15} />
-              {restoreAllPending ? "恢复中" : "全部取消归档"}
+              {restoreAllPending ? t("archivedChats.restoring") : t("archivedChats.restoreAll")}
             </button>
-            <button className="archived-close-btn" type="button" onClick={onClose} aria-label="关闭">
+            <button className="archived-close-btn" type="button" onClick={onClose} aria-label={t("common.close")}>
               <X size={18} />
             </button>
           </div>
         </header>
         <div className="archived-chat-table">
           <div className="archived-chat-row header" role="row">
-            <span>名称</span>
-            <span>创建日期</span>
+            <span>{t("archivedChats.name")}</span>
+            <span>{t("archivedChats.createdAt")}</span>
             <span />
           </div>
-          {loading ? <div className="archived-chat-empty">读取中...</div> : null}
-          {!loading && sessions.length === 0 ? <div className="archived-chat-empty">暂无已归档聊天</div> : null}
+          {loading ? <div className="archived-chat-empty">{t("common.loadingEllipsis")}</div> : null}
+          {!loading && sessions.length === 0 ? <div className="archived-chat-empty">{t("archivedChats.empty")}</div> : null}
           {!loading
             ? sessions.map((session) => (
                 <div className="archived-chat-row" role="row" key={session.id}>
@@ -75,14 +77,14 @@ export function ArchivedChatsDialog({
                     <MessageCircle size={17} />
                     <strong>{session.title}</strong>
                   </span>
-                  <span>{formatArchivedDate(session.createdAt)}</span>
+                  <span>{formatArchivedDate(session.createdAt, resolvedLanguage)}</span>
                   <span className="archived-chat-actions">
                     <button
                       type="button"
                       disabled={actionPending}
                       onClick={() => onRestore(session)}
-                      aria-label={`取消归档：${session.title}`}
-                      title="取消归档"
+                      aria-label={t("archivedChats.restoreOne", { title: session.title })}
+                      title={t("archivedChats.restore")}
                     >
                       <ArchiveRestore size={17} />
                     </button>
@@ -91,8 +93,8 @@ export function ArchivedChatsDialog({
                       type="button"
                       disabled={actionPending}
                       onClick={() => onDelete(session)}
-                      aria-label={`删除聊天：${session.title}`}
-                      title="删除"
+                      aria-label={t("archivedChats.deleteOne", { title: session.title })}
+                      title={t("common.delete")}
                     >
                       <Trash2 size={17} />
                     </button>

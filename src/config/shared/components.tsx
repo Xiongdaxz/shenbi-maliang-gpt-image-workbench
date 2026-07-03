@@ -1,3 +1,5 @@
+import { useConfigCopy } from "../configCopy";
+
 export function SwitchControl({
   checked,
   disabled,
@@ -9,6 +11,8 @@ export function SwitchControl({
   label: string;
   onChange: (checked: boolean) => void;
 }) {
+  const configCopy = useConfigCopy();
+
   return (
     <button
       type="button"
@@ -21,16 +25,18 @@ export function SwitchControl({
       <span className="switch-track">
         <span className="switch-thumb" />
       </span>
-      <span className="switch-label">{label}</span>
+      <span className="switch-label">{configCopy(label)}</span>
     </button>
   );
 }
 
 export function ConfigHeader({ title, desc }: { title: string; desc: string }) {
+  const configCopy = useConfigCopy();
+
   return (
     <header className="page-header compact">
-      <h1>{title}</h1>
-      <p>{desc}</p>
+      <h1>{configCopy(title)}</h1>
+      <p>{configCopy(desc)}</p>
     </header>
   );
 }

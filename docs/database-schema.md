@@ -52,11 +52,12 @@
 | 字段 | 说明 |
 | --- | --- |
 | `user_id` | 用户 ID，主键 |
+| `language` | 用户界面语言偏好：`auto` 自动检测，或 `zh-CN`、`zh-TW`、`en-US`、`ja-JP`、`ko-KR`、`es-ES`、`fr-FR`、`de-DE`、`pt-BR`、`ru-RU`、`fa-IR` |
 | `edit_suggestions_enabled` | 对话页图片续改建议开关，`0` 关闭、`1` 开启 |
 | `edit_suggestion_tone` | 图片续改建议倾向：`default` 默认均衡、`practical` 实用优化、`creative` 创意扩展、`detail` 细节修复 |
 | `auto_upload_pasted_assets` | 输入框粘贴图片是否自动保存到素材库，`0` 关闭、`1` 开启；关闭后仅作为本次消息引用素材保存 |
-| `prompt_optimize_styles_json` | 用户自定义 AI 优化风格 JSON，保存主风格、子风格、排序、显示状态和自定义优化指令；为空时使用系统默认风格 |
-| `prompt_optimize_custom_instruction` | 用户在输入区 AI 优化风格里的自定义补充指令 |
+| `prompt_optimize_styles_json` | 用户自定义 AI优化风格 JSON，保存主风格、子风格、排序、显示状态和自定义优化指令；为空时使用系统默认风格 |
+| `prompt_optimize_custom_instruction` | 用户在输入区 AI优化风格里的自定义补充指令 |
 | `updated_at` | 更新时间 |
 
 ### user_auth_sessions
@@ -108,7 +109,8 @@
 | 字段 | 说明 |
 | --- | --- |
 | `date` | 上海时区日期，主键，格式 `YYYY-MM-DD` |
-| `copies_json` | 当日候选文案 JSON 数组 |
+| `copies_json` | 当日中文候选文案 JSON 数组 |
+| `copies_en_json` | 当日英文候选文案 JSON 数组，非中文界面优先读取 |
 | `source` | 文案来源，当前为 `ai` |
 | `provider_name` / `model` | 生成文案使用的模型配置名称和模型 |
 | `status` | 生成状态：`success` 成功、`failed` 失败 |
@@ -190,7 +192,7 @@
 | `suggested_case_category_ids_json` | 图片生成成功后自动判断的灵感风格 ID JSON 数组，用于加入灵感空间时预填 |
 | `suggested_asset_category_ids_json` | 图片生成成功后或打开加入素材库弹窗时自动判断的素材标签 ID JSON 数组，用于加入素材库时预填；为空时下次打开会重新生成 |
 | `kind` | 图片类型：`generation` 生成、`edit` 编辑 |
-| `size` / `quality` | 请求尺寸和质量；`size` 默认 `auto`，常用 `1024x1024`、`1536x2048`、`1152x2048`、`2048x1536`、`2048x1152`；`quality` 默认可选 `low`、`medium`、`high`，具体也可由渠道配置扩展 |
+| `size` / `quality` | 请求尺寸和质量；`size` 默认 `auto`，按 GPT Image 2 文档使用 `WIDTHxHEIGHT`，常用 `1024x1024`、`1536x2048`、`1152x2048`、`2048x1536`、`2048x1152`；`quality` 默认可选 `low`、`medium`、`high`，具体也可由渠道配置扩展 |
 | `provider_id` | 实际渠道 ID |
 | `mime_type` | 图片 MIME 类型 |
 | `parent_image_id` | 编辑来源图片 |
@@ -417,7 +419,7 @@
 | `visibility` | 可见性：`private` 私有、`shared` 共享 |
 | `name` / `description` / `category` | 模板名称、说明和分类 |
 | `icon` | 模板图标 |
-| `optimize_style` | 该模板默认 AI 优化风格。支持主风格：`standard` 标准、`realistic` 写实、`cinematic` 电影、`anime` 动漫、`artistic` 艺术、`commercial` 商业、`series` 组图、`composition` 构图、`detailed` 细节、`creative` 创意；也支持 `主风格:子风格`，例如 `cinematic:cyberpunk`、`anime:ghibli`、`series:logo-design`、`composition:rule-of-thirds` |
+| `optimize_style` | 该模板默认 AI优化风格。支持主风格：`standard` 标准、`realistic` 写实、`cinematic` 电影、`anime` 动漫、`artistic` 艺术、`commercial` 商业、`series` 组图、`composition` 构图、`detailed` 细节、`creative` 创意；也支持 `主风格:子风格`，例如 `cinematic:cyberpunk`、`anime:ghibli`、`series:logo-design`、`composition:rule-of-thirds` |
 | `components_json` | 表单组件 JSON；组件类型支持 `text`、`textarea`、`select`、`image`、`color`、`section`，其中 `color` 可保存 `colorOptions`、`gradientOptions`、`allowCustomColor` |
 | `rules_json` | 基础提示词拼接规则 JSON |
 | `output_json` | 输出配置 JSON |
@@ -682,7 +684,7 @@
 | --- | --- |
 | `id` | 固定为 `default` |
 | `enabled` | 旧兼容字段；运行时总开关来自 `global_switch_settings.starter_copy_generation`，保存接口会同步写入 |
-| `copy_count` | 每次生成候选文案数量，范围 `0` 到 `100`，默认 `20` |
+| `copy_count` | 每次生成候选文案数量，范围 `0` 到 `100`，默认 `50` |
 | `updated_at` | 更新时间 |
 
 ### file_security_settings

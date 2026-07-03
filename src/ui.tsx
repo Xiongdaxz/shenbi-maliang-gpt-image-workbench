@@ -1,7 +1,8 @@
-import { createContext, useContext, useEffect, useId, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Info, X } from "lucide-react";
+import { useI18n } from "./i18n";
 
 export type SelectOption = {
   value: string;
@@ -20,23 +21,43 @@ type CustomSelectProps = {
   menuClassName?: string;
   menuPlacement?: "top" | "bottom";
   menuWidth?: number;
+  menuAutoWidth?: boolean;
+  menuAutoWidthPadding?: number;
 };
 
-export function CustomSelect({ value, options, onChange, placeholder = "请选择", disabled, className, menuClassName, menuPlacement = "bottom", menuWidth }: CustomSelectProps) {
+export function CustomSelect({
+  value,
+  options,
+  onChange,
+  placeholder,
+  disabled,
+  className,
+  menuClassName,
+  menuPlacement = "bottom",
+  menuWidth,
+  menuAutoWidth = false,
+  menuAutoWidthPadding = 0
+}: CustomSelectProps) {
   const [open, setOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState({ top: 0, left: 0, width: 0 });
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const selected = options.find((option) => option.value === value);
   const labelId = useId();
+  const { t } = useI18n();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
     function updatePosition() {
       const rect = wrapRef.current?.getBoundingClientRect();
       if (!rect) return;
-      const width = Math.max(rect.width, Number(menuWidth ?? 0));
-      const maxLeft = Math.max(12, window.innerWidth - width - 12);
-      const left = Math.min(Math.max(12, rect.left), maxLeft);
+      const viewportPadding = 12;
+      const minWidth = Math.max(rect.width, Number(menuWidth ?? 0), 1);
+      const maxWidth = Math.max(window.innerWidth - viewportPadding * 2, 1);
+      const contentWidth = menuAutoWidth ? Math.ceil(menuRef.current?.scrollWidth ?? 0) + menuAutoWidthPadding : 0;
+      const width = Math.min(Math.max(minWidth, contentWidth), maxWidth);
+      const maxLeft = Math.max(viewportPadding, window.innerWidth - width - viewportPadding);
+      const left = Math.min(Math.max(viewportPadding, rect.left), maxLeft);
       setMenuStyle({ top: menuPlacement === "top" ? rect.top - 6 : rect.bottom + 6, left, width });
     }
     function handlePointerDown(event: PointerEvent) {
@@ -45,15 +66,17 @@ export function CustomSelect({ value, options, onChange, placeholder = "请选�
       if (!wrapRef.current?.contains(target) && !inMenu) setOpen(false);
     }
     updatePosition();
+    const frame = window.requestAnimationFrame(updatePosition);
     document.addEventListener("pointerdown", handlePointerDown);
     window.addEventListener("resize", updatePosition);
     window.addEventListener("scroll", updatePosition, true);
     return () => {
+      window.cancelAnimationFrame(frame);
       document.removeEventListener("pointerdown", handlePointerDown);
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
-  }, [menuPlacement, menuWidth, open]);
+  }, [menuAutoWidth, menuAutoWidthPadding, menuPlacement, menuWidth, open, options]);
 
   return (
     <div className={`custom-select ${className ?? ""}`} ref={wrapRef}>
@@ -68,13 +91,14 @@ export function CustomSelect({ value, options, onChange, placeholder = "请选�
       >
         <span className="custom-select-value">
           {selected?.icon ? <span className="custom-select-icon" aria-hidden="true">{selected.icon}</span> : null}
-          <span className={!selected ? "custom-select-label placeholder" : "custom-select-label"}>{selected?.label ?? placeholder}</span>
+          <span className={!selected ? "custom-select-label placeholder" : "custom-select-label"}>{selected?.label ?? placeholder ?? t("common.selectPlaceholder")}</span>
         </span>
         <ChevronDown size={16} className={open ? "open" : ""} />
       </button>
       {open
         ? createPortal(
             <div
+              ref={menuRef}
               className={`custom-select-menu ${menuPlacement === "top" ? "custom-select-menu-top" : ""} ${menuClassName ?? ""}`}
               role="listbox"
               aria-labelledby={labelId}
@@ -106,7 +130,7 @@ export function CustomSelect({ value, options, onChange, placeholder = "请选�
                   </button>
                 );
               })}
-              {options.length === 0 ? <div className="custom-select-empty">暂无选项</div> : null}
+              {options.length === 0 ? <div className="custom-select-empty">{t("common.selectPlaceholder")}</div> : null}
             </div>,
             document.body
           )
@@ -134,8 +158,8 @@ export function ConfirmDialog({
   open,
   title,
   description,
-  confirmText = "确认",
-  cancelText = "取消",
+  confirmText,
+  cancelText,
   confirmationText,
   confirmationLabel,
   destructive,
@@ -145,6 +169,7 @@ export function ConfirmDialog({
   onCancel
 }: ConfirmDialogProps) {
   const [confirmationValue, setConfirmationValue] = useState("");
+  const { t } = useI18n();
   useEffect(() => {
     if (open) setConfirmationValue("");
   }, [open, confirmationText, title]);
@@ -156,14 +181,14 @@ export function ConfirmDialog({
       <section className={["case-modal compact-modal action-modal", className].filter(Boolean).join(" ")}>
         <header>
           <h3>{title}</h3>
-          <button onClick={onCancel} aria-label="关闭">
+          <button onClick={onCancel} aria-label={t("common.close")}>
             <X size={18} />
           </button>
         </header>
         <p>{description}</p>
         {requiresConfirmation ? (
           <label className="confirm-phrase-field">
-            {confirmationLabel ?? `请输入“${confirmationText}”后继续`}
+            {confirmationLabel ?? `${t("common.confirm")} ${confirmationText}`}
             <input
               value={confirmationValue}
               onChange={(event) => setConfirmationValue(event.target.value)}
@@ -174,10 +199,10 @@ export function ConfirmDialog({
         ) : null}
         <div className="row-actions">
           <button className="secondary-btn" onClick={onCancel}>
-            {cancelText}
+            {cancelText ?? t("common.cancel")}
           </button>
           <button className={destructive ? "danger-btn" : "primary-btn"} onClick={onConfirm} disabled={!confirmationMatched}>
-            {confirmText}
+            {confirmText ?? t("common.confirm")}
           </button>
         </div>
       </section>
@@ -204,11 +229,12 @@ export function PromptDialog({
   defaultValue = "",
   description,
   type = "text",
-  confirmText = "确认",
+  confirmText,
   onSubmit,
   onCancel
 }: PromptDialogProps) {
   const [value, setValue] = useState(defaultValue);
+  const { t } = useI18n();
 
   useEffect(() => {
     if (open) setValue(defaultValue);
@@ -220,7 +246,7 @@ export function PromptDialog({
       <section className="case-modal compact-modal action-modal">
         <header>
           <h3>{title}</h3>
-          <button onClick={onCancel} aria-label="关闭">
+          <button onClick={onCancel} aria-label={t("common.close")}>
             <X size={18} />
           </button>
         </header>
@@ -231,10 +257,10 @@ export function PromptDialog({
         </label>
         <div className="row-actions">
           <button className="secondary-btn" onClick={onCancel}>
-            取消
+            {t("common.cancel")}
           </button>
           <button className="primary-btn" disabled={!value.trim()} onClick={() => onSubmit(value)}>
-            {confirmText}
+            {confirmText ?? t("common.confirm")}
           </button>
         </div>
       </section>

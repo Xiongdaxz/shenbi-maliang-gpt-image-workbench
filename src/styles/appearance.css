@@ -743,6 +743,12 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .settings-switch-
   color: var(--button-primary-text);
 }
 
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .page-header-view-toggle button.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"]) .page-header-view-toggle button.active:hover {
+  color: var(--button-primary-text);
+  background: transparent;
+}
+
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .toast-card,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .toast-card.info,
 html:is([data-appearance="dark"], [data-appearance="maliang"]) .toast-card.success {

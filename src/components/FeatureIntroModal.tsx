@@ -27,8 +27,14 @@ import {
   X,
   type LucideIcon
 } from "lucide-react";
+import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import { ProjectLogo } from "./ProjectLogo";
+
+export type FeatureIntroTag = {
+  id: string;
+  label: string;
+};
 
 export type FeatureIntroSlide = {
   id: string;
@@ -36,7 +42,7 @@ export type FeatureIntroSlide = {
   description: string | string[];
   imageSrc: string;
   imageAlt: string;
-  tags: string[];
+  tags: FeatureIntroTag[];
   accent?: string;
 };
 
@@ -65,45 +71,39 @@ const SLIDE_ICON_BY_ID: Record<string, LucideIcon> = {
   "prompt-templates": Sparkles
 };
 
-const TAG_ICON_BY_LABEL: Record<string, LucideIcon> = {
-  一键带入: MousePointer2,
-  归档删除: Archive,
-  分类管理: FolderOpen,
-  多规格下载: Download,
-  多轮打磨: Repeat2,
-  共享素材: FolderOpen,
-  多类型素材选择: ImagePlus,
-  多轮对话编辑: MessageSquarePlus,
-  尺寸改版: Crop,
-  数据隐私: Shield,
-  AI辅助起步: WandSparkles,
-  AI优化提示词: WandSparkles,
-  表单化创作: Layers,
-  表单分享: Share2,
-  会思考的AI: Brain,
-  历史复用: Repeat2,
-  局部重绘: WandSparkles,
-  图片加密: Lock,
-  我的图片展示模式: Images,
-  自然语言生图: MessageSquarePlus,
-  中英提示词: MessageSquarePlus,
-  提示词复用: Repeat2,
-  收藏下载: Heart,
-  涂抹编辑: Brush,
-  多版打磨: Layers,
-  连续改稿: Repeat2,
-  删除记录: Trash2,
-  继续编辑: Brush,
-  随取随用: MousePointer2,
-  风格案例: Palette
+const TAG_ICON_BY_ID: Record<string, LucideIcon> = {
+  aiAssistedStart: WandSparkles,
+  archiveDelete: Archive,
+  categoryManage: FolderOpen,
+  continueEdit: Brush,
+  dataPrivacy: Shield,
+  favoriteDownload: Heart,
+  formCreation: Layers,
+  formSharing: Share2,
+  historyReuse: Repeat2,
+  imageEncryption: Lock,
+  inpaint: WandSparkles,
+  iterativeRefinement: Repeat2,
+  maskEditing: Brush,
+  multiSizeDownload: Download,
+  multiTypeAssets: ImagePlus,
+  myImagesView: Images,
+  naturalLanguage: MessageSquarePlus,
+  oneClickUse: MousePointer2,
+  promptReuse: Repeat2,
+  readyToUse: MousePointer2,
+  resize: Crop,
+  sharedAssets: FolderOpen,
+  smartAi: Brain,
+  styleCases: Palette
 };
 
 function slideIconFor(id: string) {
   return SLIDE_ICON_BY_ID[id] ?? Sparkles;
 }
 
-function tagIconFor(label: string) {
-  return TAG_ICON_BY_LABEL[label] ?? Sparkles;
+function tagIconFor(id: string) {
+  return TAG_ICON_BY_ID[id] ?? Sparkles;
 }
 
 function slideDescriptionItems(description: FeatureIntroSlide["description"]) {
@@ -114,10 +114,11 @@ export function FeatureIntroModal({
   open,
   slides,
   welcomeText,
-  finishLabel = "开始使用",
+  finishLabel,
   className,
   onClose
 }: FeatureIntroModalProps) {
+  const { t } = useI18n();
   const [activeIndex, setActiveIndex] = useState(0);
   const [previousIndex, setPreviousIndex] = useState<number | null>(null);
   const [direction, setDirection] = useState<SlideDirection>("next");
@@ -134,6 +135,7 @@ export function FeatureIntroModal({
   const slide = slides[activeIndex] ?? slides[0];
   const previousSlide = previousIndex === null ? null : slides[previousIndex];
   const isLast = activeIndex >= slides.length - 1;
+  const resolvedFinishLabel = finishLabel ?? t("common.startUsing");
   const showWelcome = Boolean(trimmedWelcomeText) && introPhase !== "slides";
   const typedWelcomeText = trimmedWelcomeText.slice(0, typedCount);
 
@@ -279,13 +281,14 @@ export function FeatureIntroModal({
   } as CSSProperties;
 
   const renderVisualSlide = (item: FeatureIntroSlide, state: "enter" | "exit") => {
-    const PrimaryTagIcon = tagIconFor(item.tags[0] ?? "");
+    const primaryTag = item.tags[0] ?? null;
+    const PrimaryTagIcon = tagIconFor(primaryTag?.id ?? "");
     return (
       <div className="feature-intro-image-frame" data-direction={direction} data-motion={state} key={`${item.id}-${state}`}>
         <img src={item.imageSrc} alt={item.imageAlt} />
         <div className="feature-intro-glass-card primary">
           <PrimaryTagIcon size={17} />
-          <span>{item.tags[0] ?? "智能创作"}</span>
+          <span>{primaryTag?.label ?? t("featureIntro.smartCreation")}</span>
         </div>
         <div className="feature-intro-glass-card secondary">
           <span />
@@ -308,11 +311,11 @@ export function FeatureIntroModal({
       </ol>
       <div className="feature-intro-tags">
         {item.tags.map((tag) => {
-          const TagIcon = tagIconFor(tag);
+          const TagIcon = tagIconFor(tag.id);
           return (
-            <span key={tag}>
+            <span key={tag.id}>
               <TagIcon size={17} />
-              {tag}
+              {tag.label}
             </span>
           );
         })}
@@ -332,12 +335,12 @@ export function FeatureIntroModal({
         data-placement="center"
         role="dialog"
         aria-modal="true"
-        aria-label="功能介绍"
+        aria-label={t("starter.featureIntro")}
         onMouseDown={(event) => event.stopPropagation()}
         onWheel={handleWheel}
         style={modalStyle}
       >
-        <button className="feature-intro-close" type="button" onClick={requestClose} aria-label="关闭功能介绍">
+        <button className="feature-intro-close" type="button" onClick={requestClose} aria-label={t("featureIntro.close")}>
           <X size={18} />
         </button>
         <div className="feature-intro-logo" aria-hidden="true">
@@ -382,14 +385,14 @@ export function FeatureIntroModal({
                 {renderCopySlide(slide, "enter")}
               </div>
               <div className="feature-intro-footer">
-                <div className="feature-intro-dots" aria-label="当前页">
+                <div className="feature-intro-dots" aria-label={t("featureIntro.currentPage")}>
                   {slides.map((item, index) => (
                     <button
                       key={item.id}
                       type="button"
                       className={cx(index === activeIndex && "active")}
                       onClick={() => goToSlide(index)}
-                      aria-label={`切换到第 ${index + 1} 页`}
+                      aria-label={t("featureIntro.switchPage", { page: index + 1 })}
                     />
                   ))}
                 </div>
@@ -399,7 +402,7 @@ export function FeatureIntroModal({
                     className="feature-intro-round"
                     onClick={() => goToSlide(activeIndex - 1)}
                     disabled={activeIndex === 0}
-                    aria-label="上一页"
+                    aria-label={t("featureIntro.previousPage")}
                   >
                     <ArrowLeft size={18} />
                   </button>
@@ -417,11 +420,11 @@ export function FeatureIntroModal({
                     {isLast ? (
                       <>
                         <Check size={17} />
-                        {finishLabel}
+                        {resolvedFinishLabel}
                       </>
                     ) : (
                       <>
-                        下一页
+                        {t("featureIntro.nextPage")}
                         <ArrowRight size={17} />
                       </>
                     )}

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Check, X } from "lucide-react";
 import { splitFileDisplayName } from "../lib/assets";
 import { cx } from "../lib/cx";
+import { useI18n } from "../i18n";
 import type { AssetItem, CaseCategory } from "../types";
 import { CaseCategoryMultiSelect } from "./CaseCategoryMultiSelect";
 
@@ -20,6 +21,7 @@ export function AssetEditModal({
   onClose: () => void;
   onSave: (payload: { name: string; categoryIds: string[]; shared?: boolean }) => void;
 }) {
+  const { t } = useI18n();
   const nameParts = splitFileDisplayName(asset.name);
   const [name, setName] = useState(nameParts.base);
   const [categoryIds, setCategoryIds] = useState<string[]>(asset.categoryIds);
@@ -45,47 +47,47 @@ export function AssetEditModal({
     <div className="modal-backdrop">
       <section className="case-modal compact-modal asset-category-modal">
         <header>
-          <h3>编辑素材</h3>
-          <button onClick={onClose} aria-label="关闭">
+          <h3>{t("assetEdit.title")}</h3>
+          <button onClick={onClose} aria-label={t("common.close")}>
             <X size={18} />
           </button>
         </header>
         <img src={asset.previewUrl ?? asset.url} alt={asset.name} />
         <label>
-          名称
+          {t("assetEdit.name")}
           <span className="asset-name-input-row">
-            <input value={name} onChange={(event) => setName(event.target.value)} placeholder="素材名称" />
+            <input value={name} onChange={(event) => setName(event.target.value)} placeholder={t("assetEdit.namePlaceholder")} />
             {nameParts.ext ? <span>{nameParts.ext}</span> : null}
           </span>
         </label>
         <label>
-          标签
-          <CaseCategoryMultiSelect categories={categories} value={categoryIds} onChange={setCategoryIds} labelName="标签" />
+          {t("assetEdit.tags")}
+          <CaseCategoryMultiSelect categories={categories} value={categoryIds} onChange={setCategoryIds} labelName={t("assetEdit.tags")} />
         </label>
         <label className="asset-upload-field">
-          共享状态
+          {t("assetEdit.shareStatus")}
           {asset.space === "private" ? (
-            <div className="asset-space-options" role="group" aria-label="共享状态">
+            <div className="asset-space-options" role="group" aria-label={t("assetEdit.shareStatus")}>
               <button
                 type="button"
                 className={cx(shared && "active")}
                 onClick={() => setShared((value) => !value)}
               >
                 <span className="asset-option-check">{shared ? <Check size={14} /> : null}</span>
-                <span>{shared ? (asset.shareStatus === "pending" ? "共享审核中" : "已申请共享") : "提交共享审核"}</span>
+                <span>{shared ? (asset.shareStatus === "pending" ? t("assetEdit.sharePending") : t("assetEdit.shareApplied")) : t("assetEdit.submitShare")}</span>
               </button>
             </div>
           ) : (
-            <span className="asset-shared-note">本素材已在共享中，无需单独共享。</span>
+            <span className="asset-shared-note">{t("assetEdit.alreadyShared")}</span>
           )}
         </label>
         {error ? <div className="form-error">{error.message}</div> : null}
         <div className="row-actions">
           <button className="secondary-btn" type="button" onClick={onClose}>
-            取消
+            {t("common.cancel")}
           </button>
           <button className="primary-btn" type="button" onClick={submit} disabled={!name.trim() || pending}>
-            {pending ? "保存中" : "保存"}
+            {pending ? t("common.saving") : t("common.save")}
           </button>
         </div>
       </section>

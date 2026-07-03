@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 import { Check, X } from "lucide-react";
 import { api } from "../api";
+import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import { isUncategorizedCaseCategory } from "../lib/cases";
 import { useToast } from "../ui";
@@ -48,6 +49,7 @@ export function AddCaseModal({
 }) {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const { t } = useI18n();
   const cases = useQuery({ queryKey: ["cases"], queryFn: () => api.cases() });
   const selectableCategories = useMemo(
     () => (cases.data?.categories ?? []).filter((category) => !isUncategorizedCaseCategory(category)),
@@ -92,15 +94,15 @@ export function AddCaseModal({
     onSuccess: ({ caseItems, skipped }) => {
       queryClient.invalidateQueries({ queryKey: ["cases"] });
       if (skipped > 0) {
-        showToast(caseItems.length === 0 ? "已经在灵感空间" : "部分风格已经加入，已加入新的风格", "error");
+        showToast(caseItems.length === 0 ? t("toast.caseDuplicate") : t("toast.casePartialAdded"), "error");
       } else {
         const reviewStatus = String(caseItems[0]?.reviewStatus ?? "");
-        showToast(reviewStatus === "pending" ? "已提交灵感审核" : "已加入灵感空间");
+        showToast(reviewStatus === "pending" ? t("toast.caseReviewSubmitted") : t("toast.caseAdded"));
       }
       onClose();
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "加入灵感空间失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.caseAddFailed"), "error");
     }
   });
 
@@ -162,8 +164,8 @@ export function AddCaseModal({
     <div className="modal-backdrop">
       <section className="case-modal">
         <header>
-          <h3>加入灵感空间</h3>
-          <button onClick={onClose} aria-label="关闭">
+          <h3>{t("pages.cases.addToInspiration")}</h3>
+          <button onClick={onClose} aria-label={t("common.close")}>
             <X size={18} />
           </button>
         </header>
@@ -173,10 +175,10 @@ export function AddCaseModal({
             fallbackUrl={source.url}
             alt={title}
             activeImageId={activePreviewId}
-            thumbStripLabel={includeAllImages ? "设置封面图" : "选择加入图片"}
-            activeThumbLabel={includeAllImages ? "封面" : "选中"}
-            thumbTitle={() => (includeAllImages ? "设为封面" : "选择这张")}
-            thumbAriaLabel={(_, index) => (includeAllImages ? `设第 ${index + 1} 张为封面` : `选择第 ${index + 1} 张加入`)}
+            thumbStripLabel={includeAllImages ? t("pages.cases.coverStrip") : t("pages.cases.selectImageToAdd")}
+            activeThumbLabel={includeAllImages ? t("pages.cases.cover") : t("pages.cases.selected")}
+            thumbTitle={() => (includeAllImages ? t("pages.cases.setCover") : t("pages.cases.selectThisImage"))}
+            thumbAriaLabel={(_, index) => (includeAllImages ? t("pages.cases.setNthCover", { index: index + 1 }) : t("pages.cases.selectNthImage", { index: index + 1 }))}
             onSelectImage={
               canAddAll
                 ? (image) => {
@@ -201,8 +203,8 @@ export function AddCaseModal({
                   {includeAllImages ? <Check size={13} strokeWidth={2.5} /> : null}
                 </span>
                 <span className="case-reference-toggle-copy">
-                  <span>全部加入</span>
-                  <small>勾选后保存全部 {sourceImages.length} 张；取消后只保存当前选中图。</small>
+                  <span>{t("pages.cases.addAllImages")}</span>
+                  <small>{t("pages.cases.addAllImagesDesc", { count: sourceImages.length })}</small>
                 </span>
               </label>
             ) : null}
@@ -212,44 +214,44 @@ export function AddCaseModal({
                 {includeReferences ? <Check size={13} strokeWidth={2.5} /> : null}
               </span>
               <span className="case-reference-toggle-copy">
-                <span>允许查看和下载素材</span>
-                <small>勾选后，灵感空间会显示这张图引用的素材；取消则看不到素材。</small>
+                <span>{t("pages.cases.includeReferences")}</span>
+                <small>{t("pages.cases.includeReferencesDesc")}</small>
               </span>
             </label>
             <label>
-              风格
+              {t("pages.cases.style")}
               <CaseCategoryMultiSelect
                 categories={selectableCategories}
                 value={categoryIds}
                 onChange={updateCategoryIds}
-                labelName="风格"
-                placeholder={caseSuggestionPending ? "正在生成风格..." : "不选择风格"}
+                labelName={t("pages.cases.style")}
+                placeholder={caseSuggestionPending ? t("pages.cases.generatingStyle") : t("pages.cases.noStyle")}
               />
             </label>
             <label>
-              标题
+              {t("pages.cases.titleField")}
               <input
                 value={title}
                 onChange={(event) => updateTitle(event.target.value)}
-                placeholder={caseSuggestionPending ? "正在生成标题..." : "请输入标题"}
+                placeholder={caseSuggestionPending ? t("pages.cases.generatingTitle") : t("pages.cases.titlePlaceholder")}
               />
             </label>
             <label>
-              {autoGenerateFields ? "提示内容" : "提示词"}
+              {autoGenerateFields ? t("pages.cases.promptContent") : t("pages.cases.prompt")}
               <textarea
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
                 rows={4}
-                placeholder={autoGenerateFields ? "请输入提示内容" : undefined}
+                placeholder={autoGenerateFields ? t("pages.cases.promptContentPlaceholder") : undefined}
               />
             </label>
             {save.error ? <div className="form-error">{save.error.message}</div> : null}
             <div className="row-actions">
               <button className="secondary-btn" onClick={onClose}>
-                取消
+                {t("common.cancel")}
               </button>
               <button className="primary-btn" onClick={() => save.mutate()} disabled={!canSave || save.isPending}>
-                {save.isPending ? "加入中" : caseSuggestionPending ? "生成字段中" : "加入灵感空间"}
+                {save.isPending ? t("common.adding") : caseSuggestionPending ? t("common.generatingFields") : t("pages.cases.addToInspiration")}
               </button>
             </div>
           </div>

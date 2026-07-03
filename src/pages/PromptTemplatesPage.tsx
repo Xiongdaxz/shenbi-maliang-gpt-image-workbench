@@ -115,6 +115,7 @@ import { api, type PromptTemplateExportDownload, type PromptTemplateOptimizeStyl
 import { PromptOptimizeStyleSelect } from "../components/PromptOptimizeStyleSelect";
 import { PromptTemplateColorPicker } from "../components/PromptTemplateColorPicker";
 import { SearchHistoryInput } from "../components/SearchHistoryInput";
+import { useI18n, type LocaleCode, type Translate } from "../i18n";
 import { copyTextToClipboard } from "../lib/clipboard";
 import { cx } from "../lib/cx";
 import {
@@ -269,120 +270,40 @@ const iconMap: Record<string, LucideIcon> = {
   Armchair
 };
 
-const iconLabels: Record<string, string> = {
-  Sparkles: "星光",
-  Sparkle: "闪光",
-  Image: "图片",
-  Megaphone: "宣传",
-  Film: "影片",
-  Camera: "摄影",
-  Clapperboard: "视频",
-  Video: "影像",
-  Tv: "电视",
-  PanelsTopLeft: "界面布局",
-  Palette: "调色板",
-  Brush: "绘画",
-  PenTool: "设计",
-  Shapes: "形状",
-  Layers: "层次",
-  Frame: "画框",
-  LayoutTemplate: "表单布局",
-  Type: "文字",
-  FileText: "文档",
-  Newspaper: "资讯",
-  ScrollText: "文案",
-  ClipboardList: "清单",
-  BookOpen: "书籍",
-  WandSparkles: "魔法棒",
-  Box: "产品",
-  Package: "包裹",
-  PackageCheck: "交付",
-  ShoppingBag: "购物袋",
-  ShoppingCart: "购物车",
-  Store: "门店",
-  Tag: "标签",
-  BadgePercent: "优惠",
-  ReceiptText: "票据",
-  WalletCards: "钱包",
-  Shirt: "服饰",
-  Gem: "精品",
-  Gift: "礼物",
-  Crown: "高级",
-  BadgeCheck: "认证",
-  Calendar: "活动",
-  Ticket: "票券",
-  PartyPopper: "庆典",
-  Trophy: "奖杯",
-  MapPin: "地点",
-  House: "家居",
-  Building2: "建筑",
-  Landmark: "地标",
-  Hotel: "酒店",
-  Car: "出行",
-  Plane: "旅行",
-  Truck: "物流",
-  Globe: "全球",
-  Mountain: "山景",
-  Waves: "水景",
-  Sun: "阳光",
-  Trees: "自然",
-  Leaf: "绿植",
-  Sprout: "生长",
-  Flower2: "花卉",
-  Umbrella: "雨伞",
-  Utensils: "餐饮",
-  Coffee: "咖啡",
-  Pizza: "美食",
-  Music: "音乐",
-  Podcast: "播客",
-  Radio: "广播",
-  Mic: "麦克风",
-  Gamepad2: "游戏",
-  Heart: "情感",
-  Star: "亮点",
-  Smile: "人物",
-  Users: "人群",
-  Smartphone: "数码",
-  Laptop: "电脑",
-  Monitor: "屏幕",
-  Lightbulb: "灵感",
-  Rocket: "启动",
-  Target: "目标",
-  Workflow: "流程",
-  ScanEye: "视觉",
-  Zap: "闪电",
-  Briefcase: "商务",
-  Handshake: "合作",
-  Sofa: "沙发",
-  Armchair: "座椅"
-};
+function promptTemplateIconOptions(t: Translate) {
+  return Object.entries(iconMap).map(([name, Icon]) => ({
+    value: name,
+    label: t(`promptTemplates.icons.${name}`),
+    description: name,
+    icon: <Icon size={15} />
+  }));
+}
 
-const iconOptions = Object.entries(iconMap).map(([name, Icon]) => ({
-  value: name,
-  label: iconLabels[name] ?? name,
-  description: name,
-  icon: <Icon size={15} />
-}));
+function promptTemplateComponentTypeOptions(t: Translate): Array<{ value: PromptTemplateComponentType; label: string; description: string }> {
+  return [
+    { value: "text", label: t("promptTemplates.componentTypes.text"), description: t("promptTemplates.componentTypes.textDesc") },
+    { value: "textarea", label: t("promptTemplates.componentTypes.textarea"), description: t("promptTemplates.componentTypes.textareaDesc") },
+    { value: "select", label: t("promptTemplates.componentTypes.select"), description: t("promptTemplates.componentTypes.selectDesc") },
+    { value: "color", label: t("promptTemplates.componentTypes.color"), description: t("promptTemplates.componentTypes.colorDesc") },
+    { value: "image", label: t("promptTemplates.componentTypes.image"), description: t("promptTemplates.componentTypes.imageDesc") },
+    { value: "section", label: t("promptTemplates.componentTypes.section"), description: t("promptTemplates.componentTypes.sectionDesc") }
+  ];
+}
 
-const componentTypeOptions: Array<{ value: PromptTemplateComponentType; label: string; description: string }> = [
-  { value: "text", label: "短输入框", description: "单行文本" },
-  { value: "textarea", label: "长文本框", description: "多行描述" },
-  { value: "select", label: "下拉框", description: "固定选项" },
-  { value: "color", label: "色彩选择", description: "多选色卡和渐变" },
-  { value: "image", label: "素材", description: "上传素材并填写备注，不做识图" },
-  { value: "section", label: "分组标题", description: "组织表单结构" }
-];
+function promptTemplateScopeOptions(t: Translate): Array<{ value: TemplateScope; label: string }> {
+  return [
+    { value: "all", label: t("common.all") },
+    { value: "mine", label: t("common.mine") },
+    { value: "shared", label: t("common.shared") }
+  ];
+}
 
-const scopeOptions: Array<{ value: TemplateScope; label: string }> = [
-  { value: "all", label: "全部" },
-  { value: "mine", label: "我的" },
-  { value: "shared", label: "共享" }
-];
-
-const componentWidthOptions: Array<{ value: PromptTemplateComponentWidth; label: string }> = [
-  { value: "full", label: "占用全部内容" },
-  { value: "half", label: "占用半行" }
-];
+function promptTemplateComponentWidthOptions(t: Translate): Array<{ value: PromptTemplateComponentWidth; label: string }> {
+  return [
+    { value: "full", label: t("promptTemplates.editor.widthFull") },
+    { value: "half", label: t("promptTemplates.editor.widthHalf") }
+  ];
+}
 
 function formatImageFileSize(bytes: number | undefined) {
   const value = Number(bytes ?? 0);
@@ -483,12 +404,12 @@ function negativePromptForLanguage(result: PromptTemplateResult | null, language
   return "";
 }
 
-function promptWithNegative(prompt: string, negativePrompt: string, language: PromptDisplayLanguage) {
+function promptWithNegative(prompt: string, negativePrompt: string, language: PromptDisplayLanguage, t?: Translate) {
   const positive = prompt.trim();
   const negative = negativePrompt.trim();
   if (!positive) return "";
   if (!negative) return positive;
-  const title = language === "en" ? "Negative prompt" : "反向提示词";
+  const title = language === "en" ? "Negative prompt" : t?.("promptTemplates.negativePrompt") ?? "反向提示词";
   return `${positive}\n\n${title}：\n${negative}`;
 }
 
@@ -792,17 +713,19 @@ function PromptTemplateMultiSelect({
   values,
   options,
   onChange,
-  placeholder = "请选择"
+  placeholder
 }: {
   values: string[];
   options: Array<{ value: string; label: string }>;
   onChange: (values: string[]) => void;
   placeholder?: string;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const selectedSet = useMemo(() => new Set(values), [values]);
   const selectedLabels = options.filter((option) => selectedSet.has(option.value)).map((option) => option.label);
+  const placeholderText = placeholder ?? t("common.selectPlaceholder");
 
   useEffect(() => {
     if (!open) return;
@@ -827,7 +750,7 @@ function PromptTemplateMultiSelect({
       <button type="button" className="custom-select-trigger" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
         <span className="custom-select-value">
           <span className={selectedLabels.length === 0 ? "custom-select-label placeholder" : "custom-select-label"}>
-            {selectedLabels.length > 0 ? selectedLabels.join("、") : placeholder}
+            {selectedLabels.length > 0 ? selectedLabels.join(t("common.listSeparator")) : placeholderText}
           </span>
         </span>
       </button>
@@ -842,7 +765,7 @@ function PromptTemplateMultiSelect({
               </button>
             );
           })}
-          {options.length === 0 ? <div className="custom-select-empty">暂无选项</div> : null}
+          {options.length === 0 ? <div className="custom-select-empty">{t("promptTemplates.editor.noOptions")}</div> : null}
         </div>
       ) : null}
     </div>
@@ -914,6 +837,7 @@ function ColorComponentSettings({
   component: PromptTemplateComponent;
   onPatch: (patch: Partial<PromptTemplateComponent>) => void;
 }) {
+  const { t } = useI18n();
   const colorOptions = editableColorOptions(component);
   const gradientOptions = editableGradientOptions(component);
   const canAddColorOption = colorOptions.length < PROMPT_TEMPLATE_COLOR_OPTION_LIMIT;
@@ -963,11 +887,11 @@ function ColorComponentSettings({
           checked={component.allowCustomColor !== false}
           onChange={(event) => onPatch({ allowCustomColor: event.target.checked })}
         />
-        允许填写自定义 HEX
+        {t("promptTemplates.editor.allowCustomHex")}
       </label>
       <div className="template-color-settings wide">
         <div className="template-color-settings-head">
-          <strong>单色色卡 <span>{colorOptions.length}/{PROMPT_TEMPLATE_COLOR_OPTION_LIMIT}</span></strong>
+          <strong>{t("promptTemplates.editor.solidColorSwatches")} <span>{colorOptions.length}/{PROMPT_TEMPLATE_COLOR_OPTION_LIMIT}</span></strong>
           <button
             type="button"
             onClick={() => {
@@ -975,53 +899,53 @@ function ColorComponentSettings({
               onPatch({ colorOptions: [...colorOptions, newColorOption()] });
             }}
             disabled={!canAddColorOption}
-            title={canAddColorOption ? "新增色卡" : `最多添加 ${PROMPT_TEMPLATE_COLOR_OPTION_LIMIT} 个色卡`}
+            title={canAddColorOption ? t("promptTemplates.editor.addColorSwatch") : t("promptTemplates.editor.maxColorSwatches", { count: PROMPT_TEMPLATE_COLOR_OPTION_LIMIT })}
           >
             <Plus size={14} />
-            新增色卡
+            {t("promptTemplates.editor.addColorSwatch")}
           </button>
         </div>
-        <small className="template-color-settings-tip">名称描述颜色，用途写主色/辅助/点缀；HEX 可手填或点色块。</small>
+        <small className="template-color-settings-tip">{t("promptTemplates.editor.colorSwatchTip")}</small>
         <div className="template-color-setting-list color-options" style={colorOptionListStyle(colorOptions.length)}>
           {colorOptions.map((option, index) => (
             <div className="template-color-setting-row" key={option.id}>
-              <label className="template-color-swatch-picker" style={colorPreviewStyle(option.hex)} title="点击选择颜色">
+              <label className="template-color-swatch-picker" style={colorPreviewStyle(option.hex)} title={t("promptTemplates.editor.pickColor")}>
                 <input
                   type="color"
                   value={normalizePromptTemplateHex(option.hex) || "#151517"}
-                  aria-label="选择色卡颜色"
+                  aria-label={t("promptTemplates.editor.pickSwatchColor")}
                   onChange={(event) => patchColorOption(index, { hex: event.target.value })}
                 />
               </label>
               <input
-                aria-label="色彩名称"
-                placeholder="名称，如：品牌黑"
+                aria-label={t("promptTemplates.editor.colorName")}
+                placeholder={t("promptTemplates.editor.colorNamePlaceholder")}
                 value={option.name}
                 onChange={(event) => patchColorOption(index, { name: event.target.value })}
               />
               <input
-                aria-label="色彩用途"
-                placeholder="用途，如：主色"
+                aria-label={t("promptTemplates.editor.colorRole")}
+                placeholder={t("promptTemplates.editor.colorRolePlaceholder")}
                 value={option.role}
                 onChange={(event) => patchColorOption(index, { role: event.target.value })}
               />
               <input
-                aria-label="色值"
+                aria-label={t("promptTemplates.editor.colorValue")}
                 placeholder="#151517"
                 value={option.hex}
                 onChange={(event) => patchColorOption(index, { hex: event.target.value })}
               />
-              <button type="button" aria-label="删除色卡" onClick={() => onPatch({ colorOptions: colorOptions.filter((_, optionIndex) => optionIndex !== index) })}>
+              <button type="button" aria-label={t("promptTemplates.editor.deleteColorSwatch")} onClick={() => onPatch({ colorOptions: colorOptions.filter((_, optionIndex) => optionIndex !== index) })}>
                 <Trash2 size={14} />
               </button>
             </div>
           ))}
-          {colorOptions.length === 0 ? <small>暂无单色色卡</small> : null}
+          {colorOptions.length === 0 ? <small>{t("promptTemplates.editor.noSolidColorSwatches")}</small> : null}
         </div>
       </div>
       <div className="template-color-settings wide">
         <div className="template-color-settings-head">
-          <strong>渐变组合 <span>{gradientOptions.length}/{PROMPT_TEMPLATE_GRADIENT_OPTION_LIMIT}</span></strong>
+          <strong>{t("promptTemplates.editor.gradientCombinations")} <span>{gradientOptions.length}/{PROMPT_TEMPLATE_GRADIENT_OPTION_LIMIT}</span></strong>
           <button
             type="button"
             onClick={() => {
@@ -1029,13 +953,13 @@ function ColorComponentSettings({
               onPatch({ gradientOptions: [...gradientOptions, newGradientOption()] });
             }}
             disabled={!canAddGradientOption}
-            title={canAddGradientOption ? "新增渐变" : `最多添加 ${PROMPT_TEMPLATE_GRADIENT_OPTION_LIMIT} 个渐变`}
+            title={canAddGradientOption ? t("promptTemplates.editor.addGradient") : t("promptTemplates.editor.maxGradients", { count: PROMPT_TEMPLATE_GRADIENT_OPTION_LIMIT })}
           >
             <Plus size={14} />
-            新增渐变
+            {t("promptTemplates.editor.addGradient")}
           </button>
         </div>
-        <small className="template-color-settings-tip">用途建议写背景、光效、氛围或质感，色阶可点击色块选择。</small>
+        <small className="template-color-settings-tip">{t("promptTemplates.editor.gradientTip")}</small>
         <div className="template-color-setting-list gradient-options" style={gradientOptionListStyle(gradientOptions.length)}>
           {gradientOptions.map((option, index) => {
             const colors = editableGradientColors(option.colors);
@@ -1045,33 +969,33 @@ function ColorComponentSettings({
               <div className="template-color-setting-row gradient" key={option.id}>
                 <i className="template-gradient-preview" style={gradientPreviewStyle({ ...option, colors })} />
                 <input
-                  aria-label="渐变名称"
-                  placeholder="名称，如：黑金高级"
+                  aria-label={t("promptTemplates.editor.gradientName")}
+                  placeholder={t("promptTemplates.editor.gradientNamePlaceholder")}
                   value={option.name}
                   onChange={(event) => patchGradientOption(index, { name: event.target.value })}
                 />
                 <input
-                  aria-label="渐变用途"
-                  placeholder="用途，如：海报背景"
+                  aria-label={t("promptTemplates.editor.gradientRole")}
+                  placeholder={t("promptTemplates.editor.gradientRolePlaceholder")}
                   value={option.role}
                   onChange={(event) => patchGradientOption(index, { role: event.target.value })}
                 />
-                <button type="button" aria-label="删除渐变" onClick={() => onPatch({ gradientOptions: gradientOptions.filter((_, optionIndex) => optionIndex !== index) })}>
+                <button type="button" aria-label={t("promptTemplates.editor.deleteGradient")} onClick={() => onPatch({ gradientOptions: gradientOptions.filter((_, optionIndex) => optionIndex !== index) })}>
                   <Trash2 size={14} />
                 </button>
-                <div className="template-gradient-stop-list" aria-label="渐变色阶">
+                <div className="template-gradient-stop-list" aria-label={t("promptTemplates.editor.gradientStops")}>
                   {colors.map((color, colorIndex) => (
                     <div className="template-gradient-stop" key={`${option.id}-${colorIndex}`}>
-                      <label className="template-color-swatch-picker template-gradient-stop-picker" style={colorPreviewStyle(color)} title="点击选择渐变色">
+                      <label className="template-color-swatch-picker template-gradient-stop-picker" style={colorPreviewStyle(color)} title={t("promptTemplates.editor.pickGradientColor")}>
                         <input
                           type="color"
                           value={normalizePromptTemplateHex(color) || PROMPT_TEMPLATE_DEFAULT_GRADIENT_COLORS[colorIndex % PROMPT_TEMPLATE_DEFAULT_GRADIENT_COLORS.length]}
-                          aria-label={`选择第 ${colorIndex + 1} 个渐变色`}
+                          aria-label={t("promptTemplates.editor.pickGradientColorIndex", { index: colorIndex + 1 })}
                           onChange={(event) => patchGradientColor(index, colorIndex, event.target.value)}
                         />
                       </label>
                       <input
-                        aria-label={`第 ${colorIndex + 1} 个渐变色值`}
+                        aria-label={t("promptTemplates.editor.gradientColorValueIndex", { index: colorIndex + 1 })}
                         placeholder="#151517"
                         value={color}
                         onChange={(event) => patchGradientColor(index, colorIndex, event.target.value)}
@@ -1079,9 +1003,9 @@ function ColorComponentSettings({
                       <button
                         type="button"
                         className="template-gradient-stop-remove"
-                        aria-label="删除渐变色阶"
+                        aria-label={t("promptTemplates.editor.deleteGradientStop")}
                         disabled={!canRemoveGradientColor}
-                        title={canRemoveGradientColor ? "删除色阶" : `渐变至少保留 ${PROMPT_TEMPLATE_GRADIENT_COLOR_MIN} 个颜色`}
+                        title={canRemoveGradientColor ? t("promptTemplates.editor.deleteGradientStop") : t("promptTemplates.editor.minGradientColors", { count: PROMPT_TEMPLATE_GRADIENT_COLOR_MIN })}
                         onClick={() => removeGradientColor(index, colorIndex)}
                       >
                         <X size={12} />
@@ -1092,18 +1016,18 @@ function ColorComponentSettings({
                     type="button"
                     className="template-gradient-stop-add"
                     disabled={!canAddGradientColor}
-                    title={canAddGradientColor ? "新增色阶" : `最多添加 ${PROMPT_TEMPLATE_GRADIENT_COLOR_LIMIT} 个色阶`}
+                    title={canAddGradientColor ? t("promptTemplates.editor.addGradientStop") : t("promptTemplates.editor.maxGradientStops", { count: PROMPT_TEMPLATE_GRADIENT_COLOR_LIMIT })}
                     onClick={() => addGradientColor(index)}
                   >
                     <Plus size={12} />
-                    色阶
+                    {t("promptTemplates.editor.gradientStop")}
                     <span>{colors.length}/{PROMPT_TEMPLATE_GRADIENT_COLOR_LIMIT}</span>
                   </button>
                 </div>
               </div>
             );
           })}
-          {gradientOptions.length === 0 ? <small>暂无渐变组合</small> : null}
+          {gradientOptions.length === 0 ? <small>{t("promptTemplates.editor.noGradients")}</small> : null}
         </div>
       </div>
     </>
@@ -1125,23 +1049,23 @@ function componentWidth(component: PromptTemplateComponent): PromptTemplateCompo
   return defaultComponentWidth(component.type);
 }
 
-function componentWidthLabel(component: PromptTemplateComponent) {
-  return componentWidth(component) === "half" ? "半行" : "整行";
+function componentWidthLabel(component: PromptTemplateComponent, t: Translate) {
+  return componentWidth(component) === "half" ? t("promptTemplates.editor.widthShortHalf") : t("promptTemplates.editor.widthShortFull");
 }
 
 function componentLayoutClass(component: PromptTemplateComponent) {
   return componentWidth(component) === "half" ? "layout-half" : "layout-full";
 }
 
-function newComponent(type: PromptTemplateComponentType): PromptTemplateComponent {
+function newComponent(type: PromptTemplateComponentType, t: Translate): PromptTemplateComponent {
   const stamp = Date.now().toString(36);
-  const option = componentTypeOptions.find((item) => item.value === type);
+  const option = promptTemplateComponentTypeOptions(t).find((item) => item.value === type);
   return {
     id: `${type}_${stamp}`,
     type,
-    label: option?.label ?? "组件",
-    placeholder: type === "text" || type === "textarea" ? "填写内容" : "",
-    options: type === "select" ? ["选项一", "选项二"] : [],
+    label: option?.label ?? t("promptTemplates.editor.component"),
+    placeholder: type === "text" || type === "textarea" ? t("promptTemplates.editor.defaultPlaceholder") : "",
+    options: type === "select" ? [t("promptTemplates.editor.optionOne"), t("promptTemplates.editor.optionTwo")] : [],
     colorOptions: type === "color" ? defaultPromptTemplateColorOptions : undefined,
     gradientOptions: type === "color" ? defaultPromptTemplateGradientOptions : undefined,
     allowCustomColor: type === "color" ? true : undefined,
@@ -1236,56 +1160,58 @@ function promptTemplateDraftSignature(template: PromptTemplate | null | undefine
   return JSON.stringify(payloadFromTemplate(syncRules(template)));
 }
 
-function sharedOwnerLabel(template: PromptTemplate) {
+function sharedOwnerLabel(template: PromptTemplate, t: Translate) {
   if (template.visibility !== "shared" || template.canEdit) return "";
-  return template.ownerName.trim() || "共享";
+  return template.ownerName.trim() || t("common.shared");
 }
 
-function formatTemplateDate(value: string) {
+function formatTemplateDate(value: string, locale: LocaleCode) {
   if (!value) return "";
-  return new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+  return new Intl.DateTimeFormat(locale, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 
-function formatRelativeTemplateTime(value: string) {
+function formatRelativeTemplateTime(value: string, t: Translate) {
   const time = new Date(value).getTime();
   if (!Number.isFinite(time)) return "";
   const diffMs = Date.now() - time;
-  if (diffMs < 60 * 1000) return "刚刚";
+  if (diffMs < 60 * 1000) return t("promptTemplates.time.justNow");
   const minutes = Math.floor(diffMs / (60 * 1000));
-  if (minutes < 60) return `${minutes} 分钟前`;
+  if (minutes < 60) return t("promptTemplates.time.minutesAgo", { count: minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} 小时前`;
+  if (hours < 24) return t("promptTemplates.time.hoursAgo", { count: hours });
   const days = Math.floor(hours / 24);
-  if (days < 30) return `${days} 天前`;
+  if (days < 30) return t("promptTemplates.time.daysAgo", { count: days });
   const months = Math.floor(days / 30);
-  if (months < 12) return `${months} 个月前`;
+  if (months < 12) return t("promptTemplates.time.monthsAgo", { count: months });
   const years = Math.floor(months / 12);
-  return `${years} 年前`;
+  return t("promptTemplates.time.yearsAgo", { count: years });
 }
 
-function formatPromptTemplateExportTime(value: number | null | undefined) {
+function formatPromptTemplateExportTime(value: number | null | undefined, locale: LocaleCode) {
   if (!value) return "";
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return "";
-  return new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
+  return new Intl.DateTimeFormat(locale, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
-function promptTemplateExportStatusLabel(download: PromptTemplateExportDownload) {
-  if (download.variant !== "ai") return "无 AI";
-  if (download.status === "active") return "有效";
-  if (download.status === "expired") return "已过期";
-  if (download.status === "revoked") return "已失效";
-  return "已下载";
+function promptTemplateExportStatusLabel(download: PromptTemplateExportDownload, t: Translate) {
+  if (download.variant !== "ai") return t("promptTemplates.download.noAiShort");
+  if (download.status === "active") return t("promptTemplates.download.statusActive");
+  if (download.status === "expired") return t("promptTemplates.download.statusExpired");
+  if (download.status === "revoked") return t("promptTemplates.download.statusRevoked");
+  return t("promptTemplates.download.statusDownloaded");
 }
 
-function promptTemplateExportStatusText(download: PromptTemplateExportDownload) {
-  if (download.variant !== "ai") return "基础版";
+function promptTemplateExportStatusText(download: PromptTemplateExportDownload, t: Translate, locale: LocaleCode) {
+  if (download.variant !== "ai") return t("promptTemplates.download.baseVersion");
   if (download.status === "active") {
-    return download.expiresAt ? `有效至 ${formatPromptTemplateExportTime(download.expiresAt)}` : "永久有效";
+    return download.expiresAt
+      ? t("promptTemplates.download.validUntil", { time: formatPromptTemplateExportTime(download.expiresAt, locale) })
+      : t("promptTemplates.download.permanentValid");
   }
-  if (download.status === "expired") return `过期于 ${formatPromptTemplateExportTime(download.expiresAt)}`;
-  if (download.status === "revoked") return `失效于 ${formatPromptTemplateExportTime(download.revokedAt)}`;
-  return "已下载";
+  if (download.status === "expired") return t("promptTemplates.download.expiredAt", { time: formatPromptTemplateExportTime(download.expiresAt, locale) });
+  if (download.status === "revoked") return t("promptTemplates.download.revokedAt", { time: formatPromptTemplateExportTime(download.revokedAt, locale) });
+  return t("promptTemplates.download.statusDownloaded");
 }
 
 function normalizeScope(value: string | null): TemplateScope {
@@ -1322,6 +1248,7 @@ export function PromptTemplatesPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { showToast } = useToast();
+  const { t, resolvedLanguage } = useI18n();
   const setDraftPrompt = useWorkbench((state) => state.setDraftPrompt);
   const resetNewChatComposer = useWorkbench((state) => state.resetNewChatComposer);
   const setSelectedAssets = useWorkbench((state) => state.setSelectedAssets);
@@ -1375,6 +1302,7 @@ export function PromptTemplatesPage() {
     () => sanitizePromptOptimizeStyleGroups(me.data?.user?.preferences?.promptOptimizeStyleGroups),
     [me.data?.user?.preferences?.promptOptimizeStyleGroups]
   );
+  const scopeOptions = useMemo(() => promptTemplateScopeOptions(t), [t]);
   const savedPromptOptimizeCustomInstruction = me.data?.user?.preferences?.promptOptimizeCustomInstruction ?? "";
   const savePromptOptimizeCustomInstruction = useMutation({
     mutationFn: (value: string) => api.saveUserPreferences({ promptOptimizeCustomInstruction: value }),
@@ -1493,10 +1421,10 @@ export function PromptTemplatesPage() {
         const params = new URLSearchParams();
         params.set("scope", "mine");
         navigate(`/prompt-templates/${encodeURIComponent(data.template.id)}/edit?${params.toString()}`);
-        showToast("表单已新建");
+        showToast(t("promptTemplates.toast.created"));
       }
     },
-    onError: (error) => showToast(error instanceof Error ? error.message : "新建失败", "error")
+    onError: (error) => showToast(error instanceof Error ? error.message : t("promptTemplates.toast.createFailed"), "error")
   });
   const saveTemplate = useMutation({
     mutationFn: (template: PromptTemplate) => api.updatePromptTemplate(template.id, payloadFromTemplate(syncRules(template))),
@@ -1506,9 +1434,9 @@ export function PromptTemplatesPage() {
         setWorkingTemplate(data.template);
         setSelectedId(data.template.id);
       }
-      showToast("表单已保存");
+      showToast(t("promptTemplates.toast.saved"));
     },
-    onError: (error) => showToast(error instanceof Error ? error.message : "保存失败", "error")
+    onError: (error) => showToast(error instanceof Error ? error.message : t("promptTemplates.toast.saveFailed"), "error")
   });
   const restoreDefaultTemplates = useMutation({
     mutationFn: () => api.restoreDefaultPromptTemplates(),
@@ -1517,9 +1445,9 @@ export function PromptTemplatesPage() {
       setScope("all");
       invalidateTemplates();
       if (data.templates[0]) setSelectedId(data.templates[0].id);
-      showToast(data.created > 0 ? "默认表单已初始化" : "默认表单已存在");
+      showToast(data.created > 0 ? t("promptTemplates.toast.defaultsInitialized") : t("promptTemplates.toast.defaultsAlreadyExist"));
     },
-    onError: (error) => showToast(error instanceof Error ? error.message : "初始化失败", "error")
+    onError: (error) => showToast(error instanceof Error ? error.message : t("promptTemplates.toast.initializeFailed"), "error")
   });
   const copyTemplate = useMutation({
     mutationFn: (id: string) => api.copyPromptTemplate(id),
@@ -1530,9 +1458,9 @@ export function PromptTemplatesPage() {
         setSelectedId(data.template.id);
         navigate(`/prompt-templates/${encodeURIComponent(data.template.id)}/edit${templateWorkbenchSearch("mine", "", data.template.id)}`);
       }
-      showToast("表单已复制到我的表单");
+      showToast(t("promptTemplates.toast.copiedToMine"));
     },
-    onError: (error) => showToast(error instanceof Error ? error.message : "复制失败", "error")
+    onError: (error) => showToast(error instanceof Error ? error.message : t("promptTemplates.toast.copyFailed"), "error")
   });
   const shareTemplate = useMutation({
     mutationFn: (template: PromptTemplate) => api.sharePromptTemplate(template.id, template.visibility !== "shared"),
@@ -1547,11 +1475,11 @@ export function PromptTemplatesPage() {
         setSelectedId(data.template.id);
         setWorkingTemplate(data.template);
       }
-      showToast(data.template?.visibility === "shared" ? "表单已共享" : "已取消共享");
+      showToast(data.template?.visibility === "shared" ? t("promptTemplates.toast.shared") : t("promptTemplates.toast.unshared"));
     },
     onError: (error, template, context) => {
       if (context?.previousVisibility) patchTemplateVisibility(template.id, context.previousVisibility);
-      showToast(error instanceof Error ? error.message : "分享设置失败", "error");
+      showToast(error instanceof Error ? error.message : t("promptTemplates.toast.shareFailed"), "error");
     }
   });
   const removeTemplate = useMutation({
@@ -1560,18 +1488,20 @@ export function PromptTemplatesPage() {
       setDeleteTarget(null);
       setSelectedId("");
       invalidateTemplates();
-      showToast("表单已删除");
+      showToast(t("promptTemplates.toast.deleted"));
     },
-    onError: (error) => showToast(error instanceof Error ? error.message : "删除失败", "error")
+    onError: (error) => showToast(error instanceof Error ? error.message : t("promptTemplates.toast.deleteFailed"), "error")
   });
   const revokeExportDownloads = useMutation({
     mutationFn: (templateId: string) => api.revokePromptTemplateExportDownloads(templateId),
     onSuccess: (data, templateId) => {
       setRevokeDownloadLinksOpen(false);
       queryClient.invalidateQueries({ queryKey: ["prompt-template-export-downloads", templateId] });
-      showToast(data.revokedCount > 0 ? `已失效 ${data.revokedCount} 个 AI 优化链接` : "已记录失效时间，旧 AI 优化链接将不可用");
+      showToast(data.revokedCount > 0
+        ? t("promptTemplates.toast.revokedLinks", { count: data.revokedCount })
+        : t("promptTemplates.toast.revokedNoActiveLinks"));
     },
-    onError: (error) => showToast(error instanceof Error ? error.message : "失效 AI 优化链接失败", "error")
+    onError: (error) => showToast(error instanceof Error ? error.message : t("promptTemplates.toast.revokeFailed"), "error")
   });
   const saveOptimizeStyle = useMutation({
     mutationFn: ({ templateId, nextOptimizeStyle }: { templateId: string; nextOptimizeStyle: PromptTemplateOptimizeStyle }) =>
@@ -1590,7 +1520,7 @@ export function PromptTemplatesPage() {
         };
       });
     },
-    onError: (error) => showToast(error instanceof Error ? error.message : "优化风格保存失败", "error")
+    onError: (error) => showToast(error instanceof Error ? error.message : t("promptTemplates.toast.optimizeStyleSaveFailed"), "error")
   });
   const optimize = useMutation({
     mutationFn: (payload: {
@@ -1643,15 +1573,15 @@ export function PromptTemplatesPage() {
         setStreamingOptimizedPromptEn("");
         if (shouldShowEnglish) setPromptDisplayLanguage("en");
         queryClient.invalidateQueries({ queryKey: ["prompt-template-results", variables.templateId] });
-        showToast("AI 优化完成，已生成中英文提示词");
+        showToast(t("promptTemplates.toast.aiOptimizeDone"));
       } else {
-        showToast("AI 优化已结束，但没有返回结果", "info");
+        showToast(t("promptTemplates.toast.aiOptimizeNoResult"), "info");
       }
     },
     onError: (error) => {
       setStreamingOptimizedPromptZh("");
       setStreamingOptimizedPromptEn("");
-      showToast(error instanceof Error ? error.message : "AI 优化失败，基础提示词仍可使用", "error");
+      showToast(error instanceof Error ? error.message : t("promptTemplates.toast.aiOptimizeFailed"), "error");
     }
   });
   const translateBasePrompt = useMutation({
@@ -1679,11 +1609,11 @@ export function PromptTemplatesPage() {
         await queryClient.refetchQueries({ queryKey, type: "active" });
       }
       setStreamingBasePromptEn("");
-      showToast("基础提示词已翻译");
+      showToast(t("promptTemplates.toast.baseTranslated"));
     },
     onError: (error) => {
       setStreamingBasePromptEn("");
-      showToast(error instanceof Error ? error.message : "基础提示词翻译失败", "error");
+      showToast(error instanceof Error ? error.message : t("promptTemplates.toast.baseTranslateFailed"), "error");
     }
   });
   useEffect(() => {
@@ -1759,8 +1689,8 @@ export function PromptTemplatesPage() {
   const activeNegativePrompt = negativePromptForLanguage(activeResult, activeDisplayLanguage, true);
   const templateNegativeFallback = activeDisplayLanguage === "zh" ? templateManualNegativePrompt : "";
   const displayNegativePrompt = activeNegativePrompt || templateNegativeFallback;
-  const activePromptWithNegative = promptWithNegative(activeOptimizedPrompt, displayNegativePrompt, activeDisplayLanguage);
-  const aiPromptNegativeContent = displayNegativePrompt || (template?.output.negativeEnabled ? "AI优化成功后生成反向提示词" : "");
+  const activePromptWithNegative = promptWithNegative(activeOptimizedPrompt, displayNegativePrompt, activeDisplayLanguage, t);
+  const aiPromptNegativeContent = displayNegativePrompt || (template?.output.negativeEnabled ? t("promptTemplates.aiNegativePending") : "");
   const templateHasNegativeOutput = Boolean(displayNegativePrompt || templateManualNegativePrompt || template?.output.negativeEnabled);
   const streamingPrompt = optimize.isPending
     ? (activeDisplayLanguage === "en" ? streamingOptimizedPromptEn : streamingOptimizedPromptZh)
@@ -1792,16 +1722,16 @@ export function PromptTemplatesPage() {
   const basePromptLoading = baseTranslationLoading || (basePromptTranslating && !streamingBasePromptEn);
   const basePromptActionText = basePromptContent || (baseDisplayLanguage === "zh" ? basePrompt : "");
   const baseNegativePrompt = baseDisplayLanguage === "zh" ? templateManualNegativePrompt : (basePromptTranslating ? "" : savedBaseNegativePromptEn);
-  const basePromptWithNegative = promptWithNegative(basePromptActionText, baseNegativePrompt, baseDisplayLanguage);
+  const basePromptWithNegative = promptWithNegative(basePromptActionText, baseNegativePrompt, baseDisplayLanguage, t);
   const optimizeStyleOption = promptOptimizeStyleOption(optimizeStyle, promptOptimizeStyleGroups);
-  const optimizeActionLabel = optimize.isPending ? "优化中" : activeResult ? "重新优化" : "AI 优化";
+  const optimizeActionLabel = optimize.isPending ? t("promptTemplates.actions.optimizing") : activeResult ? t("promptTemplates.actions.reoptimize") : t("promptTemplates.actions.aiOptimize");
   const baseTranslateActionLabel = translateBasePrompt.isPending
-    ? "翻译中"
+    ? t("promptTemplates.actions.translating")
     : baseDisplayLanguage === "en"
-      ? "重新翻译"
+      ? t("promptTemplates.actions.retranslate")
       : savedBasePromptEn && !baseNegativePromptNeedsTranslation
-        ? "查看英文"
-        : "翻译英文";
+        ? t("promptTemplates.actions.viewEnglish")
+        : t("promptTemplates.actions.translateEnglish");
 
   function requestBasePromptTranslation() {
     if (!template || !basePrompt.trim() || translateBasePrompt.isPending) return;
@@ -1847,8 +1777,8 @@ export function PromptTemplatesPage() {
   const displayPrompt = streamingPrompt || (activeResult ? activePromptWithNegative : basePromptWithNegative);
   const finalPromptContent = streamingPrompt
     || (typingResultId && activeResult ? typedOptimizedPrompt : activeOptimizedPrompt)
-    || (canSwitchAiPromptLanguage && activeResult ? (activeDisplayLanguage === "en" ? "英文版本生成中或需要重新优化。" : "中文版本需要重新优化后显示。") : "")
-    || "AI 优化成功后会显示专业版；当前可使用基础提示词。";
+    || (canSwitchAiPromptLanguage && activeResult ? (activeDisplayLanguage === "en" ? t("promptTemplates.result.englishNeedsReoptimize") : t("promptTemplates.result.chineseNeedsReoptimize")) : "")
+    || t("promptTemplates.result.aiPlaceholder");
   const aiPromptDiffBase = activeDisplayLanguage === "en"
     ? (activeResult?.basePromptEn || savedBasePromptEn || (baseDisplayLanguage === "en" ? basePromptContent : ""))
     : basePrompt;
@@ -1857,22 +1787,22 @@ export function PromptTemplatesPage() {
     && Boolean((streamingPrompt || typedOptimizedPrompt || activeOptimizedPrompt).trim());
   const basePromptBadge = (
     <>
-      <div className="prompt-language-switch" role="tablist" aria-label="基础提示词语言">
+      <div className="prompt-language-switch" role="tablist" aria-label={t("promptTemplates.result.baseLanguage")}>
         <button type="button" className={baseDisplayLanguage === "zh" ? "active" : ""} onClick={() => setPromptDisplayLanguage("zh")}>
-          中
+          {t("promptTemplates.language.zh")}
         </button>
         <button type="button" className={baseDisplayLanguage === "en" ? "active" : ""} onClick={() => setPromptDisplayLanguage("en")}>
           EN
         </button>
       </div>
-      {basePromptNeedsTranslation ? <strong className="stale-badge">需要重新翻译</strong> : null}
+      {basePromptNeedsTranslation ? <strong className="stale-badge">{t("promptTemplates.status.needsRetranslate")}</strong> : null}
     </>
   );
   const aiPromptBadge = canSwitchAiPromptLanguage || activeResult ? (
     <>
-      <div className="prompt-language-switch" role="tablist" aria-label="AI提示词语言">
+      <div className="prompt-language-switch" role="tablist" aria-label={t("promptTemplates.result.aiLanguage")}>
         <button type="button" className={activeDisplayLanguage === "zh" ? "active" : ""} onClick={() => setPromptDisplayLanguage("zh")}>
-          中
+          {t("promptTemplates.language.zh")}
         </button>
         <button type="button" className={activeDisplayLanguage === "en" ? "active" : ""} onClick={() => setPromptDisplayLanguage("en")}>
           EN
@@ -1883,13 +1813,13 @@ export function PromptTemplatesPage() {
         className={cx("prompt-diff-switch", showPromptDiff && "active")}
         aria-pressed={showPromptDiff}
         onClick={() => setShowPromptDiff((current) => !current)}
-        title={showPromptDiff ? "隐藏差异" : "显示差异"}
+        title={showPromptDiff ? t("promptTemplates.actions.hideDiff") : t("promptTemplates.actions.showDiff")}
       >
         <span aria-hidden="true" />
-        显示差异
+        {t("promptTemplates.actions.showDiff")}
       </button>
-      {optimize.isPending ? <strong className="fresh-badge">{activeDisplayLanguage === "en" ? "翻译中" : "优化中"}</strong> : null}
-      {activeResult && !optimize.isPending ? (resultStale ? <strong className="stale-badge">需要重新优化</strong> : <strong className="fresh-badge">已优化</strong>) : null}
+      {optimize.isPending ? <strong className="fresh-badge">{activeDisplayLanguage === "en" ? t("promptTemplates.actions.translating") : t("promptTemplates.actions.optimizing")}</strong> : null}
+      {activeResult && !optimize.isPending ? (resultStale ? <strong className="stale-badge">{t("promptTemplates.status.needsReoptimize")}</strong> : <strong className="fresh-badge">{t("promptTemplates.status.optimized")}</strong>) : null}
     </>
   ) : null;
   const exportDownloads = useMemo(
@@ -1918,7 +1848,7 @@ export function PromptTemplatesPage() {
     formDraftSaveTimerRef.current = window.setTimeout(() => {
       formDraftSaveTimerRef.current = null;
       api.savePromptTemplateFormDraft(templateId, storageValues).catch((error) => {
-        console.warn("表单草稿保存失败", error);
+        console.warn("Prompt form draft save failed", error);
       });
     }, 600);
     return () => {
@@ -1931,7 +1861,7 @@ export function PromptTemplatesPage() {
 
   async function copyPrompt(text: string) {
     const ok = await copyTextToClipboard(text);
-    showToast(ok ? "已复制提示词" : "复制失败", ok ? "success" : "error");
+    showToast(ok ? t("promptTemplates.toast.promptCopied") : t("promptTemplates.toast.copyFailed"), ok ? "success" : "error");
   }
 
   function selectOptimizeStyle(value: string) {
@@ -1977,11 +1907,11 @@ export function PromptTemplatesPage() {
     setUsingPromptTarget("");
     navigate("/");
     if (failedCount > 0) {
-      showToast(`已带入提示词，${failedCount} 张素材缺少原图，请重新上传`, "error");
+      showToast(t("promptTemplates.toast.promptSentWithMissingAssets", { count: failedCount }), "error");
     } else if (assets.length > 0) {
-      showToast(`已带入新对话和 ${assets.length} 张素材`);
+      showToast(t("promptTemplates.toast.promptSentWithAssets", { count: assets.length }));
     } else {
-      showToast("已带入新对话");
+      showToast(t("promptTemplates.toast.promptSent"));
     }
   }
 
@@ -2001,7 +1931,7 @@ export function PromptTemplatesPage() {
         })
       });
       if (!response.ok) {
-        let message = "下载失败";
+        let message = t("promptTemplates.toast.downloadFailed");
         try {
           const data = await response.json();
           message = String(data.error || data.message || message);
@@ -2013,9 +1943,9 @@ export function PromptTemplatesPage() {
       const filename = filenameFromContentDisposition(response.headers.get("Content-Disposition")) || `${template.name || "prompt-template"}.html`;
       downloadBlob(await response.blob(), filename);
       queryClient.invalidateQueries({ queryKey: ["prompt-template-export-downloads", template.id] });
-      showToast("网页已开始下载");
+      showToast(t("promptTemplates.toast.downloadStarted"));
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "下载失败", "error");
+      showToast(error instanceof Error ? error.message : t("promptTemplates.toast.downloadFailed"), "error");
     }
   }
 
@@ -2083,7 +2013,7 @@ export function PromptTemplatesPage() {
     return (
       <aside className="prompt-template-library">
         <div className="prompt-template-library-toolbar">
-          <div className="prompt-template-scope-tabs" role="tablist" aria-label="表单分组">
+          <div className="prompt-template-scope-tabs" role="tablist" aria-label={t("promptTemplates.library.scope")}>
             {scopeOptions.map((option) => (
               <button key={option.value} className={scope === option.value ? "active" : ""} type="button" onClick={() => setScope(option.value)}>
                 {option.label}
@@ -2096,8 +2026,8 @@ export function PromptTemplatesPage() {
             type="button"
             onClick={() => createTemplate.mutate()}
             disabled={createTemplate.isPending}
-            aria-label="新建提示词表单"
-            title="新建提示词表单"
+            aria-label={t("promptTemplates.actions.create")}
+            title={t("promptTemplates.actions.create")}
           >
             <Plus size={16} />
           </button>
@@ -2106,7 +2036,7 @@ export function PromptTemplatesPage() {
           scope="promptTemplates"
           value={keyword}
           onChange={setKeyword}
-          placeholder="搜索表单"
+          placeholder={t("promptTemplates.library.searchPlaceholder")}
           className="case-search prompt-template-search"
           icon={<Search size={17} />}
         />
@@ -2114,7 +2044,7 @@ export function PromptTemplatesPage() {
           {templatesQuery.isLoading ? Array.from({ length: 6 }).map((_, index) => <div className="prompt-template-skeleton" key={index} />) : null}
           {templates.map((item) => {
             const Icon = iconFor(item.icon);
-            const ownerLabel = sharedOwnerLabel(item);
+            const ownerLabel = sharedOwnerLabel(item, t);
             return (
               <article
                 key={item.id}
@@ -2133,12 +2063,12 @@ export function PromptTemplatesPage() {
                 </div>
                 <div className="prompt-template-card-actions">
                   {item.canEdit ? (
-                    <button type="button" aria-label="重命名" title="重命名" onClick={(event) => { event.stopPropagation(); setPromptDialog({ kind: "rename", template: item }); }}>
+                    <button type="button" aria-label={t("promptTemplates.actions.rename")} title={t("promptTemplates.actions.rename")} onClick={(event) => { event.stopPropagation(); setPromptDialog({ kind: "rename", template: item }); }}>
                       <Pencil size={14} />
                     </button>
                   ) : null}
                   {item.canCopy ? (
-                    <button type="button" aria-label="复制表单" title="复制表单" onClick={(event) => { event.stopPropagation(); copyTemplate.mutate(item.id); }}>
+                    <button type="button" aria-label={t("promptTemplates.actions.copyForm")} title={t("promptTemplates.actions.copyForm")} onClick={(event) => { event.stopPropagation(); copyTemplate.mutate(item.id); }}>
                       <Copy size={14} />
                     </button>
                   ) : null}
@@ -2148,7 +2078,7 @@ export function PromptTemplatesPage() {
           })}
           {!templatesQuery.isLoading && templates.length === 0 ? (
             <div className="prompt-template-list-empty prompt-template-list-empty-action">
-              <span>{canRestoreDefaultForms ? "还没有表单" : "没有匹配表单"}</span>
+              <span>{canRestoreDefaultForms ? t("promptTemplates.library.empty") : t("promptTemplates.library.noMatch")}</span>
               {canRestoreDefaultForms ? (
                 <button
                   className="secondary-btn"
@@ -2157,7 +2087,7 @@ export function PromptTemplatesPage() {
                   disabled={restoreDefaultTemplates.isPending}
                 >
                   {restoreDefaultTemplates.isPending ? <RotateCw size={15} className="spin" /> : <Sparkles size={15} />}
-                  初始化默认表单
+                  {t("promptTemplates.actions.initializeDefaults")}
                 </button>
               ) : null}
             </div>
@@ -2178,12 +2108,12 @@ export function PromptTemplatesPage() {
         <section className="prompt-template-canvas">
           <div className="prompt-template-empty prompt-template-empty-inline">
             <Sparkles size={28} />
-            <strong>暂无表单</strong>
-            <span>当前筛选下没有可用表单</span>
+            <strong>{t("promptTemplates.empty.title")}</strong>
+            <span>{t("promptTemplates.empty.desc")}</span>
           </div>
         </section>
         <aside className="prompt-template-result-panel">
-          <ResultBlock title="基础提示词" icon={FileText} content="选择表单后会在这里生成提示词" />
+          <ResultBlock title={t("promptTemplates.result.baseTitle")} icon={FileText} content={t("promptTemplates.result.selectFormPlaceholder")} />
         </aside>
       </div>
     );
@@ -2217,8 +2147,8 @@ export function PromptTemplatesPage() {
                 type="button"
                 onClick={() => copyTemplate.mutate(template.id)}
                 disabled={copyTemplate.isPending}
-                aria-label="复制"
-                title="复制"
+                aria-label={t("common.copy")}
+                title={t("common.copy")}
               >
                 <Copy size={16} />
               </button>
@@ -2228,8 +2158,8 @@ export function PromptTemplatesPage() {
                 className="secondary-btn icon-only-btn"
                 type="button"
                 onClick={() => navigate(`/prompt-templates/${encodeURIComponent(template.id)}/edit${templateWorkbenchSearch(scope, keyword, template.id)}`)}
-                aria-label="编辑表单"
-                title="编辑表单"
+                aria-label={t("promptTemplates.actions.editForm")}
+                title={t("promptTemplates.actions.editForm")}
               >
                 <Pencil size={16} />
               </button>
@@ -2240,17 +2170,17 @@ export function PromptTemplatesPage() {
                 type="button"
                 onClick={() => shareTemplate.mutate(template)}
                 disabled={shareTemplate.isPending}
-                aria-label={template.visibility === "shared" ? "取消共享" : "共享表单"}
-                title={template.visibility === "shared" ? "取消共享" : "共享表单"}
+                aria-label={template.visibility === "shared" ? t("promptTemplates.actions.unshare") : t("promptTemplates.actions.shareForm")}
+                title={template.visibility === "shared" ? t("promptTemplates.actions.unshare") : t("promptTemplates.actions.shareForm")}
               >
                 <Share2 size={16} />
               </button>
             ) : null}
-            <button className="secondary-btn icon-only-btn" type="button" onClick={() => setDownloadDialogOpen(true)} aria-label="下载网页" title="下载网页">
+            <button className="secondary-btn icon-only-btn" type="button" onClick={() => setDownloadDialogOpen(true)} aria-label={t("promptTemplates.download.title")} title={t("promptTemplates.download.title")}>
               <Download size={16} />
             </button>
             {template.canDelete ? (
-              <button className="danger-btn icon-only-btn" type="button" onClick={() => setDeleteTarget(template)} aria-label="删除" title="删除">
+              <button className="danger-btn icon-only-btn" type="button" onClick={() => setDeleteTarget(template)} aria-label={t("common.delete")} title={t("common.delete")}>
                 <Trash2 size={16} />
               </button>
             ) : null}
@@ -2261,7 +2191,7 @@ export function PromptTemplatesPage() {
           template={template}
           formValues={formValues}
           onChange={handleFormValuesChange}
-          emptyActionLabel="去编辑"
+          emptyActionLabel={t("promptTemplates.actions.editNow")}
           onEmptyAction={
             template.canEdit
               ? () => navigate(`/prompt-templates/${encodeURIComponent(template.id)}/edit${templateWorkbenchSearch(scope, keyword, template.id)}`)
@@ -2273,8 +2203,8 @@ export function PromptTemplatesPage() {
       <button
         className="prompt-template-resize-handle"
         type="button"
-        aria-label="拖动调整提示词结果宽度"
-        title="拖动调整提示词结果宽度"
+        aria-label={t("promptTemplates.resize.resultWidth")}
+        title={t("promptTemplates.resize.resultWidth")}
         onPointerDown={beginResultResize}
       >
         <span />
@@ -2283,9 +2213,9 @@ export function PromptTemplatesPage() {
       <aside className="prompt-template-result-panel">
         <div className="prompt-template-result-blocks" ref={resultBlocksRef} style={{ gridTemplateRows: resultBlockRows }}>
           <ResultBlock
-            title="基础提示词"
+            title={t("promptTemplates.result.baseTitle")}
             icon={FileText}
-            content={basePromptContent || (baseDisplayLanguage === "en" ? "英文版本需要重新翻译后显示。" : "填写表单后自动生成基础提示词")}
+            content={basePromptContent || (baseDisplayLanguage === "en" ? t("promptTemplates.result.englishBaseNeedsTranslation") : t("promptTemplates.result.basePlaceholder"))}
             badge={basePromptBadge}
             negativeContent={baseNegativePrompt}
             negativeLanguage={baseDisplayLanguage}
@@ -2298,8 +2228,8 @@ export function PromptTemplatesPage() {
                   type="button"
                   onClick={() => sendPromptToChat(basePromptWithNegative, "base")}
                   disabled={Boolean(usingPromptTarget) || !basePromptWithNegative.trim() || basePromptLoading}
-                  aria-label={usingPromptTarget === "base" ? "带入中" : "去使用"}
-                  title={usingPromptTarget === "base" ? "带入中" : "去使用"}
+                  aria-label={usingPromptTarget === "base" ? t("promptTemplates.actions.sending") : t("common.use")}
+                  title={usingPromptTarget === "base" ? t("promptTemplates.actions.sending") : t("common.use")}
                 >
                   <Send size={15} />
                 </button>
@@ -2308,8 +2238,8 @@ export function PromptTemplatesPage() {
                   type="button"
                   onClick={() => copyPrompt(basePromptWithNegative)}
                   disabled={!basePromptWithNegative.trim() || basePromptLoading}
-                  aria-label="复制"
-                  title="复制"
+                  aria-label={t("common.copy")}
+                  title={t("common.copy")}
                 >
                   <Copy size={15} />
                 </button>
@@ -2317,8 +2247,8 @@ export function PromptTemplatesPage() {
                   className="secondary-btn icon-only-btn"
                   type="button"
                   onClick={() => setHistoryOpen(true)}
-                  aria-label="历史结果"
-                  title="历史结果"
+                  aria-label={t("promptTemplates.history.title")}
+                  title={t("promptTemplates.history.title")}
                 >
                   <History size={15} />
                 </button>
@@ -2338,14 +2268,14 @@ export function PromptTemplatesPage() {
           <button
             className="prompt-template-result-height-handle"
             type="button"
-            aria-label="拖动调整基础提示词和AI提示词高度"
-            title="拖动调整基础提示词和AI提示词高度"
+            aria-label={t("promptTemplates.resize.resultHeight")}
+            title={t("promptTemplates.resize.resultHeight")}
             onPointerDown={beginResultHeightResize}
           >
             <span />
           </button>
           <ResultBlock
-            title="AI提示词"
+            title={t("promptTemplates.result.aiTitle")}
             icon={Sparkles}
             content={finalPromptContent}
             badge={aiPromptBadge}
@@ -2362,8 +2292,8 @@ export function PromptTemplatesPage() {
                   type="button"
                   onClick={() => sendPromptToChat(activePromptWithNegative, "ai")}
                   disabled={Boolean(usingPromptTarget) || optimize.isPending || !activePromptWithNegative.trim()}
-                  aria-label={usingPromptTarget === "ai" ? "带入中" : "去使用"}
-                  title={usingPromptTarget === "ai" ? "带入中" : "去使用"}
+                  aria-label={usingPromptTarget === "ai" ? t("promptTemplates.actions.sending") : t("common.use")}
+                  title={usingPromptTarget === "ai" ? t("promptTemplates.actions.sending") : t("common.use")}
                 >
                   <Send size={15} />
                 </button>
@@ -2372,8 +2302,8 @@ export function PromptTemplatesPage() {
                   type="button"
                   onClick={() => copyPrompt(displayPrompt)}
                   disabled={!displayPrompt.trim() || (optimize.isPending && !streamingPrompt)}
-                  aria-label="复制"
-                  title="复制"
+                  aria-label={t("common.copy")}
+                  title={t("common.copy")}
                 >
                   <Copy size={15} />
                 </button>
@@ -2388,8 +2318,8 @@ export function PromptTemplatesPage() {
                       optimizeStyle
                     })}
                     disabled={Boolean(usingPromptTarget) || optimize.isPending || !basePrompt.trim()}
-                    aria-label={`${optimizeActionLabel}，${optimizeStyleOption.label}风格`}
-                    title={`${optimizeActionLabel}，${optimizeStyleOption.label}风格`}
+                    aria-label={t("promptTemplates.actions.optimizeWithStyle", { action: optimizeActionLabel, style: optimizeStyleOption.label })}
+                    title={t("promptTemplates.actions.optimizeWithStyle", { action: optimizeActionLabel, style: optimizeStyleOption.label })}
                   >
                     {optimize.isPending ? <RotateCw size={15} className="spin" /> : <WandSparkles size={15} />}
                   </button>
@@ -2422,25 +2352,25 @@ export function PromptTemplatesPage() {
 
       {downloadDialogOpen ? (
         <div className="modal-backdrop prompt-template-download-backdrop" role="presentation">
-          <section className="prompt-template-download-dialog" role="dialog" aria-modal="true" aria-label="下载网页">
+          <section className="prompt-template-download-dialog" role="dialog" aria-modal="true" aria-label={t("promptTemplates.download.title")}>
             <header>
               <div>
                 <span className="prompt-template-download-icon" aria-hidden="true">
                   <Download size={18} />
                 </span>
                 <div>
-                  <strong>下载网页</strong>
-                  <p>选择导出的 HTML 能力版本，下载后可单独打开使用。</p>
+                  <strong>{t("promptTemplates.download.title")}</strong>
+                  <p>{t("promptTemplates.download.desc")}</p>
                 </div>
               </div>
-              <button className="icon-only-btn secondary-btn" type="button" onClick={() => setDownloadDialogOpen(false)} aria-label="关闭">
+              <button className="icon-only-btn secondary-btn" type="button" onClick={() => setDownloadDialogOpen(false)} aria-label={t("common.close")}>
                 <X size={16} />
               </button>
             </header>
             <div className="prompt-template-download-validity">
               <div>
-                <strong>AI 优化有效期</strong>
-                <small>默认永久有效。填写天数后，超过时间需要重新下载网页。</small>
+                <strong>{t("promptTemplates.download.validityTitle")}</strong>
+                <small>{t("promptTemplates.download.validityDesc")}</small>
               </div>
               <div className="prompt-template-expiry-controls">
                 <button
@@ -2448,23 +2378,23 @@ export function PromptTemplatesPage() {
                   className={downloadAuthDays.trim() === "" ? "active" : ""}
                   onClick={() => setDownloadAuthDays("")}
                 >
-                  永久
+                  {t("promptTemplates.download.permanent")}
                 </button>
                 <input
                   value={downloadAuthDays}
                   onChange={(event) => setDownloadAuthDays(event.target.value.replace(/\D/g, "").slice(0, 5))}
                   inputMode="numeric"
-                  placeholder="自定义天数"
-                  aria-label="AI 优化有效天数"
+                  placeholder={t("promptTemplates.download.customDays")}
+                  aria-label={t("promptTemplates.download.daysAria")}
                 />
                 <button
                   type="button"
                   className="prompt-template-revoke-inline-btn"
                   onClick={() => setRevokeDownloadLinksOpen(true)}
                   disabled={!template || revokeExportDownloads.isPending}
-                  title={activeAiExportDownloads > 0 ? `当前有 ${activeAiExportDownloads} 个 AI 优化链接有效` : "当前没有有效的 AI 优化链接"}
+                  title={activeAiExportDownloads > 0 ? t("promptTemplates.download.activeAiLinks", { count: activeAiExportDownloads }) : t("promptTemplates.download.noActiveAiLinks")}
                 >
-                  失效所有 AI 优化链接
+                  {t("promptTemplates.download.revokeAll")}
                 </button>
               </div>
             </div>
@@ -2474,8 +2404,8 @@ export function PromptTemplatesPage() {
                   <WandSparkles size={18} />
                 </span>
                 <span>
-                  <strong>AI 优化版</strong>
-                  <small>包含 AI 优化按钮。使用时需要原应用服务可访问；如果设置了有效期，到期后重新下载即可。</small>
+                  <strong>{t("promptTemplates.download.aiVersion")}</strong>
+                  <small>{t("promptTemplates.download.aiVersionDesc")}</small>
                 </span>
               </button>
               <button type="button" className="prompt-template-download-option" onClick={() => downloadTemplateHtml(false)}>
@@ -2483,18 +2413,18 @@ export function PromptTemplatesPage() {
                   <FileText size={18} />
                 </span>
                 <span>
-                  <strong>无 AI 优化</strong>
-                  <small>适合离线填写和复制基础提示词，不需要连接原应用服务。</small>
+                  <strong>{t("promptTemplates.download.noAiVersion")}</strong>
+                  <small>{t("promptTemplates.download.noAiVersionDesc")}</small>
                 </span>
               </button>
             </div>
             <div className="prompt-template-download-records">
               <div>
-                <strong>下载记录</strong>
-                <small>记录当前账号下载的该表单网页，以及 AI 优化链接状态。</small>
+                <strong>{t("promptTemplates.download.records")}</strong>
+                <small>{t("promptTemplates.download.recordsDesc")}</small>
               </div>
               {exportDownloadsQuery.isFetching && exportDownloads.length === 0 ? (
-                <p className="prompt-template-download-record-empty">加载中...</p>
+                <p className="prompt-template-download-record-empty">{t("common.loadingEllipsis")}</p>
               ) : exportDownloads.length > 0 ? (
                 <div
                   className="prompt-template-download-record-list"
@@ -2509,19 +2439,21 @@ export function PromptTemplatesPage() {
                   {exportDownloads.map((download) => (
                     <div className="prompt-template-download-record" key={download.id}>
                       <span className={`prompt-template-download-record-status ${download.status}`}>
-                        {promptTemplateExportStatusLabel(download)}
+                        {promptTemplateExportStatusLabel(download, t)}
                       </span>
                       <div>
-                        <strong>{download.variant === "ai" ? "AI 优化版" : "无 AI 优化"}</strong>
+                        <strong>{download.variant === "ai" ? t("promptTemplates.download.aiVersion") : t("promptTemplates.download.noAiVersion")}</strong>
                         <small>
-                          {formatPromptTemplateExportTime(download.issuedAt)}
-                          {download.variant === "ai" ? ` · ${promptTemplateExportStatusText(download)} · 使用 ${download.useCount} 次` : " · 基础提示词表单"}
+                          {formatPromptTemplateExportTime(download.issuedAt, resolvedLanguage)}
+                          {download.variant === "ai"
+                            ? t("promptTemplates.download.aiRecordMeta", { status: promptTemplateExportStatusText(download, t, resolvedLanguage), count: download.useCount })
+                            : t("promptTemplates.download.baseRecordMeta")}
                         </small>
                       </div>
                     </div>
                   ))}
                   {exportDownloadsQuery.isFetchingNextPage ? (
-                    <p className="prompt-template-download-record-empty">加载更多...</p>
+                    <p className="prompt-template-download-record-empty">{t("promptTemplates.actions.loadingMore")}</p>
                   ) : null}
                   {exportDownloadsQuery.hasNextPage && !exportDownloadsQuery.isFetchingNextPage ? (
                     <button
@@ -2529,12 +2461,12 @@ export function PromptTemplatesPage() {
                       type="button"
                       onClick={() => exportDownloadsQuery.fetchNextPage()}
                     >
-                      加载更多
+                      {t("promptTemplates.actions.loadMore")}
                     </button>
                   ) : null}
                 </div>
               ) : (
-                <p className="prompt-template-download-record-empty">暂无下载记录</p>
+                <p className="prompt-template-download-record-empty">{t("promptTemplates.download.noRecords")}</p>
               )}
             </div>
           </section>
@@ -2543,10 +2475,10 @@ export function PromptTemplatesPage() {
 
       <PromptDialog
         open={Boolean(promptDialog)}
-        title="重命名表单"
-        label="表单名称"
+        title={t("promptTemplates.dialog.renameTitle")}
+        label={t("promptTemplates.editor.formName")}
         defaultValue={promptDialog?.template.name ?? ""}
-        confirmText="保存"
+        confirmText={t("common.save")}
         onCancel={() => setPromptDialog(null)}
         onSubmit={(value) => {
           if (!promptDialog) return;
@@ -2557,18 +2489,18 @@ export function PromptTemplatesPage() {
       />
       <ConfirmDialog
         open={Boolean(deleteTarget)}
-        title="删除表单"
-        description={deleteTarget ? `确认删除「${deleteTarget.name}」？已保存的优化历史也会删除。` : ""}
-        confirmText="删除"
+        title={t("promptTemplates.dialog.deleteTitle")}
+        description={deleteTarget ? t("promptTemplates.dialog.deleteDescription", { name: deleteTarget.name }) : ""}
+        confirmText={t("common.delete")}
         destructive
         onCancel={() => setDeleteTarget(null)}
         onConfirm={() => deleteTarget && removeTemplate.mutate(deleteTarget.id)}
       />
       <ConfirmDialog
         open={revokeDownloadLinksOpen}
-        title="失效 AI 优化链接"
-        description={template ? `确认失效「${template.name}」之前下载的 AI 优化版网页？旧网页仍可打开和复制基础提示词，但 AI 优化和翻译将不可用。` : ""}
-        confirmText="确认失效"
+        title={t("promptTemplates.dialog.revokeTitle")}
+        description={template ? t("promptTemplates.dialog.revokeDescription", { name: template.name }) : ""}
+        confirmText={t("promptTemplates.dialog.revokeConfirm")}
         destructive
         backdropClassName="modal-backdrop-top"
         onCancel={() => setRevokeDownloadLinksOpen(false)}
@@ -2604,6 +2536,7 @@ export function PromptTemplateEditorPage() {
   const { templateId = "" } = useParams();
   const [searchParams] = useSearchParams();
   const { showToast } = useToast();
+  const { t } = useI18n();
   const scope = normalizeScope(searchParams.get("scope"));
   const keyword = searchParams.get("keyword") ?? "";
   const [workingTemplate, setWorkingTemplate] = useState<PromptTemplate | null>(null);
@@ -2633,9 +2566,9 @@ export function PromptTemplateEditorPage() {
         setSavedTemplateSignature(promptTemplateDraftSignature(data.template));
         setSelectedComponentId((current) => data.template?.components.some((component) => component.id === current) ? current : data.template?.components[0]?.id ?? "");
       }
-      showToast("表单已保存");
+      showToast(t("promptTemplates.toast.saved"));
     },
-    onError: (error) => showToast(error instanceof Error ? error.message : "保存失败", "error")
+    onError: (error) => showToast(error instanceof Error ? error.message : t("promptTemplates.toast.saveFailed"), "error")
   });
 
   useEffect(() => {
@@ -2671,7 +2604,7 @@ export function PromptTemplateEditorPage() {
       setBackConfirmOpen(false);
       navigateBackToWorkbench();
     } catch {
-      // 保存失败时停留在编辑页，错误提示由 mutation 统一处理。
+      // Stay on the editor when save fails; the mutation shows the error toast.
     }
   }
 
@@ -2695,7 +2628,7 @@ export function PromptTemplateEditorPage() {
   }
 
   function addComponent(type: PromptTemplateComponentType) {
-    const component = newComponent(type);
+    const component = newComponent(type, t);
     setWorkingTemplate((current) => {
       if (!current) return current;
       const maxOrder = Math.max(0, ...current.components.map((item) => Number(item.sortOrder) || 0));
@@ -2744,16 +2677,16 @@ export function PromptTemplateEditorPage() {
         <div className="prompt-template-edit-topbar">
           <button className="secondary-btn" type="button" onClick={() => { void backToWorkbench(); }} disabled={saveTemplate.isPending}>
             <ArrowLeft size={16} />
-            返回
+            {t("promptTemplates.actions.back")}
           </button>
           <div className="prompt-template-edit-title">
             <div>
-              <h1>加载中</h1>
-              <span>提示表单编辑</span>
+              <h1>{t("common.loading")}</h1>
+              <span>{t("promptTemplates.editor.subtitle")}</span>
             </div>
           </div>
         </div>
-        <div className="prompt-template-list-empty">正在加载表单</div>
+        <div className="prompt-template-list-empty">{t("promptTemplates.editor.loadingForm")}</div>
       </div>
     );
   }
@@ -2764,16 +2697,16 @@ export function PromptTemplateEditorPage() {
         <div className="prompt-template-edit-topbar">
           <button className="secondary-btn" type="button" onClick={() => { void backToWorkbench(); }} disabled={saveTemplate.isPending}>
             <ArrowLeft size={16} />
-            返回
+            {t("promptTemplates.actions.back")}
           </button>
           <div className="prompt-template-edit-title">
             <div>
-              <h1>表单不存在</h1>
-              <span>提示表单编辑</span>
+              <h1>{t("promptTemplates.editor.notFoundTitle")}</h1>
+              <span>{t("promptTemplates.editor.subtitle")}</span>
             </div>
           </div>
         </div>
-        <div className="prompt-template-list-empty">没有找到这个表单</div>
+        <div className="prompt-template-list-empty">{t("promptTemplates.editor.notFoundDesc")}</div>
       </div>
     );
   }
@@ -2785,7 +2718,7 @@ export function PromptTemplateEditorPage() {
       <div className="prompt-template-edit-topbar">
         <button className="secondary-btn" type="button" onClick={backToWorkbench} disabled={saveTemplate.isPending}>
           <ArrowLeft size={16} />
-          返回
+          {t("promptTemplates.actions.back")}
         </button>
         <div className="prompt-template-edit-title">
           <div className="prompt-template-title-icon">
@@ -2794,15 +2727,15 @@ export function PromptTemplateEditorPage() {
           <div>
             <div className="prompt-template-edit-title-row">
               <h1>{template.name}</h1>
-              {hasUnsavedChanges ? <span className="prompt-template-dirty-badge">有更改</span> : null}
+              {hasUnsavedChanges ? <span className="prompt-template-dirty-badge">{t("promptTemplates.editor.unsavedBadge")}</span> : null}
             </div>
-            <span>提示表单编辑</span>
+            <span>{t("promptTemplates.editor.subtitle")}</span>
           </div>
         </div>
         <div className="prompt-template-edit-actions">
           <button className="primary-btn" type="button" onClick={() => saveTemplate.mutate(template)} disabled={saveTemplate.isPending}>
             {saveTemplate.isPending ? <RotateCw size={16} className="spin" /> : <Save size={16} />}
-            {saveTemplate.isPending ? "保存中" : "保存"}
+            {saveTemplate.isPending ? t("common.saving") : t("common.save")}
           </button>
         </div>
       </div>
@@ -2824,22 +2757,22 @@ export function PromptTemplateEditorPage() {
         <div className="modal-backdrop">
           <section className="case-modal compact-modal action-modal prompt-template-unsaved-modal">
             <header>
-              <h3>返回前保存更改？</h3>
-              <button type="button" onClick={() => setBackConfirmOpen(false)} aria-label="关闭" disabled={saveTemplate.isPending}>
+              <h3>{t("promptTemplates.editor.unsavedTitle")}</h3>
+              <button type="button" onClick={() => setBackConfirmOpen(false)} aria-label={t("common.close")} disabled={saveTemplate.isPending}>
                 <X size={18} />
               </button>
             </header>
-            <p>当前表单有未保存的更改，可以保存后返回，也可以不保存直接返回。</p>
+            <p>{t("promptTemplates.editor.unsavedDesc")}</p>
             <div className="prompt-template-unsaved-actions">
               <button className="secondary-btn" type="button" onClick={() => setBackConfirmOpen(false)} disabled={saveTemplate.isPending}>
-                取消
+                {t("common.cancel")}
               </button>
               <button className="secondary-btn" type="button" onClick={discardAndBackToWorkbench} disabled={saveTemplate.isPending}>
-                不保存
+                {t("promptTemplates.editor.discard")}
               </button>
               <button className="primary-btn" type="button" onClick={() => { void saveAndBackToWorkbench(); }} disabled={saveTemplate.isPending}>
                 {saveTemplate.isPending ? <RotateCw size={16} className="spin" /> : <Save size={16} />}
-                {saveTemplate.isPending ? "保存中" : "保存并返回"}
+                {saveTemplate.isPending ? t("common.saving") : t("promptTemplates.editor.saveAndBack")}
               </button>
             </div>
           </section>
@@ -2868,6 +2801,7 @@ function TemplatePreview({
 }) {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const { t } = useI18n();
   const components = sortedPromptTemplateComponents(template.components);
   const patchValue = (id: string, value: PromptTemplateFormValues[string]) => onChange({ ...formValues, [id]: value });
   const selectable = Boolean(onSelectComponent);
@@ -2885,12 +2819,12 @@ function TemplatePreview({
       <div className={cx("template-preview-surface", "empty", selectable && "editing")}>
         <div className="template-preview-empty">
           <Sparkles size={28} />
-          <strong>还没有表单项</strong>
-          <span>添加字段后，这里会显示可填写的表单。</span>
+          <strong>{t("promptTemplates.preview.emptyTitle")}</strong>
+          <span>{t("promptTemplates.preview.emptyDesc")}</span>
           {onEmptyAction ? (
             <button className="primary-btn" type="button" onClick={onEmptyAction}>
               <Pencil size={16} />
-              {emptyActionLabel || "去编辑"}
+              {emptyActionLabel || t("promptTemplates.actions.editNow")}
             </button>
           ) : null}
         </div>
@@ -3005,7 +2939,7 @@ function TemplatePreview({
                         });
                       }
                       if (failedCount > 0) {
-                        showToast(`${failedCount} 张素材原图保存失败`, "error");
+                        showToast(t("promptTemplates.toast.assetUploadFailedCount", { count: failedCount }), "error");
                       }
                       input.value = "";
                     }}
@@ -3014,13 +2948,13 @@ function TemplatePreview({
                     <Upload size={18} />
                   </span>
                   <span>
-                    <strong>选择素材</strong>
-                    <small>支持多张图片，可继续追加</small>
+                    <strong>{t("promptTemplates.preview.pickAsset")}</strong>
+                    <small>{t("promptTemplates.preview.pickAssetDesc")}</small>
                   </span>
                 </label>
                 <input
                   value={String(imageValue.note ?? "")}
-                  placeholder="素材备注"
+                  placeholder={t("promptTemplates.preview.assetNote")}
                   onChange={(event) => patchValue(component.id, { ...imageValue, note: event.target.value })}
                 />
                 {imageFiles.length > 0 ? (
@@ -3031,11 +2965,11 @@ function TemplatePreview({
                         <div>
                           <strong>{file.fileName}</strong>
                           <span>
-                            {Number(file.width) > 0 && Number(file.height) > 0 ? `${file.width} x ${file.height}` : "尺寸未知"}
+                            {Number(file.width) > 0 && Number(file.height) > 0 ? `${file.width} x ${file.height}` : t("promptTemplates.preview.unknownSize")}
                             {formatImageFileSize(file.size) ? ` · ${formatImageFileSize(file.size)}` : ""}
                           </span>
                         </div>
-                        <button type="button" aria-label="移除素材" onClick={(event) => { event.preventDefault(); removeImageFile(file.id); }}>
+                        <button type="button" aria-label={t("promptTemplates.preview.removeAsset")} onClick={(event) => { event.preventDefault(); removeImageFile(file.id); }}>
                           <X size={14} />
                         </button>
                       </div>
@@ -3086,6 +3020,7 @@ function TemplateEditor({
   onDuplicateComponent: (component: PromptTemplateComponent) => void;
   onRemoveComponent: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const [draggingComponentId, setDraggingComponentId] = useState("");
   const [dragOverComponentId, setDragOverComponentId] = useState("");
   const [propertyPanelWidth, setPropertyPanelWidth] = useState(storedPromptEditorPropertyWidth);
@@ -3093,6 +3028,9 @@ function TemplateEditor({
   const draggingComponentIdRef = useRef("");
   const editorRef = useRef<HTMLDivElement | null>(null);
   const components = sortedPromptTemplateComponents(template.components);
+  const componentTypeOptions = useMemo(() => promptTemplateComponentTypeOptions(t), [t]);
+  const componentWidthOptions = useMemo(() => promptTemplateComponentWidthOptions(t), [t]);
+  const iconOptions = useMemo(() => promptTemplateIconOptions(t), [t]);
   const [propertyTab, setPropertyTab] = useState<PropertyTab>("template");
   const manualNegativePrompt = String(template.rules.negativePrompt ?? "");
   const hasManualNegativePrompt = Boolean(manualNegativePrompt.trim());
@@ -3226,8 +3164,8 @@ function TemplateEditor({
         <div className="template-builder-section">
           <div className="template-builder-head">
             <div>
-              <strong>组件菜单</strong>
-              <span>按住左侧把手拖动排序</span>
+              <strong>{t("promptTemplates.editor.componentMenu")}</strong>
+              <span>{t("promptTemplates.editor.dragSortHint")}</span>
             </div>
           </div>
           <div className="component-add-grid">
@@ -3248,7 +3186,7 @@ function TemplateEditor({
           <div className={cx("component-list", components.length === 0 && "empty", draggingComponentId && "dragging")}>
             {components.map((component, index) => {
               const active = component.id === selectedComponentId;
-              const typeLabel = componentTypeOptions.find((option) => option.value === component.type)?.label ?? "组件";
+              const typeLabel = componentTypeOptions.find((option) => option.value === component.type)?.label ?? t("promptTemplates.editor.component");
               return (
                 <article
                   key={component.id}
@@ -3264,7 +3202,7 @@ function TemplateEditor({
                   <button
                     className="component-drag-handle"
                     type="button"
-                    aria-label="拖动组件"
+                    aria-label={t("promptTemplates.editor.dragComponent")}
                     onPointerDown={(event) => beginComponentDrag(component.id, event)}
                     onPointerMove={updateComponentDragTarget}
                     onPointerUp={finishComponentDrag}
@@ -3273,48 +3211,48 @@ function TemplateEditor({
                     <GripVertical size={15} />
                   </button>
                   <button className="component-select-button" type="button" onClick={() => selectComponentForEdit(component.id)}>
-                    <span>{component.label || "未命名组件"}</span>
-                    <small>{typeLabel} · {componentWidthLabel(component)}</small>
+                    <span>{component.label || t("promptTemplates.editor.unnamedComponent")}</span>
+                    <small>{typeLabel} · {componentWidthLabel(component, t)}</small>
                   </button>
                   <div className="component-list-actions">
-                    <button type="button" onClick={() => onMoveComponent(component.id, -1)} disabled={index === 0} aria-label="上移组件">
+                    <button type="button" onClick={() => onMoveComponent(component.id, -1)} disabled={index === 0} aria-label={t("promptTemplates.editor.moveComponentUp")}>
                       <ArrowUp size={14} />
                     </button>
-                    <button type="button" onClick={() => onMoveComponent(component.id, 1)} disabled={index === components.length - 1} aria-label="下移组件">
+                    <button type="button" onClick={() => onMoveComponent(component.id, 1)} disabled={index === components.length - 1} aria-label={t("promptTemplates.editor.moveComponentDown")}>
                       <ArrowDown size={14} />
                     </button>
-                    <button type="button" onClick={() => onDuplicateComponent(component)} aria-label="复制组件">
+                    <button type="button" onClick={() => onDuplicateComponent(component)} aria-label={t("promptTemplates.editor.duplicateComponent")}>
                       <Copy size={14} />
                     </button>
-                    <button type="button" onClick={() => onRemoveComponent(component.id)} aria-label="删除组件">
+                    <button type="button" onClick={() => onRemoveComponent(component.id)} aria-label={t("promptTemplates.editor.deleteComponent")}>
                       <Trash2 size={14} />
                     </button>
                   </div>
                 </article>
               );
             })}
-            {components.length === 0 ? <div className="component-list-empty">请选择一个组件</div> : null}
+            {components.length === 0 ? <div className="component-list-empty">{t("promptTemplates.editor.selectComponent")}</div> : null}
           </div>
         </div>
       </aside>
       <aside className="template-property-panel">
-        <div className="template-property-tabs" role="tablist" aria-label="属性面板">
+        <div className="template-property-tabs" role="tablist" aria-label={t("promptTemplates.editor.propertyPanel")}>
           <button type="button" className={propertyTab === "template" ? "active" : ""} onClick={() => setPropertyTab("template")}>
-            表单属性
+            {t("promptTemplates.editor.formProperties")}
           </button>
           <button type="button" className={propertyTab === "component" ? "active" : ""} onClick={() => setPropertyTab("component")}>
-            组件属性
+            {t("promptTemplates.editor.componentProperties")}
           </button>
         </div>
         {propertyTab === "component" ? (
           selectedComponent ? (
             <div className="template-settings-card component-settings-card">
               <div className="component-detail-head">
-                <h3>组件属性</h3>
-                <span>{componentWidthLabel(selectedComponent)}</span>
+                <h3>{t("promptTemplates.editor.componentProperties")}</h3>
+                <span>{componentWidthLabel(selectedComponent, t)}</span>
               </div>
               <label className="template-setting-field">
-                <span className="template-setting-label">类型</span>
+                <span className="template-setting-label">{t("promptTemplates.editor.type")}</span>
                 <CustomSelect
                   value={selectedComponent.type}
                   options={componentTypeOptions}
@@ -3339,7 +3277,7 @@ function TemplateEditor({
               </label>
               {selectedComponent.type !== "section" ? (
                 <label className="template-setting-field">
-                  <span className="template-setting-label">占用</span>
+                  <span className="template-setting-label">{t("promptTemplates.editor.width")}</span>
                   <CustomSelect
                     value={componentWidth(selectedComponent)}
                     options={componentWidthOptions}
@@ -3348,32 +3286,32 @@ function TemplateEditor({
                 </label>
               ) : (
                 <label className="template-setting-field">
-                  <span className="template-setting-label">占用</span>
-                  <input value="占用全部内容" readOnly />
+                  <span className="template-setting-label">{t("promptTemplates.editor.width")}</span>
+                  <input value={t("promptTemplates.editor.widthFull")} readOnly />
                 </label>
               )}
               <label className="template-setting-field">
-                <span className="template-setting-label">标题</span>
+                <span className="template-setting-label">{t("promptTemplates.editor.label")}</span>
                 <input value={selectedComponent.label} onChange={(event) => onPatchComponent(selectedComponent.id, { label: event.target.value })} />
               </label>
               {selectedComponent.type !== "section" ? (
                 <label className="template-setting-field">
-                  <span className="template-setting-label" title={selectedComponent.type === "select" && selectedComponent.multiple ? "默认值（多选用逗号或换行分隔）" : "默认值"}>
-                    {selectedComponent.type === "select" && selectedComponent.multiple ? "默认值（多选用逗号或换行分隔）" : "默认值"}
+                  <span className="template-setting-label" title={selectedComponent.type === "select" && selectedComponent.multiple ? t("promptTemplates.editor.defaultValueMulti") : t("promptTemplates.editor.defaultValue")}>
+                    {selectedComponent.type === "select" && selectedComponent.multiple ? t("promptTemplates.editor.defaultValueMulti") : t("promptTemplates.editor.defaultValue")}
                   </span>
                   <input value={selectedComponent.defaultValue ?? ""} onChange={(event) => onPatchComponent(selectedComponent.id, { defaultValue: event.target.value })} />
                 </label>
               ) : null}
               {selectedComponent.type === "text" || selectedComponent.type === "textarea" ? (
                 <label className="template-setting-field wide">
-                  <span className="template-setting-label">占位提示</span>
+                  <span className="template-setting-label">{t("promptTemplates.editor.placeholder")}</span>
                   <input value={selectedComponent.placeholder ?? ""} onChange={(event) => onPatchComponent(selectedComponent.id, { placeholder: event.target.value })} />
                 </label>
               ) : null}
               {selectedComponent.type === "select" ? (
                 <>
                   <label className="template-setting-field wide">
-                    <span className="template-setting-label">下拉选项</span>
+                    <span className="template-setting-label">{t("promptTemplates.editor.selectOptions")}</span>
                     <textarea
                       rows={4}
                       value={(selectedComponent.options ?? []).join("\n")}
@@ -3386,7 +3324,7 @@ function TemplateEditor({
                       checked={Boolean(selectedComponent.multiple)}
                       onChange={(event) => onPatchComponent(selectedComponent.id, { multiple: event.target.checked })}
                     />
-                    允许多选
+                    {t("promptTemplates.editor.allowMultiple")}
                   </label>
                 </>
               ) : null}
@@ -3397,7 +3335,7 @@ function TemplateEditor({
                 />
               ) : null}
               <label className="template-setting-field wide">
-                <span className="template-setting-label">填写说明</span>
+                <span className="template-setting-label">{t("promptTemplates.editor.helpText")}</span>
                 <input value={selectedComponent.helpText ?? ""} onChange={(event) => onPatchComponent(selectedComponent.id, { helpText: event.target.value })} />
               </label>
               <label className="template-checkbox">
@@ -3407,21 +3345,21 @@ function TemplateEditor({
                   onChange={(event) => onPatchComponent(selectedComponent.id, { required: event.target.checked })}
                   disabled={selectedComponent.type === "section"}
                 />
-                必填
+                {t("promptTemplates.editor.required")}
               </label>
             </div>
           ) : (
-            <div className="prompt-template-list-empty">请选择一个组件</div>
+            <div className="prompt-template-list-empty">{t("promptTemplates.editor.selectComponent")}</div>
           )
         ) : (
           <div className="template-settings-card template-meta-card">
-            <h3>表单属性</h3>
+            <h3>{t("promptTemplates.editor.formProperties")}</h3>
             <label className="template-setting-field">
-              <span className="template-setting-label">表单名称</span>
+              <span className="template-setting-label">{t("promptTemplates.editor.formName")}</span>
               <input value={template.name} onChange={(event) => onPatchTemplate({ name: event.target.value })} />
             </label>
             <label className="template-setting-field">
-              <span className="template-setting-label">图标</span>
+              <span className="template-setting-label">{t("promptTemplates.editor.icon")}</span>
               <CustomSelect
                 value={template.icon}
                 options={iconOptions}
@@ -3431,19 +3369,19 @@ function TemplateEditor({
               />
             </label>
             <label className="template-setting-field wide">
-              <span className="template-setting-label">表单描述</span>
+              <span className="template-setting-label">{t("promptTemplates.editor.formDescription")}</span>
               <input value={template.description} onChange={(event) => onPatchTemplate({ description: event.target.value })} />
             </label>
             <label className="template-setting-field wide">
-              <span className="template-setting-label">前置拼接</span>
+              <span className="template-setting-label">{t("promptTemplates.editor.prefix")}</span>
               <textarea rows={2} value={template.rules.prefix ?? ""} onChange={(event) => onPatchTemplate({ rules: { ...template.rules, prefix: event.target.value } })} />
             </label>
             <label className="template-setting-field wide">
-              <span className="template-setting-label">结尾拼接</span>
+              <span className="template-setting-label">{t("promptTemplates.editor.suffix")}</span>
               <textarea rows={2} value={template.rules.suffix ?? ""} onChange={(event) => onPatchTemplate({ rules: { ...template.rules, suffix: event.target.value } })} />
             </label>
             <label className="template-setting-field wide">
-              <span className="template-setting-label">反向提示词</span>
+              <span className="template-setting-label">{t("promptTemplates.negativePrompt")}</span>
               <textarea
                 rows={2}
                 value={manualNegativePrompt}
@@ -3461,7 +3399,7 @@ function TemplateEditor({
             </label>
             <label
               className="template-checkbox"
-              title={hasManualNegativePrompt ? "已填写反向提示词，无需AI生成" : "由AI优化时生成反向提示词"}
+              title={hasManualNegativePrompt ? t("promptTemplates.editor.manualNegativeHint") : t("promptTemplates.editor.aiNegativeHint")}
             >
               <input
                 type="checkbox"
@@ -3469,7 +3407,7 @@ function TemplateEditor({
                 disabled={hasManualNegativePrompt}
                 onChange={(event) => onPatchTemplate({ output: { ...template.output, negativeEnabled: event.target.checked } })}
               />
-              AI生成反向提示词
+              {t("promptTemplates.editor.aiNegative")}
             </label>
           </div>
         )}
@@ -3477,8 +3415,8 @@ function TemplateEditor({
       <button
         className="template-editor-property-resize-handle"
         type="button"
-        aria-label="拖动调整组件属性宽度"
-        title="拖动调整组件属性宽度"
+        aria-label={t("promptTemplates.resize.propertyWidth")}
+        title={t("promptTemplates.resize.propertyWidth")}
         onPointerDown={beginPropertyPanelResize}
       >
         <span />
@@ -3486,8 +3424,8 @@ function TemplateEditor({
       <div className="template-editor-preview-panel">
         <div className="template-editor-preview-head">
           <div>
-            <strong>实时预览</strong>
-            <span>这里展示完整表单页面，半行组件会自动并排</span>
+            <strong>{t("promptTemplates.editor.livePreview")}</strong>
+            <span>{t("promptTemplates.editor.livePreviewDesc")}</span>
           </div>
         </div>
         <TemplatePreview
@@ -3527,6 +3465,7 @@ function ResultBlock({
   loading?: boolean;
   typing?: boolean;
 }) {
+  const { t } = useI18n();
   const negative = negativeContent.trim();
   const contentNode = diffEnabled ? renderPromptDiffText(content, diffAgainst) : content;
   return (
@@ -3538,7 +3477,7 @@ function ResultBlock({
         {action ? <div className="result-block-action">{action}</div> : null}
       </div>
       {loading ? (
-        <div className="result-skeleton" aria-label="正在生成提示词">
+        <div className="result-skeleton" aria-label={t("promptTemplates.result.generating")}>
           <span />
           <span />
           <span />
@@ -3549,7 +3488,7 @@ function ResultBlock({
           <pre className={typing ? "typing" : ""}>{contentNode}</pre>
           {negative ? (
             <div className="result-block-negative">
-              <span>{negativeLanguage === "en" ? "Negative prompt" : "反向提示词"}</span>
+              <span>{negativeLanguage === "en" ? "Negative prompt" : t("promptTemplates.negativePrompt")}</span>
               <pre>{negative}</pre>
             </div>
           ) : null}
@@ -3582,6 +3521,7 @@ function HistoryDialog({
   onCopy: (text: string) => void;
   onUsePrompt: (text: string, target: UsePromptTarget) => void;
 }) {
+  const { t, resolvedLanguage } = useI18n();
   const menuRef = useRef<HTMLElement | null>(null);
   const [selectedId, setSelectedId] = useState(() => results[0]?.id ?? "");
   const [displayLanguage, setDisplayLanguage] = useState<PromptDisplayLanguage>("zh");
@@ -3606,10 +3546,10 @@ function HistoryDialog({
   const baseNegativePrompt = displayLanguage === "zh" && selectedResult
     ? manualNegativePromptFromSnapshot(selectedResult.templateSnapshot)
     : "";
-  const basePromptWithNegative = promptWithNegative(basePrompt, baseNegativePrompt, displayLanguage);
+  const basePromptWithNegative = promptWithNegative(basePrompt, baseNegativePrompt, displayLanguage, t);
   const optimizedPrompt = selectedResult ? optimizedPromptForLanguage(selectedResult, displayLanguage, true) : "";
   const negativePrompt = selectedResult ? negativePromptForLanguage(selectedResult, displayLanguage, true) : "";
-  const aiPromptWithNegative = promptWithNegative(optimizedPrompt, negativePrompt, displayLanguage);
+  const aiPromptWithNegative = promptWithNegative(optimizedPrompt, negativePrompt, displayLanguage, t);
   const diffEnabled = showDiff && Boolean(basePrompt.trim()) && Boolean(optimizedPrompt.trim());
 
   useEffect(() => {
@@ -3627,15 +3567,15 @@ function HistoryDialog({
       <section className="case-modal prompt-template-history-modal">
         <header>
           <div>
-            <h3>历史结果</h3>
-            <p>默认显示最近 20 条，下滑自动加载更多。</p>
+            <h3>{t("promptTemplates.history.title")}</h3>
+            <p>{t("promptTemplates.history.desc")}</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="关闭"><X size={18} /></button>
+          <button type="button" onClick={onClose} aria-label={t("common.close")}><X size={18} /></button>
         </header>
         <div className="prompt-template-history-layout">
-          <aside className="prompt-template-history-menu" aria-label="历史结果快捷菜单" ref={menuRef} onScroll={handleMenuScroll}>
-            {loading ? <div className="prompt-template-list-empty">加载中</div> : null}
-            {!loading && results.length === 0 ? <div className="prompt-template-list-empty">暂无历史结果</div> : null}
+          <aside className="prompt-template-history-menu" aria-label={t("promptTemplates.history.menu")} ref={menuRef} onScroll={handleMenuScroll}>
+            {loading ? <div className="prompt-template-list-empty">{t("common.loading")}</div> : null}
+            {!loading && results.length === 0 ? <div className="prompt-template-list-empty">{t("promptTemplates.history.empty")}</div> : null}
             {results.map((result) => (
               <button
                 type="button"
@@ -3643,14 +3583,14 @@ function HistoryDialog({
                 className={result.id === selectedResult?.id ? "active" : ""}
                 onClick={() => setSelectedId(result.id)}
               >
-                <strong>{formatRelativeTemplateTime(result.createdAt)}</strong>
-                <span>{formatTemplateDate(result.createdAt)}</span>
+                <strong>{formatRelativeTemplateTime(result.createdAt, t)}</strong>
+                <span>{formatTemplateDate(result.createdAt, resolvedLanguage)}</span>
               </button>
             ))}
-            {loadingMore ? <div className="prompt-template-history-loading">加载中</div> : null}
+            {loadingMore ? <div className="prompt-template-history-loading">{t("common.loading")}</div> : null}
             {!loading && !loadingMore && hasMore ? (
               <button type="button" className="prompt-template-history-more" onClick={onLoadMore}>
-                加载更多
+                {t("promptTemplates.actions.loadMore")}
               </button>
             ) : null}
           </aside>
@@ -3658,16 +3598,16 @@ function HistoryDialog({
             {selectedResult ? (
               <>
                 <div className="prompt-template-history-tools">
-                  <div className="prompt-language-switch" role="tablist" aria-label="历史提示词语言">
+                  <div className="prompt-language-switch" role="tablist" aria-label={t("promptTemplates.history.language")}>
                     <button type="button" className={displayLanguage === "zh" ? "active" : ""} onClick={() => setDisplayLanguage("zh")}>
-                      中
+                      {t("promptTemplates.language.zh")}
                     </button>
                     <button
                       type="button"
                       className={displayLanguage === "en" ? "active" : ""}
                       onClick={() => setDisplayLanguage("en")}
                       disabled={!canSwitchEnglish}
-                      title={canSwitchEnglish ? "切换英文" : "该记录暂无英文版本"}
+                      title={canSwitchEnglish ? t("promptTemplates.actions.switchEnglish") : t("promptTemplates.history.noEnglish")}
                     >
                       EN
                     </button>
@@ -3677,15 +3617,15 @@ function HistoryDialog({
                     className={cx("prompt-diff-switch", showDiff && "active")}
                     aria-pressed={showDiff}
                     onClick={() => setShowDiff((current) => !current)}
-                    title={showDiff ? "隐藏差异" : "显示差异"}
+                    title={showDiff ? t("promptTemplates.actions.hideDiff") : t("promptTemplates.actions.showDiff")}
                   >
                     <span aria-hidden="true" />
-                    显示差异
+                    {t("promptTemplates.actions.showDiff")}
                   </button>
                   <div className="prompt-template-history-actions">
                     <button className="secondary-btn" type="button" onClick={() => setLoadTarget(selectedResult)}>
                       <Check size={15} />
-                      载入
+                      {t("promptTemplates.actions.load")}
                     </button>
                   </div>
                 </div>
@@ -3694,7 +3634,7 @@ function HistoryDialog({
                     <div className="prompt-template-history-block-title">
                       <div className="prompt-template-history-block-title-main">
                         <FileText size={16} />
-                        <strong>基础提示词</strong>
+                        <strong>{t("promptTemplates.result.baseTitle")}</strong>
                       </div>
                       <div className="prompt-template-history-block-actions">
                         <button
@@ -3702,8 +3642,8 @@ function HistoryDialog({
                           type="button"
                           onClick={() => onUsePrompt(basePromptWithNegative, "base")}
                           disabled={Boolean(usingPromptTarget) || !basePromptWithNegative.trim()}
-                          aria-label={usingPromptTarget === "base" ? "带入中" : "去使用基础提示词"}
-                          title={usingPromptTarget === "base" ? "带入中" : "去使用"}
+                          aria-label={usingPromptTarget === "base" ? t("promptTemplates.actions.sending") : t("promptTemplates.actions.useBasePrompt")}
+                          title={usingPromptTarget === "base" ? t("promptTemplates.actions.sending") : t("common.use")}
                         >
                           <Send size={15} />
                         </button>
@@ -3712,17 +3652,17 @@ function HistoryDialog({
                           type="button"
                           onClick={() => onCopy(basePromptWithNegative)}
                           disabled={!basePromptWithNegative.trim()}
-                          aria-label="复制基础提示词"
-                          title="复制"
+                          aria-label={t("promptTemplates.actions.copyBasePrompt")}
+                          title={t("common.copy")}
                         >
                           <Copy size={15} />
                         </button>
                       </div>
                     </div>
-                    <pre>{basePrompt || (displayLanguage === "en" ? "未记录英文基础提示词" : "未记录基础提示词")}</pre>
+                    <pre>{basePrompt || (displayLanguage === "en" ? t("promptTemplates.history.noEnglishBase") : t("promptTemplates.history.noBase"))}</pre>
                     {baseNegativePrompt ? (
                       <div className="prompt-template-history-negative">
-                        <span>反向提示词</span>
+                        <span>{t("promptTemplates.negativePrompt")}</span>
                         <pre>{baseNegativePrompt}</pre>
                       </div>
                     ) : null}
@@ -3731,7 +3671,7 @@ function HistoryDialog({
                     <div className="prompt-template-history-block-title">
                       <div className="prompt-template-history-block-title-main">
                         <Sparkles size={16} />
-                        <strong>AI提示词</strong>
+                        <strong>{t("promptTemplates.result.aiTitle")}</strong>
                       </div>
                       <div className="prompt-template-history-block-actions">
                         <button
@@ -3739,8 +3679,8 @@ function HistoryDialog({
                           type="button"
                           onClick={() => onUsePrompt(aiPromptWithNegative, "ai")}
                           disabled={Boolean(usingPromptTarget) || !aiPromptWithNegative.trim()}
-                          aria-label={usingPromptTarget === "ai" ? "带入中" : "去使用AI提示词"}
-                          title={usingPromptTarget === "ai" ? "带入中" : "去使用"}
+                          aria-label={usingPromptTarget === "ai" ? t("promptTemplates.actions.sending") : t("promptTemplates.actions.useAiPrompt")}
+                          title={usingPromptTarget === "ai" ? t("promptTemplates.actions.sending") : t("common.use")}
                         >
                           <Send size={15} />
                         </button>
@@ -3749,8 +3689,8 @@ function HistoryDialog({
                           type="button"
                           onClick={() => onCopy(aiPromptWithNegative)}
                           disabled={!aiPromptWithNegative.trim()}
-                          aria-label="复制AI提示词"
-                          title="复制"
+                          aria-label={t("promptTemplates.actions.copyAiPrompt")}
+                          title={t("common.copy")}
                         >
                           <Copy size={15} />
                         </button>
@@ -3759,11 +3699,11 @@ function HistoryDialog({
                     <pre>
                       {diffEnabled
                         ? renderPromptDiffText(optimizedPrompt, basePrompt)
-                        : (optimizedPrompt || (displayLanguage === "en" ? "未记录英文 AI 提示词" : "未记录 AI 提示词"))}
+                        : (optimizedPrompt || (displayLanguage === "en" ? t("promptTemplates.history.noEnglishAi") : t("promptTemplates.history.noAi")))}
                     </pre>
                     {negativePrompt ? (
                       <div className="prompt-template-history-negative">
-                        <span>{displayLanguage === "en" ? "Negative prompt" : "反向提示词"}</span>
+                        <span>{displayLanguage === "en" ? "Negative prompt" : t("promptTemplates.negativePrompt")}</span>
                         <pre>{negativePrompt}</pre>
                       </div>
                     ) : null}
@@ -3771,16 +3711,16 @@ function HistoryDialog({
                 </div>
               </>
             ) : (
-              <div className="prompt-template-list-empty">暂无历史结果</div>
+              <div className="prompt-template-list-empty">{t("promptTemplates.history.empty")}</div>
             )}
           </section>
         </div>
       </section>
       <ConfirmDialog
         open={Boolean(loadTarget)}
-        title="载入历史结果"
-        description={loadTarget ? `确认载入「${formatRelativeTemplateTime(loadTarget.createdAt)}」这条历史结果？当前显示的 AI 优化结果会被替换。` : ""}
-        confirmText="载入"
+        title={t("promptTemplates.history.loadTitle")}
+        description={loadTarget ? t("promptTemplates.history.loadDescription", { time: formatRelativeTemplateTime(loadTarget.createdAt, t) }) : ""}
+        confirmText={t("promptTemplates.actions.load")}
         onCancel={() => setLoadTarget(null)}
         onConfirm={() => {
           if (!loadTarget) return;

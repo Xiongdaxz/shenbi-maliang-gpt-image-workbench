@@ -666,6 +666,9 @@ function starterCopyStatusLabel(status: string) {
 
 function StarterCopyPreview({ copy }: { copy: StarterDailyCopy | null | undefined }) {
   if (!copy) return <p className="muted">今日暂未生成文案。</p>;
+  const copiesZh = (copy.copiesZh?.length ? copy.copiesZh : copy.copies).map((item) => String(item ?? "").trim()).filter(Boolean);
+  const copiesEn = (copy.copiesEn ?? []).map((item) => String(item ?? "").trim()).filter(Boolean);
+  const rowCount = Math.max(copiesZh.length, copiesEn.length);
   return (
     <div className="starter-copy-preview">
       <div className="starter-copy-preview-head">
@@ -678,11 +681,24 @@ function StarterCopyPreview({ copy }: { copy: StarterDailyCopy | null | undefine
         </div>
       </div>
       {copy.error ? <div className="form-error">{copy.error}</div> : null}
-      {copy.copies.length > 0 ? (
-        <div className="starter-copy-chip-list">
-          {copy.copies.map((item, index) => (
-            <span key={`${index}-${item}`} title={item}>{index + 1}. {item}</span>
-          ))}
+      {rowCount > 0 ? (
+        <div className="starter-copy-comparison-list">
+          {Array.from({ length: rowCount }, (_, index) => {
+            const zhText = copiesZh[index] || "未生成";
+            const enText = copiesEn[index] || "英文版本待生成";
+            return (
+              <div className="starter-copy-comparison-row" key={`${index}-${zhText}-${enText}`}>
+                <div className="starter-copy-copy">
+                  <span className="starter-copy-copy-label">中文文案</span>
+                  <span className="starter-copy-copy-text" data-config-no-translate="true" title={zhText}>{index + 1}. {zhText}</span>
+                </div>
+                <div className="starter-copy-copy">
+                  <span className="starter-copy-copy-label">英文文案</span>
+                  <span className="starter-copy-copy-text" data-config-no-translate="true" title={enText}>{index + 1}. {enText}</span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : null}
     </div>

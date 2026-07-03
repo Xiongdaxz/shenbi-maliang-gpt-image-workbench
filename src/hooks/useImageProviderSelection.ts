@@ -9,7 +9,7 @@ export function useImageProviderSelection(providerOptions: ProviderConfig[]) {
   const currentProvider = useMemo(() => {
     return providerOptions.find((item) => item.id === providerId) ?? providerOptions[0];
   }, [providerId, providerOptions]);
-  const sizeOptions = useMemo(() => buildSizeOptions(), []);
+  const sizeOptions = useMemo(() => buildSizeOptions(currentProvider?.sizes ?? []), [currentProvider]);
   const qualityOptions = useMemo(() => buildQualityOptions(currentProvider?.qualities ?? []), [currentProvider]);
 
   useEffect(() => {

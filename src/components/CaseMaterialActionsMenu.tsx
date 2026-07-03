@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { FolderOpen, MoreHorizontal, Send } from "lucide-react";
+import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 
 const CASE_MORE_MENU_WIDTH = 176;
@@ -23,6 +24,7 @@ function clamp(value: number, min: number, max: number) {
 }
 
 export function CaseMaterialActionsMenu({ buttonClassName, onUseAsMaterial, onAddToAssets }: CaseMaterialActionsMenuProps) {
+  const { t } = useI18n();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const closeTimerRef = useRef<number | null>(null);
@@ -121,10 +123,10 @@ export function CaseMaterialActionsMenu({ buttonClassName, onUseAsMaterial, onAd
         ref={triggerRef}
         className={buttonClassName}
         type="button"
-        aria-label="更多灵感操作"
+        aria-label={t("pages.cases.moreActions")}
         aria-haspopup="menu"
         aria-expanded={open && !closing}
-        title="更多"
+        title={t("common.more")}
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -157,7 +159,7 @@ export function CaseMaterialActionsMenu({ buttonClassName, onUseAsMaterial, onAd
                 }}
               >
                 <Send size={16} />
-                <span>作为素材使用</span>
+                <span>{t("pages.cases.useAsMaterial")}</span>
               </button>
               <button
                 type="button"
@@ -168,7 +170,7 @@ export function CaseMaterialActionsMenu({ buttonClassName, onUseAsMaterial, onAd
                 }}
               >
                 <FolderOpen size={16} />
-                <span>加入素材库</span>
+                <span>{t("pages.cases.addToAssets")}</span>
               </button>
             </div>,
             document.body

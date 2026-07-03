@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Search } from "lucide-react";
+import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import type { CaseCategory } from "../types";
 
@@ -9,7 +10,7 @@ export function CaseCategoryMultiSelect({
   categories,
   value,
   onChange,
-  labelName = "分类",
+  labelName,
   placeholder,
   pendingSelectionLabel
 }: {
@@ -20,6 +21,8 @@ export function CaseCategoryMultiSelect({
   placeholder?: string;
   pendingSelectionLabel?: string;
 }) {
+  const { t } = useI18n();
+  const resolvedLabelName = labelName ?? t("common.category");
   const [open, setOpen] = useState(false);
   const [keyword, setKeyword] = useState("");
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -29,11 +32,11 @@ export function CaseCategoryMultiSelect({
   const summary =
     selectedCategories.length === 0
       ? value.length > 0
-        ? pendingSelectionLabel ?? `已选择 ${value.length} 个${labelName}`
-        : placeholder ?? `请选择${labelName}`
+        ? pendingSelectionLabel ?? t("multiSelect.selectedCount", { count: value.length, label: resolvedLabelName })
+        : placeholder ?? t("multiSelect.placeholder", { label: resolvedLabelName })
       : selectedCategories.length <= 2
         ? selectedCategories.map((category) => category.name).join("、")
-        : `${selectedCategories.slice(0, 2).map((category) => category.name).join("、")} 等 ${selectedCategories.length} 个`;
+        : t("multiSelect.summaryMore", { names: selectedCategories.slice(0, 2).map((category) => category.name).join("、"), count: selectedCategories.length });
   const normalizedKeyword = keyword.trim().toLowerCase();
   const filteredCategories = useMemo(() => {
     if (!normalizedKeyword) return categories;
@@ -114,8 +117,8 @@ export function CaseCategoryMultiSelect({
         <input
           value={keyword}
           onChange={(event) => setKeyword(event.target.value)}
-          placeholder={`搜索${labelName}`}
-          aria-label={`搜索${labelName}`}
+          placeholder={t("multiSelect.search", { label: resolvedLabelName })}
+          aria-label={t("multiSelect.search", { label: resolvedLabelName })}
           autoComplete="off"
         />
       </label>
@@ -136,8 +139,8 @@ export function CaseCategoryMultiSelect({
             </button>
           );
         })}
-        {categories.length === 0 ? <span className="case-category-empty">暂无{labelName}</span> : null}
-        {categories.length > 0 && filteredCategories.length === 0 ? <span className="case-category-empty">没有匹配的{labelName}</span> : null}
+        {categories.length === 0 ? <span className="case-category-empty">{t("multiSelect.empty", { label: resolvedLabelName })}</span> : null}
+        {categories.length > 0 && filteredCategories.length === 0 ? <span className="case-category-empty">{t("multiSelect.noMatch", { label: resolvedLabelName })}</span> : null}
       </div>
     </div>
   ) : null;

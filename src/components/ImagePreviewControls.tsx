@@ -8,6 +8,7 @@ import type {
 } from "react";
 import { ChevronLeft, ChevronRight, Maximize2, RefreshCw, RotateCcw, RotateCw, ZoomIn, ZoomOut, X } from "lucide-react";
 import { ImageDownloadMenu } from "./ImageDownloadMenu";
+import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import type { CaseGroupImage, ImageReferenceItem } from "../types";
 import type { ImagePreviewItem } from "./ImagePreviewModal";
@@ -77,6 +78,7 @@ export function ImagePreviewStage({
   onPrev,
   onWheel
 }: ImagePreviewStageProps) {
+  const { t } = useI18n();
   return (
     <div
       className={cx("case-preview-stage", showNavigator && "has-navigator", canPan && "is-pannable", previewDragging && "is-dragging")}
@@ -87,7 +89,7 @@ export function ImagePreviewStage({
       onPointerCancel={onPointerCancel}
       onWheel={onWheel}
     >
-      <button className="case-preview-nav prev" type="button" onClick={onPrev} disabled={!canPrev} aria-label="上一张">
+      <button className="case-preview-nav prev" type="button" onClick={onPrev} disabled={!canPrev} aria-label={t("imagePreview.previous")}>
         <ChevronLeft size={24} />
       </button>
       <img
@@ -104,7 +106,7 @@ export function ImagePreviewStage({
         onLoad={onImageLoad}
       />
       {showNavigator && navigatorMetrics && imageSize ? (
-        <div className={cx("case-preview-navigator", canPan && "is-active")} aria-label="长图预览导航">
+        <div className={cx("case-preview-navigator", canPan && "is-active")} aria-label={t("imagePreview.longNavigator")}>
           <div
             className="case-preview-navigator-track"
             style={{
@@ -138,7 +140,7 @@ export function ImagePreviewStage({
           </div>
         </div>
       ) : null}
-      <button className="case-preview-nav next" type="button" onClick={onNext} disabled={!canNext} aria-label="下一张">
+      <button className="case-preview-nav next" type="button" onClick={onNext} disabled={!canNext} aria-label={t("imagePreview.next")}>
         <ChevronRight size={24} />
       </button>
     </div>
@@ -190,11 +192,12 @@ export function ImagePreviewToolbar({
   onZoomOut,
   toolbarRef
 }: ImagePreviewToolbarProps) {
+  const { t } = useI18n();
   return (
     <div className="case-preview-bottom">
       {groupImages.length > 1 ? (
-        <div className="case-preview-group-thumbs" aria-label="组图缩略图">
-          <span className="case-preview-reference-label">组图</span>
+        <div className="case-preview-group-thumbs" aria-label={t("imagePreview.groupThumbnails")}>
+          <span className="case-preview-reference-label">{t("imagePreview.group")}</span>
           <div className="case-preview-group-thumb-list">
             {groupImages.map((image, imageIndex) => (
               <button
@@ -202,11 +205,11 @@ export function ImagePreviewToolbar({
                 type="button"
                 className={cx(imageIndex === activeGroupImageIndex && "active")}
                 onClick={() => onGroupImageSelect(imageIndex)}
-                aria-label={`查看组图第 ${imageIndex + 1} 张`}
+                aria-label={t("imagePreview.viewGroupNth", { index: imageIndex + 1 })}
                 aria-pressed={imageIndex === activeGroupImageIndex}
               >
                 <img src={image.imageThumbnailUrl ?? image.imagePreviewUrl ?? image.imageUrl} alt="" loading="lazy" />
-                {image.isCover ? <span className="case-preview-cover-dot">封面</span> : null}
+                {image.isCover ? <span className="case-preview-cover-dot">{t("pages.cases.cover")}</span> : null}
               </button>
             ))}
           </div>
@@ -220,8 +223,8 @@ export function ImagePreviewToolbar({
               className="case-preview-description"
               type="button"
               onClick={onCopyDescription}
-              aria-label="复制完整文案"
-              title="点击复制文案"
+              aria-label={t("imagePreview.copyFullText")}
+              title={t("imagePreview.copyText")}
             >
               <span className="case-preview-description-text">{item.description}</span>
               <span className="case-preview-description-popover" role="tooltip">
@@ -234,43 +237,43 @@ export function ImagePreviewToolbar({
             {item.metaItems?.map((metaItem) => (
               <span key={metaItem}>{metaItem}</span>
             ))}
-            <span>尺寸 {sizeLabel}</span>
+            <span>{t("imagePreview.size", { size: sizeLabel })}</span>
             {fileSizeLabel ? <span>{fileSizeLabel}</span> : null}
-            {item.sourceUsername ? <span>作者：{item.sourceUsername}</span> : null}
-            {typeof item.useCount === "number" ? <span>使用：{item.useCount} 次</span> : null}
-            {typeof item.favoriteCount === "number" ? <span>收藏：{item.favoriteCount} 次</span> : null}
+            {item.sourceUsername ? <span>{t("imagePreview.author", { author: item.sourceUsername })}</span> : null}
+            {typeof item.useCount === "number" ? <span>{t("imagePreview.useCount", { count: item.useCount })}</span> : null}
+            {typeof item.favoriteCount === "number" ? <span>{t("imagePreview.favoriteCount", { count: item.favoriteCount })}</span> : null}
           </span>
         </div>
         <div className="case-preview-divider" aria-hidden="true" />
         <div className="case-preview-controls">
           <div className="case-preview-control-row">
-            <div className="case-preview-transform-tools" aria-label="图片预览工具">
-              <button className="case-preview-tool" type="button" onClick={onRotateLeft} aria-label="向左旋转" title="向左旋转">
+            <div className="case-preview-transform-tools" aria-label={t("imagePreview.tools")}>
+              <button className="case-preview-tool" type="button" onClick={onRotateLeft} aria-label={t("imagePreview.rotateLeft")} title={t("imagePreview.rotateLeft")}>
                 <RotateCcw size={16} />
               </button>
-              <button className="case-preview-tool" type="button" onClick={onRotateRight} aria-label="向右旋转" title="向右旋转">
+              <button className="case-preview-tool" type="button" onClick={onRotateRight} aria-label={t("imagePreview.rotateRight")} title={t("imagePreview.rotateRight")}>
                 <RotateCw size={16} />
               </button>
-              <button className="case-preview-tool" type="button" onClick={onZoomOut} aria-label="缩小" title="缩小">
+              <button className="case-preview-tool" type="button" onClick={onZoomOut} aria-label={t("imagePreview.zoomOut")} title={t("imagePreview.zoomOut")}>
                 <ZoomOut size={16} />
               </button>
               <span className="case-preview-zoom">{zoomLabel}</span>
-              <button className="case-preview-tool" type="button" onClick={onZoomIn} aria-label="放大" title="放大">
+              <button className="case-preview-tool" type="button" onClick={onZoomIn} aria-label={t("imagePreview.zoomIn")} title={t("imagePreview.zoomIn")}>
                 <ZoomIn size={16} />
               </button>
-              <button className="case-preview-tool text" type="button" onClick={onReset} aria-label="重置预览" title="重置预览">
+              <button className="case-preview-tool text" type="button" onClick={onReset} aria-label={t("imagePreview.reset")} title={t("imagePreview.reset")}>
                 <RefreshCw size={15} />
-                重置
+                {t("imagePreview.resetShort")}
               </button>
-              <button className="case-preview-tool text" type="button" onClick={onOriginalSize} aria-label="原始尺寸" title="原始尺寸">
+              <button className="case-preview-tool text" type="button" onClick={onOriginalSize} aria-label={t("imagePreview.originalSize")} title={t("imagePreview.originalSize")}>
                 <Maximize2 size={15} />
-                原始尺寸
+                {t("imagePreview.originalSize")}
               </button>
             </div>
             {actions ? <div className="case-preview-actions">{actions}</div> : null}
             {referenceImages.length > 0 ? (
-              <div className="case-preview-references" aria-label="素材">
-                <span className="case-preview-reference-label">素材</span>
+              <div className="case-preview-references" aria-label={t("composer.assets")}>
+                <span className="case-preview-reference-label">{t("composer.assets")}</span>
                 <div className="case-preview-reference-list">
                   {referenceImages.map((reference) => (
                     <div className="case-preview-reference-item" key={reference.id}>
@@ -278,7 +281,7 @@ export function ImagePreviewToolbar({
                         className="case-preview-reference-thumb"
                         type="button"
                         onClick={() => onReferencePreview(reference)}
-                        aria-label={`查看引用素材 ${reference.name}`}
+                        aria-label={t("imagePreview.viewReference", { name: reference.name })}
                         title={reference.name}
                       >
                         <img src={reference.thumbnailUrl ?? reference.previewUrl ?? reference.url} alt={reference.name} loading="lazy" />
@@ -301,6 +304,7 @@ type ReferenceLightboxProps = {
 };
 
 export function ReferenceLightbox({ reference, onClose }: ReferenceLightboxProps) {
+  const { t } = useI18n();
   return (
     <div className="case-reference-lightbox" onMouseDown={onClose}>
       <button
@@ -308,7 +312,7 @@ export function ReferenceLightbox({ reference, onClose }: ReferenceLightboxProps
         className="case-reference-lightbox-close"
         onMouseDown={(event) => event.stopPropagation()}
         onClick={onClose}
-        aria-label="关闭引用预览"
+        aria-label={t("imagePreview.closeReference")}
       >
         <X size={20} />
       </button>
@@ -316,8 +320,8 @@ export function ReferenceLightbox({ reference, onClose }: ReferenceLightboxProps
         source={{ type: "image-reference", id: reference.id }}
         rootClassName="case-reference-lightbox-download"
         iconSize={18}
-        ariaLabel="下载引用素材"
-        title="下载引用素材"
+        ariaLabel={t("imagePreview.downloadReference")}
+        title={t("imagePreview.downloadReference")}
         placement="bottom-end"
         stopMouseDownPropagation
       />

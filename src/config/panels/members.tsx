@@ -72,6 +72,7 @@ import type {
 } from "../../types";
 import type { ConfigAssetReviewItem, ConfigCaseReviewItem } from "../../api/config";
 import { ConfirmDialog, CustomSelect, PromptDialog, useToast } from "../../ui";
+import { useConfigCopy } from "../configCopy";
 import {
   ConfigHeader,
   REQUEST_LOG_PAGE_SIZE,
@@ -153,6 +154,7 @@ function userSwitchConfirmCopy(confirm: UserSwitchConfirm | null) {
 export function TeamAccountPanel() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const configCopy = useConfigCopy();
   const teams = useQuery({ queryKey: ["config-teams"], queryFn: configApi.teams });
   const [selectedTeamId, setSelectedTeamId] = useState("all");
   const [teamDialog, setTeamDialog] = useState<{ mode: "create" | "edit"; team?: Team } | null>(null);
@@ -317,7 +319,7 @@ export function TeamAccountPanel() {
               <p>
                 {selectedTeam
                   ? selectedTeam.description || "暂无说明"
-                  : `${teams.data?.teams.length ?? 0} 个团队，${allUserCount} 个账号`}
+                  : `${teams.data?.teams.length ?? 0} ${configCopy("个团队")}，${allUserCount} ${configCopy("个账号")}`}
               </p>
             </div>
             {teams.data?.teams.length ? (

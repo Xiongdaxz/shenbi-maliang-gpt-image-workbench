@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
+import { useI18n } from "../i18n";
 import {
   DEFAULT_LOGIN_ASSETS,
   LOGIN_BACKGROUND_AUTO_INTERVAL_MS,
@@ -12,6 +13,7 @@ import {
   readLoginThemePreference,
   type LoginTheme
 } from "../lib/loginAssets";
+import { defaultStarterHeadlineIdeas } from "../lib/starterCopy";
 import { useWorkbench } from "../store/workbench";
 import { useToast } from "../ui";
 
@@ -77,6 +79,7 @@ export function InspirationBarragePage() {
   const navigate = useNavigate();
   const startNewChatPromptOptimize = useWorkbench((state) => state.startNewChatPromptOptimize);
   const { showToast } = useToast();
+  const { t, resolvedLanguage } = useI18n();
   const [speed, setSpeed] = useState(DEFAULT_BARRAGE_SPEED);
   const [pausedLaneId, setPausedLaneId] = useState<string | null>(null);
   const loginTheme = useMemo<LoginTheme>(() => readLoginThemePreference(), []);
@@ -92,8 +95,8 @@ export function InspirationBarragePage() {
   ]);
   const backgroundFadeTimerRef = useRef<number | null>(null);
   const dailyCopies = useQuery({
-    queryKey: ["starter-copies", "today"],
-    queryFn: api.starterCopiesToday
+    queryKey: ["starter-copies", "today", resolvedLanguage],
+    queryFn: () => api.starterCopiesToday(resolvedLanguage)
   });
   const branding = useQuery({
     queryKey: ["branding"],
@@ -105,7 +108,11 @@ export function InspirationBarragePage() {
     const otherThemeBackgrounds = loginBackgroundsFor(assets, loginTheme === "light" ? "dark" : "light");
     return Array.from(new Set([...sameThemeBackgrounds, ...otherThemeBackgrounds].filter(Boolean)));
   }, [branding.data, loginTheme]);
-  const copies = useMemo(() => normalizeCopies(dailyCopies.data?.copies ?? []), [dailyCopies.data?.copies]);
+  const fallbackCopies = useMemo(() => defaultStarterHeadlineIdeas(resolvedLanguage), [resolvedLanguage]);
+  const copies = useMemo(() => {
+    const daily = normalizeCopies(dailyCopies.data?.copies ?? []);
+    return daily.length > 0 ? daily : fallbackCopies;
+  }, [dailyCopies.data?.copies, fallbackCopies]);
   const barrageLanes = useMemo(() => buildBarrageLanes(copies, speed), [copies, speed]);
 
   const updateBackground = useCallback((nextBackground: string) => {
@@ -174,7 +181,7 @@ export function InspirationBarragePage() {
     const prompt = text.trim();
     if (!prompt) return;
     startNewChatPromptOptimize(prompt);
-    showToast("已带入新对话，正在优化");
+    showToast(t("inspirationBarrage.toast.sent"));
     navigate("/");
   };
 
@@ -194,10 +201,10 @@ export function InspirationBarragePage() {
       <header className="inspiration-barrage-header">
         <button className="secondary-btn inspiration-barrage-back" type="button" onClick={() => navigate("/cases")}>
           <ArrowLeft size={17} />
-          返回灵感空间
+          {t("inspirationBarrage.back")}
         </button>
         <label className="inspiration-barrage-speed">
-          <span>速度</span>
+          <span>{t("inspirationBarrage.speed")}</span>
           <input
             type="range"
             min={BARRAGE_SPEED_MIN}
@@ -207,21 +214,21 @@ export function InspirationBarragePage() {
             style={{ "--barrage-speed-progress": speedProgress } as CSSProperties}
             onInput={(event) => setSpeed(Number(event.currentTarget.value))}
             onChange={(event) => setSpeed(Number(event.target.value))}
-            aria-label="弹幕速度"
+            aria-label={t("inspirationBarrage.speedAria")}
           />
           <strong>{speed.toFixed(2)}x</strong>
         </label>
       </header>
-      <div className="inspiration-barrage-sky" aria-label="灵感弹幕">
-        {dailyCopies.isLoading ? <div className="inspiration-barrage-state">加载今日文案...</div> : null}
+      <div className="inspiration-barrage-sky" aria-label={t("inspirationBarrage.title")}>
+        {dailyCopies.isLoading ? <div className="inspiration-barrage-state">{t("inspirationBarrage.loading")}</div> : null}
         {!dailyCopies.isLoading && dailyCopies.error ? (
-          <div className="inspiration-barrage-state">今日文案加载失败</div>
+          <div className="inspiration-barrage-state">{t("inspirationBarrage.loadFailed")}</div>
         ) : null}
         {!dailyCopies.isLoading && !dailyCopies.error && barrageLanes.length === 0 ? (
           <div className="inspiration-barrage-state">
-            <strong>今日暂无后台生成文案</strong>
+            <strong>{t("inspirationBarrage.empty")}</strong>
             <button className="secondary-btn" type="button" onClick={() => navigate("/cases")}>
-              返回灵感空间
+              {t("inspirationBarrage.back")}
             </button>
           </div>
         ) : null}
@@ -252,10 +259,10 @@ export function InspirationBarragePage() {
                         onBlur={() => setPausedLaneId((current) => (current === lane.id ? null : current))}
                         onMouseEnter={() => setPausedLaneId(lane.id)}
                         onMouseLeave={() => setPausedLaneId((current) => (current === lane.id ? null : current))}
-                        aria-label={`使用文案：${text}`}
+                        aria-label={t("inspirationBarrage.useCopy", { text })}
                       >
                         <span className="inspiration-barrage-copy">{text}</span>
-                        <span className="inspiration-barrage-tip">点击使用</span>
+                        <span className="inspiration-barrage-tip">{t("inspirationBarrage.clickUse")}</span>
                       </button>
                     ))}
                   </div>

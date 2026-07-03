@@ -1,9 +1,11 @@
 import type { AppearanceMode } from "./lib/appearance";
+import type { LanguagePreference } from "./i18n";
 import type { PromptOptimizeStyleGroup, PromptTemplateOptimizeStyle } from "./lib/promptOptimizeStyles";
 
 export type EditSuggestionTone = "default" | "practical" | "creative" | "detail";
 
 export type UserPreferences = {
+  language: LanguagePreference;
   editSuggestionsEnabled: boolean;
   editSuggestionTone: EditSuggestionTone;
   autoUploadPastedAssets: boolean;
@@ -203,6 +205,9 @@ export type StarterCopySettings = {
 export type StarterDailyCopy = {
   date: string;
   copies: string[];
+  copiesZh?: string[];
+  copiesEn?: string[];
+  locale?: "zh" | "en";
   source: string;
   generatedAt: string;
   providerName?: string;

@@ -7,6 +7,7 @@ export type SubmitRequest = {
   sessionId?: string;
   providerId?: string;
   prompt: string;
+  language?: string;
   size?: string;
   quality?: string;
   n?: number;

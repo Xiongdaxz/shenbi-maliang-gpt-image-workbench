@@ -2,18 +2,20 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, configApi } from "../api";
 import { ProjectLogo } from "../components/ProjectLogo";
+import { useI18n } from "../i18n";
 import { useDocumentBranding } from "../lib/branding";
 import { ToastProvider } from "../ui";
 import { ConfigDashboard } from "./ConfigDashboard";
 
 export default function ConfigApp() {
+  const { t } = useI18n();
   const status = useQuery({ queryKey: ["config-status"], queryFn: configApi.status });
   const branding = useQuery({ queryKey: ["branding"], queryFn: api.branding });
 
   useDocumentBranding(branding.data);
 
   if (status.isLoading) {
-    return <div className="center-screen">加载配置入口...</div>;
+    return <div className="center-screen">{t("config.loading")}</div>;
   }
 
   if (status.data?.setupRequired) {
@@ -33,6 +35,7 @@ export default function ConfigApp() {
 
 function ConfigAuth({ mode }: { mode: "setup" | "login" }) {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [password, setPassword] = useState("");
   const mutation = useMutation({
     mutationFn: () => (mode === "setup" ? configApi.setup(password) : configApi.login(password)),
@@ -47,8 +50,8 @@ function ConfigAuth({ mode }: { mode: "setup" | "login" }) {
             <ProjectLogo className="config-login-logo" />
           </div>
           <div className="config-login-title">
-            <h1>{mode === "setup" ? "初始化配置入口" : "配置入口登录"}</h1>
-            <p>{mode === "setup" ? "设置独立的配置页面密码。" : "请输入配置页面独立密码。"}</p>
+            <h1>{mode === "setup" ? t("config.auth.setupTitle") : t("config.auth.loginTitle")}</h1>
+            <p>{mode === "setup" ? t("config.auth.setupDesc") : t("config.auth.loginDesc")}</p>
           </div>
         </div>
         <form
@@ -59,7 +62,7 @@ function ConfigAuth({ mode }: { mode: "setup" | "login" }) {
           }}
         >
           <label>
-            配置密码
+            {t("config.auth.password")}
             <input
               value={password}
               onChange={(event) => setPassword(event.target.value)}
@@ -69,7 +72,7 @@ function ConfigAuth({ mode }: { mode: "setup" | "login" }) {
           </label>
           {mutation.error ? <div className="form-error">{mutation.error.message}</div> : null}
           <button className="primary-btn" disabled={mutation.isPending}>
-            {mode === "setup" ? "创建配置密码" : "进入配置页面"}
+            {mode === "setup" ? t("config.auth.createPassword") : t("config.auth.enter")}
           </button>
         </form>
       </section>

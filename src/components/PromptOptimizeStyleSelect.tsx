@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, ChevronRight, RotateCw, WandSparkles, X } from "lucide-react";
+import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import {
   normalizePromptOptimizeStyle,
@@ -45,6 +46,7 @@ export function PromptOptimizeStyleSelect({
   menuWidth = 260,
   submenuWidth = 260
 }: PromptOptimizeStyleSelectProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [activeGroup, setActiveGroup] = useState<string | null>(null);
   const [menuStyle, setMenuStyle] = useState(() => ({
@@ -63,7 +65,7 @@ export function PromptOptimizeStyleSelect({
   const normalizedValue = hasStyleGroups ? normalizePromptOptimizeStyle(value, styleGroups) : "";
   const selected = hasStyleGroups
     ? promptOptimizeStyleOption(normalizedValue, styleGroups)
-    : { label: "自定义", description: "自定义优化方向", value: "", prompt: "", visible: true };
+    : { label: t("promptOptimizeStyle.custom"), description: t("promptOptimizeStyle.customDesc"), value: "", prompt: "", visible: true };
   const hasCustomInstruction = customInstruction.trim().length > 0;
 
   function childrenForGroup(groupValue: string) {
@@ -200,7 +202,7 @@ export function PromptOptimizeStyleSelect({
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
-        title={hasStyleGroups ? promptOptimizeStyleFullLabel(normalizedValue, styleGroups) : "自定义"}
+        title={hasStyleGroups ? promptOptimizeStyleFullLabel(normalizedValue, styleGroups) : t("promptOptimizeStyle.custom")}
         onClick={() => setOpen((current) => !current)}
       >
         <span className="custom-select-value">
@@ -260,7 +262,7 @@ export function PromptOptimizeStyleSelect({
                       </span>
                     </button>
                     {children.length > 0 ? (
-                      <div className="prompt-style-picker-submenu" role="group" aria-label={`${group.label}子风格`}>
+                      <div className="prompt-style-picker-submenu" role="group" aria-label={t("promptOptimizeStyle.substylesFor", { label: group.label })}>
                         {children.map((child) => {
                           const active = child.value === normalizedValue;
                           return (
@@ -296,7 +298,7 @@ export function PromptOptimizeStyleSelect({
                         value={customInstruction}
                         rows={1}
                         maxLength={500}
-                        placeholder="自定义风格"
+                        placeholder={t("promptOptimizeStyle.customPlaceholder")}
                         onFocus={() => setActiveGroup("")}
                         onChange={(event) => {
                           onCustomInstructionChange(event.target.value);
@@ -314,8 +316,8 @@ export function PromptOptimizeStyleSelect({
                               customInstructionRef.current?.focus();
                             });
                           }}
-                          aria-label="清空自定义风格"
-                          title="清空"
+                          aria-label={t("promptOptimizeStyle.clearCustom")}
+                          title={t("common.clear")}
                         >
                           <X size={14} />
                         </button>
@@ -329,8 +331,8 @@ export function PromptOptimizeStyleSelect({
                             setOpen(false);
                           }}
                           disabled={customInstructionSubmitDisabled || customInstructionSubmitPending}
-                          aria-label="按自定义补充优化"
-                          title="按自定义补充优化"
+                          aria-label={t("promptOptimizeStyle.submitCustom")}
+                          title={t("promptOptimizeStyle.submitCustom")}
                         >
                           {customInstructionSubmitPending ? (
                             <RotateCw size={14} className="spin" />

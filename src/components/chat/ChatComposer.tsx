@@ -23,6 +23,7 @@ import {
   promptOptimizeStyleOption,
   type PromptOptimizeStyleGroup
 } from "../../lib/promptOptimizeStyles";
+import { useI18n } from "../../i18n";
 import type { QualityOption, SizeOption } from "../../lib/imageOptions";
 import type { ComposerPromptTemplateDraft, ComposerPromptTemplatePanelDraft } from "../../store/workbench";
 import type { AssetItem, ImageEditSuggestion } from "../../types";
@@ -188,6 +189,7 @@ export function ChatComposer({
   const [promptBeforeInputOptimize, setPromptBeforeInputOptimize] = useState("");
   const [promptTemplateCollapseSignal, setPromptTemplateCollapseSignal] = useState(0);
   const { showToast } = useToast();
+  const { t } = useI18n();
   const quickMenuRef = useRef<HTMLDivElement | null>(null);
   const slashTriggerRef = useRef<{ index: number } | null>(null);
   const promptTemplateLoadingRef = useRef(false);
@@ -210,7 +212,7 @@ export function ChatComposer({
     : "";
   const hasDraftPrompt = Boolean(draftPrompt.trim());
   const hasClearableInput = hasDraftPrompt || selectedAssets.length > 0;
-  const clearInputLabel = selectedAssets.length > 0 ? "清空输入内容和素材" : "清空输入内容";
+  const clearInputLabel = selectedAssets.length > 0 ? t("composer.clearInputWithAssets") : t("composer.clearInput");
   const visibleEditSuggestions = editSuggestions.slice(0, 3);
   const showEditSuggestions = editSuggestionsLoading || visibleEditSuggestions.length > 0;
   const previewItems = previews.map((preview) => ({
@@ -578,16 +580,16 @@ export function ChatComposer({
         }
       );
       const optimizedPrompt = promptWithOptionalNegative(data.prompt, data.negativePrompt);
-      if (!optimizedPrompt.trim()) throw new Error("AI 优化已结束，但没有返回结果");
+      if (!optimizedPrompt.trim()) throw new Error(t("composer.optimizeEmptyResult"));
       onDraftPromptChange(optimizedPrompt);
       scrollPromptTextareaToBottom();
       promptOptimizedDraftRef.current = optimizedPrompt;
       setPromptBeforeInputOptimize(originalPrompt);
-      showToast("输入内容已优化");
+      showToast(t("composer.optimizeSuccess"));
     } catch (error) {
       onDraftPromptChange(originalPrompt);
       setPromptBeforeInputOptimize(previousUndoPrompt);
-      showToast(error instanceof Error ? error.message : "AI 优化失败，原提示词已保留", "error");
+      showToast(error instanceof Error ? error.message : t("composer.optimizeFailed"), "error");
     } finally {
       setPromptInputOptimizePending(false);
       setPromptInputOptimizeStreaming(false);
@@ -619,7 +621,7 @@ export function ChatComposer({
     stopPromptTemplateTyping();
     onDraftPromptChange(promptBeforeInputOptimize);
     resetInputOptimizationState();
-    showToast("已还原优化前的提示词");
+    showToast(t("composer.optimizeUndo"));
   }
 
   function clearDraftPrompt() {
@@ -718,7 +720,7 @@ export function ChatComposer({
   }
 
   const editSuggestionStrip = showEditSuggestions ? (
-    <div className="composer-edit-suggestions" aria-label="续改建议">
+    <div className="composer-edit-suggestions" aria-label={t("composer.editSuggestions")}>
       {editSuggestionsLoading && visibleEditSuggestions.length === 0 ? (
         Array.from({ length: 3 }).map((_, index) => (
           <span
@@ -784,11 +786,11 @@ export function ChatComposer({
                   type="button"
                   className="composer-preview-open"
                   onClick={() => setPreviewState({ items: previewItems, index })}
-                  aria-label={`预览${preview.name}`}
+                  aria-label={t("composer.previewNamed", { name: preview.name })}
                 >
                   <img src={preview.url} alt={preview.name} />
                 </button>
-                <button type="button" className="composer-preview-remove" onClick={preview.onRemove} aria-label={`移除${preview.name}`}>
+                <button type="button" className="composer-preview-remove" onClick={preview.onRemove} aria-label={t("composer.removeNamed", { name: preview.name })}>
                   <X size={15} />
                 </button>
               </figure>
@@ -834,9 +836,9 @@ export function ChatComposer({
             <button
               type="button"
               className="composer-tool-btn"
-              aria-label="添加素材/提示词"
+              aria-label={t("composer.addMenu")}
               aria-expanded={quickMenuOpen}
-              data-tooltip="添加素材/提示词"
+              data-tooltip={t("composer.addMenu")}
               onClick={openQuickMenuFromPlus}
             >
               <Plus size={24} strokeWidth={2} />
@@ -846,7 +848,7 @@ export function ChatComposer({
                 className={cx("composer-quick-menu", quickMenuSource === "slash" && "is-slash")}
                 style={quickMenuSource === "slash" && slashMenuPosition ? slashMenuPosition : undefined}
                 role="menu"
-                aria-label="输入框快捷选项"
+                aria-label={t("composer.quickOptions")}
               >
                 <button
                   type="button"
@@ -858,7 +860,7 @@ export function ChatComposer({
                   onClick={openMaterialPickerFromMenu}
                 >
                   <ImageIcon size={17} />
-                  <strong>素材库</strong>
+                  <strong>{t("composer.assets")}</strong>
                 </button>
                 <button
                   type="button"
@@ -870,7 +872,7 @@ export function ChatComposer({
                   onClick={openCasePickerFromMenu}
                 >
                   <Lightbulb size={17} />
-                  <strong>灵感空间</strong>
+                  <strong>{t("composer.inspiration")}</strong>
                 </button>
                 <button
                   type="button"
@@ -882,7 +884,7 @@ export function ChatComposer({
                   onClick={openPromptTemplateFromMenu}
                 >
                   <Sparkles size={17} />
-                  <strong>创作提示词</strong>
+                  <strong>{t("composer.promptTemplates")}</strong>
                 </button>
               </div>
             ) : null}
@@ -890,7 +892,7 @@ export function ChatComposer({
           <SizePicker value={size} options={sizeOptions} onChange={onSizeChange} />
           <QualityPicker value={quality} options={qualityOptions} onChange={onQualityChange} />
           <ImageCountStepper value={imageCount} onChange={onImageCountChange} />
-          <span className="composer-prompt-template-style-tooltip composer-prompt-template-color-control" data-tooltip="色系选择">
+          <span className="composer-prompt-template-style-tooltip composer-prompt-template-color-control" data-tooltip={t("settings.personalization.colorSchemes.title")}>
             <PromptColorSchemeSelect
               value={normalizedPromptColorSchemeIds}
               schemes={promptColorSchemes}
@@ -907,15 +909,15 @@ export function ChatComposer({
           <span className="composer-prompt-template-action-slot" ref={setPromptTemplateActionSlot}>
             {!promptTemplateOptimizeControlVisible ? (
               <>
-                <div className="composer-prompt-template-optimize-control is-default" aria-label="AI 优化选项">
+                <div className="composer-prompt-template-optimize-control is-default" aria-label={t("composer.optimizeOptions")}>
                   <button
                     type="button"
                     className="secondary-btn icon-only-btn composer-prompt-template-optimize-submit"
                     disabled={promptInputOptimizePending || !draftPrompt.trim()}
                     onClick={() => optimizeCurrentPrompt()}
-                    aria-label={draftPrompt.trim() ? `优化输入内容，${optimizeStyleOption.label}风格` : "输入内容后可优化"}
-                    title={draftPrompt.trim() ? `优化输入内容，${optimizeStyleOption.label}风格` : "输入内容后可优化"}
-                    data-tooltip="AI优化提示词"
+                    aria-label={draftPrompt.trim() ? t("composer.optimizeInput", { style: optimizeStyleOption.label }) : t("composer.optimizeDisabled")}
+                    title={draftPrompt.trim() ? t("composer.optimizeInput", { style: optimizeStyleOption.label }) : t("composer.optimizeDisabled")}
+                    data-tooltip={t("composer.optimizeTooltip")}
                   >
                     {promptInputOptimizePending ? <RotateCw size={15} className="spin" /> : <WandSparkles size={15} />}
                   </button>
@@ -925,14 +927,14 @@ export function ChatComposer({
                       className="secondary-btn icon-only-btn composer-prompt-template-undo-submit"
                       onClick={undoInputOptimization}
                       disabled={promptInputOptimizePending}
-                      aria-label="撤销优化，还原提示词"
-                      title="撤销优化，还原提示词"
-                      data-tooltip="撤销优化"
+                      aria-label={t("composer.undoOptimize")}
+                      title={t("composer.undoOptimize")}
+                      data-tooltip={t("composer.undoOptimizeShort")}
                     >
                       <Undo2 size={15} />
                     </button>
                   ) : null}
-                  <span className="composer-prompt-template-style-tooltip" data-tooltip="AI优化风格">
+                  <span className="composer-prompt-template-style-tooltip" data-tooltip={t("settings.personalization.promptStyles.title")}>
                     <PromptOptimizeStyleSelect
                       value={promptInputOptimizeStyle}
                       onChange={updatePromptOptimizeStyle}
@@ -972,7 +974,7 @@ export function ChatComposer({
             ) : null}
           </span>
           <span className="composer-action-spacer" />
-          <button className="send-btn" disabled={busy || promptOptimizationLoading || !draftPrompt.trim()} aria-label="发送">
+          <button className="send-btn" disabled={busy || promptOptimizationLoading || !draftPrompt.trim()} aria-label={t("composer.send")}>
             <ArrowUp size={22} />
           </button>
         </div>

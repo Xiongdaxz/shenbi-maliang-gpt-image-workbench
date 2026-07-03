@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState, type PointerEvent } from "react";
+import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 
 type ChartTone = "primary" | "muted" | "danger" | "success";
@@ -52,8 +53,9 @@ export function LightweightLineChart<TData extends { label: string }>({
   data,
   series,
   valueLabel = (value) => String(value),
-  ariaLabel = "趋势图"
+  ariaLabel
 }: LightweightLineChartProps<TData>) {
+  const { t } = useI18n();
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [viewBoxWidth, setViewBoxWidth] = useState(720);
   const [hiddenSeriesIds, setHiddenSeriesIds] = useState<Set<string>>(() => new Set());
@@ -137,7 +139,7 @@ export function LightweightLineChart<TData extends { label: string }>({
                 className={cx(item.tone ?? "primary", hidden && "hidden")}
                 onClick={() => toggleSeries(item.id)}
                 aria-pressed={!hidden}
-                title={hidden ? `显示${item.label}` : `隐藏${item.label}`}
+                title={hidden ? t("chart.showSeries", { label: item.label }) : t("chart.hideSeries", { label: item.label })}
               >
                 {item.label}
               </button>
@@ -149,7 +151,7 @@ export function LightweightLineChart<TData extends { label: string }>({
         ref={svgRef}
         viewBox={`0 0 ${width} ${height}`}
         role="img"
-        aria-label={ariaLabel}
+        aria-label={ariaLabel ?? t("chart.trend")}
         onPointerMove={updateHover}
         onPointerLeave={() => setHoverIndex(null)}
       >

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ImageIcon, X } from "lucide-react";
+import { useI18n } from "../i18n";
 import { ASSET_UPLOAD_MODE_OPTIONS, type AssetUploadMode } from "../lib/assets";
 import { cx } from "../lib/cx";
 import { formatImageFileSize } from "../lib/format";
@@ -21,6 +22,7 @@ export function AssetUploadModal({
   onClose: () => void;
   onUpload: (payload: { files: File[]; spaceMode: AssetUploadMode; categoryIds: string[] }) => void;
 }) {
+  const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [previewItems, setPreviewItems] = useState<Array<{ file: File; url: string }>>([]);
@@ -41,13 +43,18 @@ export function AssetUploadModal({
     if (files.length === 0 || pending) return;
     onUpload({ files, spaceMode, categoryIds });
   };
+  const uploadModeOptions = ASSET_UPLOAD_MODE_OPTIONS.map((option) => ({
+    ...option,
+    label: t(`asset.uploadMode.${option.value}.label`),
+    description: t(`asset.uploadMode.${option.value}.description`)
+  }));
 
   return (
     <div className="modal-backdrop">
       <section className="case-modal compact-modal asset-upload-modal">
         <header>
-          <h3>上传素材</h3>
-          <button onClick={onClose} aria-label="关闭">
+          <h3>{t("pages.assets.upload")}</h3>
+          <button onClick={onClose} aria-label={t("common.close")}>
             <X size={18} />
           </button>
         </header>
@@ -59,7 +66,7 @@ export function AssetUploadModal({
                   <img src={url} alt={item.name} />
                   <span>
                     <strong>{item.name}</strong>
-                    <small>{formatImageFileSize(item.size) || "本地图片"}</small>
+                    <small>{formatImageFileSize(item.size) || t("pages.assets.localImage")}</small>
                   </span>
                 </div>
               ))}
@@ -68,8 +75,8 @@ export function AssetUploadModal({
             <>
               <ImageIcon size={32} />
               <span>
-                <strong>选择图片素材</strong>
-                <small>点击选择一个或多个本地图片</small>
+                <strong>{t("pages.assets.chooseImages")}</strong>
+                <small>{t("pages.assets.chooseImagesDesc")}</small>
               </span>
             </>
           )}
@@ -85,9 +92,9 @@ export function AssetUploadModal({
           />
         </button>
         <label className="asset-upload-field">
-          上传位置
-          <div className="asset-space-options" role="radiogroup" aria-label="上传位置">
-            {ASSET_UPLOAD_MODE_OPTIONS.map((option) => {
+          {t("pages.assets.uploadLocation")}
+          <div className="asset-space-options" role="radiogroup" aria-label={t("pages.assets.uploadLocation")}>
+            {uploadModeOptions.map((option) => {
               const selected = option.value === spaceMode;
               return (
                 <button
@@ -109,16 +116,16 @@ export function AssetUploadModal({
           </div>
         </label>
         <label>
-          标签
-          <CaseCategoryMultiSelect categories={categories} value={categoryIds} onChange={setCategoryIds} labelName="标签" />
+          {t("pages.assets.tagsLabel")}
+          <CaseCategoryMultiSelect categories={categories} value={categoryIds} onChange={setCategoryIds} labelName={t("pages.assets.tag")} />
         </label>
         {error ? <div className="form-error">{error.message}</div> : null}
         <div className="row-actions">
           <button className="secondary-btn" type="button" onClick={onClose}>
-            取消
+            {t("common.cancel")}
           </button>
           <button className="primary-btn" type="button" onClick={submit} disabled={files.length === 0 || pending}>
-            {pending ? "上传中" : "上传素材"}
+            {pending ? t("common.uploading") : t("pages.assets.upload")}
           </button>
         </div>
       </section>

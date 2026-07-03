@@ -23,12 +23,13 @@ import {
 import { MAIN_CHAT_BRANCH_ID, buildChatRenderState, isServerEchoOfPending } from "../lib/chatRender";
 import { cx } from "../lib/cx";
 import { type AssetUploadMode } from "../lib/assets";
-import { APP_INTRO_SLIDES } from "../lib/featureIntroSlides";
+import { getAppIntroSlides } from "../lib/featureIntroSlides";
 import { isDefaultCaseItemId } from "../lib/defaultCases";
+import { useI18n, type LocaleCode } from "../i18n";
 import { requestSizeFromSelection, type SizeOption } from "../lib/imageOptions";
 import { normalizePromptColorSchemeIds } from "../lib/promptColorSchemes";
 import { normalizePromptOptimizeStyle, sanitizePromptOptimizeStyleGroups } from "../lib/promptOptimizeStyles";
-import { getTimeGreeting } from "../lib/timeGreeting";
+import { getTimeGreetingKey } from "../lib/timeGreeting";
 import { workImageFromMessage } from "../lib/workImages";
 import { useComposerPasteAsset } from "../hooks/useComposerPasteAsset";
 import { useComposerTextareaAutosize } from "../hooks/useComposerTextareaAutosize";
@@ -55,23 +56,169 @@ const PROMPT_INPUT_OPTIMIZE_STYLE_STORAGE_KEY = "gpt-image.prompt-input-optimize
 const MESSAGE_REVEAL_STAGGER_MS = 46;
 const MESSAGE_REVEAL_MAX_DELAY_MS = 414;
 const EMPTY_PROMPT_COLOR_SCHEMES: [] = [];
-const FALLBACK_IMAGE_EDIT_SUGGESTIONS: ImageEditSuggestion[] = [
-  {
-    id: "fallback-edit-suggestion-1",
-    label: "强化视觉焦点",
-    prompt: "保留当前主体，选出画面最重要的一个信息或物件，通过位置、光影和留白调整让它更醒目。"
-  },
-  {
-    id: "fallback-edit-suggestion-2",
-    label: "补真实场景",
-    prompt: "保留当前风格，把主体放进更具体的使用场景，加入 1-2 个能说明用途的道具或环境细节。"
-  },
-  {
-    id: "fallback-edit-suggestion-3",
-    label: "精修关键细节",
-    prompt: "保留整体构图，针对最容易出错的文字、边缘、材质或表情做局部精修，让画面更干净可信。"
-  }
-];
+const FALLBACK_IMAGE_EDIT_SUGGESTIONS_BY_LOCALE: Record<LocaleCode, Array<Omit<ImageEditSuggestion, "id">>> = {
+  "zh-CN": [
+    {
+      label: "强化视觉焦点",
+      prompt: "保留当前主体，选出画面最重要的一个信息或物件，通过位置、光影和留白调整让它更醒目。"
+    },
+    {
+      label: "补真实场景",
+      prompt: "保留当前风格，把主体放进更具体的使用场景，加入 1-2 个能说明用途的道具或环境细节。"
+    },
+    {
+      label: "精修关键细节",
+      prompt: "保留整体构图，针对最容易出错的文字、边缘、材质或表情做局部精修，让画面更干净可信。"
+    }
+  ],
+  "zh-TW": [
+    {
+      label: "強化視覺焦點",
+      prompt: "保留目前主體，選出畫面最重要的資訊或物件，透過位置、光影和留白讓它更醒目。"
+    },
+    {
+      label: "補真實場景",
+      prompt: "保留目前風格，把主體放進更具體的使用場景，加入 1-2 個能說明用途的道具或環境細節。"
+    },
+    {
+      label: "精修關鍵細節",
+      prompt: "保留整體構圖，針對最容易出錯的文字、邊緣、材質或表情做局部精修，讓畫面更乾淨可信。"
+    }
+  ],
+  "en-US": [
+    {
+      label: "Strengthen focal point",
+      prompt: "Keep the current subject, choose the most important message or object, and use placement, lighting, and whitespace to make it stand out."
+    },
+    {
+      label: "Add real context",
+      prompt: "Keep the current style and place the subject in a more specific use scene with 1-2 props or environmental details."
+    },
+    {
+      label: "Refine key details",
+      prompt: "Keep the overall composition and retouch the most fragile text, edges, materials, or expressions so the image feels cleaner and more credible."
+    }
+  ],
+  "ja-JP": [
+    {
+      label: "焦点を強める",
+      prompt: "現在の主体を保ち、最も重要な情報や物を選び、配置、光、余白でより目立つように調整してください。"
+    },
+    {
+      label: "実用場面を足す",
+      prompt: "現在のスタイルを保ち、主体をより具体的な使用シーンに置き、用途が伝わる小物や環境要素を 1-2 個追加してください。"
+    },
+    {
+      label: "重要部分を整える",
+      prompt: "全体の構図を保ち、文字、輪郭、素材感、表情など崩れやすい部分を局所的に整えて、より自然で信頼感のある画面にしてください。"
+    }
+  ],
+  "ko-KR": [
+    {
+      label: "시선 중심 강화",
+      prompt: "현재 주체는 유지하고 가장 중요한 정보나 오브젝트를 정한 뒤 위치, 조명, 여백으로 더 눈에 띄게 조정하세요."
+    },
+    {
+      label: "실제 사용 장면 추가",
+      prompt: "현재 스타일을 유지하면서 주체를 더 구체적인 사용 장면에 배치하고 용도를 설명하는 소품이나 환경 디테일을 1-2개 추가하세요."
+    },
+    {
+      label: "핵심 디테일 보정",
+      prompt: "전체 구도는 유지하고 텍스트, 가장자리, 재질, 표정처럼 어색해지기 쉬운 부분을 부분적으로 다듬어 더 깔끔하고 신뢰감 있게 만드세요."
+    }
+  ],
+  "es-ES": [
+    {
+      label: "Reforzar el foco",
+      prompt: "Mantén el sujeto actual, elige el mensaje u objeto más importante y usa posición, luz y espacio para hacerlo más visible."
+    },
+    {
+      label: "Añadir contexto real",
+      prompt: "Mantén el estilo actual y coloca el sujeto en una escena de uso más concreta con 1 o 2 accesorios o detalles del entorno."
+    },
+    {
+      label: "Pulir detalles clave",
+      prompt: "Mantén la composición general y retoca textos, bordes, materiales o expresiones delicadas para que la imagen se vea más limpia y creíble."
+    }
+  ],
+  "fr-FR": [
+    {
+      label: "Renforcer le focus",
+      prompt: "Gardez le sujet actuel, choisissez le message ou l'objet le plus important, puis utilisez placement, lumière et espace pour le rendre plus visible."
+    },
+    {
+      label: "Ajouter un contexte réel",
+      prompt: "Gardez le style actuel et placez le sujet dans une scène d'usage plus précise avec 1 ou 2 accessoires ou détails d'environnement."
+    },
+    {
+      label: "Affiner les détails clés",
+      prompt: "Gardez la composition générale et retouchez les textes, contours, matières ou expressions fragiles pour une image plus propre et crédible."
+    }
+  ],
+  "de-DE": [
+    {
+      label: "Fokus stärken",
+      prompt: "Behalte das aktuelle Hauptmotiv bei, wähle die wichtigste Information oder das wichtigste Objekt und betone es durch Position, Licht und Freiraum."
+    },
+    {
+      label: "Realen Kontext ergänzen",
+      prompt: "Behalte den aktuellen Stil bei und setze das Motiv in eine konkretere Nutzungsszene mit 1-2 passenden Requisiten oder Umgebungsdetails."
+    },
+    {
+      label: "Kerndetails verfeinern",
+      prompt: "Behalte die Gesamtkomposition bei und retuschiere empfindliche Texte, Kanten, Materialien oder Gesichtsausdrücke für ein saubereres, glaubwürdigeres Bild."
+    }
+  ],
+  "pt-BR": [
+    {
+      label: "Reforçar o foco",
+      prompt: "Mantenha o sujeito atual, escolha a mensagem ou objeto mais importante e use posição, luz e respiro para destacá-lo melhor."
+    },
+    {
+      label: "Adicionar contexto real",
+      prompt: "Mantenha o estilo atual e coloque o sujeito em uma cena de uso mais concreta com 1 ou 2 acessórios ou detalhes de ambiente."
+    },
+    {
+      label: "Refinar detalhes-chave",
+      prompt: "Mantenha a composição geral e retoque textos, bordas, materiais ou expressões frágeis para a imagem ficar mais limpa e confiável."
+    }
+  ],
+  "ru-RU": [
+    {
+      label: "Усилить фокус",
+      prompt: "Сохраните текущий главный объект, выберите самое важное сообщение или деталь и выделите ее композицией, светом и свободным пространством."
+    },
+    {
+      label: "Добавить реальный контекст",
+      prompt: "Сохраните текущий стиль и поместите объект в более конкретную сцену использования, добавив 1-2 предмета или детали окружения."
+    },
+    {
+      label: "Уточнить ключевые детали",
+      prompt: "Сохраните общую композицию и аккуратно доработайте текст, края, материалы или выражения, чтобы изображение выглядело чище и достовернее."
+    }
+  ],
+  "fa-IR": [
+    {
+      label: "تقویت نقطه کانونی",
+      prompt: "سوژه فعلی را حفظ کنید، مهم ترین پیام یا شیء را انتخاب کنید و با جایگذاری، نور و فضای خالی آن را برجسته تر کنید."
+    },
+    {
+      label: "افزودن زمینه واقعی",
+      prompt: "سبک فعلی را حفظ کنید و سوژه را در یک موقعیت کاربردی مشخص تر قرار دهید، همراه با 1 یا 2 وسیله یا جزئیات محیطی."
+    },
+    {
+      label: "اصلاح جزئیات کلیدی",
+      prompt: "ترکیب کلی را حفظ کنید و متن، لبه ها، جنس مواد یا حالت چهره را که ممکن است ناهماهنگ باشد اصلاح کنید تا تصویر تمیزتر و قابل اعتمادتر شود."
+    }
+  ]
+};
+
+function fallbackImageEditSuggestionsForLocale(locale: LocaleCode): ImageEditSuggestion[] {
+  return (FALLBACK_IMAGE_EDIT_SUGGESTIONS_BY_LOCALE[locale] ?? FALLBACK_IMAGE_EDIT_SUGGESTIONS_BY_LOCALE["zh-CN"]).map((item, index) => ({
+    id: `fallback-edit-suggestion-${index + 1}`,
+    ...item
+  }));
+}
 
 function messageRevealStyle(index: number): CSSProperties {
   return {
@@ -96,7 +243,8 @@ function ChatMessageSkeleton() {
   );
 }
 
-function fallbackImageEditSuggestionsForImage(image: WorkImage | null): ImageEditSuggestion[] {
+function fallbackImageEditSuggestionsForImage(image: WorkImage | null, locale: LocaleCode): ImageEditSuggestion[] {
+  if (locale !== "zh-CN") return fallbackImageEditSuggestionsForLocale(locale);
   const promptText = `${image?.originPrompt ?? ""} ${image?.prompt ?? ""}`.replace(/\s+/g, " ").trim();
   const promptLookup = promptText.toLowerCase();
   const pickSubject = () => {
@@ -189,7 +337,7 @@ function fallbackImageEditSuggestionsForImage(image: WorkImage | null): ImageEdi
     ]);
   }
 
-  return FALLBACK_IMAGE_EDIT_SUGGESTIONS;
+  return fallbackImageEditSuggestionsForLocale(locale);
 }
 
 function createChatBranchId() {
@@ -333,9 +481,11 @@ export function ChatPage({ user }: { user: User }) {
   const submitSessionByRequestRef = useRef(new Map<string, string>());
   const retryInFlightJobIdsRef = useRef(new Set<string>());
   const { showToast } = useToast();
+  const { resolvedLanguage, t } = useI18n();
   const appIntroGuide = useGuideSeen(GUIDE_KEYS.appIntro);
-  const guideDisplayName = user.username?.trim() || user.account?.trim() || "朋友";
-  const guideGreeting = getTimeGreeting();
+  const guideDisplayName = user.username?.trim() || user.account?.trim() || t("chat.friend");
+  const guideGreeting = t(getTimeGreetingKey());
+  const appIntroSlides = useMemo(() => getAppIntroSlides(t), [t]);
   const editSuggestionsEnabled = user.preferences?.editSuggestionsEnabled !== false;
   const editSuggestionTone = user.preferences?.editSuggestionTone ?? "default";
   const autoUploadPastedAssets = user.preferences?.autoUploadPastedAssets !== false;
@@ -565,6 +715,7 @@ export function ChatPage({ user }: { user: User }) {
           sessionId: activeSessionId,
           providerId: request.providerId,
           prompt: request.prompt,
+          ...(request.language ? { language: request.language } : {}),
           size: requestSizeFromSelection(request.size ?? ""),
           ...(request.quality ? { quality: request.quality } : {}),
           ...(request.n ? { n: request.n } : {}),
@@ -586,6 +737,7 @@ export function ChatPage({ user }: { user: User }) {
         sessionId: activeSessionId,
         providerId: request.providerId,
         prompt: request.prompt,
+        ...(request.language ? { language: request.language } : {}),
         size: requestSizeFromSelection(request.size ?? ""),
         ...(request.quality ? { quality: request.quality } : {}),
         ...(request.n ? { n: request.n } : {}),
@@ -639,7 +791,7 @@ export function ChatPage({ user }: { user: User }) {
         if ((sessionId ?? NEW_SESSION_PENDING_SCOPE) === request.pendingScope) navigateToSessionIfNeeded(failedSessionId);
       }
       const currentRouteScope = sessionId ?? NEW_SESSION_PENDING_SCOPE;
-      const message = submitErrorMessage(err);
+      const message = submitErrorMessage(err, t("common.requestFailed"));
       showToast(message, "error");
       if (currentRouteScope === request.pendingScope || currentRouteScope === failedSessionId) {
         setError(message);
@@ -693,11 +845,11 @@ export function ChatPage({ user }: { user: User }) {
       }
     },
     onError: (error) => {
-      const message = submitErrorMessage(error, "重试失败");
+      const message = submitErrorMessage(error, t("toast.retryFailed"));
       if (message.includes("任务正在处理中")) {
-        showToast("任务正在重试中，请稍候", "info");
+        showToast(t("toast.retryInProgress"), "info");
       } else if (message.includes("带遮罩的编辑无法自动重试")) {
-        showToast("遮罩编辑不支持自动重试，请重新涂抹后再发送", "info");
+        showToast(t("toast.maskRetryUnsupported"), "info");
       } else {
         showToast(message, "error");
       }
@@ -720,13 +872,13 @@ export function ChatPage({ user }: { user: User }) {
       queryClient.invalidateQueries({ queryKey: ["assets"] });
       setAssetTarget(null);
       if (result.created) {
-        showToast("已加入素材库");
+        showToast(t("toast.assetAdded"));
       } else {
-        showToast(result.duplicateScope === "shared" ? "已存在共享中" : "已经在素材库", "error");
+        showToast(result.duplicateScope === "shared" ? t("toast.assetDuplicateShared") : t("toast.assetDuplicatePrivate"), "error");
       }
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "加入素材库失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.assetAddFailed"), "error");
     }
   });
   const routeSubmitScope = sessionId ?? NEW_SESSION_PENDING_SCOPE;
@@ -791,6 +943,7 @@ export function ChatPage({ user }: { user: User }) {
   const submitDraft = () => {
     if (currentScopeBusy || !draftPrompt.trim()) return;
     const prompt = draftPrompt.trim();
+    const selectedRequestSize = requestSizeFromSelection(size);
     const caseUsage = draftCaseUsage?.caseItemId ? draftCaseUsage : null;
     const latestAssistantImage = [...visibleBranchMessages]
       .reverse()
@@ -907,6 +1060,7 @@ export function ChatPage({ user }: { user: User }) {
     setSelectedAssets([]);
     setSelectedCaseMaterials([]);
     setMaterialPickerOpen(false);
+    setSize("");
     resetPromptInputOptimizeStyle();
     resetPromptColorScheme();
     submit.mutate({
@@ -916,7 +1070,8 @@ export function ChatPage({ user }: { user: User }) {
       sessionId,
       providerId,
       prompt,
-      size: requestSizeFromSelection(size),
+      language: resolvedLanguage,
+      size: selectedRequestSize,
       ...(quality ? { quality } : {}),
       n: imageCount,
       ...(requestCaseItemId ? { caseItemId: requestCaseItemId } : {}),
@@ -994,8 +1149,8 @@ export function ChatPage({ user }: { user: User }) {
   }, [activeChatBranchId, currentScopeBusy, imageEditor, imageJobs]);
   const editSuggestionImageId = latestEditSuggestionImage?.id ?? latestCompletedImageJobImageId;
   const editSuggestionsQuery = useQuery({
-    queryKey: ["image-edit-suggestions", editSuggestionImageId, editSuggestionTone, editSuggestionsEnabled],
-    queryFn: () => api.imageEditSuggestions(editSuggestionImageId),
+    queryKey: ["image-edit-suggestions", editSuggestionImageId, editSuggestionTone, editSuggestionsEnabled, resolvedLanguage],
+    queryFn: () => api.imageEditSuggestions(editSuggestionImageId, resolvedLanguage),
     enabled: Boolean(editSuggestionsEnabled && editSuggestionImageId && !currentScopeBusy && !imageEditor),
     staleTime: 5 * 60 * 1000
   });
@@ -1003,8 +1158,8 @@ export function ChatPage({ user }: { user: User }) {
     if (!editSuggestionsEnabled || !latestEditSuggestionImage || currentScopeBusy || imageEditor) return [];
     const suggestions = editSuggestionsQuery.data?.suggestions?.slice(0, 3) ?? [];
     if (suggestions.length > 0) return suggestions;
-    return editSuggestionsQuery.isError ? fallbackImageEditSuggestionsForImage(latestEditSuggestionImage) : [];
-  }, [currentScopeBusy, editSuggestionsEnabled, editSuggestionsQuery.data?.suggestions, editSuggestionsQuery.isError, imageEditor, latestEditSuggestionImage]);
+    return editSuggestionsQuery.isError ? fallbackImageEditSuggestionsForImage(latestEditSuggestionImage, resolvedLanguage) : [];
+  }, [currentScopeBusy, editSuggestionsEnabled, editSuggestionsQuery.data?.suggestions, editSuggestionsQuery.isError, imageEditor, latestEditSuggestionImage, resolvedLanguage]);
   const composerEditSuggestionsLoading = Boolean(
     editSuggestionsEnabled
       && editSuggestionImageId
@@ -1204,6 +1359,7 @@ export function ChatPage({ user }: { user: User }) {
     setSelectedAssets([]);
     setSelectedCaseMaterials([]);
     setMaterialPickerOpen(false);
+    setSize("");
     resetPromptInputOptimizeStyle();
     resetPromptColorScheme();
     submit.mutate({
@@ -1213,6 +1369,7 @@ export function ChatPage({ user }: { user: User }) {
       sessionId,
       providerId,
       prompt: trimmedPrompt,
+      language: resolvedLanguage,
       size: selectedRequestSize,
       ...(quality ? { quality } : {}),
       n: imageCount,
@@ -1244,6 +1401,7 @@ export function ChatPage({ user }: { user: User }) {
       sourceSnapshot.sourceReferenceIds.length > 0
         ? "edit"
         : "generation";
+    const selectedRequestSize = requestSizeFromSelection(size);
     const hideReference = sourceSnapshot.hideReference && sourceSnapshot.references.length === 0;
     const primaryReference = sourceSnapshot.primaryImageReference;
     const firstMaterialReference = sourceSnapshot.materialReferences[0] ?? null;
@@ -1353,6 +1511,7 @@ export function ChatPage({ user }: { user: User }) {
         ...referenceFields
       }
     });
+    setSize("");
     submit.mutate({
       clientRequestId,
       pendingScope,
@@ -1360,7 +1519,8 @@ export function ChatPage({ user }: { user: User }) {
       sessionId,
       providerId,
       prompt: trimmedPrompt,
-      size: requestSizeFromSelection(size),
+      language: resolvedLanguage,
+      size: selectedRequestSize,
       ...(quality ? { quality } : {}),
       n: imageCount,
       sourceImageIds: sourceSnapshot.sourceImageIds,
@@ -1381,7 +1541,7 @@ export function ChatPage({ user }: { user: User }) {
             id: `edit-${editImage.id}`,
             url: editImage.thumbnailUrl || editImage.previewUrl || editImage.url,
             previewUrl: editImage.previewUrl || editImage.originalUrl || editImage.url,
-            name: "待编辑图片",
+            name: t("chat.editor.pendingImage"),
             title: editImage.prompt,
             onRemove: () => setEditImage(null)
           }
@@ -1391,7 +1551,7 @@ export function ChatPage({ user }: { user: User }) {
       id: `case-${caseMaterial.caseItemId}`,
       url: caseMaterial.thumbnailUrl ?? caseMaterial.previewUrl ?? caseMaterial.url,
       previewUrl: caseMaterial.previewUrl ?? caseMaterial.originalUrl ?? caseMaterial.url,
-      name: "灵感素材",
+      name: t("chat.editor.inspirationMaterial"),
       title: caseMaterial.title,
       onRemove: () => setSelectedCaseMaterials(selectedCaseMaterials.filter((item) => item.caseItemId !== caseMaterial.caseItemId))
     })),
@@ -1413,8 +1573,8 @@ export function ChatPage({ user }: { user: User }) {
 
   const showStarter = !sessionId && messageList.length === 0;
   const composerPlaceholder = sessionId || messageList.length > 0 || composerPreviews.length > 0
-    ? "描述你想调整的地方，或继续补充生成要求"
-    : "描述你想生成的图片";
+    ? t("chat.placeholder.continue")
+    : t("chat.placeholder.new");
   const branchSwitchOptions = useMemo(() => {
     const switchItem = renderItems.find((item) => item.type === "thread");
     if (
@@ -1432,7 +1592,7 @@ export function ChatPage({ user }: { user: User }) {
         id: revision.branchId || MAIN_CHAT_BRANCH_ID,
         label: String(index + 1),
         active: index === switchItem.activeVersionIndex,
-        title: titleSeed ? titleSeed.slice(0, 48) : `分支 ${index + 1}`
+        title: titleSeed ? titleSeed.slice(0, 48) : t("chat.branchTitle", { index: index + 1 })
       };
     });
   }, [renderItems]);
@@ -1475,14 +1635,14 @@ export function ChatPage({ user }: { user: User }) {
       )}
     >
       {branchSwitchOptions.length > 1 ? (
-        <div className="chat-branch-switch" aria-label="分支切换">
+        <div className="chat-branch-switch" aria-label={t("chat.branchSwitch")}>
           {branchSwitchOptions.map((option) => (
             <button
               key={option.id}
               type="button"
               className={cx(option.active && "active")}
               onClick={() => setActiveBranchId(option.id)}
-              aria-label={`切换到分支 ${option.label}`}
+              aria-label={t("chat.switchBranch", { label: option.label })}
               aria-pressed={option.active}
               title={option.title}
             >
@@ -1546,7 +1706,7 @@ export function ChatPage({ user }: { user: User }) {
           <div className="message-enter-row" style={messageRevealStyle(renderItems.length)}>
             <RenderingErrorMessage
               mode={latestVisibleFailedJob.type}
-              message={latestVisibleFailedJob.error ?? "图片任务失败"}
+              message={latestVisibleFailedJob.error ?? t("chat.failedJob")}
               canRetry={true}
               retrying={retryImageJob.isPending}
               onRetry={() => {
@@ -1657,8 +1817,9 @@ export function ChatPage({ user }: { user: User }) {
       />
       <FeatureIntroModal
         open={showStarter && (!appIntroGuide.seen || chatIntroOpen)}
-        welcomeText={`${guideDisplayName}，${guideGreeting}，开启我们的灵感碰撞吧！`}
-        slides={APP_INTRO_SLIDES}
+        welcomeText={t("chat.introWelcome", { name: guideDisplayName, greeting: guideGreeting })}
+        finishLabel={t("common.startUsing")}
+        slides={appIntroSlides}
         onClose={() => {
           appIntroGuide.markSeen();
           setChatIntroOpen(false);

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, Check, Eye, EyeOff, Pencil, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
 import { api, type PromptColorScheme, type PromptColorSchemePayload } from "../api";
+import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import {
   defaultPromptColorSchemes,
@@ -109,6 +110,7 @@ function gradientPreviewStyle(colors: string[]) {
 export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSchemeSettingsDialogProps) {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const { t } = useI18n();
   const schemesQuery = useQuery({
     queryKey: ["prompt-color-schemes", "settings"],
     queryFn: () => api.promptColorSchemes({ includeDeleted: true }),
@@ -191,9 +193,9 @@ export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSc
         setSelectedId(data.scheme.id);
       }
       invalidate();
-      showToast("色系已新增");
+      showToast(t("promptColorSettings.toast.created"));
     },
-    onError: (error) => showToast(error instanceof Error ? error.message : "新增色系失败", "error")
+    onError: (error) => showToast(error instanceof Error ? error.message : t("promptColorSettings.toast.createFailed"), "error")
   });
   const updateScheme = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: PromptColorSchemePayload }) => api.updatePromptColorScheme(id, payload),
@@ -203,9 +205,9 @@ export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSc
         setSelectedId(data.scheme.id);
       }
       invalidate();
-      showToast("色系已保存");
+      showToast(t("promptColorSettings.toast.saved"));
     },
-    onError: (error) => showToast(error instanceof Error ? error.message : "保存色系失败", "error")
+    onError: (error) => showToast(error instanceof Error ? error.message : t("promptColorSettings.toast.saveFailed"), "error")
   });
   const deleteScheme = useMutation({
     mutationFn: api.deletePromptColorScheme,
@@ -219,9 +221,9 @@ export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSc
     onSuccess: () => {
       setSelectedId("");
       invalidate();
-      showToast("色系已删除");
+      showToast(t("promptColorSettings.toast.deleted"));
     },
-    onError: (error) => showToast(error instanceof Error ? error.message : "删除色系失败", "error")
+    onError: (error) => showToast(error instanceof Error ? error.message : t("promptColorSettings.toast.deleteFailed"), "error")
   });
   if (!open) return null;
 
@@ -267,11 +269,11 @@ export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSc
     const nextName = categoryNameDraft.trim();
     if (!source) return;
     if (!nextName) {
-      showToast("分类名称不能为空", "error");
+      showToast(t("promptColorSettings.toast.categoryRequired"), "error");
       return;
     }
     if (nextName !== source && categories.includes(nextName)) {
-      showToast("分类名称已存在", "error");
+      showToast(t("promptColorSettings.toast.categoryDuplicate"), "error");
       return;
     }
     if (nextName === source) {
@@ -358,10 +360,10 @@ export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSc
       setDeletedSchemeIds(new Set());
       await invalidate();
       const changedCount = dirtyDrafts.length + idsToDelete.length;
-      showToast(changedCount > 1 ? `已保存 ${changedCount} 项色系修改` : "色系已保存");
+      showToast(changedCount > 1 ? t("promptColorSettings.toast.savedChanges", { count: changedCount }) : t("promptColorSettings.toast.saved"));
       if (closeAfterSave) onClose();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "保存色系失败", "error");
+      showToast(error instanceof Error ? error.message : t("promptColorSettings.toast.saveFailed"), "error");
     } finally {
       setSavingDrafts(false);
     }
@@ -422,23 +424,23 @@ export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSc
         if (event.target === event.currentTarget) requestClose();
       }}
     >
-      <section className="prompt-style-settings-dialog prompt-color-settings-dialog" role="dialog" aria-modal="true" aria-label="色系选择设置">
+      <section className="prompt-style-settings-dialog prompt-color-settings-dialog" role="dialog" aria-modal="true" aria-label={t("promptColorSettings.aria")}>
         <header className="prompt-style-settings-head">
           <div>
-            <strong>色系选择</strong>
-            <span>维护对话页可用的色彩方案，选择后会注入到当前提示词。</span>
+            <strong>{t("promptColorSettings.title")}</strong>
+            <span>{t("promptColorSettings.desc")}</span>
           </div>
-          <button className="settings-close-btn" type="button" onClick={requestClose} aria-label="关闭">
+          <button className="settings-close-btn" type="button" onClick={requestClose} aria-label={t("common.close")}>
             <X size={16} />
           </button>
         </header>
         <div className="prompt-style-settings-body">
           <aside className="prompt-style-main-panel">
             <div className="prompt-style-panel-head">
-              <span>分类</span>
+              <span>{t("promptColorSettings.categories")}</span>
               <button className="secondary-btn" type="button" disabled={busy} onClick={createCategory}>
                 <Plus size={14} />
-                新增分类
+                {t("promptColorSettings.addCategory")}
               </button>
             </div>
             <div className="prompt-style-main-list">
@@ -471,7 +473,7 @@ export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSc
                               }
                             }}
                           />
-                          <small>{count} 个色系</small>
+                          <small>{t("promptColorSettings.schemeCount", { count })}</small>
                         </span>
                       </div>
                     ) : (
@@ -483,7 +485,7 @@ export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSc
                         <span className="prompt-style-main-index">{index + 1}</span>
                         <span className="prompt-style-main-copy">
                           <strong>{category}</strong>
-                          <small>{count} 个色系</small>
+                          <small>{t("promptColorSettings.schemeCount", { count })}</small>
                         </span>
                       </button>
                     )}
@@ -491,8 +493,8 @@ export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSc
                       <button
                         className="prompt-color-category-edit"
                         type="button"
-                        aria-label="编辑分类名称"
-                        title="编辑分类名称"
+                        aria-label={t("promptColorSettings.editCategory")}
+                        title={t("promptColorSettings.editCategory")}
                         onClick={() => startEditingCategory(category)}
                       >
                         <Pencil size={13} />
@@ -500,8 +502,8 @@ export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSc
                       <button
                         className="prompt-color-category-delete"
                         type="button"
-                        aria-label="删除分类"
-                        title="删除分类"
+                        aria-label={t("promptColorSettings.deleteCategory")}
+                        title={t("promptColorSettings.deleteCategory")}
                         onClick={() => deleteCategory(category)}
                       >
                         <Trash2 size={13} />
@@ -517,7 +519,7 @@ export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSc
               <div className="prompt-style-section-head">
                 <div>
                   <span>{activeCategoryName}</span>
-                  <small>{categorySchemes.length} 个色系</small>
+                  <small>{t("promptColorSettings.schemeCount", { count: categorySchemes.length })}</small>
                 </div>
                 <button
                   className="secondary-btn"
@@ -526,7 +528,7 @@ export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSc
                   onClick={() => createScheme.mutate(newSchemePayload((schemes.at(-1)?.sortOrder ?? 0) + 10, activeCategoryName))}
                 >
                   <Plus size={14} />
-                  新增
+                  {t("common.add")}
                 </button>
               </div>
               <div className="prompt-color-settings-card-list">
@@ -548,7 +550,7 @@ export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSc
                     ) : null}
                   </button>
                 ))}
-                {categorySchemes.length === 0 ? <div className="settings-empty">当前分类暂无色系</div> : null}
+                {categorySchemes.length === 0 ? <div className="settings-empty">{t("promptColorSettings.emptyCategory")}</div> : null}
               </div>
             </section>
             {draft ? (
@@ -556,40 +558,40 @@ export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSc
                 <section className="prompt-style-detail-section">
                   <div className="prompt-style-section-head">
                     <div>
-                      <span>色系配置</span>
-                      <small>{draft.visible ? "当前显示" : "当前隐藏"}</small>
+                      <span>{t("promptColorSettings.schemeConfig")}</span>
+                      <small>{draft.visible ? t("promptStyleSettings.currentVisible") : t("promptStyleSettings.currentHidden")}</small>
                     </div>
                     <div className="prompt-style-section-actions">
-                      <button type="button" onClick={() => moveSelected(-1)} disabled={busy} aria-label="上移色系" title="上移色系">
+                      <button type="button" onClick={() => moveSelected(-1)} disabled={busy} aria-label={t("promptColorSettings.moveSchemeUp")} title={t("promptColorSettings.moveSchemeUp")}>
                         <ArrowUp size={15} />
                       </button>
-                      <button type="button" onClick={() => moveSelected(1)} disabled={busy} aria-label="下移色系" title="下移色系">
+                      <button type="button" onClick={() => moveSelected(1)} disabled={busy} aria-label={t("promptColorSettings.moveSchemeDown")} title={t("promptColorSettings.moveSchemeDown")}>
                         <ArrowDown size={15} />
                       </button>
                       <button
                         type="button"
                         onClick={() => patchDraft({ visible: !draft.visible })}
-                        aria-label={draft.visible ? "隐藏色系" : "显示色系"}
-                        title={draft.visible ? "隐藏色系" : "显示色系"}
+                        aria-label={draft.visible ? t("promptColorSettings.hideScheme") : t("promptColorSettings.showScheme")}
+                        title={draft.visible ? t("promptColorSettings.hideScheme") : t("promptColorSettings.showScheme")}
                       >
                         {draft.visible ? <Eye size={15} /> : <EyeOff size={15} />}
                       </button>
-                      <button className="danger" type="button" disabled={busy} onClick={() => deleteScheme.mutate(draft.id)} aria-label="删除色系" title="删除色系">
+                      <button className="danger" type="button" disabled={busy} onClick={() => deleteScheme.mutate(draft.id)} aria-label={t("promptColorSettings.deleteScheme")} title={t("promptColorSettings.deleteScheme")}>
                         <Trash2 size={15} />
                       </button>
                     </div>
                   </div>
                   <div className="prompt-color-settings-basic-grid">
                     <label>
-                      <span>名称</span>
+                      <span>{t("promptColorSettings.name")}</span>
                       <input value={draft.name} onChange={(event) => patchDraft({ name: event.target.value })} />
                     </label>
                     <label>
-                      <span>适用场景</span>
+                      <span>{t("promptColorSettings.scene")}</span>
                       <input value={draft.description} onChange={(event) => patchDraft({ description: event.target.value })} />
                     </label>
                     <label className="wide">
-                      <span>补充提示</span>
+                      <span>{t("promptColorSettings.prompt")}</span>
                       <input value={draft.prompt} onChange={(event) => patchDraft({ prompt: event.target.value })} />
                     </label>
                   </div>
@@ -598,7 +600,7 @@ export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSc
                 <section className="prompt-style-detail-section">
                   <div className="prompt-style-section-head">
                     <div>
-                      <span>单色色卡</span>
+                      <span>{t("promptTemplates.editor.solidColorSwatches")}</span>
                       <small>{draft.colors.length}/12</small>
                     </div>
                     <button
@@ -608,17 +610,17 @@ export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSc
                       onClick={() => patchDraft({ colors: [...draft.colors, { id: nextLocalId("color"), name: "新颜色", role: "辅助色", hex: "#2563EB" }] })}
                     >
                       <Plus size={14} />
-                      添加
+                      {t("common.add")}
                     </button>
                   </div>
                   <div className="prompt-color-settings-option-list">
                     {draft.colors.map((color, index) => (
                       <div className="prompt-color-settings-option" key={color.id}>
-                        <input type="color" value={normalizePromptColorSchemeHex(color.hex) || "#2563EB"} onChange={(event) => patchColor(index, { hex: event.target.value })} aria-label="选择颜色" />
-                        <input value={color.name} onChange={(event) => patchColor(index, { name: event.target.value })} placeholder="颜色名" />
-                        <input value={color.role} onChange={(event) => patchColor(index, { role: event.target.value })} placeholder="用途" />
+                        <input type="color" value={normalizePromptColorSchemeHex(color.hex) || "#2563EB"} onChange={(event) => patchColor(index, { hex: event.target.value })} aria-label={t("promptTemplates.editor.pickColor")} />
+                        <input value={color.name} onChange={(event) => patchColor(index, { name: event.target.value })} placeholder={t("promptColorSettings.colorNamePlaceholder")} />
+                        <input value={color.role} onChange={(event) => patchColor(index, { role: event.target.value })} placeholder={t("promptColorSettings.rolePlaceholder")} />
                         <input value={color.hex} onChange={(event) => patchColor(index, { hex: event.target.value })} placeholder="#2563EB" />
-                        <button type="button" aria-label="删除颜色" onClick={() => patchDraft({ colors: draft.colors.filter((_, itemIndex) => itemIndex !== index) })}>
+                        <button type="button" aria-label={t("promptColorSettings.deleteColor")} onClick={() => patchDraft({ colors: draft.colors.filter((_, itemIndex) => itemIndex !== index) })}>
                           <Trash2 size={14} />
                         </button>
                       </div>
@@ -629,7 +631,7 @@ export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSc
                 <section className="prompt-style-detail-section">
                   <div className="prompt-style-section-head">
                     <div>
-                      <span>渐变组合</span>
+                      <span>{t("promptTemplates.editor.gradientCombinations")}</span>
                       <small>{draft.gradients.length}/12</small>
                     </div>
                     <button
@@ -639,7 +641,7 @@ export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSc
                       onClick={() => patchDraft({ gradients: [...draft.gradients, { id: nextLocalId("gradient"), name: "新渐变", role: "背景色", colors: ["#2563EB", "#8B5CF6"] }] })}
                     >
                       <Plus size={14} />
-                      添加
+                      {t("common.add")}
                     </button>
                   </div>
                   <div className="prompt-color-settings-gradient-list">
@@ -647,18 +649,18 @@ export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSc
                       <div className="prompt-color-settings-gradient" key={gradient.id}>
                         <div className="prompt-color-settings-gradient-preview" style={gradientPreviewStyle(gradient.colors)} />
                         <div className="prompt-color-settings-gradient-fields">
-                          <input value={gradient.name} onChange={(event) => patchGradient(gradientIndex, { name: event.target.value })} placeholder="渐变名" />
-                          <input value={gradient.role} onChange={(event) => patchGradient(gradientIndex, { role: event.target.value })} placeholder="用途" />
+                          <input value={gradient.name} onChange={(event) => patchGradient(gradientIndex, { name: event.target.value })} placeholder={t("promptColorSettings.gradientNamePlaceholder")} />
+                          <input value={gradient.role} onChange={(event) => patchGradient(gradientIndex, { role: event.target.value })} placeholder={t("promptColorSettings.rolePlaceholder")} />
                         </div>
                         <div className="prompt-color-settings-gradient-colors">
                           {gradient.colors.map((color, colorIndex) => (
                             <span key={`${gradient.id}-${colorIndex}`}>
-                              <input type="color" value={normalizePromptColorSchemeHex(color) || "#2563EB"} onChange={(event) => patchGradientColor(gradientIndex, colorIndex, event.target.value)} aria-label="选择渐变颜色" />
+                              <input type="color" value={normalizePromptColorSchemeHex(color) || "#2563EB"} onChange={(event) => patchGradientColor(gradientIndex, colorIndex, event.target.value)} aria-label={t("promptTemplates.editor.pickGradientColor")} />
                               <input value={color} onChange={(event) => patchGradientColor(gradientIndex, colorIndex, event.target.value)} />
                               {gradient.colors.length > 2 ? (
                                 <button
                                   type="button"
-                                  aria-label="删除渐变颜色"
+                                  aria-label={t("promptColorSettings.deleteGradientColor")}
                                   onClick={() => patchGradient(gradientIndex, { colors: gradient.colors.filter((_, itemIndex) => itemIndex !== colorIndex) })}
                                 >
                                   <Trash2 size={13} />
@@ -672,7 +674,7 @@ export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSc
                             </button>
                           ) : null}
                         </div>
-                        <button type="button" className="prompt-color-settings-delete-gradient" aria-label="删除渐变" onClick={() => patchDraft({ gradients: draft.gradients.filter((_, itemIndex) => itemIndex !== gradientIndex) })}>
+                        <button type="button" className="prompt-color-settings-delete-gradient" aria-label={t("promptTemplates.editor.deleteGradient")} onClick={() => patchDraft({ gradients: draft.gradients.filter((_, itemIndex) => itemIndex !== gradientIndex) })}>
                           <Trash2 size={14} />
                         </button>
                       </div>
@@ -681,34 +683,34 @@ export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSc
                 </section>
               </>
             ) : (
-              <div className="settings-empty">暂无色系</div>
+              <div className="settings-empty">{t("promptColorSettings.emptySchemes")}</div>
             )}
           </main>
         </div>
         <footer className="prompt-style-settings-footer">
           <div>
-            <span>{dirty ? "有未保存修改" : "修改后点击保存生效"}</span>
+            <span>{dirty ? t("promptStyleSettings.dirty") : t("promptColorSettings.saveHint")}</span>
           </div>
           <div className="prompt-style-footer-actions">
             <button className="secondary-btn" type="button" disabled={busy} onClick={() => setRestoreConfirmOpen(true)}>
               <RotateCcw size={14} />
-              恢复默认
+              {t("promptStyleSettings.restoreDefault")}
             </button>
             <button className="secondary-btn" type="button" onClick={requestClose}>
-              取消
+              {t("common.cancel")}
             </button>
             <button className="primary-btn" type="button" disabled={!dirty || busy} onClick={() => saveDraft()}>
               <Save size={14} />
-              保存
+              {t("common.save")}
             </button>
           </div>
         </footer>
       </section>
       <ConfirmDialog
         open={restoreConfirmOpen}
-        title="恢复默认色系"
-        description="将用内置默认色系恢复当前色系配置，当前未保存的色系修改会被丢弃。确认继续吗？"
-        confirmText="恢复默认"
+        title={t("promptColorSettings.restoreTitle")}
+        description={t("promptColorSettings.restoreDescription")}
+        confirmText={t("promptStyleSettings.restoreDefault")}
         backdropClassName="modal-backdrop-top"
         onCancel={() => setRestoreConfirmOpen(false)}
         onConfirm={() => {
@@ -718,10 +720,10 @@ export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSc
       />
       <ConfirmDialog
         open={closeConfirmOpen}
-        title="保存色系修改？"
-        description="当前色系配置有未保存修改。保存后关闭会写入当前配置；只关闭会丢弃这些修改。"
-        confirmText="保存并关闭"
-        cancelText="只关闭"
+        title={t("promptColorSettings.closeTitle")}
+        description={t("promptColorSettings.closeDescription")}
+        confirmText={t("promptStyleSettings.saveAndClose")}
+        cancelText={t("promptStyleSettings.closeOnly")}
         backdropClassName="modal-backdrop-top"
         onCancel={() => {
           setCloseConfirmOpen(false);

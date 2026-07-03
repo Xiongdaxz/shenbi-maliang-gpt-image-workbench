@@ -16,6 +16,7 @@ import { PromptReferenceLinksDialog } from "../components/PromptReferenceLinksDi
 import { SearchHistoryInput } from "../components/SearchHistoryInput";
 import { SkeletonImage } from "../components/SkeletonImage";
 import { ScrollJumpButton } from "../components/ScrollJumpButton";
+import { useI18n } from "../i18n";
 import { isUncategorizedCaseCategory } from "../lib/cases";
 import { buildGalleryCaseItems, caseMaterialFromCaseItem, visibleCaseStyleNames, type GalleryCaseItem } from "../lib/caseMaterials";
 import { cx } from "../lib/cx";
@@ -40,10 +41,10 @@ function filterGalleryCaseItems(items: GalleryCaseItem[], options: { mineOnly: b
   });
 }
 
-function caseReviewStatusLabel(status: GalleryCaseItem["reviewStatus"]) {
-  if (status === "pending") return "待审核";
-  if (status === "rejected") return "未通过";
-  return "已通过";
+function caseReviewStatusLabel(status: GalleryCaseItem["reviewStatus"], t: (key: string) => string) {
+  if (status === "pending") return t("status.pendingReview");
+  if (status === "rejected") return t("status.rejected");
+  return t("status.approved");
 }
 
 function EditCaseModal({
@@ -61,6 +62,7 @@ function EditCaseModal({
   pending: boolean;
   error: Error | null;
 }) {
+  const { t } = useI18n();
   const [title, setTitle] = useState(item.title);
   const [prompt, setPrompt] = useState(item.prompt);
   const [categoryIds, setCategoryIds] = useState<string[]>(item.categoryIds);
@@ -119,8 +121,8 @@ function EditCaseModal({
     <div className="modal-backdrop">
       <section className="case-modal">
         <header>
-          <h3>编辑灵感</h3>
-          <button onClick={onClose} aria-label="关闭">
+          <h3>{t("pages.cases.edit")}</h3>
+          <button onClick={onClose} aria-label={t("common.close")}>
             <X size={18} />
           </button>
         </header>
@@ -130,10 +132,10 @@ function EditCaseModal({
             fallbackUrl={item.imageUrl}
             alt={title}
             activeImageId={coverImageId}
-            thumbStripLabel="设置封面图"
-            activeThumbLabel="封面"
-            thumbTitle={() => "设为封面"}
-            thumbAriaLabel={(_, index) => `设第 ${index + 1} 张为封面`}
+            thumbStripLabel={t("pages.cases.coverStrip")}
+            activeThumbLabel={t("pages.cases.cover")}
+            thumbTitle={() => t("pages.cases.setCover")}
+            thumbAriaLabel={(_, index) => t("pages.cases.setNthCover", { index: index + 1 })}
             onSelectImage={previewImages.length > 1 ? (image) => setCoverImageId(image.id) : undefined}
           />
           <div className="case-modal-form-pane">
@@ -143,34 +145,34 @@ function EditCaseModal({
                 {includeReferences ? <Check size={13} strokeWidth={2.5} /> : null}
               </span>
               <span className="case-reference-toggle-copy">
-                <span>允许查看和下载素材</span>
-                <small>勾选后，灵感空间会显示这张图引用的素材；取消则看不到素材。</small>
+                <span>{t("pages.cases.includeReferences")}</span>
+                <small>{t("pages.cases.includeReferencesDesc")}</small>
               </span>
             </label>
             <label>
-              风格
+              {t("pages.cases.style")}
               <CaseCategoryMultiSelect
                 categories={categories}
                 value={categoryIds}
                 onChange={setCategoryIds}
-                labelName="风格"
+                labelName={t("pages.cases.style")}
               />
             </label>
             <label>
-              标题
+              {t("pages.cases.titleField")}
               <input value={title} onChange={(event) => setTitle(event.target.value)} />
             </label>
             <label>
-              描述
+              {t("pages.cases.descriptionField")}
               <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={4} />
             </label>
             {error ? <div className="form-error">{error.message}</div> : null}
             <div className="row-actions">
               <button className="secondary-btn" type="button" onClick={onClose}>
-                取消
+                {t("common.cancel")}
               </button>
               <button className="primary-btn" type="button" onClick={submit} disabled={!title.trim() || !prompt.trim() || pending}>
-                {pending ? "保存中" : "保存"}
+                {pending ? t("common.saving") : t("common.save")}
               </button>
             </div>
           </div>
@@ -189,6 +191,7 @@ export function CasesPage() {
   const setSelectedCaseMaterial = useWorkbench((state) => state.setSelectedCaseMaterial);
   const setMaterialPickerOpen = useWorkbench((state) => state.setMaterialPickerOpen);
   const { showToast } = useToast();
+  const { t } = useI18n();
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [mineOnly, setMineOnly] = useState(false);
   const [favoriteOnly, setFavoriteOnly] = useState(false);
@@ -237,10 +240,10 @@ export function CasesPage() {
       setSelectedCategoryIds([category.id]);
       setMineOnly(false);
       setTagDialogOpen(false);
-      showToast("风格已新增");
+      showToast(t("toast.caseStyleCreated"));
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "新增风格失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.caseStyleCreateFailed"), "error");
     }
   });
   const deleteCase = useMutation({
@@ -254,10 +257,10 @@ export function CasesPage() {
       });
       queryClient.invalidateQueries({ queryKey: ["cases"] });
       setDeleteTarget(null);
-      showToast("灵感已删除");
+      showToast(t("toast.caseDeleted"));
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "删除灵感失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.caseDeleteFailed"), "error");
     }
   });
   const updateCase = useMutation({
@@ -276,30 +279,30 @@ export function CasesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cases"] });
       setEditTarget(null);
-      showToast("灵感已更新");
+      showToast(t("toast.caseUpdated"));
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "保存灵感失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.caseUpdateFailed"), "error");
     }
   });
   const setCaseFavorite = useMutation({
     mutationFn: (payload: { caseId: string; favorited: boolean }) => api.setCaseFavorite(payload.caseId, payload.favorited),
     onSuccess: ({ favorited }) => {
-      showToast(favorited ? "已收藏" : "已取消收藏");
+      showToast(favorited ? t("toast.favoriteAdded") : t("toast.favoriteRemoved"));
       queryClient.invalidateQueries({ queryKey: ["cases"] });
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "收藏灵感失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.caseFavoriteFailed"), "error");
     }
   });
   const submitCaseReview = useMutation({
     mutationFn: (caseId: string) => api.submitCaseReview(caseId),
     onSuccess: ({ reviewStatus }) => {
       queryClient.invalidateQueries({ queryKey: ["cases"] });
-      showToast(reviewStatus === "approved" ? "灵感已公开" : "灵感已提交审核");
+      showToast(reviewStatus === "approved" ? t("toast.casePublished") : t("toast.caseReviewSubmitted"));
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "提交审核失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.caseReviewSubmitFailed"), "error");
     }
   });
   const setCaseCover = useMutation({
@@ -307,10 +310,10 @@ export function CasesPage() {
       api.setCaseCover(payload.caseId, { groupImageId: payload.groupImage.id, sourceId: payload.groupImage.sourceId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cases"] });
-      showToast("封面已更新");
+      showToast(t("toast.caseCoverUpdated"));
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "设置封面失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.caseCoverUpdateFailed"), "error");
     }
   });
   const addAssetFromCase = useMutation({
@@ -325,13 +328,13 @@ export function CasesPage() {
       queryClient.invalidateQueries({ queryKey: ["assets"] });
       setAssetCaseTarget(null);
       if (result.created) {
-        showToast("已加入素材库");
+        showToast(t("toast.assetAdded"));
       } else {
-        showToast(result.duplicateScope === "shared" ? "已存在共享中" : "已经在素材库", "error");
+        showToast(result.duplicateScope === "shared" ? t("toast.assetDuplicateShared") : t("toast.assetDuplicatePrivate"), "error");
       }
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "加入素材库失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.assetAddFailed"), "error");
     }
   });
   const visibleItems = useMemo(() => {
@@ -378,12 +381,12 @@ export function CasesPage() {
           activeGroupImage: undefined as CaseGroupImage | undefined,
           isActiveGroupImageCover: undefined as boolean | undefined,
           metaItems: [
-            ...(styleNames.length > 0 ? [`风格：${styleNames.join(" / ")}`] : []),
-            ...(groupImages.length > 1 ? [`组图：${groupImages.length} 张`] : [])
+            ...(styleNames.length > 0 ? [t("pages.cases.styleMeta", { styles: styleNames.join(" / ") })] : []),
+            ...(groupImages.length > 1 ? [t("pages.cases.groupImageCount", { count: groupImages.length })] : [])
           ]
         };
       }),
-    [visibleItems]
+    [t, visibleItems]
   );
   const caseFilterHintKey = useMemo(
     () =>
@@ -417,7 +420,7 @@ export function CasesPage() {
     setEditImage(null);
     setMaterialPickerOpen(false);
     navigate("/");
-    showToast("已作为素材使用");
+    showToast(t("toast.caseUsedAsMaterial"));
   };
   const toggleCaseFavorite = (item: GalleryCaseItem) => {
     setCaseFavorite.mutate({ caseId: item.groupId || item.id, favorited: !item.favorited });
@@ -449,7 +452,7 @@ export function CasesPage() {
           setMineOnly(false);
         }}
       >
-        <FilterTabLabel count={caseFilterCounts.all}>全部</FilterTabLabel>
+        <FilterTabLabel count={caseFilterCounts.all}>{t("common.all")}</FilterTabLabel>
       </button>
       <button
         className={cx(mineOnly && "active")}
@@ -458,7 +461,7 @@ export function CasesPage() {
           setMineOnly((value) => !value);
         }}
       >
-        <FilterTabLabel count={caseFilterCounts.mine}>我的</FilterTabLabel>
+        <FilterTabLabel count={caseFilterCounts.mine}>{t("common.mine")}</FilterTabLabel>
       </button>
     </>
   );
@@ -466,30 +469,30 @@ export function CasesPage() {
   return (
     <section className="page-section">
       <PageHeader
-        title="灵感空间"
-        desc="不同风格的灵感图片和提示词，可直接带入对话。"
+        title={t("pages.cases.title")}
+        desc={t("pages.cases.desc")}
         icon={<Lightbulb size={24} />}
         actions={
           <div className="case-page-header-actions">
             <FilterModeToggle value={filterDisplayMode} onChange={setFilterDisplayMode} />
             <button className="secondary-btn prompt-reference-entry" type="button" onClick={() => navigate("/cases/barrage")}>
               <Balloon size={16} />
-              灵感弹幕
+              {t("pages.cases.barrage")}
             </button>
             <button className="secondary-btn prompt-reference-entry" type="button" onClick={() => setPromptReferenceOpen(true)}>
               <Link2 size={16} />
-              灵感链接
+              {t("pages.cases.links")}
             </button>
           </div>
         }
       />
       <div className={cx("library-filter-row", `filter-mode-${filterDisplayMode}`)}>
         {filterDisplayMode === "compact" ? (
-          <div className="case-filter-pinned-tabs" role="group" aria-label="灵感范围筛选">
+          <div className="case-filter-pinned-tabs" role="group" aria-label={t("pages.cases.scope")}>
             {scopeFilterButtons}
           </div>
         ) : null}
-        <FilterTabsScroller ariaLabel="灵感风格筛选" hintKey={caseFilterHintKey} mode={filterDisplayMode}>
+        <FilterTabsScroller ariaLabel={t("pages.cases.styles")} hintKey={caseFilterHintKey} mode={filterDisplayMode}>
           {filterDisplayMode === "compact" ? null : scopeFilterButtons}
           {caseStyleCategories.map((category) => (
             <button
@@ -506,9 +509,9 @@ export function CasesPage() {
             className={cx("case-favorite-filter-btn", favoriteOnly && "active")}
             type="button"
             onClick={() => setFavoriteOnly((value) => !value)}
-            aria-label={favoriteOnly ? "取消收藏筛选" : "只看收藏灵感"}
+            aria-label={favoriteOnly ? t("pages.cases.cancelFavoriteOnly") : t("pages.cases.favoriteOnly")}
             aria-pressed={favoriteOnly}
-            title={favoriteOnly ? "取消收藏筛选" : "只看收藏灵感"}
+            title={favoriteOnly ? t("pages.cases.cancelFavoriteOnly") : t("pages.cases.favoriteOnly")}
           >
             <Heart size={17} fill={favoriteOnly ? "currentColor" : "none"} />
             <span className="filter-tab-count">{caseFilterCounts.favorite}</span>
@@ -518,13 +521,13 @@ export function CasesPage() {
             className="case-search"
             value={keyword}
             onChange={setKeyword}
-            placeholder="搜索标题、描述或风格"
-            ariaLabel="搜索灵感"
+            placeholder={t("pages.cases.searchPlaceholder")}
+            ariaLabel={t("pages.cases.searchAria")}
             icon={<Search size={17} />}
           />
           <button className="secondary-btn case-add-tag" type="button" onClick={() => setTagDialogOpen(true)}>
             <Plus size={16} />
-            新增风格
+            {t("pages.cases.addStyle")}
           </button>
         </div>
       </div>
@@ -533,14 +536,14 @@ export function CasesPage() {
           const styleNames = visibleCaseStyleNames(item);
           return (
             <article className="case-card" key={item.id}>
-              <div className="case-image-frame" title={(item.imageCount ?? 1) > 1 ? "组图" : undefined}>
+              <div className="case-image-frame" title={(item.imageCount ?? 1) > 1 ? t("pages.cases.groupImage") : undefined}>
                 <button className="case-image-btn" type="button" onClick={() => setPreviewIndex(index)}>
                   <SkeletonImage src={item.imageThumbnailUrl ?? item.imagePreviewUrl ?? item.imageUrl} alt={item.title} />
                 </button>
                 {(item.imageCount ?? 1) > 1 ? (
                   <span
                     className="case-multi-image-badge"
-                    aria-label={`组图，共 ${item.imageCount} 张`}
+                    aria-label={t("pages.cases.groupImageCount", { count: item.imageCount ?? 0 })}
                   >
                     <ImagesIcon size={15} />
                     <span>{item.imageCount}</span>
@@ -550,15 +553,15 @@ export function CasesPage() {
                   className={cx("case-action-icon", "case-favorite-btn", item.favorited && "active")}
                   type="button"
                   onClick={() => toggleCaseFavorite(item)}
-                  aria-label={item.favorited ? "取消收藏灵感" : "收藏灵感"}
+                  aria-label={item.favorited ? t("pages.cases.unfavorite") : t("pages.cases.favorite")}
                   aria-pressed={item.favorited}
-                  title={item.favorited ? "取消收藏" : "收藏"}
+                  title={item.favorited ? t("pages.cases.unfavorite") : t("pages.cases.favorite")}
                   disabled={setCaseFavorite.isPending}
                 >
                   <Heart size={16} fill={item.favorited ? "currentColor" : "none"} />
                 </button>
                 <div className="case-card-actions">
-                  <button className="case-action-icon" type="button" onClick={() => useCasePrompt(item)} aria-label="使用提示词" title="使用提示词">
+                  <button className="case-action-icon" type="button" onClick={() => useCasePrompt(item)} aria-label={t("pages.cases.usePrompt")} title={t("pages.cases.usePrompt")}>
                     <Send size={16} />
                   </button>
                   {item.canDelete ? (
@@ -568,17 +571,17 @@ export function CasesPage() {
                           className="case-action-icon"
                           type="button"
                           onClick={() => submitCaseReview.mutate(item.groupId || item.id)}
-                          aria-label="重新提交审核"
-                          title="重新提交审核"
+                          aria-label={t("pages.cases.resubmitReview")}
+                          title={t("pages.cases.resubmitReview")}
                           disabled={submitCaseReview.isPending}
                         >
                           <RefreshCw size={16} />
                         </button>
                       ) : null}
-                      <button className="case-action-icon" type="button" onClick={() => setEditTarget(item)} aria-label="编辑灵感" title="编辑灵感">
+                      <button className="case-action-icon" type="button" onClick={() => setEditTarget(item)} aria-label={t("pages.cases.edit")} title={t("pages.cases.edit")}>
                         <Pencil size={16} />
                       </button>
-                      <button className="case-action-icon danger" type="button" onClick={() => setDeleteTarget(item)} aria-label="删除灵感" title="删除灵感">
+                      <button className="case-action-icon danger" type="button" onClick={() => setDeleteTarget(item)} aria-label={t("pages.cases.delete")} title={t("pages.cases.delete")}>
                         <Trash2 size={16} />
                       </button>
                     </>
@@ -597,12 +600,12 @@ export function CasesPage() {
                 <div className="case-card-title-row">
                   <h3>{item.title}</h3>
                   {item.canDelete && item.reviewStatus !== "approved" ? (
-                    <span className={cx("asset-space-badge", `share-status-${item.reviewStatus}`)}>{caseReviewStatusLabel(item.reviewStatus)}</span>
+                    <span className={cx("asset-space-badge", `share-status-${item.reviewStatus}`)}>{caseReviewStatusLabel(item.reviewStatus, t)}</span>
                   ) : null}
                 </div>
                 <p>{item.prompt}</p>
                 {item.canDelete && item.reviewStatus === "rejected" && item.rejectReason ? (
-                  <small className="case-review-reject">原因：{item.rejectReason}</small>
+                  <small className="case-review-reject">{t("pages.cases.rejectReason", { reason: item.rejectReason })}</small>
                 ) : null}
                 {styleNames.length > 0 ? <AssetTagScroller names={styleNames} /> : null}
               </div>
@@ -615,26 +618,26 @@ export function CasesPage() {
           <LibraryEmptyState
             compact
             imageSrc="/image/empty-states/inspiration-empty.png"
-            imageAlt="空白画卷与神笔"
-            title="没有匹配灵感"
-            description="换个关键词或清除筛选后再看看。"
+            imageAlt={t("pages.cases.emptyAlt")}
+            title={t("pages.cases.noMatch")}
+            description={t("empty.tryDifferentFilters")}
             action={
               <button className="secondary-btn" type="button" onClick={clearCaseFilters}>
                 <X size={16} />
-                清除筛选
+                {t("common.clearFilters")}
               </button>
             }
           />
         ) : (
           <LibraryEmptyState
             imageSrc="/image/empty-states/inspiration-empty.png"
-            imageAlt="空白画卷与神笔"
-            title="灵感空间还没有内容"
-            description="先创作第一张图片，再把满意的结果加入灵感空间。"
+            imageAlt={t("pages.cases.emptyAlt")}
+            title={t("pages.cases.empty")}
+            description={t("pages.cases.emptyDesc")}
             action={
               <button className="primary-btn" type="button" onClick={startNewCaseCreation}>
                 <Send size={16} />
-                去创作图片
+                {t("pages.cases.create")}
               </button>
             }
           />
@@ -646,7 +649,7 @@ export function CasesPage() {
         <ImagePreviewModal
           items={casePreviewItems}
           index={previewIndex}
-          ariaLabel="灵感预览"
+          ariaLabel={t("pages.cases.preview")}
           initialZoomMode="contain"
           onIndexChange={setPreviewIndex}
           onClose={() => setPreviewIndex(null)}
@@ -656,14 +659,14 @@ export function CasesPage() {
                 className={cx("case-preview-tool", "favorite", item.favorited && "active")}
                 type="button"
                 onClick={() => toggleCaseFavorite(item)}
-                aria-label={item.favorited ? "取消收藏灵感" : "收藏灵感"}
+                aria-label={item.favorited ? t("pages.cases.unfavorite") : t("pages.cases.favorite")}
                 aria-pressed={item.favorited}
-                title={item.favorited ? "取消收藏" : "收藏"}
+                title={item.favorited ? t("pages.cases.unfavorite") : t("pages.cases.favorite")}
                 disabled={setCaseFavorite.isPending}
               >
                 <Heart size={16} fill={item.favorited ? "currentColor" : "none"} />
               </button>
-              <button className="case-preview-tool" type="button" onClick={() => useCasePrompt(item)} aria-label="使用提示词" title="使用提示词">
+              <button className="case-preview-tool" type="button" onClick={() => useCasePrompt(item)} aria-label={t("pages.cases.usePrompt")} title={t("pages.cases.usePrompt")}>
                 <Send size={16} />
               </button>
               {item.canDelete ? (
@@ -673,14 +676,14 @@ export function CasesPage() {
                       className="case-preview-tool"
                       type="button"
                       onClick={() => submitCaseReview.mutate(item.groupId || item.id)}
-                      aria-label="重新提交审核"
-                      title="重新提交审核"
+                      aria-label={t("pages.cases.resubmitReview")}
+                      title={t("pages.cases.resubmitReview")}
                       disabled={submitCaseReview.isPending}
                     >
                       <RefreshCw size={16} />
                     </button>
                   ) : null}
-                  <button className="case-preview-tool" type="button" onClick={() => setEditTarget(item)} aria-label="编辑灵感" title="编辑灵感">
+                  <button className="case-preview-tool" type="button" onClick={() => setEditTarget(item)} aria-label={t("pages.cases.edit")} title={t("pages.cases.edit")}>
                     <Pencil size={16} />
                   </button>
                 </>
@@ -690,8 +693,8 @@ export function CasesPage() {
                   className="case-preview-tool"
                   type="button"
                   onClick={() => setCaseCover.mutate({ caseId: item.groupId || item.id, groupImage: item.activeGroupImage! })}
-                  aria-label={item.isActiveGroupImageCover ? "当前封面" : "设为封面"}
-                  title={item.isActiveGroupImageCover ? "当前封面" : "设为封面"}
+                  aria-label={item.isActiveGroupImageCover ? t("pages.cases.currentCover") : t("pages.cases.setCover")}
+                  title={item.isActiveGroupImageCover ? t("pages.cases.currentCover") : t("pages.cases.setCover")}
                   disabled={Boolean(item.isActiveGroupImageCover) || setCaseCover.isPending}
                 >
                   <ImagesIcon size={16} />
@@ -702,7 +705,7 @@ export function CasesPage() {
                 className="case-preview-tool"
               />
               {item.canDelete ? (
-                <button className="case-preview-tool danger" type="button" onClick={() => setDeleteTarget(item)} aria-label="删除灵感" title="删除灵感">
+                <button className="case-preview-tool danger" type="button" onClick={() => setDeleteTarget(item)} aria-label={t("pages.cases.delete")} title={t("pages.cases.delete")}>
                   <Trash2 size={16} />
                 </button>
               ) : null}
@@ -720,9 +723,9 @@ export function CasesPage() {
       ) : null}
       <PromptDialog
         open={tagDialogOpen}
-        title="新增风格"
-        label="风格名称"
-        confirmText={createCategory.isPending ? "保存中" : "新增风格"}
+        title={t("pages.cases.addStyleTitle")}
+        label={t("pages.cases.styleName")}
+        confirmText={createCategory.isPending ? t("common.saving") : t("pages.cases.addStyle")}
         onSubmit={(value) => {
           if (!createCategory.isPending) createCategory.mutate(value.trim());
         }}
@@ -751,9 +754,9 @@ export function CasesPage() {
       ) : null}
       <ConfirmDialog
         open={Boolean(deleteTarget)}
-        title="删除灵感"
-        description={`确认删除“${deleteTarget?.title ?? ""}”？删除后不会影响原图片。`}
-        confirmText={deleteCase.isPending ? "删除中" : "删除"}
+        title={t("pages.cases.deleteTitle")}
+        description={t("pages.cases.deleteDescription", { title: deleteTarget?.title ?? "" })}
+        confirmText={deleteCase.isPending ? t("common.deleting") : t("common.delete")}
         destructive
         onConfirm={() => {
           if (deleteTarget && !deleteCase.isPending) deleteCase.mutate(deleteTarget.id);

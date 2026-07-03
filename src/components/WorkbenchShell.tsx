@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, FocusEvent, FormEvent, MouseEvent } from "react";
+import type { CSSProperties, FocusEvent, FormEvent, MouseEvent, ReactNode } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { InfiniteData } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
 import { Camera, ChevronRight, FolderOpen, Images, Lightbulb, LogOut, Menu, MessageCircle, MessageCirclePlus, PanelLeft, Pin, PinOff, RotateCcw, Search, Settings, ShieldCheck, Sparkles, X } from "lucide-react";
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api";
+import { languagePreferenceLabel, useI18n, type LocaleCode, type Translate } from "../i18n";
 import type { AppearanceMode } from "../lib/appearance";
 import { cx } from "../lib/cx";
 import { pauseRenderingMotion } from "../lib/renderingMotion";
@@ -41,8 +42,6 @@ const SIDEBAR_TITLE_CHAR_DELAY_MS = 34;
 const SIDEBAR_CONTENT_FADE_MS = 110;
 const SIDEBAR_WIDTH_ANIMATION_MS = 200;
 const SESSION_GROUP_COLLAPSE_STORAGE_KEY = "gpt-image.sidebar.session-groups.collapsed";
-const USERNAME_RULE_MESSAGE =
-  "用户名支持中文、英文、数字、单个空格、下划线和短横线，长度 2-20 个字符，不支持首尾空格或连续空格";
 const IMAGE_EDIT_SUGGESTIONS_STALE_MS = 5 * 60 * 1000;
 type SidebarMotionState = "expanded" | "collapsing" | "collapsed" | "expanding";
 type SessionGroupKey = "pinned" | "recent";
@@ -55,6 +54,10 @@ type SidebarFloatingTip = {
 };
 type SessionPage = Awaited<ReturnType<typeof api.sessions>>;
 type ActiveSessionPages = InfiniteData<SessionPage, number>;
+
+function PageRouteTransition({ children }: { children: ReactNode }) {
+  return <div className="page-route-transition">{children}</div>;
+}
 
 function readSessionGroupCollapseState(): SessionGroupCollapseState {
   if (typeof window === "undefined") return { pinned: false, recent: false };
@@ -88,43 +91,46 @@ function compareActiveSessions(left: ChatSession, right: ChatSession) {
   return right.updatedAt.localeCompare(left.updatedAt);
 }
 
-function validateProfileUsername(value: string) {
+function validateProfileUsername(value: string, t: Translate) {
   const username = value.trim();
-  if (!username) return "请填写用户名";
-  if (value !== username) return USERNAME_RULE_MESSAGE;
-  if (/ {2,}/.test(username)) return USERNAME_RULE_MESSAGE;
-  if (/[^\S ]/.test(username)) return USERNAME_RULE_MESSAGE;
-  if (!/^[\u4e00-\u9fffA-Za-z0-9_ -]+$/.test(username)) return USERNAME_RULE_MESSAGE;
-  if (!/[\u4e00-\u9fffA-Za-z]/.test(username)) return "用户名至少包含一个中文或英文字母";
+  if (!username) return t("profile.usernameRequired");
+  if (value !== username) return t("profile.usernameRule");
+  if (/ {2,}/.test(username)) return t("profile.usernameRule");
+  if (/[^\S ]/.test(username)) return t("profile.usernameRule");
+  if (!/^[\u4e00-\u9fffA-Za-z0-9_ -]+$/.test(username)) return t("profile.usernameRule");
+  if (!/[\u4e00-\u9fffA-Za-z]/.test(username)) return t("profile.usernameNeedsLetter");
   const length = Array.from(username).length;
-  return length >= 2 && length <= 20 ? "" : USERNAME_RULE_MESSAGE;
+  return length >= 2 && length <= 20 ? "" : t("profile.usernameRule");
 }
 
-function userPreferencesToast(preferences: Partial<UserPreferences>) {
+function userPreferencesToast(preferences: Partial<UserPreferences>, t: Translate, resolvedLanguage: LocaleCode) {
+  if (preferences.language) {
+    return t("settings.language.toast", { language: languagePreferenceLabel(preferences.language, t, resolvedLanguage) });
+  }
   if (preferences.promptOptimizeStyleGroups) {
-    return "AI 优化风格已保存";
+    return t("toast.promptStylesSaved");
   }
   if (typeof preferences.editSuggestionsEnabled === "boolean") {
-    return preferences.editSuggestionsEnabled ? "续改建议已开启" : "续改建议已关闭";
+    return preferences.editSuggestionsEnabled ? t("toast.editSuggestionsOn") : t("toast.editSuggestionsOff");
   }
   if (typeof preferences.autoUploadPastedAssets === "boolean") {
-    return preferences.autoUploadPastedAssets ? "自动上传素材库已开启" : "自动上传素材库已关闭";
+    return preferences.autoUploadPastedAssets ? t("toast.autoUploadOn") : t("toast.autoUploadOff");
   }
   if (preferences.editSuggestionTone) {
-    const labels: Record<UserPreferences["editSuggestionTone"], string> = {
-      default: "默认",
-      practical: "实用优化",
-      creative: "创意扩展",
-      detail: "细节修复"
+    const labelKeys: Record<UserPreferences["editSuggestionTone"], string> = {
+      default: "settings.personalization.tone.default",
+      practical: "settings.personalization.tone.practical",
+      creative: "settings.personalization.tone.creative",
+      detail: "settings.personalization.tone.detail"
     };
-    return `建议倾向已切换为：${labels[preferences.editSuggestionTone] ?? "默认"}`;
+    return t("toast.suggestionToneChanged", { tone: t(labelKeys[preferences.editSuggestionTone] ?? "settings.personalization.tone.default") });
   }
-  return "个性化设置已保存";
+  return t("toast.preferencesSaved");
 }
 
-function sidebarSessionTitle(title: string) {
+function sidebarSessionTitle(title: string, fallback: string) {
   const normalized = title.replace(/\s+/g, " ").trim();
-  return normalized || "新的图像对话";
+  return normalized || fallback;
 }
 
 let sidebarTitleMeasureCanvas: HTMLCanvasElement | null = null;
@@ -161,15 +167,19 @@ function SidebarSessionTitle({
   title,
   titleStatus = "ready",
   className,
-  ellipsisWhenTruncated = false
+  ellipsisWhenTruncated = false,
+  fallbackTitle,
+  pendingTitle
 }: {
   title: string;
   titleStatus?: ChatSession["titleStatus"];
   className: string;
   ellipsisWhenTruncated?: boolean;
+  fallbackTitle: string;
+  pendingTitle: string;
 }) {
   const titlePending = titleStatus === "pending";
-  const normalizedTitle = sidebarSessionTitle(title);
+  const normalizedTitle = sidebarSessionTitle(title, fallbackTitle);
   const titleRef = useRef<HTMLSpanElement | null>(null);
   const [displayTitle, setDisplayTitle] = useState("");
   const [animateTitle, setAnimateTitle] = useState(false);
@@ -218,7 +228,7 @@ function SidebarSessionTitle({
     <span
       className={cx(className, titlePending && "session-title-skeleton", animateTitle && "session-title-char-in")}
       ref={titleRef}
-      aria-label={titlePending ? "标题生成中" : normalizedTitle}
+      aria-label={titlePending ? pendingTitle : normalizedTitle}
     >
       {titlePending ? (
         <span aria-hidden="true" />
@@ -240,6 +250,7 @@ export function WorkbenchShell({ user }: { user: User }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { showToast } = useToast();
+  const { resolvedLanguage, t } = useI18n();
   const mobileMenuOpen = useWorkbench((state) => state.mobileMenuOpen);
   const setMobileMenuOpen = useWorkbench((state) => state.setMobileMenuOpen);
   const resetNewChatComposer = useWorkbench((state) => state.resetNewChatComposer);
@@ -293,8 +304,8 @@ export function WorkbenchShell({ user }: { user: User }) {
   });
   const avatarSource = user.username?.trim() || user.account?.trim() || "U";
   const avatarText = avatarSource.slice(0, 1).toUpperCase();
-  const userAccountLabel = user.account?.trim() || "未设置账号";
-  const deleteAccountConfirmationText = `${user.username.trim()}确认删除账户`;
+  const userAccountLabel = user.account?.trim() || t("sidebar.accountUnset");
+  const deleteAccountConfirmationText = t("dialog.deleteAccount.confirmation", { username: user.username.trim() });
   const renderUserAvatar = (className?: string) => (
     <span className={cx("user-avatar", className)} aria-hidden="true">
       {user.avatarUrl ? <img src={user.avatarUrl} alt="" /> : avatarText}
@@ -313,7 +324,7 @@ export function WorkbenchShell({ user }: { user: User }) {
   const scrollSidebarHistoryToTop = useCallback(() => {
     sidebarMainScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
-  const sidebarToggleLabel = sidebarCollapsed ? "打开边栏" : "关闭边栏";
+  const sidebarToggleLabel = sidebarCollapsed ? t("sidebar.openSidebar") : t("sidebar.closeSidebar");
   const showSidebarFloatingTip = useCallback(
     (event: MouseEvent<HTMLElement> | FocusEvent<HTMLElement>, tip: Pick<SidebarFloatingTip, "label" | "shortcut">) => {
       const rect = event.currentTarget.getBoundingClientRect();
@@ -550,7 +561,7 @@ export function WorkbenchShell({ user }: { user: User }) {
       navigate("/", { replace: true });
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "删除账户失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.accountDeleteFailed"), "error");
     }
   });
   const archiveChat = useMutation({
@@ -561,10 +572,10 @@ export function WorkbenchShell({ user }: { user: User }) {
       if (payload.archived) clearSessionGenerationStatus(payload.sessionId);
       if (payload.archived) leaveDeletedOrArchivedChat([payload.sessionId]);
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
-      showToast(payload.archived ? "已归档聊天" : "已取消归档");
+      showToast(payload.archived ? t("toast.chatArchived") : t("toast.chatUnarchived"));
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "操作失败", "error");
+      showToast(error instanceof Error ? error.message : t("common.error"), "error");
     }
   });
   const pinChat = useMutation({
@@ -587,10 +598,10 @@ export function WorkbenchShell({ user }: { user: User }) {
         };
       });
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
-      showToast(payload.pinned ? "已置顶聊天" : "已取消置顶");
+      showToast(payload.pinned ? t("toast.chatPinned") : t("toast.chatUnpinned"));
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "置顶失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.pinFailed"), "error");
     }
   });
   const renameChat = useMutation({
@@ -598,10 +609,10 @@ export function WorkbenchShell({ user }: { user: User }) {
     onSuccess: ({ session }) => {
       patchSessionInCache(session);
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
-      showToast("聊天已重命名");
+      showToast(t("toast.chatRenamed"));
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "重命名失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.chatRenameFailed"), "error");
     }
   });
   const archiveAllChats = useMutation({
@@ -621,10 +632,10 @@ export function WorkbenchShell({ user }: { user: User }) {
         resetNewChatComposer();
         navigate("/", { replace: true });
       }
-      showToast(archived > 0 ? "已归档所有聊天" : "没有可归档的聊天", archived > 0 ? "success" : "info");
+      showToast(archived > 0 ? t("toast.allChatsArchived") : t("toast.noChatsToArchive"), archived > 0 ? "success" : "info");
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "全部归档失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.archiveAllFailed"), "error");
     }
   });
   const unarchiveAllChats = useMutation({
@@ -634,10 +645,10 @@ export function WorkbenchShell({ user }: { user: User }) {
         current ? { ...current, sessions: [], pageInfo: { ...current.pageInfo, total: 0, hasMore: false } } : current
       );
       queryClient.invalidateQueries({ queryKey: ["sessions"] });
-      showToast(restored > 0 ? "已取消全部归档" : "没有已归档聊天", restored > 0 ? "success" : "info");
+      showToast(restored > 0 ? t("toast.allChatsUnarchived") : t("toast.noArchivedChats"), restored > 0 ? "success" : "info");
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "全部取消归档失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.unarchiveAllFailed"), "error");
     }
   });
   const deleteChat = useMutation({
@@ -651,10 +662,10 @@ export function WorkbenchShell({ user }: { user: User }) {
       queryClient.invalidateQueries({ queryKey: ["cases"] });
       queryClient.invalidateQueries({ queryKey: ["assets"] });
       leaveDeletedOrArchivedChat([sessionId]);
-      showToast("已删除聊天及关联图片、灵感、素材");
+      showToast(t("toast.chatDeleted"));
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "删除聊天失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.chatDeleteFailed"), "error");
     }
   });
   const deleteAllChats = useMutation({
@@ -682,17 +693,17 @@ export function WorkbenchShell({ user }: { user: User }) {
         resetNewChatComposer();
         navigate("/", { replace: true });
       }
-      showToast("已删除所有聊天及关联图片、灵感、素材");
+      showToast(t("toast.allChatsDeleted"));
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "删除所有聊天失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.allChatsDeleteFailed"), "error");
     }
   });
   const changePassword = useMutation({
     mutationFn: api.changePassword,
     onSuccess: () => {
       setPasswordDialogOpen(false);
-      showToast("密码已修改，请重新登录");
+      showToast(t("toast.passwordChanged"));
       queryClient.setQueryData(["me"], { user: null });
       queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== "me" });
       navigate("/", { replace: true });
@@ -714,10 +725,10 @@ export function WorkbenchShell({ user }: { user: User }) {
     onSuccess: (data) => {
       setEditProfileDialogOpen(false);
       queryClient.setQueryData(["me"], { user: data.user });
-      showToast("个人资料已保存");
+      showToast(t("toast.profileSaved"));
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "个人资料保存失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.profileSaveFailed"), "error");
     }
   });
   const saveAppearanceMode = useMutation({
@@ -726,7 +737,7 @@ export function WorkbenchShell({ user }: { user: User }) {
       queryClient.setQueryData(["me"], { user: data.user });
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "主题保存失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.themeSaveFailed"), "error");
     }
   });
   const saveUserPreferences = useMutation({
@@ -734,10 +745,10 @@ export function WorkbenchShell({ user }: { user: User }) {
     onSuccess: (data, preferences) => {
       queryClient.setQueryData(["me"], { user: data.user });
       queryClient.invalidateQueries({ queryKey: ["image-edit-suggestions"] });
-      showToast(userPreferencesToast(preferences));
+      showToast(userPreferencesToast(preferences, t, resolvedLanguage));
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "个性化设置保存失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.preferencesSaveFailed"), "error");
     }
   });
   const configAccess = useMutation({
@@ -757,7 +768,7 @@ export function WorkbenchShell({ user }: { user: User }) {
         configWindowRef.current.close();
       }
       configWindowRef.current = null;
-      showToast(error instanceof Error ? error.message : "无法进入管理后台", "error");
+      showToast(error instanceof Error ? error.message : t("toast.configAccessFailed"), "error");
     }
   });
 
@@ -775,7 +786,7 @@ export function WorkbenchShell({ user }: { user: User }) {
     if (configAccess.isPending) return;
     const configWindow = window.open("about:blank", "_blank");
     if (!configWindow) {
-      showToast("浏览器阻止了新标签页，请允许弹窗后重试", "error");
+      showToast(t("toast.popupBlocked"), "error");
       return;
     }
     configWindow.opener = null;
@@ -938,11 +949,11 @@ export function WorkbenchShell({ user }: { user: User }) {
     if (!normalizedImageId || !editSuggestionsEnabled) return;
     const editSuggestionTone = user.preferences?.editSuggestionTone ?? "default";
     void queryClient.prefetchQuery({
-      queryKey: ["image-edit-suggestions", normalizedImageId, editSuggestionTone, editSuggestionsEnabled],
-      queryFn: () => api.imageEditSuggestions(normalizedImageId),
+      queryKey: ["image-edit-suggestions", normalizedImageId, editSuggestionTone, editSuggestionsEnabled, resolvedLanguage],
+      queryFn: () => api.imageEditSuggestions(normalizedImageId, resolvedLanguage),
       staleTime: IMAGE_EDIT_SUGGESTIONS_STALE_MS
     });
-  }, [queryClient, user.preferences?.editSuggestionTone, user.preferences?.editSuggestionsEnabled]);
+  }, [queryClient, resolvedLanguage, user.preferences?.editSuggestionTone, user.preferences?.editSuggestionsEnabled]);
 
   const handleImageJobEvent = useCallback((payload: ImageJobEventPayload) => {
     const sessionId = payload.sessionId.trim();
@@ -1017,7 +1028,7 @@ export function WorkbenchShell({ user }: { user: User }) {
         sessionGenerationStates[session.id]?.state ?? (session.runningImageJobCount > 0 ? "running" : null);
       const isCurrentSession = session.id === activeChatSessionId;
       const titlePending = session.titleStatus === "pending";
-      const sessionTitleLabel = titlePending ? "标题生成中" : session.title;
+      const sessionTitleLabel = titlePending ? t("sidebar.titlePending") : session.title;
       const generationState = isCurrentSession && rawGenerationState === "running" ? null : rawGenerationState;
       const pinned = Boolean(session.pinnedAt);
       const nextPinned = !pinned;
@@ -1053,21 +1064,23 @@ export function WorkbenchShell({ user }: { user: User }) {
               titleStatus={session.titleStatus}
               className="recent-item-title"
               ellipsisWhenTruncated={hoveredSessionId === session.id || openSessionMenuId === session.id}
+              fallbackTitle={t("sidebar.defaultSessionTitle")}
+              pendingTitle={t("sidebar.titlePending")}
             />
           </NavLink>
           {generationState ? (
             <span
               className={cx("recent-generation-status", generationState)}
               role="status"
-              aria-label={generationState === "running" ? "图片生成中" : "图片已生成"}
+              aria-label={generationState === "running" ? t("sidebar.imageRunning") : t("sidebar.imageDone")}
             />
           ) : null}
           <button
             className={cx("session-pin-trigger", pinned && "is-pinned")}
             type="button"
             disabled={sessionActionPending}
-            aria-label={pinned ? "取消置顶聊天" : "置顶聊天"}
-            title={pinned ? "取消置顶" : "置顶"}
+            aria-label={pinned ? t("sidebar.unpinChat") : t("sidebar.pinChat")}
+            title={pinned ? t("sidebar.unpin") : t("sidebar.pin")}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
@@ -1094,7 +1107,7 @@ export function WorkbenchShell({ user }: { user: User }) {
 
   return (
     <div className={cx("app-shell", sidebarCollapsed && "sidebar-collapsed", `sidebar-motion-${sidebarMotionState}`)}>
-      <button className="mobile-menu-btn" onClick={() => setMobileMenuOpen(true)} aria-label="打开菜单">
+      <button className="mobile-menu-btn" onClick={() => setMobileMenuOpen(true)} aria-label={t("sidebar.openMenu")}>
         <Menu size={20} />
       </button>
       <aside
@@ -1115,8 +1128,8 @@ export function WorkbenchShell({ user }: { user: User }) {
                   className="sidebar-logo-button"
                   type="button"
                   onClick={scrollSidebarHistoryToTop}
-                  aria-label="回到对话记录顶部"
-                  title="回到对话记录顶部"
+                  aria-label={t("sidebar.scrollTop")}
+                  title={t("sidebar.scrollTop")}
                 >
                   <ProjectLogo className="sidebar-logo" />
                 </button>
@@ -1126,10 +1139,10 @@ export function WorkbenchShell({ user }: { user: User }) {
                   <button
                     className="sidebar-head-search"
                     type="button"
-                    aria-label="搜索聊天"
-                    onMouseEnter={(event) => showSidebarFloatingTip(event, { label: "搜索聊天", shortcut: "Ctrl + K" })}
+                    aria-label={t("sidebar.searchChats")}
+                    onMouseEnter={(event) => showSidebarFloatingTip(event, { label: t("sidebar.searchChats"), shortcut: "Ctrl + K" })}
                     onMouseLeave={hideSidebarFloatingTip}
-                    onFocus={(event) => showSidebarFloatingTip(event, { label: "搜索聊天", shortcut: "Ctrl + K" })}
+                    onFocus={(event) => showSidebarFloatingTip(event, { label: t("sidebar.searchChats"), shortcut: "Ctrl + K" })}
                     onBlur={hideSidebarFloatingTip}
                     onClick={() => {
                       hideSidebarFloatingTip();
@@ -1157,7 +1170,7 @@ export function WorkbenchShell({ user }: { user: User }) {
                 >
                   <PanelLeft size={18} aria-hidden="true" />
                 </button>
-                <button className="icon-btn mobile-only" onClick={() => setMobileMenuOpen(false)} aria-label="关闭菜单">
+                <button className="icon-btn mobile-only" onClick={() => setMobileMenuOpen(false)} aria-label={t("sidebar.closeMenu")}>
                   <X size={18} />
                 </button>
               </div>
@@ -1167,7 +1180,7 @@ export function WorkbenchShell({ user }: { user: User }) {
                 to="/"
                 end
                 className={({ isActive }) => cx("nav-item", "nav-item-with-shortcut-tip", isActive && "active")}
-                aria-label="新对话"
+                aria-label={t("sidebar.newConversation")}
                 onPointerDown={pauseRenderingBeforeRouteNavigation}
                 onClick={() => {
                   pauseRenderingBeforeRouteNavigation();
@@ -1175,9 +1188,9 @@ export function WorkbenchShell({ user }: { user: User }) {
                 }}
               >
                 <MessageCirclePlus size={18} />
-                <span>新对话</span>
+                <span>{t("sidebar.newConversation")}</span>
                 <div className="sidebar-shortcut-tip" role="tooltip" aria-hidden="true">
-                  <strong>新聊天</strong>
+                  <strong>{t("sidebar.newChat")}</strong>
                   <kbd>Ctrl + Shift + O</kbd>
                 </div>
               </NavLink>
@@ -1185,16 +1198,16 @@ export function WorkbenchShell({ user }: { user: User }) {
                 <button
                   type="button"
                   className={cx("nav-item", "nav-item-with-shortcut-tip", searchOpen && "active")}
-                  aria-label="搜索聊天"
+                  aria-label={t("sidebar.searchChats")}
                   onClick={() => {
                     setSearchOpen(true);
                     setMobileMenuOpen(false);
                   }}
                 >
                   <Search size={18} />
-                  <span>搜索聊天</span>
+                  <span>{t("sidebar.searchChats")}</span>
                   <div className="sidebar-shortcut-tip" role="tooltip" aria-hidden="true">
-                    <strong>搜索聊天</strong>
+                    <strong>{t("sidebar.searchChats")}</strong>
                     <kbd>Ctrl + K</kbd>
                   </div>
                 </button>
@@ -1206,46 +1219,46 @@ export function WorkbenchShell({ user }: { user: User }) {
               <NavLink
                 to="/cases"
                 className={({ isActive }) => cx("nav-item", isActive && "active")}
-                aria-label="灵感空间"
-                data-sidebar-tip="灵感空间"
+                aria-label={t("sidebar.inspiration")}
+                data-sidebar-tip={t("sidebar.inspiration")}
                 onPointerDown={pauseRenderingBeforeRouteNavigation}
                 onClick={pauseRenderingBeforeRouteNavigation}
               >
                 <Lightbulb size={18} />
-                <span>灵感空间</span>
+                <span>{t("sidebar.inspiration")}</span>
               </NavLink>
               <NavLink
                 to="/assets"
                 className={({ isActive }) => cx("nav-item", isActive && "active")}
-                aria-label="素材库"
-                data-sidebar-tip="素材库"
+                aria-label={t("sidebar.assets")}
+                data-sidebar-tip={t("sidebar.assets")}
                 onPointerDown={pauseRenderingBeforeRouteNavigation}
                 onClick={pauseRenderingBeforeRouteNavigation}
               >
                 <FolderOpen size={18} />
-                <span>素材库</span>
+                <span>{t("sidebar.assets")}</span>
               </NavLink>
               <NavLink
                 to="/images"
                 className={({ isActive }) => cx("nav-item", isActive && "active")}
-                aria-label="我的图片"
-                data-sidebar-tip="我的图片"
+                aria-label={t("sidebar.images")}
+                data-sidebar-tip={t("sidebar.images")}
                 onPointerDown={pauseRenderingBeforeRouteNavigation}
                 onClick={pauseRenderingBeforeRouteNavigation}
               >
                 <Images size={18} />
-                <span>我的图片</span>
+                <span>{t("sidebar.images")}</span>
               </NavLink>
               <NavLink
                 to="/prompt-templates"
                 className={({ isActive }) => cx("nav-item", isActive && "active")}
-                aria-label="创作提示词"
-                data-sidebar-tip="创作提示词"
+                aria-label={t("sidebar.promptCreation")}
+                data-sidebar-tip={t("sidebar.promptCreation")}
                 onPointerDown={pauseRenderingBeforeRouteNavigation}
                 onClick={pauseRenderingBeforeRouteNavigation}
               >
                 <Sparkles size={18} />
-                <span>创作提示词</span>
+                <span>{t("sidebar.promptCreation")}</span>
               </NavLink>
             </nav>
             <div className="collapsed-recent-wrap" ref={collapsedRecentRef}>
@@ -1254,9 +1267,9 @@ export function WorkbenchShell({ user }: { user: User }) {
                 type="button"
                 onClick={toggleCollapsedRecent}
                 onPointerDown={(event) => event.stopPropagation()}
-                aria-label="最近聊天"
+                aria-label={t("sidebar.recentChats")}
                 aria-expanded={collapsedRecentOpen}
-                data-sidebar-tip="最近聊天"
+                data-sidebar-tip={t("sidebar.recentChats")}
               >
                 <MessageCircle size={18} />
               </button>
@@ -1269,7 +1282,7 @@ export function WorkbenchShell({ user }: { user: User }) {
                   aria-expanded={!sessionGroupsCollapsed.pinned}
                   onClick={() => toggleSessionGroup("pinned")}
                 >
-                  <h2>已置顶</h2>
+                  <h2>{t("sidebar.pinned")}</h2>
                   <span className="session-group-chevron" aria-hidden="true">
                     <ChevronRight size={14} />
                   </span>
@@ -1288,7 +1301,7 @@ export function WorkbenchShell({ user }: { user: User }) {
                 aria-expanded={!sessionGroupsCollapsed.recent}
                 onClick={() => toggleSessionGroup("recent")}
               >
-                <h2>最近</h2>
+                <h2>{t("sidebar.recent")}</h2>
                 <span className="session-group-chevron" aria-hidden="true">
                   <ChevronRight size={14} />
                 </span>
@@ -1316,9 +1329,9 @@ export function WorkbenchShell({ user }: { user: User }) {
               className="user-footer-profile"
               type="button"
               onClick={toggleUserCard}
-              aria-label="查看用户信息"
+              aria-label={t("sidebar.userInfo")}
               aria-expanded={userCardOpen && !userCardClosing}
-              data-sidebar-tip="查看用户信息"
+              data-sidebar-tip={t("sidebar.userInfo")}
             >
               {renderUserAvatar()}
               <span className="user-footer-name">
@@ -1331,8 +1344,8 @@ export function WorkbenchShell({ user }: { user: User }) {
               type="button"
               onClick={requestLogout}
               disabled={logout.isPending}
-              aria-label="退出登录"
-              data-sidebar-tip="退出登录"
+              aria-label={t("sidebar.logout")}
+              data-sidebar-tip={t("sidebar.logout")}
             >
               <LogOut size={18} />
             </button>
@@ -1341,13 +1354,13 @@ export function WorkbenchShell({ user }: { user: User }) {
             <div
               className={cx("user-info-card", "ui-pop-motion")}
               role="dialog"
-              aria-label="用户信息"
+              aria-label={t("sidebar.userInfo")}
               data-state={userCardClosing ? "closing" : "open"}
               data-placement={sidebarCollapsed ? "bottom-start" : "top-start"}
             >
               <button className="user-info-action" type="button" onClick={openSettingsDialog}>
                 <Settings size={16} />
-                <span>设置</span>
+                <span>{t("sidebar.settings")}</span>
               </button>
               {user.hasConfigAccess ? (
                 <button
@@ -1357,7 +1370,7 @@ export function WorkbenchShell({ user }: { user: User }) {
                   disabled={configAccess.isPending}
                 >
                   <ShieldCheck size={16} />
-                  <span>{configAccess.isPending ? "进入中" : "管理后台"}</span>
+                  <span>{configAccess.isPending ? t("sidebar.entering") : t("sidebar.admin")}</span>
                 </button>
               ) : null}
               <button
@@ -1367,7 +1380,7 @@ export function WorkbenchShell({ user }: { user: User }) {
                 disabled={logout.isPending}
               >
                 <LogOut size={16} />
-                <span>{logout.isPending ? "退出中" : "退出登录"}</span>
+                <span>{logout.isPending ? t("sidebar.loggingOut") : t("sidebar.logout")}</span>
               </button>
             </div>
           ) : null}
@@ -1391,7 +1404,7 @@ export function WorkbenchShell({ user }: { user: User }) {
             <div
               className="collapsed-recent-card ui-pop-motion"
               role="dialog"
-              aria-label="最近聊天"
+              aria-label={t("sidebar.recentChats")}
               style={collapsedRecentCardStyle}
               data-state="open"
               data-placement="bottom-start"
@@ -1399,11 +1412,11 @@ export function WorkbenchShell({ user }: { user: User }) {
               onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
             >
-              <header>最近聊天</header>
+              <header>{t("sidebar.recentChats")}</header>
               <div className="collapsed-recent-card-list">
-                {showInitialSessionSkeleton ? <div className="collapsed-recent-empty">加载中...</div> : null}
+                {showInitialSessionSkeleton ? <div className="collapsed-recent-empty">{t("common.loadingEllipsis")}</div> : null}
                 {!showInitialSessionSkeleton && collapsedRecentSessions.length === 0 ? (
-                  <div className="collapsed-recent-empty">暂无聊天</div>
+                  <div className="collapsed-recent-empty">{t("sidebar.emptyChats")}</div>
                 ) : null}
                 {collapsedRecentSessions.map((session) => {
                   const isCurrentSession = session.id === activeChatSessionId;
@@ -1412,7 +1425,7 @@ export function WorkbenchShell({ user }: { user: User }) {
                     <NavLink
                       key={session.id}
                       to={`/chat/${session.id}`}
-                      title={titlePending ? "标题生成中" : session.title}
+                      title={titlePending ? t("sidebar.titlePending") : session.title}
                       className={cx("collapsed-recent-card-link", isCurrentSession && "active")}
                       onPointerDown={() => pauseRenderingBeforeChatNavigation(session.id)}
                       onClick={() => {
@@ -1423,7 +1436,13 @@ export function WorkbenchShell({ user }: { user: User }) {
                         if (sessionGenerationStates[session.id]?.state === "completed") clearSessionGenerationStatus(session.id);
                       }}
                     >
-                      <SidebarSessionTitle title={session.title} titleStatus={session.titleStatus} className="collapsed-recent-card-title" />
+                      <SidebarSessionTitle
+                        title={session.title}
+                        titleStatus={session.titleStatus}
+                        className="collapsed-recent-card-title"
+                        fallbackTitle={t("sidebar.defaultSessionTitle")}
+                        pendingTitle={t("sidebar.titlePending")}
+                      />
                     </NavLink>
                   );
                 })}
@@ -1496,22 +1515,22 @@ export function WorkbenchShell({ user }: { user: User }) {
       />
       <ConfirmDialog
         open={logoutConfirmOpen}
-        title="确认退出登录"
-        description="退出后需要重新登录，确认现在退出吗？"
-        confirmText="退出登录"
-        cancelText="取消"
+        title={t("dialog.logout.title")}
+        description={t("dialog.logout.description")}
+        confirmText={t("dialog.logout.confirm")}
+        cancelText={t("common.cancel")}
         destructive
         onConfirm={confirmLogout}
         onCancel={() => setLogoutConfirmOpen(false)}
       />
       <ConfirmDialog
         open={deleteAccountConfirmOpen}
-        title="删除账户"
-        description="删除后会退出登录，并清理该账户的聊天、图片、素材、灵感空间内容、提示词表单和个人设置。该操作不可恢复。"
-        confirmText={deleteAccount.isPending ? "删除中" : "删除账户"}
-        cancelText="取消"
+        title={t("dialog.deleteAccount.title")}
+        description={t("dialog.deleteAccount.description")}
+        confirmText={deleteAccount.isPending ? t("common.deleting") : t("settings.account.delete")}
+        cancelText={t("common.cancel")}
         confirmationText={deleteAccountConfirmationText}
-        confirmationLabel={`请输入“${deleteAccountConfirmationText}”确认删除账户`}
+        confirmationLabel={t("dialog.deleteAccount.confirmationLabel", { confirmation: deleteAccountConfirmationText })}
         destructive
         backdropClassName="modal-backdrop-top"
         onConfirm={confirmDeleteAccount}
@@ -1522,11 +1541,11 @@ export function WorkbenchShell({ user }: { user: User }) {
       />
       <ConfirmDialog
         open={Boolean(deleteSessionTarget)}
-        title="删除聊天"
-        description={`会从聊天列表删除。该聊天生成的图片会从我的图片删除；基于这些图片保存到灵感空间的灵感、加入素材库的素材也会同步删除。确认删除「${deleteSessionTarget?.title ?? ""}」吗？`}
-        confirmText="删除"
-        cancelText="取消"
-        confirmationText="确认"
+        title={t("dialog.deleteChat.title")}
+        description={t("dialog.deleteChat.description", { title: deleteSessionTarget?.title ?? "" })}
+        confirmText={t("common.delete")}
+        cancelText={t("common.cancel")}
+        confirmationText={t("common.confirm")}
         destructive
         backdropClassName={deleteSessionTarget?.source === "archived" ? "modal-backdrop-top" : undefined}
         onConfirm={() => {
@@ -1539,10 +1558,10 @@ export function WorkbenchShell({ user }: { user: User }) {
       />
       <ConfirmDialog
         open={archiveAllConfirmOpen}
-        title="归档所有聊天"
-        description={`将把当前 ${activeSessionTotal} 条聊天移入已归档列表，确认继续吗？`}
-        confirmText="全部归档"
-        cancelText="取消"
+        title={t("dialog.archiveAll.title")}
+        description={t("dialog.archiveAll.description", { count: activeSessionTotal })}
+        confirmText={t("dialog.archiveAll.confirm")}
+        cancelText={t("common.cancel")}
         backdropClassName="modal-backdrop-top"
         onConfirm={() => {
           if (archiveAllChats.isPending) return;
@@ -1553,11 +1572,11 @@ export function WorkbenchShell({ user }: { user: User }) {
       />
       <ConfirmDialog
         open={deleteAllConfirmOpen}
-        title="删除所有聊天"
-        description="会从聊天列表删除所有聊天和已归档聊天。相关生成图片会从我的图片删除；基于这些图片保存到灵感空间的灵感、加入素材库的素材也会同步删除。确认继续吗？"
-        confirmText="全部删除"
-        cancelText="取消"
-        confirmationText="确认"
+        title={t("dialog.deleteAllChats.title")}
+        description={t("dialog.deleteAllChats.description")}
+        confirmText={t("settings.data.deleteAllAction")}
+        cancelText={t("common.cancel")}
+        confirmationText={t("common.confirm")}
         destructive
         backdropClassName="modal-backdrop-top"
         onConfirm={() => {
@@ -1571,12 +1590,12 @@ export function WorkbenchShell({ user }: { user: User }) {
         <Routes>
           <Route path="/" element={<ChatPage user={user} />} />
           <Route path="/chat/:sessionId" element={<ChatPage user={user} />} />
-          <Route path="/cases" element={<CasesPage />} />
-          <Route path="/cases/barrage" element={<InspirationBarragePage />} />
-          <Route path="/prompt-templates" element={<PromptTemplatesPage />} />
-          <Route path="/prompt-templates/:templateId/edit" element={<PromptTemplateEditorPage />} />
-          <Route path="/assets" element={<AssetsPage />} />
-          <Route path="/images" element={<ImagesPage />} />
+          <Route path="/cases" element={<PageRouteTransition key="cases"><CasesPage /></PageRouteTransition>} />
+          <Route path="/cases/barrage" element={<PageRouteTransition key="cases-barrage"><InspirationBarragePage /></PageRouteTransition>} />
+          <Route path="/prompt-templates" element={<PageRouteTransition key="prompt-templates"><PromptTemplatesPage /></PageRouteTransition>} />
+          <Route path="/prompt-templates/:templateId/edit" element={<PageRouteTransition key="prompt-template-editor"><PromptTemplateEditorPage /></PageRouteTransition>} />
+          <Route path="/assets" element={<PageRouteTransition key="assets"><AssetsPage /></PageRouteTransition>} />
+          <Route path="/images" element={<PageRouteTransition key="images"><ImagesPage /></PageRouteTransition>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
@@ -1599,6 +1618,7 @@ function ChangePasswordDialog({
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [localError, setLocalError] = useState("");
+  const { t } = useI18n();
 
   useEffect(() => {
     setLocalError("");
@@ -1608,11 +1628,11 @@ function ChangePasswordDialog({
     event.preventDefault();
     if (pending) return;
     if (!currentPassword || !newPassword) {
-      setLocalError("请填写当前密码和新密码");
+      setLocalError(t("profile.passwordRequired"));
       return;
     }
     if (newPassword !== confirmPassword) {
-      setLocalError("两次输入的新密码不一致");
+      setLocalError(t("profile.passwordMismatch"));
       return;
     }
     onSubmit({ currentPassword, newPassword });
@@ -1623,13 +1643,13 @@ function ChangePasswordDialog({
     <div className="modal-backdrop modal-backdrop-top">
       <form className="case-modal compact-modal action-modal change-password-modal" onSubmit={submit}>
         <header>
-          <h3>修改密码</h3>
-          <button type="button" onClick={onClose} aria-label="关闭">
+          <h3>{t("profile.changePassword")}</h3>
+          <button type="button" onClick={onClose} aria-label={t("common.close")}>
             <X size={18} />
           </button>
         </header>
         <label>
-          当前密码
+          {t("profile.currentPassword")}
           <input
             value={currentPassword}
             type="password"
@@ -1639,7 +1659,7 @@ function ChangePasswordDialog({
           />
         </label>
         <label>
-          新密码
+          {t("profile.newPassword")}
           <input
             value={newPassword}
             type="password"
@@ -1648,7 +1668,7 @@ function ChangePasswordDialog({
           />
         </label>
         <label>
-          确认新密码
+          {t("profile.confirmNewPassword")}
           <input
             value={confirmPassword}
             type="password"
@@ -1659,10 +1679,10 @@ function ChangePasswordDialog({
         {errorMessage ? <div className="form-error">{errorMessage}</div> : null}
         <div className="row-actions">
           <button className="secondary-btn" type="button" onClick={onClose} disabled={pending}>
-            取消
+            {t("common.cancel")}
           </button>
           <button className="primary-btn" type="submit" disabled={pending || !currentPassword || !newPassword || !confirmPassword}>
-            {pending ? "保存中" : "保存"}
+            {pending ? t("common.saving") : t("common.save")}
           </button>
         </div>
       </form>
@@ -1694,9 +1714,10 @@ function EditProfileDialog({
   const [localError, setLocalError] = useState("");
   const [generatedUsername, setGeneratedUsername] = useState<{ previous: string; generated: string } | null>(null);
   const [usernameSuggestions, setUsernameSuggestions] = useState<string[]>([]);
+  const { t } = useI18n();
   const trimmedUsername = username.trim();
   const currentTrimmedUsername = currentUsername.trim();
-  const usernameValidationError = validateProfileUsername(username);
+  const usernameValidationError = validateProfileUsername(username, t);
   const usernameChanged = trimmedUsername !== currentTrimmedUsername;
   const avatarChanged = Boolean(avatarFile);
   const visibleAvatarUrl = avatarPreviewUrl || avatarUrl;
@@ -1738,7 +1759,7 @@ function EditProfileDialog({
     if (pending || suggestUsername.isPending) return;
     if (usernameValidationError) return;
     if (!usernameChanged && !avatarChanged) {
-      setLocalError("个人资料没有变化");
+      setLocalError(t("profile.noChanges"));
       return;
     }
     onSubmit({ username: trimmedUsername, avatarFile });
@@ -1762,8 +1783,8 @@ function EditProfileDialog({
     <div className="modal-backdrop modal-backdrop-top">
       <form className="case-modal compact-modal action-modal edit-profile-modal" onSubmit={submit}>
         <header>
-          <h3>编辑个人资料</h3>
-          <button type="button" onClick={onClose} aria-label="关闭">
+          <h3>{t("profile.editProfile")}</h3>
+          <button type="button" onClick={onClose} aria-label={t("common.close")}>
             <X size={18} />
           </button>
         </header>
@@ -1773,7 +1794,7 @@ function EditProfileDialog({
             type="button"
             onClick={() => avatarInputRef.current?.click()}
             disabled={pending}
-            aria-label="修改头像"
+            aria-label={t("profile.editProfile")}
           >
             {visibleAvatarUrl ? <img src={visibleAvatarUrl} alt="" /> : <span>{visibleAvatarText}</span>}
             <span className="edit-profile-avatar-camera" aria-hidden="true">
@@ -1797,7 +1818,7 @@ function EditProfileDialog({
           />
         </div>
         <label className="edit-profile-field">
-          <span>用户名</span>
+          <span>{t("profile.username")}</span>
           <div className={cx("edit-profile-username-control", canUndoGeneratedUsername && "with-undo")}>
             <input
               value={username}
@@ -1816,8 +1837,8 @@ function EditProfileDialog({
                   className="edit-profile-username-action"
                   type="button"
                   disabled={pending || suggestUsername.isPending}
-                  aria-label="撤销生成的用户名"
-                  title="撤销生成的用户名"
+                  aria-label={t("profile.undoGeneratedUsername")}
+                  title={t("profile.undoGeneratedUsername")}
                   onClick={() => {
                     if (!generatedUsername) return;
                     setUsername(generatedUsername.previous);
@@ -1832,8 +1853,8 @@ function EditProfileDialog({
                 className="edit-profile-username-action"
                 type="button"
                 disabled={pending || suggestUsername.isPending}
-                aria-label={canUndoGeneratedUsername ? "再次生成用户名" : "自动生成用户名"}
-                title={canUndoGeneratedUsername ? "再次生成用户名" : "自动生成用户名"}
+                aria-label={canUndoGeneratedUsername ? t("profile.generateUsernameAgain") : t("profile.generateUsername")}
+                title={canUndoGeneratedUsername ? t("profile.generateUsernameAgain") : t("profile.generateUsername")}
                 onClick={generateUsername}
               >
                 <Sparkles size={16} />
@@ -1843,7 +1864,7 @@ function EditProfileDialog({
           {suggestUsername.isPending || usernameSuggestions.length > 0 ? (
             <div className="edit-profile-username-suggestions" aria-live="polite">
               {suggestUsername.isPending ? (
-                <span className="edit-profile-username-suggestion-label">生成中</span>
+                <span className="edit-profile-username-suggestion-label">{t("common.loading")}</span>
               ) : (
                 usernameSuggestions.map((candidate) => (
                   <button
@@ -1864,14 +1885,14 @@ function EditProfileDialog({
         {errorMessage ? <div className="form-error">{errorMessage}</div> : null}
         <div className="row-actions">
           <button className="secondary-btn" type="button" onClick={onClose} disabled={pending}>
-            取消
+            {t("common.cancel")}
           </button>
           <button
             className="primary-btn"
             type="submit"
             disabled={pending || suggestUsername.isPending || Boolean(usernameValidationError) || (!usernameChanged && !avatarChanged)}
           >
-            {pending ? "保存中" : "保存"}
+            {pending ? t("common.saving") : t("common.save")}
           </button>
         </div>
       </form>

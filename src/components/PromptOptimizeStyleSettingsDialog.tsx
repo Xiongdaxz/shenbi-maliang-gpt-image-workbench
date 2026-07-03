@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, Eye, EyeOff, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
+import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import { ConfirmDialog } from "../ui";
 import {
@@ -30,6 +31,7 @@ export function PromptOptimizeStyleSettingsDialog({
   onClose,
   onSave
 }: PromptOptimizeStyleSettingsDialogProps) {
+  const { t } = useI18n();
   const savedGroups = useMemo(() => sanitizePromptOptimizeStyleGroups(groups), [groups]);
   const [draft, setDraft] = useState<PromptOptimizeStyleGroup[]>(() => savedGroups);
   const [activeGroupValue, setActiveGroupValue] = useState(savedGroups[0]?.value ?? "");
@@ -164,23 +166,23 @@ export function PromptOptimizeStyleSettingsDialog({
         if (event.target === event.currentTarget) requestClose();
       }}
     >
-      <section className="prompt-style-settings-dialog" role="dialog" aria-modal="true" aria-label="AI 优化风格设置">
+      <section className="prompt-style-settings-dialog" role="dialog" aria-modal="true" aria-label={t("promptStyleSettings.aria")}>
         <header className="prompt-style-settings-head">
           <div>
-            <strong>AI 优化风格</strong>
-            <span>左侧管理主风格，右侧配置选中主风格和子风格。</span>
+            <strong>{t("promptStyleSettings.title")}</strong>
+            <span>{t("promptStyleSettings.desc")}</span>
           </div>
-          <button className="settings-close-btn" type="button" onClick={requestClose} aria-label="关闭">
+          <button className="settings-close-btn" type="button" onClick={requestClose} aria-label={t("common.close")}>
             <X size={16} />
           </button>
         </header>
         <div className="prompt-style-settings-body">
           <aside className="prompt-style-main-panel">
             <div className="prompt-style-panel-head">
-              <span>主风格</span>
+              <span>{t("promptStyleSettings.mainStyles")}</span>
               <button className="secondary-btn" type="button" onClick={addGroup}>
                 <Plus size={14} />
-                新增
+                {t("common.add")}
               </button>
             </div>
             <div className="prompt-style-main-list">
@@ -197,14 +199,14 @@ export function PromptOptimizeStyleSettingsDialog({
                   >
                     <span className="prompt-style-main-index">{groupIndex + 1}</span>
                     <span className="prompt-style-main-copy">
-                      <strong>{group.label || "未命名主风格"}</strong>
-                      <small>{children.length > 0 ? `${children.length} 个子风格` : "无子风格"}</small>
+                      <strong>{group.label || t("promptStyleSettings.unnamedMain")}</strong>
+                      <small>{children.length > 0 ? t("promptStyleSettings.childCount", { count: children.length }) : t("promptStyleSettings.noChildren")}</small>
                     </span>
                     <span className="prompt-style-main-actions">
                       <span
                         role="button"
                         tabIndex={0}
-                        aria-label="上移主风格"
+                        aria-label={t("promptStyleSettings.moveMainUp")}
                         aria-disabled={groupIndex === 0}
                         className={cx(groupIndex === 0 && "disabled")}
                         onClick={(event) => {
@@ -224,7 +226,7 @@ export function PromptOptimizeStyleSettingsDialog({
                       <span
                         role="button"
                         tabIndex={0}
-                        aria-label="下移主风格"
+                        aria-label={t("promptStyleSettings.moveMainDown")}
                         aria-disabled={groupIndex === draft.length - 1}
                         className={cx(groupIndex === draft.length - 1 && "disabled")}
                         onClick={(event) => {
@@ -253,15 +255,15 @@ export function PromptOptimizeStyleSettingsDialog({
                 <section className="prompt-style-detail-section">
                   <div className="prompt-style-section-head">
                     <div>
-                      <span>主风格配置</span>
-                      <small>{activeGroup.visible === false ? "当前隐藏" : "当前显示"}</small>
+                      <span>{t("promptStyleSettings.mainConfig")}</span>
+                      <small>{activeGroup.visible === false ? t("promptStyleSettings.currentHidden") : t("promptStyleSettings.currentVisible")}</small>
                     </div>
                     <div className="prompt-style-section-actions">
                       <button
                         type="button"
                         onClick={() => patchGroup(activeGroupIndex, { visible: activeGroup.visible === false })}
-                        aria-label={activeGroup.visible === false ? "显示主风格" : "隐藏主风格"}
-                        title={activeGroup.visible === false ? "显示主风格" : "隐藏主风格"}
+                        aria-label={activeGroup.visible === false ? t("promptStyleSettings.showMain") : t("promptStyleSettings.hideMain")}
+                        title={activeGroup.visible === false ? t("promptStyleSettings.showMain") : t("promptStyleSettings.hideMain")}
                       >
                         {activeGroup.visible === false ? <EyeOff size={15} /> : <Eye size={15} />}
                       </button>
@@ -269,8 +271,8 @@ export function PromptOptimizeStyleSettingsDialog({
                         className="danger"
                         type="button"
                         onClick={() => removeGroup(activeGroupIndex)}
-                        aria-label="删除主风格"
-                        title="删除主风格"
+                        aria-label={t("promptStyleSettings.deleteMain")}
+                        title={t("promptStyleSettings.deleteMain")}
                       >
                         <Trash2 size={15} />
                       </button>
@@ -278,7 +280,7 @@ export function PromptOptimizeStyleSettingsDialog({
                   </div>
                   <div className="prompt-style-field-grid">
                     <label>
-                      <span>名称</span>
+                      <span>{t("promptStyleSettings.name")}</span>
                       <input
                         value={activeGroup.label}
                         maxLength={40}
@@ -286,7 +288,7 @@ export function PromptOptimizeStyleSettingsDialog({
                       />
                     </label>
                     <label>
-                      <span>菜单说明</span>
+                      <span>{t("promptStyleSettings.menuDescription")}</span>
                       <input
                         value={activeGroup.description}
                         maxLength={120}
@@ -294,12 +296,12 @@ export function PromptOptimizeStyleSettingsDialog({
                       />
                     </label>
                     <label className="wide">
-                      <span>优化指令</span>
+                      <span>{t("promptStyleSettings.optimizeInstruction")}</span>
                       <textarea
                         value={activeGroup.prompt ?? ""}
                         rows={3}
                         maxLength={1200}
-                        placeholder="留空时使用系统默认规则；填写后会作为这个主风格的专属优化方向。"
+                        placeholder={t("promptStyleSettings.mainPromptPlaceholder")}
                         onChange={(event) => patchGroup(activeGroupIndex, { prompt: event.target.value })}
                       />
                     </label>
@@ -308,12 +310,12 @@ export function PromptOptimizeStyleSettingsDialog({
                 <section className="prompt-style-detail-section substyles">
                   <div className="prompt-style-section-head">
                     <div>
-                      <span>子风格</span>
-                      <small>用于细化当前主风格，菜单中会缩进显示。</small>
+                      <span>{t("promptStyleSettings.substyles")}</span>
+                      <small>{t("promptStyleSettings.substylesDesc")}</small>
                     </div>
                     <button className="secondary-btn" type="button" onClick={() => addChild(activeGroupIndex)}>
                       <Plus size={14} />
-                      新增子风格
+                      {t("promptStyleSettings.addSubstyle")}
                     </button>
                   </div>
                   <div className="prompt-style-child-list">
@@ -323,25 +325,25 @@ export function PromptOptimizeStyleSettingsDialog({
                         <article className={cx("prompt-style-child-item", !childVisible && "hidden")} key={child.value}>
                           <div className="prompt-style-child-head">
                             <span>{childIndex + 1}</span>
-                            <strong>{child.label || "未命名子风格"}</strong>
+                            <strong>{child.label || t("promptStyleSettings.unnamedChild")}</strong>
                             <div className="prompt-style-child-actions">
-                              <button type="button" onClick={() => moveChild(activeGroupIndex, childIndex, -1)} disabled={childIndex === 0} aria-label="上移子风格">
+                              <button type="button" onClick={() => moveChild(activeGroupIndex, childIndex, -1)} disabled={childIndex === 0} aria-label={t("promptStyleSettings.moveChildUp")}>
                                 <ArrowUp size={14} />
                               </button>
-                              <button type="button" onClick={() => moveChild(activeGroupIndex, childIndex, 1)} disabled={childIndex === (activeGroup.children ?? []).length - 1} aria-label="下移子风格">
+                              <button type="button" onClick={() => moveChild(activeGroupIndex, childIndex, 1)} disabled={childIndex === (activeGroup.children ?? []).length - 1} aria-label={t("promptStyleSettings.moveChildDown")}>
                                 <ArrowDown size={14} />
                               </button>
-                              <button type="button" onClick={() => patchChild(activeGroupIndex, childIndex, { visible: !childVisible })} aria-label={childVisible ? "隐藏子风格" : "显示子风格"}>
+                              <button type="button" onClick={() => patchChild(activeGroupIndex, childIndex, { visible: !childVisible })} aria-label={childVisible ? t("promptStyleSettings.hideChild") : t("promptStyleSettings.showChild")}>
                                 {childVisible ? <Eye size={14} /> : <EyeOff size={14} />}
                               </button>
-                              <button type="button" className="danger" onClick={() => removeChild(activeGroupIndex, childIndex)} aria-label="删除子风格">
+                              <button type="button" className="danger" onClick={() => removeChild(activeGroupIndex, childIndex)} aria-label={t("promptStyleSettings.deleteChild")}>
                                 <Trash2 size={14} />
                               </button>
                             </div>
                           </div>
                           <div className="prompt-style-field-grid compact">
                             <label>
-                              <span>名称</span>
+                              <span>{t("promptStyleSettings.name")}</span>
                               <input
                                 value={child.label}
                                 maxLength={40}
@@ -349,7 +351,7 @@ export function PromptOptimizeStyleSettingsDialog({
                               />
                             </label>
                             <label>
-                              <span>说明</span>
+                              <span>{t("promptStyleSettings.description")}</span>
                               <input
                                 value={child.description}
                                 maxLength={120}
@@ -357,12 +359,12 @@ export function PromptOptimizeStyleSettingsDialog({
                               />
                             </label>
                             <label className="wide">
-                              <span>优化指令</span>
+                              <span>{t("promptStyleSettings.optimizeInstruction")}</span>
                               <textarea
                                 value={child.prompt ?? ""}
                                 rows={2}
                                 maxLength={1200}
-                                placeholder="留空时继承主风格和系统子风格规则。"
+                                placeholder={t("promptStyleSettings.childPromptPlaceholder")}
                                 onChange={(event) => patchChild(activeGroupIndex, childIndex, { prompt: event.target.value })}
                               />
                             </label>
@@ -371,41 +373,41 @@ export function PromptOptimizeStyleSettingsDialog({
                       );
                     })}
                     {(activeGroup.children ?? []).length === 0 ? (
-                      <div className="prompt-style-empty">还没有子风格，可以直接使用主风格，也可以新增子风格。</div>
+                      <div className="prompt-style-empty">{t("promptStyleSettings.emptyChildren")}</div>
                     ) : null}
                   </div>
                 </section>
               </>
             ) : (
-              <div className="prompt-style-empty">暂无主风格，请新增一个主风格。</div>
+              <div className="prompt-style-empty">{t("promptStyleSettings.emptyMain")}</div>
             )}
           </main>
         </div>
         <footer className="prompt-style-settings-footer">
           <div>
-            <span>{dirty ? "有未保存修改" : "当前配置已保存"}</span>
-            <small>{styleDescription(activeGroup?.description, "选择左侧主风格后配置它的子风格。")}</small>
+            <span>{dirty ? t("promptStyleSettings.dirty") : t("promptStyleSettings.saved")}</span>
+            <small>{styleDescription(activeGroup?.description, t("promptStyleSettings.footerHint"))}</small>
           </div>
           <div className="prompt-style-footer-actions">
             <button className="secondary-btn" type="button" onClick={() => setRestoreConfirmOpen(true)}>
               <RotateCcw size={15} />
-              恢复默认
+              {t("promptStyleSettings.restoreDefault")}
             </button>
             <button className="secondary-btn" type="button" onClick={requestClose}>
-              取消
+              {t("common.cancel")}
             </button>
             <button className="primary-btn" type="button" onClick={() => onSave(normalizedDraft)} disabled={!dirty || saving}>
               <Save size={15} />
-              {saving ? "保存中" : "保存"}
+              {saving ? t("common.saving") : t("common.save")}
             </button>
           </div>
         </footer>
       </section>
       <ConfirmDialog
         open={restoreConfirmOpen}
-        title="恢复默认 AI 优化风格"
-        description="将把 AI 优化风格恢复为系统默认列表，当前未保存的风格修改会被替换。确认继续吗？"
-        confirmText="恢复默认"
+        title={t("promptStyleSettings.restoreTitle")}
+        description={t("promptStyleSettings.restoreDescription")}
+        confirmText={t("promptStyleSettings.restoreDefault")}
         backdropClassName="modal-backdrop-top"
         onCancel={() => setRestoreConfirmOpen(false)}
         onConfirm={() => {
@@ -415,10 +417,10 @@ export function PromptOptimizeStyleSettingsDialog({
       />
       <ConfirmDialog
         open={closeConfirmOpen}
-        title="保存 AI 优化风格修改？"
-        description="当前 AI 优化风格有未保存修改。保存后关闭会写入当前配置；只关闭会丢弃这些修改。"
-        confirmText="保存并关闭"
-        cancelText="只关闭"
+        title={t("promptStyleSettings.closeTitle")}
+        description={t("promptStyleSettings.closeDescription")}
+        confirmText={t("promptStyleSettings.saveAndClose")}
+        cancelText={t("promptStyleSettings.closeOnly")}
         backdropClassName="modal-backdrop-top"
         onCancel={() => {
           setCloseConfirmOpen(false);

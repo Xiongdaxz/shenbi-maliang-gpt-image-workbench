@@ -5,6 +5,7 @@ import { AddCaseModal } from "../AddCaseModal";
 import { ImageLightbox, type ImageLightboxState, type ImageLightboxTarget } from "../ImageLightbox";
 import { ImageDownloadMenu } from "../ImageDownloadMenu";
 import { EditReferenceArrowIcon, MessageEditIcon } from "../InlineIcons";
+import { useI18n } from "../../i18n";
 import { copyTextToClipboard } from "../../lib/clipboard";
 import { sourceSnapshotFromMessage } from "../../lib/chatRequest";
 import { type MessageRevision } from "../../lib/chatRender";
@@ -52,22 +53,22 @@ function sameLocalDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-function padTime(value: number) {
-  return String(value).padStart(2, "0");
-}
-
-function messageTimeLabel(value: string) {
+function messageTimeLabel(value: string, locale: string, t: (key: string, params?: Record<string, string | number>) => string) {
   const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return "时间未知";
+  if (!Number.isFinite(date.getTime())) return t("chatMessages.unknownTime");
 
   const now = new Date();
-  const time = `${padTime(date.getHours())}:${padTime(date.getMinutes())}`;
-  if (sameLocalDay(date, now)) return `今天，${time}`;
-  if (date.getFullYear() === now.getFullYear()) return `${date.getMonth() + 1}月${date.getDate()}日，${time}`;
-  return `${date.getFullYear()}/${padTime(date.getMonth() + 1)}/${padTime(date.getDate())}，${time}`;
+  const time = new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(date);
+  if (sameLocalDay(date, now)) return t("chatMessages.todayTime", { time });
+  const dateText = new Intl.DateTimeFormat(locale, date.getFullYear() === now.getFullYear()
+    ? { month: "short", day: "numeric" }
+    : { year: "numeric", month: "short", day: "numeric" }
+  ).format(date);
+  return t("chatMessages.dateTime", { date: dateText, time });
 }
 
 function MessageMoreButton({ createdAt }: { createdAt: string }) {
+  const { resolvedLanguage, t } = useI18n();
   const [open, setOpen] = useState(false);
   const [cardStyle, setCardStyle] = useState<CSSProperties>({});
   const rootRef = useRef<HTMLSpanElement | null>(null);
@@ -122,10 +123,10 @@ function MessageMoreButton({ createdAt }: { createdAt: string }) {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        aria-label="更多"
+        aria-label={t("common.more")}
         aria-haspopup="dialog"
         aria-expanded={open}
-        title="更多"
+        title={t("common.more")}
       >
         <MoreHorizontal size={17} />
       </button>
@@ -136,13 +137,13 @@ function MessageMoreButton({ createdAt }: { createdAt: string }) {
               className="message-more-card ui-pop-motion"
               style={cardStyle}
               role="dialog"
-              aria-label="消息时间"
+              aria-label={t("chatMessages.messageTime")}
               data-state="open"
               data-placement="top-start"
               onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
             >
-              <time dateTime={createdAt || undefined}>{messageTimeLabel(createdAt)}</time>
+              <time dateTime={createdAt || undefined}>{messageTimeLabel(createdAt, resolvedLanguage, t)}</time>
             </div>,
             document.body
           )
@@ -205,6 +206,7 @@ export function ChatMessageThread({
   const [previewState, setPreviewState] = useState<ImageLightboxState | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const { showToast } = useToast();
+  const { t } = useI18n();
   const maxIndex = Math.max(0, versions.length - 1);
   const controlledActiveIndex = typeof activeVersionIndex === "number";
   const currentIndex = Math.max(0, Math.min(controlledActiveIndex ? activeVersionIndex : activeIndex, maxIndex));
@@ -236,10 +238,10 @@ export function ChatMessageThread({
   const copyMessage = async () => {
     const copied = await copyTextToClipboard(revision.user.content);
     if (copied) {
-      showToast("内容已复制");
+      showToast(t("toast.contentCopied"));
       return;
     }
-    showToast("复制失败", "error");
+    showToast(t("toast.copyFailed"), "error");
   };
   const moveVersion = (offset: number) => {
     setEditing(false);
@@ -287,7 +289,7 @@ export function ChatMessageThread({
             }}
           >
             {editSourceSnapshot.references.length > 0 ? (
-              <div className="message-edit-preview-row" aria-label="原始素材">
+              <div className="message-edit-preview-row" aria-label={t("chatMessages.originalMaterials")}>
                 {editSourceSnapshot.references.map((reference, index) => (
                   <button
                     key={`${reference.kind}-${reference.id}-${reference.url}`}
@@ -295,7 +297,7 @@ export function ChatMessageThread({
                     className="message-edit-preview-card"
                     title={reference.name}
                     onClick={() => setPreviewState({ items: editPreviewItems, index })}
-                    aria-label={`预览${reference.name}`}
+                    aria-label={t("composer.previewNamed", { name: reference.name })}
                   >
                     <img src={reference.thumbnailUrl ?? reference.previewUrl ?? reference.url} alt={reference.name} />
                   </button>
@@ -305,10 +307,10 @@ export function ChatMessageThread({
             <textarea ref={textareaRef} value={editValue} onChange={(event) => setEditValue(event.target.value)} />
             <div className="message-edit-actions">
               <button type="button" onClick={() => setEditing(false)}>
-                取消
+                {t("common.cancel")}
               </button>
               <button type="submit" disabled={isSubmitting || !editValue.trim()}>
-                发送
+                {t("composer.send")}
               </button>
             </div>
           </form>
@@ -317,10 +319,10 @@ export function ChatMessageThread({
         )}
         {!editing ? (
           <div className="message-version-actions">
-            <button type="button" onClick={() => void copyMessage()} aria-label="复制">
+            <button type="button" onClick={() => void copyMessage()} aria-label={t("chatMessages.copy")}>
               <Copy size={17} />
             </button>
-            <button type="button" onClick={startEditing} disabled={isSubmitting} aria-label="编辑此消息" title="编辑消息">
+            <button type="button" onClick={startEditing} disabled={isSubmitting} aria-label={t("chatMessages.editMessage")} title={t("chatMessages.editMessage")}>
               <MessageEditIcon size={16} />
             </button>
             {canRetry ? (
@@ -329,21 +331,21 @@ export function ChatMessageThread({
                 className={cx("message-retry-button", retrying && "retrying")}
                 onClick={() => onRetryJob?.(revisionJobId)}
                 disabled={isSubmitting || retrying}
-                aria-label="重试此消息"
-                title="重试"
+                aria-label={t("chatMessages.retryMessage")}
+                title={t("chatMessages.retry")}
               >
                 <RefreshCw size={16} />
               </button>
             ) : null}
             {hasVersions ? (
               <>
-                <button type="button" onClick={() => moveVersion(-1)} disabled={currentIndex === 0} aria-label="上一版">
+                <button type="button" onClick={() => moveVersion(-1)} disabled={currentIndex === 0} aria-label={t("chatMessages.previousVersion")}>
                   <ChevronLeft size={17} />
                 </button>
                 <span>
                   {currentIndex + 1}/{versions.length}
                 </span>
-                <button type="button" onClick={() => moveVersion(1)} disabled={currentIndex === maxIndex} aria-label="下一版">
+                <button type="button" onClick={() => moveVersion(1)} disabled={currentIndex === maxIndex} aria-label={t("chatMessages.nextVersion")}>
                   <ChevronRight size={17} />
                 </button>
               </>
@@ -393,6 +395,7 @@ function AssistantImageGroup({
   const mainImageRef = useRef<HTMLDivElement | null>(null);
   const thumbsRef = useRef<HTMLDivElement | null>(null);
   const { showToast } = useToast();
+  const { t } = useI18n();
   const maxIndex = Math.max(0, imageMessages.length - 1);
   const currentIndex = Math.min(activeIndex, maxIndex);
   const activeMessage = imageMessages[currentIndex] ?? imageMessages[0];
@@ -440,20 +443,20 @@ function AssistantImageGroup({
     if (!activeMessage.imageUrl || copyingImage) return;
     if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
       const copiedUrl = await copyTextToClipboard(activeMessage.imageUrl);
-      showToast(copiedUrl ? "当前浏览器不支持直接复制图片，已复制图片链接" : "当前浏览器不支持直接复制图片", copiedUrl ? "info" : "error");
+      showToast(copiedUrl ? t("toast.imageCopyUnsupportedUrlCopied") : t("toast.imageCopyUnsupported"), copiedUrl ? "info" : "error");
       return;
     }
     setCopyingImage(true);
     try {
       const response = await fetch(activeMessage.imageUrl);
-      if (!response.ok) throw new Error("图片读取失败");
+      if (!response.ok) throw new Error(t("toast.imageReadFailed"));
       const sourceBlob = await response.blob();
       const imageBlob = sourceBlob.type === "image/png" ? sourceBlob : await convertImageBlobToPng(sourceBlob);
       await navigator.clipboard.write([new ClipboardItem({ [imageBlob.type || "image/png"]: imageBlob })]);
-      showToast("图片已复制");
+      showToast(t("toast.imageCopied"));
     } catch {
       const copiedUrl = await copyTextToClipboard(activeMessage.imageUrl);
-      showToast(copiedUrl ? "复制图片失败，已复制图片链接" : "复制图片失败", copiedUrl ? "info" : "error");
+      showToast(copiedUrl ? t("toast.imageCopyFailedUrlCopied") : t("toast.imageCopyFailed"), copiedUrl ? "info" : "error");
     } finally {
       setCopyingImage(false);
     }
@@ -463,14 +466,14 @@ function AssistantImageGroup({
     <article className="message assistant-message assistant-image-group-message">
       <div className={cx("image-result-group", longImage && "image-result-group-long")} style={imageGroupStyle}>
         <div className={cx("image-result-thumbs-wrap", thumbsOverflowing && "is-scrollable")}>
-          <div className="image-result-thumbs" ref={thumbsRef} aria-label="生成结果缩略图">
+          <div className="image-result-thumbs" ref={thumbsRef} aria-label={t("chatMessages.resultThumbnails")}>
             {imageMessages.map((message, index) => (
               <button
                 key={message.id}
                 type="button"
                 className={cx(index === currentIndex && "active")}
                 onClick={() => setActiveIndex(index)}
-                aria-label={`查看第 ${index + 1} 张`}
+                aria-label={t("chatMessages.viewNthImage", { index: index + 1 })}
                 aria-pressed={index === currentIndex}
               >
                 <img src={messageThumbnailUrl(message)} alt="" />
@@ -486,7 +489,7 @@ function AssistantImageGroup({
             onClick={() => {
               if (image) onOpenEditor(image);
             }}
-            aria-label="打开图片编辑"
+            aria-label={t("pages.images.editImage")}
           >
             <img src={messagePreviewUrl(activeMessage)} alt={activeMessage.content} onLoad={updateThumbLayout} />
           </button>
@@ -498,7 +501,7 @@ function AssistantImageGroup({
           />
         </div>
         <div className="assistant-image-toolbar assistant-image-group-toolbar">
-          <button type="button" onClick={() => void copyImage()} disabled={copyingImage} aria-label="复制图片" title="复制图片">
+          <button type="button" onClick={() => void copyImage()} disabled={copyingImage} aria-label={t("chatMessages.copyImage")} title={t("chatMessages.copyImage")}>
             <Copy size={17} />
           </button>
           <MessageMoreButton createdAt={activeMessage.createdAt} />
@@ -544,6 +547,7 @@ function AssistantImageActions({
   onOpenCase: () => void;
   onAddAsset: (image: WorkImage) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="image-actions">
       <button
@@ -552,10 +556,10 @@ function AssistantImageActions({
           if (image) onOpenEditor(image);
         }}
       >
-        编辑
+        {t("pages.images.edit")}
       </button>
       <button type="button" onClick={onOpenCase}>
-        加入灵感空间
+        {t("pages.cases.addToInspiration")}
       </button>
       <button
         type="button"
@@ -563,7 +567,7 @@ function AssistantImageActions({
           if (image) onAddAsset(image);
         }}
       >
-        加入素材库
+        {t("pages.cases.addToAssets")}
       </button>
       <ImageDownloadMenu source={image ? { type: "image", id: image.id } : null} />
     </div>
@@ -587,10 +591,11 @@ export function ChatMessage({
   const [userTextExpanded, setUserTextExpanded] = useState(false);
   const userTextRef = useRef<HTMLParagraphElement | null>(null);
   const { showToast } = useToast();
+  const { t } = useI18n();
   const image = workImageFromMessage(message);
   const hideReference = message.metadata?.hideReference === true;
   const referenceImageUrl = message.referenceImageUrl ?? (message.role === "user" ? message.imageUrl : null);
-  const referenceImagePrompt = message.referenceImagePrompt ?? message.imagePrompt ?? "引用图片";
+  const referenceImagePrompt = message.referenceImagePrompt ?? message.imagePrompt ?? t("chatMessages.referenceImage");
   const referenceImageKind = message.referenceImageKind ?? (message.role === "user" && referenceImageUrl ? "image" : null);
   const sourceReferenceImages = message.sourceReferenceImages ?? [];
   const showSelectedContentLabel =
@@ -661,10 +666,10 @@ export function ChatMessage({
           type="button"
           className="user-message-toggle"
           onClick={() => setUserTextExpanded((value) => !value)}
-          aria-label={userTextCollapsed ? "展开完整消息" : "收起消息"}
+          aria-label={userTextCollapsed ? t("chatMessages.expandFullMessage") : t("chatMessages.collapseMessage")}
           aria-expanded={userTextExpanded}
         >
-          <span>{userTextCollapsed ? "展开" : "收起"}</span>
+          <span>{userTextCollapsed ? t("common.expand") : t("common.collapse")}</span>
           {userTextCollapsed ? <ChevronDown size={14} strokeWidth={2.2} /> : <ChevronUp size={14} strokeWidth={2.2} />}
         </button>
       ) : null}
@@ -715,20 +720,20 @@ export function ChatMessage({
     if (!message.imageUrl || copyingImage) return;
     if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
       const copiedUrl = await copyTextToClipboard(message.imageUrl);
-      showToast(copiedUrl ? "当前浏览器不支持直接复制图片，已复制图片链接" : "当前浏览器不支持直接复制图片", copiedUrl ? "info" : "error");
+      showToast(copiedUrl ? t("toast.imageCopyUnsupportedUrlCopied") : t("toast.imageCopyUnsupported"), copiedUrl ? "info" : "error");
       return;
     }
     setCopyingImage(true);
     try {
       const response = await fetch(message.imageUrl);
-      if (!response.ok) throw new Error("图片读取失败");
+      if (!response.ok) throw new Error(t("toast.imageReadFailed"));
       const sourceBlob = await response.blob();
       const imageBlob = sourceBlob.type === "image/png" ? sourceBlob : await convertImageBlobToPng(sourceBlob);
       await navigator.clipboard.write([new ClipboardItem({ [imageBlob.type || "image/png"]: imageBlob })]);
-      showToast("图片已复制");
+      showToast(t("toast.imageCopied"));
     } catch {
       const copiedUrl = await copyTextToClipboard(message.imageUrl);
-      showToast(copiedUrl ? "复制图片失败，已复制图片链接" : "复制图片失败", copiedUrl ? "info" : "error");
+      showToast(copiedUrl ? t("toast.imageCopyFailedUrlCopied") : t("toast.imageCopyFailed"), copiedUrl ? "info" : "error");
     } finally {
       setCopyingImage(false);
     }
@@ -737,14 +742,14 @@ export function ChatMessage({
   if (message.role === "user" && directReferenceImages.length > 0) {
     return (
       <article className={cx("message direct-image-message", userTextMultiline ? "user-message-multiline" : "user-message-singleline")}>
-        <div className="direct-image-preview-grid" aria-label="发送图片">
+        <div className="direct-image-preview-grid" aria-label={t("chatMessages.sentImages")}>
           {directReferenceImages.map((item, index) => (
             <button
               key={item.id}
               type="button"
               className="direct-image-preview"
               onClick={() => openReferencePreview(directReferencePreviewItems, index)}
-              aria-label={`预览发送图片 ${item.name}`}
+              aria-label={t("chatMessages.previewSentImage", { name: item.name })}
             >
               <img src={item.thumbnailUrl ?? item.previewUrl ?? item.url} alt={item.name} />
             </button>
@@ -773,24 +778,24 @@ export function ChatMessage({
             type="button"
             className="edit-request-thumb"
             onClick={() => openReferencePreview(primaryReferencePreviewItems, 0)}
-            aria-label="预览引用图片"
+            aria-label={t("chatMessages.previewReferenceImage")}
           >
             <img src={referenceThumbnailUrl(message)} alt={referenceImagePrompt} />
             <span className="edit-request-hover-preview" aria-hidden="true">
               <img src={referencePreviewUrl(message)} alt="" />
             </span>
           </button>
-          {showSelectedContentLabel ? <strong>所选内容</strong> : null}
+          {showSelectedContentLabel ? <strong>{t("chatMessages.selectedContent")}</strong> : null}
         </div>
         {editMaterialReferenceImages.length > 0 ? (
-          <div className="direct-image-preview-grid edit-request-material-grid" aria-label="发送素材">
+          <div className="direct-image-preview-grid edit-request-material-grid" aria-label={t("chatMessages.sentMaterials")}>
             {editMaterialReferenceImages.map((item, index) => (
               <button
                 key={item.id}
                 type="button"
                 className="direct-image-preview"
                 onClick={() => openReferencePreview(editMaterialPreviewItems, index)}
-                aria-label={`预览发送素材 ${item.name}`}
+                aria-label={t("chatMessages.previewSentMaterial", { name: item.name })}
               >
                 <img src={item.thumbnailUrl ?? item.previewUrl ?? item.url} alt={item.name} />
               </button>
@@ -828,7 +833,7 @@ export function ChatMessage({
               onClick={() => {
                 if (image) onOpenEditor(image);
               }}
-              aria-label="打开图片编辑"
+              aria-label={t("pages.images.editImage")}
             >
               <img src={messagePreviewUrl(message)} alt={message.content} />
             </button>
@@ -840,7 +845,7 @@ export function ChatMessage({
             />
           </div>
           <div className="assistant-image-toolbar">
-            <button type="button" onClick={() => void copyImage()} disabled={copyingImage} aria-label="复制图片" title="复制图片">
+            <button type="button" onClick={() => void copyImage()} disabled={copyingImage} aria-label={t("chatMessages.copyImage")} title={t("chatMessages.copyImage")}>
               <Copy size={17} />
             </button>
             <MessageMoreButton createdAt={message.createdAt} />

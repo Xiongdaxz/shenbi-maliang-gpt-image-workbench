@@ -3,6 +3,7 @@ import type { WheelEvent as ReactWheelEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { BrushCleaning, Check, Search, X } from "lucide-react";
 import { api } from "../api";
+import { useI18n } from "../i18n";
 import { assetSpaceLabel } from "../lib/assets";
 import { cx } from "../lib/cx";
 import type { AssetItem } from "../types";
@@ -78,6 +79,7 @@ export function MaterialPicker({
   closing = false
 }: MaterialPickerProps) {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [keyword, setKeyword] = useState("");
   const [selectedTagKey, setSelectedTagKey] = useState("");
   const upload = useMutation({
@@ -123,8 +125,8 @@ export function MaterialPicker({
       });
   }, [allAssets, keyword, selectedTag]);
   const sections = [
-    { id: "shared", name: "共享", assets: filteredAssets.filter((asset) => asset.space === "shared" || asset.shared) },
-    { id: "private", name: "我的", assets: filteredAssets.filter((asset) => asset.canEdit && asset.space === "private") }
+    { id: "shared", name: t("common.shared"), assets: filteredAssets.filter((asset) => asset.space === "shared" || asset.shared) },
+    { id: "private", name: t("common.mine"), assets: filteredAssets.filter((asset) => asset.canEdit && asset.space === "private") }
   ];
   const totalVisibleAssets = sections.reduce((count, section) => count + section.assets.length, 0);
 
@@ -148,11 +150,11 @@ export function MaterialPicker({
     <div className="material-picker" data-state={closing ? "closing" : "open"}>
       <div className="material-head">
         <div className="material-title-row">
-          <strong>选择素材</strong>
+          <strong>{t("materialPicker.title")}</strong>
           {materialTags.length > 0 ? (
-            <div className="material-tag-filter" aria-label="素材标签筛选" onWheel={handleTagWheel}>
+            <div className="material-tag-filter" aria-label={t("pages.assets.tags")} onWheel={handleTagWheel}>
               <button type="button" className={cx(!selectedTagKey && "active")} onClick={() => setSelectedTagKey("")}>
-                全部
+                {t("common.all")}
               </button>
               {materialTags.map((tag) => (
                 <button
@@ -168,12 +170,12 @@ export function MaterialPicker({
           ) : null}
           <label className="case-search material-search">
             <Search size={16} />
-            <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索素材" />
+            <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder={t("materialPicker.searchPlaceholder")} />
           </label>
         </div>
         <div className="material-head-actions">
           <label className="upload-btn compact">
-            本地上传
+            {t("materialPicker.localUpload")}
             <input
               type="file"
               accept="image/*"
@@ -189,7 +191,7 @@ export function MaterialPicker({
             />
           </label>
           {onClose ? (
-            <button type="button" className="icon-btn material-close-btn" onClick={onClose} aria-label="关闭素材选择">
+            <button type="button" className="icon-btn material-close-btn" onClick={onClose} aria-label={t("materialPicker.close")}>
               <X size={17} />
             </button>
           ) : null}
@@ -208,14 +210,14 @@ export function MaterialPicker({
                     const sectionAssetIds = new Set(section.assets.map((asset) => asset.id));
                     onSelectedAssetsChange(selectedAssets.filter((asset) => !sectionAssetIds.has(asset.id)));
                   }}
-                  aria-label={`清除${section.name}选中素材`}
-                  title={`清除${section.name}选中素材`}
+                  aria-label={t("materialPicker.clearSelected", { section: section.name })}
+                  title={t("materialPicker.clearSelected", { section: section.name })}
                 >
                   <BrushCleaning size={14} />
                 </button>
               ) : null}
             </div>
-            {section.assets.length === 0 ? <p className="muted">{totalVisibleAssets === 0 ? "暂无匹配素材" : "暂无素材"}</p> : null}
+            {section.assets.length === 0 ? <p className="muted">{totalVisibleAssets === 0 ? t("materialPicker.noMatch") : t("materialPicker.empty")}</p> : null}
             <div className="material-grid">
               {section.assets.map((asset) => {
                 const active = selectedAssets.some((item) => item.id === asset.id);

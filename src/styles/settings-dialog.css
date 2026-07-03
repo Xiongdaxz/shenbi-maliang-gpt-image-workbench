@@ -149,6 +149,10 @@
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.settings-language-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .appearance-mode-control {
   min-width: 312px;
   height: 38px;
@@ -279,60 +283,101 @@
   gap: 10px;
 }
 
-.settings-edit-suggestion-select {
+.settings-modal .custom-select {
   width: max-content;
 }
 
-.settings-edit-suggestion-select .custom-select-trigger {
+.settings-modal .custom-select-trigger {
   width: auto;
   min-width: 86px;
-  min-height: 32px;
-  height: 32px;
+  min-height: 34px;
+  height: 34px;
   grid-template-columns: max-content 14px;
   justify-content: center;
   gap: 6px;
-  border-color: transparent;
+  border-color: var(--button-default-border);
   border-radius: 999px;
-  background: transparent;
-  padding: 6px 10px 6px 12px;
+  background: var(--button-default-bg);
+  color: var(--app-text);
+  padding: 7px 11px 7px 13px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
   box-shadow: none;
 }
 
-.settings-edit-suggestion-select .custom-select-trigger:hover,
-.settings-edit-suggestion-select .custom-select-trigger:focus,
-.settings-edit-suggestion-select .custom-select-trigger[aria-expanded="true"] {
-  border-color: transparent;
+.settings-modal .custom-select-trigger:hover,
+.settings-modal .custom-select-trigger:focus,
+.settings-modal .custom-select-trigger[aria-expanded="true"] {
+  border-color: var(--button-default-border);
   background: var(--button-default-hover-bg);
   box-shadow: none;
 }
 
-.settings-edit-suggestion-select .custom-select-label {
-  font-weight: 600;
+.settings-modal .custom-select-value,
+.settings-modal .custom-select-label {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
 }
 
-.settings-edit-suggestion-select .custom-select-trigger > svg {
+.settings-modal .custom-select-trigger > svg {
   width: 14px;
   height: 14px;
 }
 
+.settings-language-menu button,
 .settings-edit-suggestion-menu button {
   min-height: 46px;
 }
 
+.settings-language-menu .custom-select-option-main,
 .settings-edit-suggestion-menu .custom-select-option-main {
   min-width: 0;
   align-items: flex-start;
 }
 
+.settings-language-menu .custom-select-option-text,
 .settings-edit-suggestion-menu .custom-select-option-text {
   min-width: 0;
 }
 
-.settings-edit-suggestion-menu small {
+.settings-language-menu small {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.settings-edit-suggestion-menu {
+  overflow-x: hidden;
+}
+
+.settings-edit-suggestion-menu button {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 100%;
+  grid-template-columns: max-content 16px;
+  justify-content: space-between;
+  column-gap: 10px;
+}
+
+.settings-edit-suggestion-menu .custom-select-option-main,
+.settings-edit-suggestion-menu .custom-select-option-text {
+  min-width: max-content;
+}
+
+.settings-edit-suggestion-menu .custom-select-option-text,
+.settings-edit-suggestion-menu strong,
+.settings-edit-suggestion-menu small {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.settings-edit-suggestion-menu small {
+  display: block;
 }
 
 .settings-prompt-styles-entry {
@@ -872,6 +917,7 @@
   .settings-row,
   .settings-account-row,
   .settings-appearance-row,
+  .settings-language-row,
   .settings-preference-row,
   .settings-prompt-styles-entry {
     grid-template-columns: 1fr;

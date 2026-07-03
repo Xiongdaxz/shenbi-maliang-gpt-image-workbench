@@ -12,6 +12,7 @@ import {
   ImageEditorRail,
   ImageEditorTopbar
 } from "./ImageEditorControls";
+import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import type { SizeOption } from "../lib/imageOptions";
 import {
@@ -92,6 +93,7 @@ export function ImageEditWorkspace({
   onToggleMaterialPicker,
   onSubmitEdit
 }: ImageEditWorkspaceProps) {
+  const { t } = useI18n();
   const [activeId, setActiveId] = useState(activeImageId);
   const [selectionMode, setSelectionMode] = useState(false);
   const [prompt, setPrompt] = useState("");
@@ -141,7 +143,7 @@ export function ImageEditWorkspace({
       id: `case-${caseMaterial.caseItemId}`,
       url: caseMaterial.thumbnailUrl ?? caseMaterial.previewUrl ?? caseMaterial.url,
       previewUrl: caseMaterial.previewUrl ?? caseMaterial.originalUrl ?? caseMaterial.url,
-      name: "灵感素材",
+      name: t("chat.editor.inspirationMaterial"),
       title: caseMaterial.title,
       onRemove: () => setSelectedCaseMaterials(selectedCaseMaterials.filter((item) => item.caseItemId !== caseMaterial.caseItemId))
     })),
@@ -780,13 +782,13 @@ export function ImageEditWorkspace({
     const selectedStrokes = (currentStrokeRef.current ? [...strokesRef.current, currentStrokeRef.current] : strokesRef.current).filter(
       (stroke) => stroke.points.length > 1
     );
-    if (naturalSize.width <= 0 || naturalSize.height <= 0) throw new Error("图片尺寸读取失败");
-    if (selectedStrokes.length === 0) throw new Error("请先涂抹需要修改的区域");
+    if (naturalSize.width <= 0 || naturalSize.height <= 0) throw new Error(t("imageEditor.error.sizeReadFailed"));
+    if (selectedStrokes.length === 0) throw new Error(t("imageEditor.error.noSelection"));
     const canvas = document.createElement("canvas");
     canvas.width = naturalSize.width;
     canvas.height = naturalSize.height;
     const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("无法创建遮罩");
+    if (!ctx) throw new Error(t("imageEditor.error.maskCreateFailed"));
     ctx.fillStyle = "rgba(255,255,255,1)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.globalCompositeOperation = "destination-out";
@@ -798,7 +800,7 @@ export function ImageEditWorkspace({
   const submitFromEditor = () => {
     const trimmedPrompt = prompt.trim();
     if (!trimmedPrompt) {
-      setEditorError("请输入编辑描述");
+      setEditorError(t("imageEditor.error.promptRequired"));
       return;
     }
     try {
@@ -812,13 +814,13 @@ export function ImageEditWorkspace({
         sourceCaseItemIds: selectedCaseMaterials.map((item) => item.caseItemId)
       });
     } catch (error) {
-      setEditorError(error instanceof Error ? error.message : "提交编辑失败");
+      setEditorError(error instanceof Error ? error.message : t("imageEditor.error.submitFailed"));
     }
   };
   const shareImage = async () => {
     const url = new URL(activeImageOriginalUrl, window.location.origin).toString();
     if (navigator.share) {
-      await navigator.share({ title: activeImage.prompt || "图片", url }).catch(() => undefined);
+      await navigator.share({ title: activeImage.prompt || t("imageEditor.shareTitle"), url }).catch(() => undefined);
       return;
     }
     await navigator.clipboard?.writeText(url).catch(() => undefined);
@@ -936,7 +938,7 @@ export function ImageEditWorkspace({
             </div>
           </div>
           {previewNavigatorMetrics ? (
-            <div className={cx("image-editor-preview-navigator", canPreviewPan && "is-active")} aria-label="图片预览导航">
+            <div className={cx("image-editor-preview-navigator", canPreviewPan && "is-active")} aria-label={t("imagePreview.tools")}>
               <div
                 className="image-editor-preview-navigator-track"
                 style={{

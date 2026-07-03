@@ -183,7 +183,8 @@ async function ensureImageEditSuggestionsForImages(
           image,
           originPrompt,
           preferences.editSuggestionTone,
-          promptHistory
+          promptHistory,
+          preferences.language
         );
       })
     );
@@ -200,12 +201,14 @@ function prepareImageEditSuggestionsForJob({
   userId,
   prompt,
   kind,
-  promptHistory
+  promptHistory,
+  language
 }: {
   userId: string;
   prompt: string;
   kind: "generation" | "edit";
   promptHistory: string[];
+  language?: unknown;
 }) {
   const preferences = userPreferences(userId);
   if (!preferences.editSuggestionsEnabled) return null;
@@ -216,7 +219,8 @@ function prepareImageEditSuggestionsForJob({
     originPrompt: effectivePromptHistory[0] ?? prompt,
     promptHistory: effectivePromptHistory,
     kind,
-    tone: preferences.editSuggestionTone
+    tone: preferences.editSuggestionTone,
+    language: language ?? preferences.language
   });
 }
 
@@ -858,7 +862,8 @@ api.get("/images/:imageId/edit-suggestions", async (c) => {
     image,
     originPrompt,
     preferences.editSuggestionTone,
-    promptHistory
+    promptHistory,
+    c.req.query("language") || preferences.language
   );
   return c.json(result);
 });
@@ -994,7 +999,8 @@ api.post("/images/generate", async (c) => {
         userId: user.id,
         prompt,
         kind: "generation",
-        promptHistory: [prompt]
+        promptHistory: [prompt],
+        language: body.language
       });
       const { provider: actualProvider, responseJson, savedImages, attemptNo, retryCount } = await saveProviderImagesWithRetry({
         providers,
@@ -1393,7 +1399,8 @@ api.post("/images/edit", async (c) => {
       userId: user.id,
       prompt,
       kind: "edit",
-      promptHistory: editPromptHistoryForSourceImage(primarySourceImage, prompt)
+      promptHistory: editPromptHistoryForSourceImage(primarySourceImage, prompt),
+      language: body.language
     });
     const result = await saveProviderImagesWithRetry({
       providers,

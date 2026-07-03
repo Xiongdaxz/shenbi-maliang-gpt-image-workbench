@@ -74,6 +74,7 @@ export type GenerateImagePayload = {
   sessionId?: string;
   providerId?: string;
   prompt: string;
+  language?: string;
   size?: string;
   quality?: string;
   n?: number;
@@ -605,7 +606,7 @@ export const api = {
       body: form
     }),
   providers: () => request<{ providers: ProviderConfig[]; imageMode: ImageGenerationMode }>("/api/providers"),
-  starterCopiesToday: () => request<StarterDailyCopy>("/api/starter-copies/today"),
+  starterCopiesToday: (language?: string) => request<StarterDailyCopy>(`/api/starter-copies/today${queryString({ language })}`),
   changelog: () => request<{ entries: ChangelogEntry[] }>("/api/changelog"),
   sessions: (params?: SessionQuery, init?: RequestInit) =>
     request<PagedResponse<{ sessions: ChatSession[] }>>(
@@ -837,9 +838,9 @@ export const api = {
       `/api/images/${encodeURIComponent(imageId)}/case-suggestions`,
       { method: "POST" }
     ),
-  imageEditSuggestions: (imageId: string) =>
+  imageEditSuggestions: (imageId: string, language?: string) =>
     request<{ imageId: string; suggestions: ImageEditSuggestion[]; generated: boolean }>(
-      `/api/images/${encodeURIComponent(imageId)}/edit-suggestions`
+      `/api/images/${encodeURIComponent(imageId)}/edit-suggestions${queryString({ language })}`
     ),
   generate: (payload: GenerateImagePayload) =>
     request<{ sessionId: string; job: ImageJob | null; image: WorkImage | null; images?: WorkImage[]; error?: string }>("/api/images/generate", {

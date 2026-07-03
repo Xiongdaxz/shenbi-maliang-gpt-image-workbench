@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Archive, MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
+import { useI18n } from "../../i18n";
 import { cx } from "../../lib/cx";
 
 const SESSION_MENU_CLOSE_ANIMATION_MS = 240;
@@ -18,6 +19,7 @@ type SessionActionsMenuProps = {
 };
 
 export function SessionActionsMenu({ open, title, pinned, disabled, onOpenChange, onRename, onPin, onArchive, onDelete }: SessionActionsMenuProps) {
+  const { t } = useI18n();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const renameSettledRef = useRef(false);
@@ -138,10 +140,10 @@ export function SessionActionsMenu({ open, title, pinned, disabled, onOpenChange
         className="session-menu-trigger"
         type="button"
         disabled={disabled}
-        aria-label="更多聊天操作"
+        aria-label={t("sidebar.sessionMoreActions")}
         aria-haspopup="menu"
         aria-expanded={open && !closing}
-        title="更多"
+        title={t("common.more")}
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -172,7 +174,7 @@ export function SessionActionsMenu({ open, title, pinned, disabled, onOpenChange
                   className="session-rename-input"
                   value={draftTitle}
                   disabled={disabled}
-                  aria-label="编辑聊天标题"
+                  aria-label={t("sidebar.editChatTitle")}
                   onChange={(event) => setDraftTitle(event.target.value)}
                   onBlur={commitRename}
                   onKeyDown={(event) => {
@@ -193,7 +195,7 @@ export function SessionActionsMenu({ open, title, pinned, disabled, onOpenChange
                   onClick={beginRename}
                 >
                   <Pencil size={16} />
-                  <span>重命名</span>
+                  <span>{t("sidebar.renameChat")}</span>
                 </button>
               )}
               <button
@@ -205,7 +207,7 @@ export function SessionActionsMenu({ open, title, pinned, disabled, onOpenChange
                 }}
               >
                 {pinned ? <PinOff size={16} /> : <Pin size={16} />}
-                <span>{pinned ? "取消置顶" : "置顶聊天"}</span>
+                <span>{pinned ? t("sidebar.unpinChat") : t("sidebar.pinChat")}</span>
               </button>
               <button
                 type="button"
@@ -216,7 +218,7 @@ export function SessionActionsMenu({ open, title, pinned, disabled, onOpenChange
                 }}
               >
                 <Archive size={16} />
-                <span>归档</span>
+                <span>{t("sidebar.archiveChat")}</span>
               </button>
               <button
                 className="danger"
@@ -228,7 +230,7 @@ export function SessionActionsMenu({ open, title, pinned, disabled, onOpenChange
                 }}
               >
                 <Trash2 size={16} />
-                <span>删除</span>
+                <span>{t("common.delete")}</span>
               </button>
             </div>,
             document.body

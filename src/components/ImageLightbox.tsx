@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 
 export type ImageLightboxTarget = {
@@ -22,6 +23,7 @@ export function ImageLightbox({
   onClose: () => void;
   onChangeIndex: (index: number) => void;
 }) {
+  const { t } = useI18n();
   const items = state?.items ?? [];
   const index = Math.max(0, Math.min(state?.index ?? 0, Math.max(0, items.length - 1)));
   const activeItem = items[index] ?? null;
@@ -53,13 +55,13 @@ export function ImageLightbox({
   };
 
   return (
-    <div className={cx("reference-image-lightbox", canSwitch && "has-thumbs")} onMouseDown={onClose} role="dialog" aria-modal="true" aria-label="图片预览">
+    <div className={cx("reference-image-lightbox", canSwitch && "has-thumbs")} onMouseDown={onClose} role="dialog" aria-modal="true" aria-label={t("imageLightbox.preview")}>
       <button
         type="button"
         className="reference-image-close"
         onMouseDown={(event) => event.stopPropagation()}
         onClick={onClose}
-        aria-label="关闭预览"
+        aria-label={t("imageLightbox.close")}
       >
         <X size={20} />
       </button>
@@ -69,7 +71,7 @@ export function ImageLightbox({
           className="reference-image-step reference-image-step-prev"
           onMouseDown={(event) => event.stopPropagation()}
           onClick={() => goByOffset(-1)}
-          aria-label="上一张"
+          aria-label={t("imageLightbox.previous")}
         >
           <ChevronLeft size={26} />
         </button>
@@ -84,18 +86,18 @@ export function ImageLightbox({
             className="reference-image-step reference-image-step-next"
             onMouseDown={(event) => event.stopPropagation()}
             onClick={() => goByOffset(1)}
-            aria-label="下一张"
+            aria-label={t("imageLightbox.next")}
           >
             <ChevronRight size={26} />
           </button>
-          <div className="reference-image-thumbs" onMouseDown={(event) => event.stopPropagation()} aria-label="预览缩略图">
+          <div className="reference-image-thumbs" onMouseDown={(event) => event.stopPropagation()} aria-label={t("imageLightbox.thumbnails")}>
             {items.map((item, itemIndex) => (
               <button
                 key={`${item.url}-${itemIndex}`}
                 type="button"
                 className={cx(itemIndex === index && "active")}
                 onClick={() => onChangeIndex(itemIndex)}
-                aria-label={`查看第 ${itemIndex + 1} 张`}
+                aria-label={t("imageLightbox.viewNth", { index: itemIndex + 1 })}
                 aria-pressed={itemIndex === index}
               >
                 <img src={item.thumbnailUrl ?? item.url} alt={item.name} />

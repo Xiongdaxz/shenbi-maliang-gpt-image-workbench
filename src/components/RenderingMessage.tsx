@@ -1,30 +1,31 @@
 import { RefreshCw } from "lucide-react";
 import { memo, type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import { RENDERING_MOTION_PAUSE_EVENT, getRenderingMotionPauseUntil } from "../lib/renderingMotion";
 
 type RenderingMode = "generation" | "edit";
 
-const GENERATION_LOADING_TITLES = [
-  "正在理解你的描述",
-  "正在构思画面结构",
-  "正在铺设光影和色彩",
-  "正在打磨主体细节",
-  "正在调整整体质感",
-  "正在处理边缘与层次",
-  "正在让画面更自然",
-  "正在完成最后润色"
+const GENERATION_LOADING_TITLE_KEYS = [
+  "rendering.generation.understanding",
+  "rendering.generation.composing",
+  "rendering.generation.lighting",
+  "rendering.generation.details",
+  "rendering.generation.texture",
+  "rendering.generation.edges",
+  "rendering.generation.natural",
+  "rendering.generation.finishing"
 ];
 
-const EDIT_LOADING_TITLES = [
-  "正在分析原图内容",
-  "正在理解修改意图",
-  "正在融合参考元素",
-  "正在重绘局部细节",
-  "正在统一光影和色调",
-  "正在修整过渡边缘",
-  "正在检查画面一致性",
-  "正在完成最后润色"
+const EDIT_LOADING_TITLE_KEYS = [
+  "rendering.edit.analyzing",
+  "rendering.edit.intent",
+  "rendering.edit.references",
+  "rendering.edit.repainting",
+  "rendering.edit.lighting",
+  "rendering.edit.edges",
+  "rendering.edit.consistency",
+  "rendering.edit.finishing"
 ];
 
 const RENDERING_DOT_COUNT = 15;
@@ -202,7 +203,11 @@ const applyDotStyle = (element: HTMLSpanElement | null, style: RenderingDotStyle
 };
 
 export const RenderingMessage = memo(function RenderingMessage({ mode }: { mode: RenderingMode }) {
-  const titles = mode === "edit" ? EDIT_LOADING_TITLES : GENERATION_LOADING_TITLES;
+  const { t } = useI18n();
+  const titles = useMemo(
+    () => (mode === "edit" ? EDIT_LOADING_TITLE_KEYS : GENERATION_LOADING_TITLE_KEYS).map((key) => t(key)),
+    [mode, t]
+  );
   const initialFocusState = useMemo(createInitialFocusState, [mode]);
   const [renderSeed] = useState(() => Math.floor(Math.random() * 100000));
   const [titleIndex, setTitleIndex] = useState(0);
@@ -409,14 +414,17 @@ export function RenderingErrorMessage({
   retrying?: boolean;
   onRetry?: () => void;
 }) {
-  const displayMessage = message.trim().endsWith("请稍候重试。")
-    ? message.trim()
-    : `${message.trim() || "图片任务失败"} 请稍候重试。`;
+  const { t } = useI18n();
+  const retryHint = t("rendering.retryHint");
+  const trimmedMessage = message.trim();
+  const displayMessage = trimmedMessage.endsWith(retryHint)
+    ? trimmedMessage
+    : t("rendering.errorMessage", { message: trimmedMessage || t("rendering.taskFailed"), retryHint });
   return (
     <article className="message assistant-message rendering-message rendering-error-message" aria-live="polite">
-      <span className="rendering-title settled">{mode === "edit" ? "图片编辑失败" : "图片生成失败"}</span>
+      <span className="rendering-title settled">{mode === "edit" ? t("rendering.editFailed") : t("rendering.generationFailed")}</span>
       <div className="rendering-error-card">
-        <strong>接口返回错误</strong>
+        <strong>{t("rendering.apiError")}</strong>
         <p>{displayMessage}</p>
         {canRetry ? (
           <div className="rendering-error-actions">
@@ -425,11 +433,11 @@ export function RenderingErrorMessage({
               className={cx("rendering-error-retry-button", retrying && "retrying")}
               onClick={() => onRetry?.()}
               disabled={retrying}
-              aria-label="重试此任务"
-              title="重试"
+              aria-label={t("rendering.retryTask")}
+              title={t("chatMessages.retry")}
             >
               <RefreshCw size={14} />
-              <span>{retrying ? "重试中..." : "重试"}</span>
+              <span>{retrying ? t("rendering.retrying") : t("chatMessages.retry")}</span>
             </button>
           </div>
         ) : null}

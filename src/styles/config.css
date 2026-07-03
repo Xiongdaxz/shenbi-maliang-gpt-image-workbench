@@ -164,9 +164,92 @@
   transform: translateY(-1px);
 }
 
-.config-side .ghost-btn {
+.config-side-tools {
   flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-language-control {
+  position: relative;
+  min-width: 0;
+}
+
+.config-language-icon {
+  position: absolute;
+  top: 50%;
+  left: 11px;
+  z-index: 1;
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  color: #6b7280;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.config-language-select .custom-select-trigger {
+  min-height: 38px;
+  height: 38px;
+  grid-template-columns: minmax(0, 1fr) 16px;
+  border-color: #e5e7eb;
+  border-radius: 999px;
+  background: #fff;
+  padding: 8px 10px 8px 34px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.config-language-select .custom-select-trigger:hover,
+.config-language-select .custom-select-trigger:focus,
+.config-language-select .custom-select-trigger[aria-expanded="true"] {
+  border-color: #d1d5db;
+  background: #f3f4f6;
+  box-shadow: none;
+}
+
+.config-language-select .custom-select-value,
+.config-language-select .custom-select-label {
+  min-width: 0;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: 1;
+}
+
+.config-language-menu button {
+  min-height: 46px;
+}
+
+.config-language-menu .custom-select-option-main,
+.config-language-menu .custom-select-option-text {
+  min-width: 0;
+}
+
+.config-language-menu small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-side .ghost-btn.config-logout-btn {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  min-height: 38px;
   margin-top: 0;
+  border-color: #e5e7eb;
+  border-radius: 999px;
+  padding: 0;
+}
+
+.config-side .ghost-btn.config-logout-btn span {
+  display: none;
 }
 
 .config-side-collapsed .config-side {
@@ -250,14 +333,36 @@
   border-color: #111827;
 }
 
-.config-side-collapsed .config-side .ghost-btn {
-  align-self: center;
+.config-side-collapsed .config-side-tools {
+  width: 38px;
+  grid-template-columns: 38px;
+  justify-items: center;
+}
+
+.config-side-collapsed .config-language-control,
+.config-side-collapsed .config-language-select,
+.config-side-collapsed .config-language-select .custom-select-trigger,
+.config-side-collapsed .config-side .ghost-btn.config-logout-btn {
   width: 38px;
   height: 38px;
   min-height: 38px;
-  border-color: #e5e7eb;
   border-radius: 9px;
   padding: 0;
+}
+
+.config-side-collapsed .config-language-icon {
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.config-side-collapsed .config-language-select .custom-select-trigger {
+  grid-template-columns: 1fr;
+  border-color: #e5e7eb;
+}
+
+.config-side-collapsed .config-language-select .custom-select-value,
+.config-side-collapsed .config-language-select .custom-select-trigger > svg {
+  opacity: 0;
 }
 
 .config-main {
@@ -322,13 +427,47 @@
     padding: 9px 11px;
   }
 
-  .config-shell.config-side-collapsed .config-side .ghost-btn {
-    align-self: stretch;
-    width: 100%;
-    height: auto;
-    min-height: 36px;
+  .config-shell.config-side-collapsed .config-side-tools {
+    width: auto;
+    grid-template-columns: minmax(0, 1fr) 38px;
+    justify-items: stretch;
+  }
+
+  .config-shell.config-side-collapsed .config-language-control,
+  .config-shell.config-side-collapsed .config-language-select,
+  .config-shell.config-side-collapsed .config-language-select .custom-select-trigger {
+    width: auto;
+    height: 38px;
+    min-height: 38px;
+  }
+
+  .config-shell.config-side-collapsed .config-language-select .custom-select-trigger {
+    grid-template-columns: minmax(0, 1fr) 16px;
     border-radius: 999px;
-    padding: 9px 14px;
+    padding: 8px 10px 8px 34px;
+  }
+
+  .config-shell.config-side-collapsed .config-language-icon {
+    left: 11px;
+    transform: translateY(-50%);
+  }
+
+  .config-shell.config-side-collapsed .config-language-select .custom-select-value,
+  .config-shell.config-side-collapsed .config-language-select .custom-select-trigger > svg {
+    opacity: 1;
+  }
+
+  .config-shell.config-side-collapsed .config-side .ghost-btn.config-logout-btn {
+    align-self: stretch;
+    width: 38px;
+    height: 38px;
+    min-height: 38px;
+    border-radius: 999px;
+    padding: 0;
+  }
+
+  .config-shell.config-side-collapsed .config-side .ghost-btn.config-logout-btn span {
+    display: none;
   }
 }
 
@@ -517,6 +656,41 @@
   white-space: nowrap;
 }
 
+.starter-copy-comparison-list {
+  display: grid;
+  gap: 8px;
+}
+
+.starter-copy-comparison-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.starter-copy-copy {
+  min-width: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fafafa;
+  padding: 8px 10px;
+  display: grid;
+  gap: 5px;
+}
+
+.starter-copy-copy-label {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.starter-copy-copy-text {
+  min-width: 0;
+  color: #111827;
+  font-size: 13px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
 @media (max-width: 760px) {
   .starter-copy-control-row {
     grid-template-columns: minmax(0, 1fr);
@@ -537,6 +711,10 @@
   }
 
   .starter-copy-chip-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .starter-copy-comparison-row {
     grid-template-columns: minmax(0, 1fr);
   }
 }

@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp } from "lucide-react";
+import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import type { ScrollJumpState } from "../hooks/useScrollJump";
 
@@ -11,7 +12,12 @@ type ScrollJumpButtonProps = {
 };
 
 export function ScrollJumpButton({ className, hidden = false, loading = false, onClick, scrollJump }: ScrollJumpButtonProps) {
-  const label = loading ? "查看正在加载的回复" : scrollJump.target === "top" ? "一键到顶" : "一键到底";
+  const { t } = useI18n();
+  const label = loading
+    ? t("scrollJump.loading")
+    : scrollJump.target === "top"
+      ? t("scrollJump.top")
+      : t("scrollJump.bottom");
 
   return (
     <button

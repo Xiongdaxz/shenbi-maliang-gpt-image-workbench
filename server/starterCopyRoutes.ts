@@ -22,6 +22,7 @@ type StarterCopySettingsRow = {
 type StarterDailyCopyRow = {
   date: string;
   copies_json: string;
+  copies_en_json: string;
   source: string;
   provider_name: string;
   model: string;
@@ -111,6 +112,7 @@ const COPY_RELEVANCE_KEYWORDS = [
   "摄影"
 ];
 const COPY_END_PUNCTUATION_RE = /[。！？!…]$/;
+const ENGLISH_COPY_END_PUNCTUATION_RE = /[.!?…]$/;
 
 let schedulerTimer: ReturnType<typeof setTimeout> | null = null;
 let generationPromise: Promise<StarterDailyCopyRow | null> | null = null;
@@ -133,11 +135,36 @@ function publicStarterCopySettings(row: StarterCopySettingsRow) {
   };
 }
 
-function publicStarterDailyCopy(row: StarterDailyCopyRow | null) {
+function starterCopyLocale(value: unknown): "zh" | "en" {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!normalized) return "zh";
+  return normalized.startsWith("zh") ? "zh" : "en";
+}
+
+function starterCopyList(value: string) {
+  return safeJson<string[]>(value, [])
+    .map((item) => String(item ?? "").trim())
+    .filter(Boolean);
+}
+
+function starterChineseCopies(row: StarterDailyCopyRow) {
+  return starterCopyList(row.copies_json);
+}
+
+function starterEnglishCopies(row: StarterDailyCopyRow) {
+  return starterCopyList(row.copies_en_json);
+}
+
+function publicStarterDailyCopy(row: StarterDailyCopyRow | null, locale: "zh" | "en" = "zh") {
   if (!row || row.status !== "success") return null;
+  const copiesZh = starterChineseCopies(row);
+  const copiesEn = starterEnglishCopies(row);
   return {
     date: row.date,
-    copies: safeJson<string[]>(row.copies_json, []).map((item) => String(item ?? "").trim()).filter(Boolean),
+    copies: locale === "en" ? copiesEn : copiesZh,
+    copiesZh,
+    copiesEn,
+    locale,
     source: row.source,
     generatedAt: row.generated_at,
     providerName: row.provider_name,
@@ -150,6 +177,9 @@ function publicStarterDailyCopyStatus(row: StarterDailyCopyRow | null) {
   const base = publicStarterDailyCopy(row) ?? {
     date: row.date,
     copies: [],
+    copiesZh: starterCopyList(row.copies_json),
+    copiesEn: starterCopyList(row.copies_en_json),
+    locale: "zh" as const,
     source: row.source,
     generatedAt: row.generated_at,
     providerName: row.provider_name,
@@ -387,8 +417,24 @@ function normalizeCopy(value: unknown) {
     .trim();
 }
 
+function normalizeEnglishCopy(value: unknown) {
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    value = record.en ?? record.english ?? record.text ?? record.copy ?? record.translation ?? "";
+  }
+  return String(value ?? "")
+    .replace(/^[\s"'“”‘’`*#\-•\d.、)）]+/, "")
+    .replace(/["'“”‘’`]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function copyWithEndingPunctuation(value: string) {
   return COPY_END_PUNCTUATION_RE.test(value) ? value : `${value}。`;
+}
+
+function englishCopyWithEndingPunctuation(value: string) {
+  return ENGLISH_COPY_END_PUNCTUATION_RE.test(value) ? value : `${value}.`;
 }
 
 function collectValidCopies(candidates: unknown[], copyCount: number, existingCopies: string[] = []) {
@@ -405,6 +451,21 @@ function collectValidCopies(candidates: unknown[], copyCount: number, existingCo
     if (!COPY_RELEVANCE_KEYWORDS.some((keyword) => copy.includes(keyword))) continue;
     if (seen.has(copy)) continue;
     seen.add(copy);
+    copies.push(copy);
+    if (copies.length >= copyCount) break;
+  }
+  return copies;
+}
+
+function collectEnglishCopies(candidates: unknown[], copyCount: number) {
+  const seen = new Set<string>();
+  const copies: string[] = [];
+  for (const candidate of candidates) {
+    const copy = englishCopyWithEndingPunctuation(normalizeEnglishCopy(candidate));
+    if (copy.length < 6 || copy.length > 120) continue;
+    if (/[\u3400-\u9fff]/.test(copy)) continue;
+    if (seen.has(copy.toLowerCase())) continue;
+    seen.add(copy.toLowerCase());
     copies.push(copy);
     if (copies.length >= copyCount) break;
   }
@@ -470,6 +531,37 @@ function parseGeneratedCopies(content: string, copyCount: number, existingCopies
   return collectValidCopies(candidates, copyCount, existingCopies);
 }
 
+function parseTranslatedCopies(content: string, copyCount: number) {
+  const stripped = stripJsonFence(content);
+  const candidates: unknown[] = [];
+  try {
+    const parsed = JSON.parse(stripped);
+    if (Array.isArray(parsed)) candidates.push(...parsed);
+    else if (parsed && typeof parsed === "object" && Array.isArray((parsed as Record<string, unknown>).copies)) {
+      candidates.push(...((parsed as Record<string, unknown>).copies as unknown[]));
+    }
+  } catch {
+    const jsonMatch = stripped.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (Array.isArray(parsed)) candidates.push(...parsed);
+        else if (parsed && typeof parsed === "object" && Array.isArray((parsed as Record<string, unknown>).copies)) {
+          candidates.push(...((parsed as Record<string, unknown>).copies as unknown[]));
+        }
+      } catch {
+        // Fall through to line parsing.
+      }
+    }
+  }
+  if (candidates.length === 0) candidates.push(...stripped.split(/\r?\n/));
+  const copies = collectEnglishCopies(candidates, copyCount);
+  if (copies.length < copyCount) {
+    throw new Error(`英文每日文案翻译失败：需要 ${copyCount} 条，实际 ${copies.length} 条`);
+  }
+  return copies;
+}
+
 async function generateCopyBatchWithProvider(provider: PromptOptimizerProviderRow, copyCount: number, existingCopies: string[] = []) {
   const content = await requestPromptModelText(provider, [
     {
@@ -517,6 +609,34 @@ async function generateCopyBatchWithProvider(provider: PromptOptimizerProviderRo
   return parseGeneratedCopies(content, copyCount, existingCopies);
 }
 
+async function translateCopiesWithProvider(provider: PromptOptimizerProviderRow, copies: string[]) {
+  if (copies.length === 0) return [];
+  const content = await requestPromptModelText(provider, [
+    {
+      role: "system",
+      content: [
+        "你是 GPT 图像工作台的双语产品文案编辑。",
+        `请把 ${copies.length} 条中文空白页互动文案翻译成英文，用在非中文界面的 AI 生图工作台空白页。`,
+        "必须先忠实保留原意，再把表达调整成自然、简洁、有邀请感的英文 UI 文案。",
+        "必须保持与输入完全相同的顺序和数量，一条中文对应一条英文。",
+        "不要添加编号、引号之外的说明、Markdown 或额外字段。",
+        "每条 5 到 14 个英文单词左右；不要出现中文字符；结尾使用自然英文标点。",
+        `必须返回刚好 ${copies.length} 条有效文案，copies 数组长度必须等于 ${copies.length}。`,
+        "只输出 JSON，格式为 {\"copies\":[\"...\"]}，不要解释。"
+      ].join("\n")
+    },
+    {
+      role: "user",
+      content: JSON.stringify({
+        sourceLanguage: "zh-CN",
+        targetLanguage: "en-US",
+        copies
+      })
+    }
+  ]);
+  return parseTranslatedCopies(content, copies.length);
+}
+
 async function generateCopiesWithProvider(provider: PromptOptimizerProviderRow, copyCount: number, fallbackCopies: string[] = []) {
   let copies: string[] = [];
   for (let attempt = 0; attempt < MAX_STARTER_COPY_GENERATION_ATTEMPTS && copies.length < copyCount; attempt += 1) {
@@ -539,6 +659,7 @@ async function generateCopiesWithProvider(provider: PromptOptimizerProviderRow, 
 function upsertStarterCopyRecord({
   date,
   copies,
+  copiesEn = [],
   providerName,
   model,
   status,
@@ -546,6 +667,7 @@ function upsertStarterCopyRecord({
 }: {
   date: string;
   copies: string[];
+  copiesEn?: string[];
   providerName: string;
   model: string;
   status: "success" | "failed";
@@ -555,10 +677,11 @@ function upsertStarterCopyRecord({
   run(
     appDb,
     `insert into starter_daily_copies (
-      date, copies_json, source, provider_name, model, status, error, generated_at, created_at, updated_at
-    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      date, copies_json, copies_en_json, source, provider_name, model, status, error, generated_at, created_at, updated_at
+    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     on conflict(date) do update set
       copies_json = excluded.copies_json,
+      copies_en_json = excluded.copies_en_json,
       source = excluded.source,
       provider_name = excluded.provider_name,
       model = excluded.model,
@@ -568,6 +691,7 @@ function upsertStarterCopyRecord({
       updated_at = excluded.updated_at`,
     date,
     JSON.stringify(copies),
+    JSON.stringify(copiesEn),
     "ai",
     providerName,
     model,
@@ -601,12 +725,54 @@ function recordStarterCopyFailure(date: string, message: string, existing: Start
   });
 }
 
+function starterCopyNeedsEnglish(row: StarterDailyCopyRow | null | undefined) {
+  if (!row || row.status !== "success") return false;
+  const copies = starterChineseCopies(row);
+  if (copies.length === 0) return false;
+  return starterEnglishCopies(row).length < copies.length;
+}
+
+async function ensureStarterCopyEnglish(row: StarterDailyCopyRow | null | undefined, provider?: PromptOptimizerProviderRow | null) {
+  if (!starterCopyNeedsEnglish(row)) return row ?? null;
+  const sourceRow = row as StarterDailyCopyRow;
+  const resolvedProvider =
+    provider ??
+    getOne<PromptOptimizerProviderRow>(
+      configDb,
+      "select * from prompt_optimizer_providers where enabled = 1 order by sort_order asc, created_at asc limit 1"
+    );
+  if (!resolvedProvider) return sourceRow;
+  try {
+    const copiesEn = await translateCopiesWithProvider(resolvedProvider, starterChineseCopies(sourceRow));
+    run(
+      appDb,
+      "update starter_daily_copies set copies_en_json = ?, error = ?, updated_at = ? where date = ?",
+      JSON.stringify(copiesEn),
+      "",
+      now(),
+      sourceRow.date
+    );
+    return getOne<StarterDailyCopyRow>(appDb, "select * from starter_daily_copies where date = ?", sourceRow.date) ?? sourceRow;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "英文每日文案翻译失败";
+    run(
+      appDb,
+      "update starter_daily_copies set error = ?, updated_at = ? where date = ?",
+      message,
+      now(),
+      sourceRow.date
+    );
+    console.warn("每日空白页英文文案翻译失败", message);
+    return getOne<StarterDailyCopyRow>(appDb, "select * from starter_daily_copies where date = ?", sourceRow.date) ?? sourceRow;
+  }
+}
+
 export async function generateStarterCopies({ force = false }: { force?: boolean } = {}) {
   if (generationPromise) return generationPromise;
   generationPromise = (async () => {
     const date = shanghaiDateString();
     const existing = getOne<StarterDailyCopyRow>(appDb, "select * from starter_daily_copies where date = ?", date);
-    if (!force && existing?.status === "success") return existing;
+    if (!force && existing?.status === "success") return ensureStarterCopyEnglish(existing);
 
     const settings = starterCopySettingsRow();
     if (!settings || !globalSwitchEnabled("starter_copy_generation")) {
@@ -633,9 +799,11 @@ export async function generateStarterCopies({ force = false }: { force?: boolean
       if (!provider) throw new Error("请先在配置页启用提示词优化模型");
 
       const copies = await generateCopiesWithProvider(provider, copyCount, starterCopyHistory(date));
+      const copiesEn = await translateCopiesWithProvider(provider, copies);
       return upsertStarterCopyRecord({
         date,
         copies,
+        copiesEn,
         providerName: provider.name,
         model: provider.model,
         status: "success",
@@ -663,7 +831,10 @@ async function ensureStarterCopiesForToday() {
     shanghaiDateString(),
     "success"
   );
-  if (existing) return;
+  if (existing) {
+    await ensureStarterCopyEnglish(existing);
+    return;
+  }
   await generateStarterCopies().catch(() => undefined);
 }
 
@@ -685,11 +856,15 @@ export function registerStarterCopyRoutes(api: Hono) {
   api.get("/starter-copies/today", async (c) => {
     const user = await requireUser(c);
     if (!user) return c.json({ error: "未登录" }, 401);
+    const locale = starterCopyLocale(c.req.query("language"));
     const settings = starterCopySettingsRow();
     if (!settings || !globalSwitchEnabled("starter_copy_generation")) {
       return c.json({
         date: shanghaiDateString(),
         copies: [],
+        copiesZh: [],
+        copiesEn: [],
+        locale,
         source: "fallback",
         generatedAt: ""
       });
@@ -700,22 +875,27 @@ export function registerStarterCopyRoutes(api: Hono) {
       shanghaiDateString(),
       "success"
     );
-    return c.json(publicStarterDailyCopy(row) ?? {
+    const resolvedRow = locale === "en" ? await ensureStarterCopyEnglish(row) : row;
+    return c.json(publicStarterDailyCopy(resolvedRow, locale) ?? {
       date: shanghaiDateString(),
       copies: [],
+      copiesZh: row ? starterChineseCopies(row) : [],
+      copiesEn: row ? starterEnglishCopies(row) : [],
+      locale,
       source: "fallback",
       generatedAt: ""
     });
   });
 
-  api.get("/config/starter-copy-settings", (c) => {
+  api.get("/config/starter-copy-settings", async (c) => {
     const blocked = requireConfig(c);
     if (blocked) return blocked;
     const settings = starterCopySettingsRow();
     const today = getOne<StarterDailyCopyRow>(appDb, "select * from starter_daily_copies where date = ?", shanghaiDateString());
+    const resolvedToday = await ensureStarterCopyEnglish(today);
     return c.json({
       settings: settings ? publicStarterCopySettings(settings) : null,
-      today: publicStarterDailyCopyStatus(today)
+      today: publicStarterDailyCopyStatus(resolvedToday)
     });
   });
 

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useI18n } from "../i18n";
 import type { SubmitRequest } from "../lib/chatRequest";
 import { MAIN_CHAT_BRANCH_ID, isServerEchoOfPending, messageChatBranchId } from "../lib/chatRender";
 import type { ImageJob, Message } from "../types";
@@ -26,6 +27,7 @@ export function useChatViewState({
   runningImageJobs,
   serverMessages
 }: UseChatViewStateOptions) {
+  const { t } = useI18n();
   const pendingMatchesCurrentView = pendingSubmitScope === currentSubmitScope;
   const pendingMatchesActiveBranch = Boolean(pendingUserMessage && messageChatBranchId(pendingUserMessage) === activeBranchId);
   const pendingHasServerEcho = Boolean(pendingUserMessage && serverMessages.some((message) => isServerEchoOfPending(message, pendingUserMessage)));
@@ -43,7 +45,11 @@ export function useChatViewState({
         : visibleRunningImageJobs[0]
           ? "generation"
           : null;
-  const loadingTitle = visibleLoadingMode === "edit" ? "正在编辑图片" : visibleLoadingMode === "generation" ? "正在创建图片" : "";
+  const loadingTitle = visibleLoadingMode === "edit"
+    ? t("chat.loading.editingImage")
+    : visibleLoadingMode === "generation"
+      ? t("chat.loading.creatingImage")
+      : "";
 
   return {
     currentViewSubmitting: currentScopeBusy,

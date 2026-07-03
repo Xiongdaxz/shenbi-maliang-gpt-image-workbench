@@ -1,8 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Archive, Database, Github, KeyRound, Monitor, Moon, Palette, Pencil, Settings, Smile, Sun, Trash2, UserRound, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api } from "../../api";
+import {
+  languagePreferenceOptions,
+  normalizeLanguagePreference,
+  useI18n,
+  type LanguagePreference
+} from "../../i18n";
 import { cx } from "../../lib/cx";
 import { useAppearanceMode } from "../../hooks/useAppearanceMode";
 import type { AppearanceMode } from "../../lib/appearance";
@@ -17,34 +23,34 @@ type SettingsSectionId = "general" | "personalization" | "account" | "data" | "a
 
 const PROJECT_REPOSITORY_URL = "https://github.com/Xiongdaxz/shenbi-maliang-gpt-image-workbench";
 
-const settingsSections: Array<{ id: SettingsSectionId; label: string; icon: LucideIcon }> = [
-  { id: "general", label: "常规", icon: Settings },
-  { id: "personalization", label: "个性化", icon: Smile },
-  { id: "account", label: "账户", icon: UserRound },
-  { id: "data", label: "数据管理", icon: Database },
-  { id: "about", label: "关于", icon: Github }
+const settingsSections: Array<{ id: SettingsSectionId; labelKey: string; icon: LucideIcon }> = [
+  { id: "general", labelKey: "settings.nav.general", icon: Settings },
+  { id: "personalization", labelKey: "settings.nav.personalization", icon: Smile },
+  { id: "account", labelKey: "settings.nav.account", icon: UserRound },
+  { id: "data", labelKey: "settings.nav.data", icon: Database },
+  { id: "about", labelKey: "settings.nav.about", icon: Github }
 ];
 
-const settingsSectionTitles: Record<SettingsSectionId, string> = {
-  general: "常规",
-  personalization: "个性化",
-  account: "账户",
-  data: "数据管理",
-  about: "关于"
+const settingsSectionTitleKeys: Record<SettingsSectionId, string> = {
+  general: "settings.nav.general",
+  personalization: "settings.nav.personalization",
+  account: "settings.nav.account",
+  data: "settings.nav.data",
+  about: "settings.nav.about"
 };
 
-const appearanceOptions: Array<{ value: AppearanceMode; label: string; icon: LucideIcon }> = [
-  { value: "system", label: "系统", icon: Monitor },
-  { value: "dark", label: "深色", icon: Moon },
-  { value: "light", label: "浅色", icon: Sun },
-  { value: "maliang", label: "马良", icon: Palette }
+const appearanceOptions: Array<{ value: AppearanceMode; labelKey: string; icon: LucideIcon }> = [
+  { value: "system", labelKey: "appearance.system", icon: Monitor },
+  { value: "dark", labelKey: "appearance.dark", icon: Moon },
+  { value: "light", labelKey: "appearance.light", icon: Sun },
+  { value: "maliang", labelKey: "appearance.maliang", icon: Palette }
 ];
 
-const editSuggestionToneOptions: Array<{ value: EditSuggestionTone; label: string; description: string }> = [
-  { value: "default", label: "默认", description: "兼顾可用性、创意扩展和细节修复。" },
-  { value: "practical", label: "实用优化", description: "强化排版清晰、信息层级、阅读顺序和商业可用性。" },
-  { value: "creative", label: "创意扩展", description: "强化场景变化、风格包装、叙事感和视觉记忆点。" },
-  { value: "detail", label: "细节修复", description: "强化文字、主体、背景、材质、光影和局部瑕疵修正。" }
+const editSuggestionToneOptions: Array<{ value: EditSuggestionTone; labelKey: string; descriptionKey: string }> = [
+  { value: "default", labelKey: "settings.personalization.tone.default", descriptionKey: "settings.personalization.tone.defaultDesc" },
+  { value: "practical", labelKey: "settings.personalization.tone.practical", descriptionKey: "settings.personalization.tone.practicalDesc" },
+  { value: "creative", labelKey: "settings.personalization.tone.creative", descriptionKey: "settings.personalization.tone.creativeDesc" },
+  { value: "detail", labelKey: "settings.personalization.tone.detail", descriptionKey: "settings.personalization.tone.detailDesc" }
 ];
 
 type AppSettingsDialogProps = {
@@ -91,6 +97,16 @@ export function AppSettingsDialog({
   const [promptColorSchemeSettingsOpen, setPromptColorSchemeSettingsOpen] = useState(false);
   const { mode: appearanceMode, setMode: setAppearanceMode } = useAppearanceMode();
   const { showToast } = useToast();
+  const { language, resolvedLanguage, setLanguage, t } = useI18n();
+  const languageOptions = useMemo(() => languagePreferenceOptions(t, resolvedLanguage), [resolvedLanguage, t]);
+  const toneOptions = useMemo(
+    () => editSuggestionToneOptions.map((option) => ({
+      value: option.value,
+      label: t(option.labelKey),
+      description: t(option.descriptionKey)
+    })),
+    [t]
+  );
   const changelog = useQuery({
     queryKey: ["changelog"],
     queryFn: api.changelog,
@@ -116,13 +132,16 @@ export function AppSettingsDialog({
     editSuggestionsEnabled: user.preferences?.editSuggestionsEnabled ?? true,
     editSuggestionTone: user.preferences?.editSuggestionTone ?? "default" as const,
     autoUploadPastedAssets: user.preferences?.autoUploadPastedAssets ?? true,
+    language: normalizeLanguagePreference(user.preferences?.language ?? language),
     promptOptimizeStyleGroups: sanitizePromptOptimizeStyleGroups(user.preferences?.promptOptimizeStyleGroups)
   };
   const toneDisabled = !preferences.editSuggestionsEnabled;
   const promptStyleGroupCount = preferences.promptOptimizeStyleGroups.length;
   const promptSubStyleCount = preferences.promptOptimizeStyleGroups.reduce((total, group) => total + (group.children?.length ?? 0), 0);
   const colorSchemeList = promptColorSchemes.data?.schemes ?? [];
-  const visibleColorSchemeCount = colorSchemeList.filter((scheme) => scheme.visible).length;
+  const visibleColorSchemes = colorSchemeList.filter((scheme) => scheme.visible);
+  const visibleColorSchemeCategoryCount = new Set(visibleColorSchemes.map((scheme) => scheme.category?.trim() || t("promptColorScheme.customCategory"))).size;
+  const visibleColorSchemeCount = visibleColorSchemes.length;
 
   return (
     <div
@@ -131,9 +150,9 @@ export function AppSettingsDialog({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <section className="settings-modal" role="dialog" aria-modal="true" aria-label="设置">
-        <aside className="settings-side" aria-label="设置菜单">
-          <button className="settings-close-btn" type="button" onClick={onClose} aria-label="关闭设置">
+      <section className="settings-modal" role="dialog" aria-modal="true" aria-label={t("settings.dialog.title")}>
+        <aside className="settings-side" aria-label={t("settings.dialog.menu")}>
+          <button className="settings-close-btn" type="button" onClick={onClose} aria-label={t("settings.close")}>
             <X size={20} />
           </button>
           <nav className="settings-nav">
@@ -147,7 +166,7 @@ export function AppSettingsDialog({
                   onClick={() => setActiveSection(item.id)}
                 >
                   <Icon size={18} />
-                  <span>{item.label}</span>
+                  <span>{t(item.labelKey)}</span>
                 </button>
               );
             })}
@@ -155,16 +174,16 @@ export function AppSettingsDialog({
         </aside>
         <div className="settings-content">
           <header className="settings-content-head">
-            <h2>{settingsSectionTitles[activeSection]}</h2>
+            <h2>{t(settingsSectionTitleKeys[activeSection])}</h2>
           </header>
           {activeSection === "general" ? (
             <div className="settings-list">
               <div className="settings-row settings-appearance-row">
                 <div>
-                  <strong>外观</strong>
-                  <span>选择工作台界面的显示模式</span>
+                  <strong>{t("settings.general.appearance.title")}</strong>
+                  <span>{t("settings.general.appearance.desc")}</span>
                 </div>
-                <div className="appearance-mode-control" role="group" aria-label="外观模式">
+                <div className="appearance-mode-control" role="group" aria-label={t("settings.general.appearance.title")}>
                   {appearanceOptions.map((option) => {
                     const Icon = option.icon;
                     const active = option.value === appearanceMode;
@@ -178,27 +197,46 @@ export function AppSettingsDialog({
                           if (active) return;
                           setAppearanceMode(option.value);
                           onAppearanceModeChange(option.value);
-                          showToast("外观已更新");
+                          showToast(t("settings.general.appearance.toast"));
                         }}
                       >
                         <Icon size={15} />
-                        <span>{option.label}</span>
+                        <span>{t(option.labelKey)}</span>
                       </button>
                     );
                   })}
                 </div>
               </div>
+              <div className="settings-row settings-language-row">
+                <div>
+                  <strong>{t("settings.language.title")}</strong>
+                  <span>{t("settings.language.desc")}</span>
+                </div>
+                <CustomSelect
+                  value={preferences.language}
+                  options={languageOptions}
+                  onChange={(value) => {
+                    const nextLanguage = normalizeLanguagePreference(value) as LanguagePreference;
+                    if (nextLanguage === preferences.language) return;
+                    setLanguage(nextLanguage);
+                    onPreferencesChange({ language: nextLanguage });
+                  }}
+                  className="settings-language-select"
+                  menuClassName="settings-language-menu"
+                  menuWidth={260}
+                />
+              </div>
               <div className="settings-row settings-preference-row">
                 <div>
-                  <strong>自动上传素材库</strong>
-                  <span>开启后，输入框粘贴的图片会自动保存到素材库；关闭后仅作为本次输入素材使用</span>
+                  <strong>{t("settings.general.autoUpload.title")}</strong>
+                  <span>{t("settings.general.autoUpload.desc")}</span>
                 </div>
                 <button
                   className={cx("settings-switch-control", preferences.autoUploadPastedAssets && "checked")}
                   type="button"
                   role="switch"
                   aria-checked={preferences.autoUploadPastedAssets}
-                  aria-label="自动上传素材库"
+                  aria-label={t("settings.general.autoUpload.title")}
                   onClick={() => onPreferencesChange({ autoUploadPastedAssets: !preferences.autoUploadPastedAssets })}
                 >
                   <span className="settings-switch-track" aria-hidden="true">
@@ -211,8 +249,8 @@ export function AppSettingsDialog({
             <div className="settings-list">
               <div className="settings-row settings-preference-row">
                 <div>
-                  <strong>续改建议</strong>
-                  <span>控制对话输入框上方的 3 条图片续改建议，选择新建议的生成倾向</span>
+                  <strong>{t("settings.personalization.editSuggestions.title")}</strong>
+                  <span>{t("settings.personalization.editSuggestions.desc")}</span>
                 </div>
                 <div className="settings-edit-suggestions-control">
                   <button
@@ -220,7 +258,7 @@ export function AppSettingsDialog({
                     type="button"
                     role="switch"
                     aria-checked={preferences.editSuggestionsEnabled}
-                    aria-label="续改建议"
+                    aria-label={t("settings.personalization.editSuggestions.title")}
                     onClick={() => onPreferencesChange({ editSuggestionsEnabled: !preferences.editSuggestionsEnabled })}
                   >
                     <span className="settings-switch-track" aria-hidden="true">
@@ -229,7 +267,7 @@ export function AppSettingsDialog({
                   </button>
                   <CustomSelect
                     value={preferences.editSuggestionTone}
-                    options={editSuggestionToneOptions}
+                    options={toneOptions}
                     onChange={(value) => {
                       const nextTone = editSuggestionToneOptions.find((option) => option.value === value)?.value;
                       if (!nextTone || nextTone === preferences.editSuggestionTone) return;
@@ -239,29 +277,33 @@ export function AppSettingsDialog({
                     className="settings-edit-suggestion-select"
                     menuClassName="settings-edit-suggestion-menu"
                     menuWidth={300}
+                    menuAutoWidth
+                    menuAutoWidthPadding={10}
                   />
                 </div>
               </div>
               <div className="settings-row settings-prompt-styles-entry">
                 <div>
-                  <strong>AI 优化风格</strong>
+                  <strong>{t("settings.personalization.promptStyles.title")}</strong>
                   <span>
-                    {promptStyleGroupCount} 个主风格，{promptSubStyleCount} 个子风格；可设置排序、显示状态和专属优化指令
+                    {t("settings.personalization.promptStyles.desc", { groupCount: promptStyleGroupCount, childCount: promptSubStyleCount })}
                   </span>
                 </div>
                 <button className="secondary-btn" type="button" onClick={() => setPromptStyleSettingsOpen(true)}>
                   <Settings size={15} />
-                  管理风格
+                  {t("settings.personalization.promptStyles.manage")}
                 </button>
               </div>
               <div className="settings-row settings-prompt-styles-entry">
                 <div>
-                  <strong>色系选择</strong>
-                  <span>{visibleColorSchemeCount} 个可用色系；选择后会注入到对话页提示词</span>
+                  <strong>{t("settings.personalization.colorSchemes.title")}</strong>
+                  <span>
+                    {t("settings.personalization.colorSchemes.desc", { categoryCount: visibleColorSchemeCategoryCount, schemeCount: visibleColorSchemeCount })}
+                  </span>
                 </div>
                 <button className="secondary-btn" type="button" onClick={() => setPromptColorSchemeSettingsOpen(true)}>
                   <Palette size={15} />
-                  管理色系
+                  {t("settings.personalization.colorSchemes.manage")}
                 </button>
               </div>
             </div>
@@ -273,51 +315,51 @@ export function AppSettingsDialog({
                     {user.avatarUrl ? <img src={user.avatarUrl} alt="" /> : <span>{avatarText}</span>}
                   </span>
                   <div className="settings-account-text">
-                    <strong>账号</strong>
+                    <strong>{t("settings.account.account")}</strong>
                     <span>{user.account}</span>
                   </div>
                 </div>
                 <button className="secondary-btn" type="button" onClick={onEditProfile}>
                   <Pencil size={15} />
-                  编辑个人资料
+                  {t("settings.account.editProfile")}
                 </button>
               </div>
               <div className="settings-row">
                 <div>
-                  <strong>用户名</strong>
+                  <strong>{t("settings.account.username")}</strong>
                   <span>{user.username}</span>
                 </div>
               </div>
               <div className="settings-row">
                 <div>
-                  <strong>登录密码</strong>
-                  <span>用于账号登录验证</span>
+                  <strong>{t("settings.account.password")}</strong>
+                  <span>{t("settings.account.passwordDesc")}</span>
                 </div>
                 <button className="secondary-btn" type="button" onClick={onChangePassword}>
                   <KeyRound size={15} />
-                  修改密码
+                  {t("settings.account.changePassword")}
                 </button>
               </div>
               <div className="settings-row">
                 <div>
-                  <strong>邮箱</strong>
-                  <span>{user.email || "未填写邮箱"}</span>
+                  <strong>{t("settings.account.email")}</strong>
+                  <span>{user.email || t("settings.account.emailEmpty")}</span>
                 </div>
               </div>
               <div className="settings-row">
                 <div>
-                  <strong>所属团队</strong>
-                  <span>{user.teamName || user.teamId || "默认团队"}</span>
+                  <strong>{t("settings.account.team")}</strong>
+                  <span>{user.teamName || user.teamId || t("settings.account.defaultTeam")}</span>
                 </div>
               </div>
               <div className="settings-row danger">
                 <div>
-                  <strong>删除账户</strong>
-                  <span>删除后会退出登录，并清理该账户的聊天、图片、素材和个人数据</span>
+                  <strong>{t("settings.account.delete")}</strong>
+                  <span>{t("settings.account.deleteDesc")}</span>
                 </div>
                 <button className="danger-outline-btn" type="button" onClick={onDeleteAccount} disabled={deleteAccountPending}>
                   <Trash2 size={15} />
-                  {deleteAccountPending ? "删除中" : "删除账户"}
+                  {deleteAccountPending ? t("common.deleting") : t("settings.account.delete")}
                 </button>
               </div>
             </div>
@@ -325,17 +367,17 @@ export function AppSettingsDialog({
             <div className="settings-list">
               <div className="settings-row">
                 <div>
-                  <strong>已归档的聊天</strong>
-                  <span>{archivedSessionCount} 条</span>
+                  <strong>{t("settings.data.archivedChats")}</strong>
+                  <span>{archivedSessionCount}</span>
                 </div>
                 <button className="secondary-btn" type="button" onClick={onOpenArchivedChats}>
-                  管理
+                  {t("common.manage")}
                 </button>
               </div>
               <div className="settings-row">
                 <div>
-                  <strong>归档所有聊天</strong>
-                  <span>{activeSessionCount} 条</span>
+                  <strong>{t("settings.data.archiveAll")}</strong>
+                  <span>{activeSessionCount}</span>
                 </div>
                 <button
                   className="secondary-btn"
@@ -344,13 +386,13 @@ export function AppSettingsDialog({
                   disabled={archiveAllPending || activeSessionCount === 0}
                 >
                   <Archive size={15} />
-                  {archiveAllPending ? "归档中" : "全部归档"}
+                  {archiveAllPending ? t("settings.data.archiving") : t("settings.data.archiveAllAction")}
                 </button>
               </div>
               <div className="settings-row danger">
                 <div>
-                  <strong>删除所有聊天</strong>
-                  <span>{activeSessionCount + archivedSessionCount} 条</span>
+                  <strong>{t("settings.data.deleteAll")}</strong>
+                  <span>{activeSessionCount + archivedSessionCount}</span>
                 </div>
                 <button
                   className="danger-outline-btn"
@@ -359,7 +401,7 @@ export function AppSettingsDialog({
                   disabled={deleteAllPending || activeSessionCount + archivedSessionCount === 0}
                 >
                   <Trash2 size={15} />
-                  全部删除
+                  {t("settings.data.deleteAllAction")}
                 </button>
               </div>
             </div>
@@ -368,7 +410,7 @@ export function AppSettingsDialog({
               <div className="settings-list settings-about-list">
                 <div className="settings-row settings-about-version-row">
                   <div>
-                    <strong>当前版本</strong>
+                    <strong>{t("settings.about.currentVersion")}</strong>
                     <span>{latestEntry?.version ?? "-"}</span>
                   </div>
                   <a className="secondary-btn" href={PROJECT_REPOSITORY_URL} target="_blank" rel="noreferrer">
@@ -378,10 +420,10 @@ export function AppSettingsDialog({
                 </div>
               </div>
               <div className="settings-changelog">
-                <h3 className="settings-section-title">更新日志</h3>
-                {changelog.isLoading ? <div className="settings-empty">更新日志加载中...</div> : null}
+                <h3 className="settings-section-title">{t("settings.about.changelog")}</h3>
+                {changelog.isLoading ? <div className="settings-empty">{t("settings.about.changelogLoading")}</div> : null}
                 {changelog.error ? <div className="form-error">{changelog.error.message}</div> : null}
-                {!changelog.isLoading && entries.length === 0 ? <div className="settings-empty">暂无更新日志</div> : null}
+                {!changelog.isLoading && entries.length === 0 ? <div className="settings-empty">{t("settings.about.changelogEmpty")}</div> : null}
                 {entries.map((entry) => (
                   <article className="settings-changelog-entry" key={entry.version}>
                     <header>

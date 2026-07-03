@@ -1,7 +1,9 @@
 import { appDb, getOne, run } from "./db";
 import {
-  FALLBACK_PROMPT_EDIT_SUGGESTIONS,
+  fallbackPromptEditSuggestionsForLocale,
   generatePromptEditSuggestions,
+  normalizePromptEditSuggestionLocale,
+  type PromptEditSuggestionLocale,
   type PromptEditSuggestion
 } from "./promptTitle";
 import type { ImageEditSuggestionRow, ImageRow } from "./types";
@@ -13,14 +15,14 @@ export type PublicImageEditSuggestion = PromptEditSuggestion & {
 };
 
 const EDIT_SUGGESTION_COUNT = 3;
-const EDIT_SUGGESTION_PROMPT_UPDATED_AT = "2026-06-15T00:00:00.000";
+const EDIT_SUGGESTION_PROMPT_UPDATED_AT = "2026-07-02T00:00:00.000";
 type ImageEditSuggestionResult = {
   imageId: string;
   suggestions: PublicImageEditSuggestion[];
   generated: boolean;
 };
 export type PreparedImageEditSuggestions = {
-  preferenceKey: EditSuggestionTone;
+  preferenceKey: string;
   suggestions: Promise<PromptEditSuggestion[]>;
 };
 const inFlightEditSuggestions = new Map<string, Promise<ImageEditSuggestionResult>>();
@@ -70,10 +72,14 @@ function normalizeStoredSuggestions(value: unknown) {
   return suggestions;
 }
 
-function publicEditSuggestions(suggestions: unknown): PublicImageEditSuggestion[] {
+function editSuggestionPreferenceKey(tone: EditSuggestionTone, language: PromptEditSuggestionLocale) {
+  return `${tone}:${language}`;
+}
+
+function publicEditSuggestions(suggestions: unknown, language: PromptEditSuggestionLocale): PublicImageEditSuggestion[] {
   const normalized = normalizeStoredSuggestions(suggestions);
   const filled = [...normalized];
-  for (const fallback of FALLBACK_PROMPT_EDIT_SUGGESTIONS) {
+  for (const fallback of fallbackPromptEditSuggestionsForLocale(language)) {
     if (filled.length >= EDIT_SUGGESTION_COUNT) break;
     if (filled.some((item) => item.label === fallback.label && item.prompt === fallback.prompt)) continue;
     filled.push(fallback);
@@ -103,23 +109,27 @@ export function prepareImageEditSuggestionsForPrompt({
   originPrompt = "",
   tone = "default",
   promptHistory = [],
-  kind = ""
+  kind = "",
+  language
 }: {
   prompt: string;
   originPrompt?: string;
   tone?: EditSuggestionTone;
   promptHistory?: string[];
   kind?: string;
+  language?: unknown;
 }): PreparedImageEditSuggestions {
-  const preferenceKey = normalizeEditSuggestionTone(tone);
+  const normalizedTone = normalizeEditSuggestionTone(tone);
+  const normalizedLanguage = normalizePromptEditSuggestionLocale(language);
   return {
-    preferenceKey,
+    preferenceKey: editSuggestionPreferenceKey(normalizedTone, normalizedLanguage),
     suggestions: generatePromptEditSuggestions({
       prompt,
       originPrompt,
       promptHistory,
       kind,
-      tone: preferenceKey
+      tone: normalizedTone,
+      language: normalizedLanguage
     })
   };
 }
@@ -165,9 +175,12 @@ export async function ensureImageEditSuggestionsForImageWithTone(
   image: ImageRow,
   originPrompt = "",
   tone: EditSuggestionTone = "default",
-  promptHistory: string[] = []
+  promptHistory: string[] = [],
+  language?: unknown
 ) {
-  const preferenceKey = normalizeEditSuggestionTone(tone);
+  const normalizedTone = normalizeEditSuggestionTone(tone);
+  const normalizedLanguage = normalizePromptEditSuggestionLocale(language);
+  const preferenceKey = editSuggestionPreferenceKey(normalizedTone, normalizedLanguage);
   const existing = getOne<ImageEditSuggestionRow>(
     appDb,
     "select * from image_edit_suggestions where image_id = ? and user_id = ?",
@@ -184,7 +197,7 @@ export async function ensureImageEditSuggestionsForImageWithTone(
       !promptVersionExpired &&
       !shouldRefreshStoredSuggestions(storedSuggestions)
     ) {
-      return { imageId: image.id, suggestions: publicEditSuggestions(storedSuggestions), generated: false };
+      return { imageId: image.id, suggestions: publicEditSuggestions(storedSuggestions, normalizedLanguage), generated: false };
     }
   }
 
@@ -198,7 +211,8 @@ export async function ensureImageEditSuggestionsForImageWithTone(
       originPrompt,
       promptHistory,
       kind: image.kind,
-      tone: preferenceKey
+      tone: normalizedTone,
+      language: normalizedLanguage
     });
     const timestamp = now();
     run(
@@ -220,7 +234,7 @@ export async function ensureImageEditSuggestionsForImageWithTone(
     );
     return {
       imageId: image.id,
-      suggestions: publicEditSuggestions(suggestions),
+      suggestions: publicEditSuggestions(suggestions, normalizedLanguage),
       generated: true
     };
   })().finally(() => {

@@ -71,6 +71,39 @@ export function shouldRequestOpenAiCompatibleBase64(provider: RuntimeProviderRow
   return channel !== "chatgpt_web";
 }
 
+function greatestCommonDivisor(left: number, right: number): number {
+  return right === 0 ? left : greatestCommonDivisor(right, left % right);
+}
+
+function aspectRatioInstructionFromSize(value: unknown) {
+  const size = String(value ?? "").trim();
+  if (!size || size.toLowerCase() === "auto") return "";
+  const match = size.match(/^(\d+)\s*x\s*(\d+)$/i);
+  if (!match) return "";
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return "";
+  const divisor = greatestCommonDivisor(width, height);
+  const ratio = `${width / divisor}:${height / divisor}`;
+  if (width === height) {
+    return `宽高比要求：请按 ${ratio} 方形画幅构图，保持正方形画面，不要改成横图或竖图。`;
+  }
+  if (width > height) {
+    return `宽高比要求：请按 ${ratio} 横向画幅构图，整体画面适合宽屏输出，不要改成竖图或方图。`;
+  }
+  return `宽高比要求：请按 ${ratio} 竖向画幅构图，整体画面适合竖版输出，不要改成横图或方图。`;
+}
+
+function injectAspectRatioInstruction(payload: Record<string, unknown>) {
+  const instruction = aspectRatioInstructionFromSize(payload.size);
+  const prompt = String(payload.prompt ?? "");
+  if (!instruction || !prompt.trim()) return payload;
+  return {
+    ...payload,
+    prompt: [instruction, "", prompt].join("\n")
+  };
+}
+
 function imageModeLabel(mode: ImageGenerationSettings["mode"]) {
   if (mode === "cpa") return "CPA 渠道模式";
   if (mode === "chatgpt_web") return "官网模式";
@@ -2930,7 +2963,7 @@ function payloadForProvider(provider: RuntimeProviderRow, payload: Record<string
   if (channel !== "chatgpt_web") {
     delete nextPayload.webConversationContext;
   }
-  return nextPayload;
+  return injectAspectRatioInstruction(nextPayload);
 }
 
 type ProviderChainResponseHandler<T> = (input: {
@@ -2964,21 +2997,22 @@ export async function callProviderGenerationWithProgress(
   onImageResult: (responseJson: unknown) => Promise<void> | void,
   context: ProviderRequestContext = {}
 ) {
+  const providerPayload = payloadForProvider(provider, payload);
   if (normalizeProviderChannel(provider.channel || inferChannelFromType(provider.type)) !== "chatgpt_web" && normalizeRouteMode(provider.route_mode) !== "responses") {
     const endpoint = normalizePath(provider.base_url, provider.generation_path);
     try {
-      const responseJson = await executeImagesApiStreamRequest(provider, endpoint, payload, onImageResult, context);
+      const responseJson = await executeImagesApiStreamRequest(provider, endpoint, providerPayload, onImageResult, context);
       return { responseJson, streamed: true };
     } catch (error) {
       const streamedImageCount = error instanceof Error ? (error as Error & { streamedImageCount?: number }).streamedImageCount ?? 0 : 0;
       if (streamedImageCount === 0) {
-        const responseJson = await callImagesApiProvider(provider, "generation", payload, context);
+        const responseJson = await callImagesApiProvider(provider, "generation", providerPayload, context);
         return { responseJson, streamed: false };
       }
       throw error;
     }
   }
-  const responseJson = await callProvider(provider, "generation", payload, context);
+  const responseJson = await callProvider(provider, "generation", providerPayload, context);
   return { responseJson, streamed: false };
 }
 

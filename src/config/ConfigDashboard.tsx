@@ -1,10 +1,20 @@
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { LogOut, PanelLeft } from "lucide-react";
-import { configApi } from "../api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Languages, LogOut, PanelLeft } from "lucide-react";
+import { api, configApi } from "../api";
 import { ProjectLogo } from "../components/ProjectLogo";
+import {
+  languagePreferenceOptions,
+  normalizeLanguagePreference,
+  useI18n,
+  useSyncI18nPreference,
+  type LanguagePreference
+} from "../i18n";
 import { cx } from "../lib/cx";
+import type { UserPreferences } from "../types";
+import { CustomSelect, useToast } from "../ui";
+import { useConfigCopyScope } from "./configCopy";
 import {
   ConfigTabValue,
   CONFIG_NAV_CATEGORIES,
@@ -21,13 +31,35 @@ import { AccountSearchPanel, TeamAccountPanel } from "./panels/members";
 import { ChangelogPanel, StatisticsPanel } from "./panels/overview";
 import { AuditPanel, BackupPanel, BrandingSettingsPanel, DebugSettingsPanel, ModelRequestLogsPanel, ProxyPanel, RequestLogsPanel, SmsSettingsPanel, SmtpSettingsPanel } from "./panels/system";
 
+function configNavLabelKey(value: ConfigTabValue) {
+  return `config.nav.${value}`;
+}
+
+function configCategoryLabelKey(value: (typeof CONFIG_NAV_CATEGORIES)[number]["value"]) {
+  return `config.nav.${value}`;
+}
+
 export function ConfigDashboard() {
   const queryClient = useQueryClient();
+  const { language, resolvedLanguage, setLanguage, t } = useI18n();
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<ConfigTabValue>(storedConfigTab);
   const [sideCollapsed, setSideCollapsed] = useState(storedConfigSideCollapsed);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const me = useQuery({ queryKey: ["me"], queryFn: api.me });
+  useSyncI18nPreference(me.data?.user?.preferences?.language, Boolean(me.data?.user));
+  useConfigCopyScope(shellRef);
+  const languageOptions = useMemo(() => languagePreferenceOptions(t, resolvedLanguage), [resolvedLanguage, t]);
   const logout = useMutation({
     mutationFn: configApi.logout,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["config-status"] })
+  });
+  const saveUserPreferences = useMutation({
+    mutationFn: (preferences: Partial<UserPreferences>) => api.saveUserPreferences(preferences),
+    onSuccess: (data) => queryClient.setQueryData(["me"], { user: data.user }),
+    onError: (error) => {
+      showToast(error instanceof Error ? error.message : t("toast.preferencesSaveFailed"), "error");
+    }
   });
 
   function changeActiveTab(value: string) {
@@ -52,39 +84,66 @@ export function ConfigDashboard() {
     });
   }
 
-  const sideToggleLabel = sideCollapsed ? "展开配置菜单" : "收起配置菜单";
+  function changeLanguage(value: string) {
+    const nextLanguage = normalizeLanguagePreference(value) as LanguagePreference;
+    if (nextLanguage === language) return;
+    setLanguage(nextLanguage);
+    if (me.data?.user) saveUserPreferences.mutate({ language: nextLanguage });
+    showToast(t("settings.language.toast", { language: languageOptions.find((option) => option.value === nextLanguage)?.label ?? nextLanguage }));
+  }
+
+  const sideToggleLabel = sideCollapsed ? t("config.sidebar.expand") : t("config.sidebar.collapse");
 
   return (
-    <Tabs.Root value={activeTab} onValueChange={changeActiveTab} className={cx("config-shell", sideCollapsed && "config-side-collapsed")}>
+    <Tabs.Root ref={shellRef} value={activeTab} onValueChange={changeActiveTab} className={cx("config-shell", sideCollapsed && "config-side-collapsed")}>
       <aside className="config-side">
         <div className="config-side-head">
           <div className="brand-row config-side-brand">
             <ProjectLogo className="config-side-logo" />
-            <span>配置中心</span>
+            <span>{t("config.center")}</span>
           </div>
           <button className="config-side-toggle" type="button" onClick={toggleConfigSide} aria-label={sideToggleLabel} title={sideToggleLabel}>
             <PanelLeft size={18} aria-hidden="true" />
           </button>
         </div>
-        <nav className="config-nav" aria-label="配置菜单">
+        <nav className="config-nav" aria-label={t("config.menu")}>
           {CONFIG_NAV_CATEGORIES.map((category) => (
             <section className="config-nav-section" key={category.value}>
-              <div className="config-nav-heading">{category.label}</div>
-              <Tabs.List className="config-nav-section-list" aria-label={`${category.label}配置菜单`}>
-                {configNavItemsForCategory(category.value).map(({ value, label, Icon }) => (
+              <div className="config-nav-heading">{t(configCategoryLabelKey(category.value))}</div>
+              <Tabs.List className="config-nav-section-list" aria-label={t("config.menu.sectionAria", { section: t(configCategoryLabelKey(category.value)) })}>
+                {configNavItemsForCategory(category.value).map(({ value, Icon }) => {
+                  const label = t(configNavLabelKey(value));
+                  return (
                   <Tabs.Trigger value={value} key={value} title={sideCollapsed ? label : undefined}>
                     <Icon size={16} />
                     <span className="config-nav-label">{label}</span>
                   </Tabs.Trigger>
-                ))}
+                  );
+                })}
               </Tabs.List>
             </section>
           ))}
         </nav>
-        <button className="ghost-btn" onClick={() => logout.mutate()} title={sideCollapsed ? "退出配置入口" : undefined}>
-          <LogOut size={16} />
-          <span>退出配置入口</span>
-        </button>
+        <div className="config-side-tools">
+          <div className="config-language-control" title={sideCollapsed ? t("settings.language.title") : undefined}>
+            <span className="config-language-icon" aria-hidden="true">
+              <Languages size={16} />
+            </span>
+            <CustomSelect
+              value={language}
+              options={languageOptions}
+              onChange={changeLanguage}
+              className="config-language-select"
+              menuClassName="config-language-menu"
+              menuPlacement="top"
+              menuWidth={260}
+            />
+          </div>
+          <button className="ghost-btn config-logout-btn" onClick={() => logout.mutate()} aria-label={t("config.logout")} title={t("config.logout")}>
+            <LogOut size={16} />
+            <span>{t("config.logout")}</span>
+          </button>
+        </div>
       </aside>
       <main className="config-main">
         <Tabs.Content value="statistics">

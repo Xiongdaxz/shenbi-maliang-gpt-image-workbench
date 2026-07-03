@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Check, Heart, Lightbulb, Search, X } from "lucide-react";
 import { api } from "../api";
+import { useI18n } from "../i18n";
 import { buildGalleryCaseItems, caseMaterialFromCaseItem, caseStyleCategories } from "../lib/caseMaterials";
 import { cx } from "../lib/cx";
 import { IMAGE_PAGE_SIZE } from "../lib/pagination";
@@ -29,6 +30,7 @@ export function CaseMaterialPickerModal({
   onClose: () => void;
   onConfirm: (caseMaterials: CaseMaterialItem[]) => void;
 }) {
+  const { t } = useI18n();
   const closeTimerRef = useRef<number | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollAnchorRef = useRef<CasePickerScrollAnchor | null>(null);
@@ -195,7 +197,7 @@ export function CaseMaterialPickerModal({
           setMineOnly(false);
         }}
       >
-        <FilterTabLabel count={counts?.all}>全部</FilterTabLabel>
+        <FilterTabLabel count={counts?.all}>{t("common.all")}</FilterTabLabel>
       </button>
       <button
         type="button"
@@ -205,7 +207,7 @@ export function CaseMaterialPickerModal({
           setMineOnly((value) => !value);
         }}
       >
-        <FilterTabLabel count={counts?.mine}>我的</FilterTabLabel>
+        <FilterTabLabel count={counts?.mine}>{t("common.mine")}</FilterTabLabel>
       </button>
     </>
   );
@@ -216,7 +218,7 @@ export function CaseMaterialPickerModal({
         className={cx("case-picker-modal", "ui-modal-motion")}
         role="dialog"
         aria-modal="true"
-        aria-label="选择灵感图片作为素材"
+        aria-label={t("caseMaterialPicker.title")}
         data-state={closing ? "closing" : "open"}
         data-placement="center"
         onMouseDown={(event) => event.stopPropagation()}
@@ -226,17 +228,17 @@ export function CaseMaterialPickerModal({
             <span className="case-picker-title-icon" aria-hidden="true">
               <Lightbulb size={18} />
             </span>
-            <h3>选择灵感图片作为素材</h3>
+            <h3>{t("caseMaterialPicker.title")}</h3>
           </div>
-          <button type="button" className="case-picker-close" onClick={requestClose} aria-label="关闭灵感选择">
+          <button type="button" className="case-picker-close" onClick={requestClose} aria-label={t("caseMaterialPicker.close")}>
             <X size={18} />
           </button>
         </header>
         <div className="case-picker-filter-row">
-          <div className="case-picker-pinned-tabs" role="group" aria-label="灵感范围筛选">
+          <div className="case-picker-pinned-tabs" role="group" aria-label={t("pages.cases.scope")}>
             {scopeFilterButtons}
           </div>
-          <FilterTabsScroller ariaLabel="灵感风格筛选" hintKey={hintKey} mode="compact">
+          <FilterTabsScroller ariaLabel={t("pages.cases.styles")} hintKey={hintKey} mode="compact">
             {styles.map((category) => (
               <button
                 key={category.id}
@@ -253,9 +255,9 @@ export function CaseMaterialPickerModal({
               className={cx("case-favorite-filter-btn", favoriteOnly && "active")}
               type="button"
               onClick={() => setFavoriteOnly((value) => !value)}
-              aria-label={favoriteOnly ? "取消收藏筛选" : "只看收藏灵感"}
+              aria-label={favoriteOnly ? t("pages.cases.cancelFavoriteOnly") : t("pages.cases.favoriteOnly")}
               aria-pressed={favoriteOnly}
-              title={favoriteOnly ? "取消收藏筛选" : "只看收藏灵感"}
+              title={favoriteOnly ? t("pages.cases.cancelFavoriteOnly") : t("pages.cases.favoriteOnly")}
             >
               <Heart size={17} fill={favoriteOnly ? "currentColor" : "none"} />
               <span className="filter-tab-count">{counts?.favorite ?? 0}</span>
@@ -265,15 +267,15 @@ export function CaseMaterialPickerModal({
               className="case-search case-picker-search"
               value={keyword}
               onChange={setKeyword}
-              placeholder="搜索标题、描述或风格"
-              ariaLabel="搜索灵感"
+              placeholder={t("pages.cases.searchPlaceholder")}
+              ariaLabel={t("pages.cases.searchAria")}
               icon={<Search size={17} />}
             />
           </div>
         </div>
         <div className="case-picker-body" ref={bodyRef}>
-          {cases.isLoading ? <div className="case-empty">正在加载灵感图片</div> : null}
-          {!cases.isLoading && visibleItems.length === 0 ? <div className="case-empty">暂无匹配灵感</div> : null}
+          {cases.isLoading ? <div className="case-empty">{t("caseMaterialPicker.loading")}</div> : null}
+          {!cases.isLoading && visibleItems.length === 0 ? <div className="case-empty">{t("caseMaterialPicker.empty")}</div> : null}
           <div className="case-picker-grid">
             {visibleItems.map((item) => {
               const caseMaterial = caseMaterialFromCaseItem(item);
@@ -304,13 +306,13 @@ export function CaseMaterialPickerModal({
           <div ref={loadMoreRef} className="page-load-sentinel" aria-hidden="true" />
         </div>
         <footer className="case-picker-footer">
-          <span>已选 {selectedCount} 张</span>
+          <span>{t("caseMaterialPicker.selectedCount", { count: selectedCount })}</span>
           <div className="case-picker-footer-actions">
             <button type="button" className="secondary-btn" onClick={requestClose}>
-              取消
+              {t("common.cancel")}
             </button>
             <button type="button" className="primary-btn" onClick={confirmSelection}>
-              确认选择{selectedCount > 0 ? ` (${selectedCount})` : ""}
+              {t("caseMaterialPicker.confirm", { suffix: selectedCount > 0 ? ` (${selectedCount})` : "" })}
             </button>
           </div>
         </footer>

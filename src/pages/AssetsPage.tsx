@@ -13,6 +13,7 @@ import { PageHeader } from "../components/PageHeader";
 import { SearchHistoryInput } from "../components/SearchHistoryInput";
 import { SkeletonImage } from "../components/SkeletonImage";
 import { ScrollJumpButton } from "../components/ScrollJumpButton";
+import { useI18n } from "../i18n";
 import { assetSpaceLabel, type AssetUploadMode } from "../lib/assets";
 import { cx } from "../lib/cx";
 import { formatImageFileSize } from "../lib/format";
@@ -42,6 +43,7 @@ export function AssetsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { t } = useI18n();
   const resetNewChatComposer = useWorkbench((state) => state.resetNewChatComposer);
   const setSelectedAssets = useWorkbench((state) => state.setSelectedAssets);
   const assetCategories = useQuery({ queryKey: ["asset-categories"], queryFn: api.assetCategories });
@@ -81,10 +83,10 @@ export function AssetsPage() {
       queryClient.invalidateQueries({ queryKey: ["asset-categories"] });
       setSelectedCategoryIds([category.id]);
       setTagDialogOpen(false);
-      showToast("素材标签已新增");
+      showToast(t("toast.assetTagCreated"));
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "新增素材标签失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.assetTagCreateFailed"), "error");
     }
   });
   const upload = useMutation({
@@ -103,10 +105,10 @@ export function AssetsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["assets"] });
       setUploadOpen(false);
-      showToast("素材已上传");
+      showToast(t("toast.assetUploaded"));
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "上传素材失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.assetUploadFailed"), "error");
     }
   });
   const updateAsset = useMutation({
@@ -118,10 +120,10 @@ export function AssetsPage() {
       );
       queryClient.invalidateQueries({ queryKey: ["assets"] });
       setEditTarget(null);
-      showToast("素材信息已更新");
+      showToast(t("toast.assetUpdated"));
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "保存素材信息失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.assetUpdateFailed"), "error");
     }
   });
   const deleteAsset = useMutation({
@@ -139,10 +141,10 @@ export function AssetsPage() {
       queryClient.invalidateQueries({ queryKey: ["assets"] });
       setEditTarget((current) => (current?.id === assetId ? null : current));
       setDeleteTarget(null);
-      showToast("素材已删除");
+      showToast(t("toast.assetDeleted"));
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "删除素材失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.assetDeleteFailed"), "error");
     }
   });
   const updateShare = useMutation({
@@ -152,10 +154,10 @@ export function AssetsPage() {
         current ? { assets: current.assets.map((item) => (item.id === result.asset.id ? result.asset : item)) } : current
       );
       queryClient.invalidateQueries({ queryKey: ["assets"] });
-      showToast(payload.shared ? "已提交共享审核" : result.asset.shareStatus === "none" ? "已取消共享" : "共享状态已更新");
+      showToast(payload.shared ? t("toast.assetShareSubmitted") : result.asset.shareStatus === "none" ? t("toast.assetShareCancelled") : t("toast.assetShareStatusUpdated"));
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "更新分享状态失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.assetShareUpdateFailed"), "error");
     }
   });
   const visibleAssets = useMemo(() => {
@@ -193,19 +195,25 @@ export function AssetsPage() {
       private: baseAssets.filter((asset) => assetMatchesSpace(asset, "private")).length
     };
   }, [assetItems, assets.data?.pages, keyword, selectedCategoryIds]);
+  const assetSpaceLabelText = (asset: AssetItem) => {
+    if (asset.space === "private" && asset.shareStatus === "pending") return t("status.pendingReview");
+    if (asset.space === "private" && asset.shareStatus === "rejected") return t("status.rejected");
+    if (asset.space === "private" && asset.shared) return asset.canEdit ? t("status.privateAndShared") : t("common.shared");
+    return asset.space === "shared" ? t("common.shared") : t("common.mine");
+  };
   const assetPreviewItems = useMemo(
     () =>
       visibleAssets.map((asset) => ({
         ...asset,
         title: asset.name,
-        description: asset.categoryNames.length > 0 ? asset.categoryNames.join(" / ") : assetSpaceLabel(asset),
+        description: asset.categoryNames.length > 0 ? asset.categoryNames.join(" / ") : assetSpaceLabelText(asset),
         imageUrl: asset.previewUrl ?? asset.url,
         originalUrl: asset.originalUrl ?? asset.url,
         previewUrl: asset.previewUrl ?? asset.url,
         thumbnailUrl: asset.thumbnailUrl ?? asset.previewUrl ?? asset.url,
         imageFileSize: asset.size
       })),
-    [visibleAssets]
+    [t, visibleAssets]
   );
   const assetFilterHintKey = useMemo(
     () => ["asset-filter", spaceFilter, selectedCategoryIds.join(","), ...categories.map((category) => `${category.id}:${category.name}`)].join("\u0000"),
@@ -251,17 +259,17 @@ export function AssetsPage() {
   return (
     <section className="page-section">
       <PageHeader
-        title="素材库"
-        desc="共享和我的参考图片，可按标签筛选和复用；共享需后台审核通过后公开。"
+        title={t("pages.assets.title")}
+        desc={t("pages.assets.desc")}
         icon={<FolderOpen size={24} />}
         actions={<FilterModeToggle value={filterDisplayMode} onChange={setFilterDisplayMode} />}
       />
       <div className={cx("library-filter-row asset-filter-row", `filter-mode-${filterDisplayMode}`)}>
-        <div className="asset-space-filter-tabs" role="group" aria-label="素材范围筛选">
+        <div className="asset-space-filter-tabs" role="group" aria-label={t("pages.assets.scope")}>
           {[
-            { value: "all", label: "所有", count: assetSpaceFilterCounts.all },
-            { value: "shared", label: "共享", count: assetSpaceFilterCounts.shared },
-            { value: "private", label: "我的", count: assetSpaceFilterCounts.private }
+            { value: "all", label: t("common.all"), count: assetSpaceFilterCounts.all },
+            { value: "shared", label: t("common.shared"), count: assetSpaceFilterCounts.shared },
+            { value: "private", label: t("common.mine"), count: assetSpaceFilterCounts.private }
           ].map((item) => (
             <button
               key={item.value}
@@ -274,13 +282,13 @@ export function AssetsPage() {
           ))}
         </div>
         <span className="asset-filter-divider" aria-hidden="true" />
-        <FilterTabsScroller className="asset-filter-tabs" ariaLabel="素材标签筛选" hintKey={assetFilterHintKey} mode={filterDisplayMode}>
+        <FilterTabsScroller className="asset-filter-tabs" ariaLabel={t("pages.assets.tags")} hintKey={assetFilterHintKey} mode={filterDisplayMode}>
           <button
             type="button"
             className={cx(selectedCategoryIds.length === 0 && "active")}
             onClick={() => setSelectedCategoryIds([])}
           >
-            <FilterTabLabel count={assetTagFilterCounts.all}>全部</FilterTabLabel>
+            <FilterTabLabel count={assetTagFilterCounts.all}>{t("common.all")}</FilterTabLabel>
           </button>
           {categories.map((category) => (
             <button
@@ -299,17 +307,17 @@ export function AssetsPage() {
             className="case-search asset-search"
             value={keyword}
             onChange={setKeyword}
-            placeholder="搜索素材、标签或来源"
-            ariaLabel="搜索素材"
+            placeholder={t("pages.assets.searchPlaceholder")}
+            ariaLabel={t("pages.assets.searchAria")}
             icon={<Search size={17} />}
           />
           <button className="secondary-btn case-add-tag" type="button" onClick={() => setTagDialogOpen(true)}>
             <Plus size={16} />
-            新增标签
+            {t("pages.assets.addTag")}
           </button>
           <button className="upload-btn" type="button" onClick={openUploadModal}>
             <Plus size={16} />
-            上传素材
+            {t("pages.assets.upload")}
           </button>
         </div>
       </div>
@@ -317,11 +325,11 @@ export function AssetsPage() {
         {visibleAssets.map((asset, index) => (
           <article className="asset-card" key={asset.id}>
             <div className="asset-image-frame">
-              <button className="asset-image-btn" type="button" onClick={() => setPreviewIndex(index)} aria-label={`预览素材 ${asset.name}`}>
+              <button className="asset-image-btn" type="button" onClick={() => setPreviewIndex(index)} aria-label={t("pages.assets.previewAsset", { name: asset.name })}>
                 <SkeletonImage src={asset.thumbnailUrl ?? asset.previewUrl ?? asset.url} alt={asset.name} />
               </button>
               <div className="asset-card-actions">
-                <button type="button" onClick={() => useAssetInNewChat(asset)} aria-label="使用素材" title="使用素材">
+                <button type="button" onClick={() => useAssetInNewChat(asset)} aria-label={t("pages.assets.useAsset")} title={t("pages.assets.useAsset")}>
                   <Send size={16} />
                 </button>
                 {asset.canEdit ? (
@@ -331,8 +339,8 @@ export function AssetsPage() {
                         type="button"
                         onClick={() => updateShare.mutate({ assetId: asset.id, shared: !(asset.shared || asset.shareStatus === "pending") })}
                         disabled={updateShare.isPending}
-                        aria-label={asset.shared || asset.shareStatus === "pending" ? "取消共享" : "提交共享审核"}
-                        title={asset.shared || asset.shareStatus === "pending" ? "取消共享" : "提交共享审核"}
+                        aria-label={asset.shared || asset.shareStatus === "pending" ? t("pages.assets.cancelShare") : t("pages.assets.submitShare")}
+                        title={asset.shared || asset.shareStatus === "pending" ? t("pages.assets.cancelShare") : t("pages.assets.submitShare")}
                       >
                         {asset.shared || asset.shareStatus === "pending" ? <X size={16} /> : <Share2 size={16} />}
                       </button>
@@ -340,8 +348,8 @@ export function AssetsPage() {
                     <button
                       type="button"
                       onClick={() => setEditTarget(asset)}
-                      aria-label="编辑素材"
-                      title="编辑素材"
+                      aria-label={t("pages.assets.editAsset")}
+                      title={t("pages.assets.editAsset")}
                     >
                       <Pencil size={16} />
                     </button>
@@ -349,8 +357,8 @@ export function AssetsPage() {
                       className="danger"
                       type="button"
                       onClick={() => setDeleteTarget(asset)}
-                      aria-label="删除素材"
-                      title="删除素材"
+                      aria-label={t("pages.assets.deleteAsset")}
+                      title={t("pages.assets.deleteAsset")}
                     >
                       <Trash2 size={16} />
                     </button>
@@ -361,11 +369,11 @@ export function AssetsPage() {
             <div className="asset-card-body">
               <div className="asset-card-title-row">
                 <h3>{asset.name}</h3>
-                <span className={cx("asset-space-badge", asset.space, asset.shared && "is-shared", `share-status-${asset.shareStatus}`)}>{assetSpaceLabel(asset)}</span>
+                <span className={cx("asset-space-badge", asset.space, asset.shared && "is-shared", `share-status-${asset.shareStatus}`)}>{assetSpaceLabelText(asset)}</span>
               </div>
               <div className="asset-card-meta">
-                <span>{formatImageFileSize(asset.size) || "图片素材"}</span>
-                <span>来源：{asset.sourceUsername}</span>
+                <span>{formatImageFileSize(asset.size) || t("pages.assets.imageMaterial")}</span>
+                <span>{t("pages.assets.source", { source: asset.sourceUsername })}</span>
               </div>
               <AssetTagScroller names={asset.categoryNames} />
             </div>
@@ -377,26 +385,26 @@ export function AssetsPage() {
           <LibraryEmptyState
             compact
             imageSrc="/image/empty-states/assets-empty.png"
-            imageAlt="空白画卷、素材盒与神笔"
-            title="没有匹配素材"
-            description="换个关键词或清除筛选后再看看。"
+            imageAlt={t("pages.assets.emptyAlt")}
+            title={t("pages.assets.noMatch")}
+            description={t("empty.tryDifferentFilters")}
             action={
               <button className="secondary-btn" type="button" onClick={clearAssetFilters}>
                 <X size={16} />
-                清除筛选
+                {t("common.clearFilters")}
               </button>
             }
           />
         ) : (
           <LibraryEmptyState
             imageSrc="/image/empty-states/assets-empty.png"
-            imageAlt="空白画卷、素材盒与神笔"
-            title="素材库还是空的"
-            description="上传参考图或把生成结果加入素材库，后续创作可以直接复用。"
+            imageAlt={t("pages.assets.emptyAlt")}
+            title={t("pages.assets.empty")}
+            description={t("pages.assets.emptyDesc")}
             action={
               <button className="primary-btn" type="button" onClick={openUploadModal}>
                 <Plus size={16} />
-                上传素材
+                {t("pages.assets.upload")}
               </button>
             }
           />
@@ -408,13 +416,13 @@ export function AssetsPage() {
         <ImagePreviewModal
           items={assetPreviewItems}
           index={previewIndex}
-          ariaLabel="素材预览"
+          ariaLabel={t("pages.assets.preview")}
           initialZoomMode="contain"
           onIndexChange={setPreviewIndex}
           onClose={() => setPreviewIndex(null)}
           renderActions={(item) => (
             <>
-              <button className="case-preview-tool" type="button" onClick={() => useAssetInNewChat(item)} aria-label="使用素材" title="使用素材">
+              <button className="case-preview-tool" type="button" onClick={() => useAssetInNewChat(item)} aria-label={t("pages.assets.useAsset")} title={t("pages.assets.useAsset")}>
                 <Send size={16} />
               </button>
               {item.canEdit ? (
@@ -425,20 +433,20 @@ export function AssetsPage() {
                       type="button"
                       onClick={() => updateShare.mutate({ assetId: item.id, shared: !(item.shared || item.shareStatus === "pending") })}
                       disabled={updateShare.isPending}
-                      aria-label={item.shared || item.shareStatus === "pending" ? "取消共享" : "提交共享审核"}
-                      title={item.shared || item.shareStatus === "pending" ? "取消共享" : "提交共享审核"}
+                      aria-label={item.shared || item.shareStatus === "pending" ? t("pages.assets.cancelShare") : t("pages.assets.submitShare")}
+                      title={item.shared || item.shareStatus === "pending" ? t("pages.assets.cancelShare") : t("pages.assets.submitShare")}
                     >
                       {item.shared || item.shareStatus === "pending" ? <X size={16} /> : <Share2 size={16} />}
                     </button>
                   ) : null}
-                  <button className="case-preview-tool" type="button" onClick={() => setEditTarget(item)} aria-label="编辑素材" title="编辑素材">
+                  <button className="case-preview-tool" type="button" onClick={() => setEditTarget(item)} aria-label={t("pages.assets.editAsset")} title={t("pages.assets.editAsset")}>
                     <Pencil size={16} />
                   </button>
                 </>
               ) : null}
               <ImageDownloadMenu source={{ type: "asset", id: item.id }} className="case-preview-tool" />
               {item.canEdit ? (
-                <button className="case-preview-tool danger" type="button" onClick={() => setDeleteTarget(item)} aria-label="删除素材" title="删除素材">
+                <button className="case-preview-tool danger" type="button" onClick={() => setDeleteTarget(item)} aria-label={t("pages.assets.deleteAsset")} title={t("pages.assets.deleteAsset")}>
                   <Trash2 size={16} />
                 </button>
               ) : null}
@@ -448,9 +456,9 @@ export function AssetsPage() {
       ) : null}
       <PromptDialog
         open={tagDialogOpen}
-        title="新增素材标签"
-        label="标签名称"
-        confirmText={createCategory.isPending ? "保存中" : "新增标签"}
+        title={t("pages.assets.addTagTitle")}
+        label={t("pages.assets.tagName")}
+        confirmText={createCategory.isPending ? t("common.saving") : t("pages.assets.addTag")}
         onSubmit={(value) => {
           if (!createCategory.isPending) createCategory.mutate(value.trim());
         }}
@@ -478,9 +486,9 @@ export function AssetsPage() {
       ) : null}
       <ConfirmDialog
         open={Boolean(deleteTarget)}
-        title="删除素材"
-        description={`确认删除“${deleteTarget?.name ?? ""}”？删除后素材库中将不再显示。`}
-        confirmText={deleteAsset.isPending ? "删除中" : "删除"}
+        title={t("pages.assets.deleteTitle")}
+        description={t("pages.assets.deleteDescription", { name: deleteTarget?.name ?? "" })}
+        confirmText={deleteAsset.isPending ? t("common.deleting") : t("common.delete")}
         destructive
         onConfirm={() => {
           if (deleteTarget && !deleteAsset.isPending) deleteAsset.mutate(deleteTarget.id);

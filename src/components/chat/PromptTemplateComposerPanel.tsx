@@ -99,6 +99,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api, type PromptTemplateOptimizeStyle } from "../../api";
+import { useI18n } from "../../i18n";
 import { PromptOptimizeStyleSelect } from "../PromptOptimizeStyleSelect";
 import { PromptTemplateColorPicker } from "../PromptTemplateColorPicker";
 import { cx } from "../../lib/cx";
@@ -402,13 +403,6 @@ function mergeAssets(current: AssetItem[], nextAssets: AssetItem[]) {
   return merged;
 }
 
-function resultLabel(value: PromptResultKey) {
-  if (value === "base-en") return "基础英文";
-  if (value === "ai-zh") return "AI优化中文";
-  if (value === "ai-en") return "AI优化英文";
-  return "基础中文";
-}
-
 type PromptResultOption = {
   value: PromptResultKey;
   label: string;
@@ -483,6 +477,7 @@ export function PromptTemplateComposerPanel({
 }) {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const { t } = useI18n();
   const initialDraftRef = useRef(initialDraft ?? null);
   const restoredInitialDraftRef = useRef(false);
   const [keyword, setKeyword] = useState("");
@@ -585,7 +580,7 @@ export function PromptTemplateComposerPanel({
     },
     onError: (error) => {
       setStreamingBasePromptEn("");
-      showToast(error instanceof Error ? error.message : "基础提示词翻译失败", "error");
+      showToast(error instanceof Error ? error.message : t("promptTemplates.toast.baseTranslateFailed"), "error");
     }
   });
   const selectedBaseEnglishLoading = outputKey === "base-en" && (baseTranslationQuery.isFetching || translateBasePrompt.isPending);
@@ -629,20 +624,20 @@ export function PromptTemplateComposerPanel({
       setStreamingOptimizedPromptEn("");
       if (!data.result) {
         setOutputKey("base-zh");
-        showToast("AI 优化已结束，但没有返回结果", "info");
+        showToast(t("promptTemplates.toast.aiOptimizeNoResult"), "info");
         return;
       }
       setActiveResult(data.result);
       setOptimizedSignature(signature);
       setOutputKey(requestedOutputKey?.startsWith("ai") ? requestedOutputKey : "ai-zh");
-      showToast("AI 优化完成");
+      showToast(t("promptTemplates.toast.aiOptimizeDone"));
       if (selectedTemplate) queryClient.invalidateQueries({ queryKey: ["prompt-template-results", selectedTemplate.id] });
     },
     onError: (error) => {
       setStreamingOptimizedPromptZh("");
       setStreamingOptimizedPromptEn("");
       setOutputKey("base-zh");
-      showToast(error instanceof Error ? error.message : "AI 优化失败，基础提示词仍可使用", "error");
+      showToast(error instanceof Error ? error.message : t("promptTemplates.toast.aiOptimizeFailed"), "error");
     }
   });
 
@@ -779,26 +774,26 @@ export function PromptTemplateComposerPanel({
     || liveZhOptimizedStreaming
   ));
   const resultOptions: PromptResultOption[] = [
-    { value: "base-zh" as const, label: "基础中文", description: "表单实时生成", disabled: !baseZhPrompt.trim() },
+    { value: "base-zh" as const, label: t("promptTemplates.composer.baseZh"), description: t("promptTemplates.composer.baseZhDesc"), disabled: !baseZhPrompt.trim() },
     {
       value: "base-en" as const,
-      label: "基础英文",
-      description: translateBasePrompt.isPending || baseTranslationQuery.isFetching ? "翻译中" : "基础提示词英文版",
+      label: t("promptTemplates.composer.baseEn"),
+      description: translateBasePrompt.isPending || baseTranslationQuery.isFetching ? t("promptTemplates.actions.translating") : t("promptTemplates.composer.baseEnDesc"),
       loading: translateBasePrompt.isPending || baseTranslationQuery.isFetching,
       disabled: !basePrompt.trim()
     },
     {
       value: "ai-zh" as const,
-      label: "AI优化中文",
-      description: optimize.isPending ? "优化中" : aiZhNeedsOptimize ? "点击生成优化结果" : "AI 优化结果",
+      label: t("promptTemplates.composer.aiZh"),
+      description: optimize.isPending ? t("promptTemplates.actions.optimizing") : aiZhNeedsOptimize ? t("promptTemplates.composer.clickOptimize") : t("promptTemplates.composer.aiResult"),
       loading: optimize.isPending && outputKey === "ai-zh",
       needsOptimize: aiZhNeedsOptimize,
       disabled: !basePrompt.trim()
     },
     {
       value: "ai-en" as const,
-      label: "AI优化英文",
-      description: optimize.isPending ? "生成中" : aiEnNeedsOptimize ? "点击生成优化结果" : "AI 优化英文版",
+      label: t("promptTemplates.composer.aiEn"),
+      description: optimize.isPending ? t("promptTemplates.result.generating") : aiEnNeedsOptimize ? t("promptTemplates.composer.clickOptimize") : t("promptTemplates.composer.aiEnDesc"),
       loading: optimize.isPending && outputKey === "ai-en",
       needsOptimize: aiEnNeedsOptimize,
       disabled: !basePrompt.trim()
@@ -807,7 +802,7 @@ export function PromptTemplateComposerPanel({
   const templateOptions = switchTemplates.map((template) => ({
     value: template.id,
     label: template.name,
-    description: template.description || "创作提示词表单",
+    description: template.description || t("promptTemplates.composer.defaultDescription"),
     icon: template.icon
   }));
 
@@ -820,9 +815,9 @@ export function PromptTemplateComposerPanel({
         : outputKey === "ai-en"
           ? aiEnPrompt
           : baseZhPrompt;
-  const optimizeActionLabel = optimize.isPending ? "优化中" : activeResult ? "重新优化" : "AI 优化";
+  const optimizeActionLabel = optimize.isPending ? t("promptTemplates.actions.optimizing") : activeResult ? t("promptTemplates.actions.reoptimize") : t("promptTemplates.actions.aiOptimize");
   const optimizeStyleOption = promptOptimizeStyleOption(optimizeStyle, promptStyleGroups);
-  const headerStatus = resultStale ? "AI 结果需要重新优化" : optimize.isPending ? "AI 优化中" : "";
+  const headerStatus = resultStale ? t("promptTemplates.composer.needsReoptimize") : optimize.isPending ? t("promptTemplates.composer.optimizingStatus") : "";
 
   useEffect(() => {
     if (!selectedTemplate || !activeResult || optimize.isPending || resultStale || !aiZhPrompt.trim()) return;
@@ -938,13 +933,13 @@ export function PromptTemplateComposerPanel({
         className="secondary-btn icon-only-btn composer-prompt-template-optimize-submit"
         disabled={optimize.isPending || !basePrompt.trim()}
         onClick={() => optimize.mutate(undefined)}
-        aria-label={`${optimizeActionLabel}，${optimizeStyleOption.label}风格`}
-        title={`${optimizeActionLabel}，${optimizeStyleOption.label}风格`}
-        data-tooltip="AI优化提示词"
+        aria-label={t("promptTemplates.actions.optimizeWithStyle", { action: optimizeActionLabel, style: optimizeStyleOption.label })}
+        title={t("promptTemplates.actions.optimizeWithStyle", { action: optimizeActionLabel, style: optimizeStyleOption.label })}
+        data-tooltip={t("composer.optimizeTooltip")}
       >
         {optimize.isPending ? <RotateCw size={15} className="spin" /> : <WandSparkles size={15} />}
       </button>
-      <span className="composer-prompt-template-style-tooltip" data-tooltip="AI优化风格">
+      <span className="composer-prompt-template-style-tooltip" data-tooltip={t("composer.optimizeOptions")}>
         <PromptOptimizeStyleSelect
           value={optimizeStyle}
           onChange={updateOptimizeStyle}
@@ -981,8 +976,8 @@ export function PromptTemplateComposerPanel({
             type="button"
             className="composer-prompt-template-expand-hitarea"
             onClick={expandCollapsedPanel}
-            aria-label="展开提示词表单"
-            title="展开提示词表单"
+            aria-label={t("promptTemplates.composer.expand")}
+            title={t("promptTemplates.composer.expand")}
           />
           <div
             className="composer-prompt-template-collapsed-main"
@@ -1000,7 +995,7 @@ export function PromptTemplateComposerPanel({
               onChange={selectTemplate}
               fallbackIcon={CollapsedTemplateIcon}
             />
-            {optimize.isPending ? <b>优化中</b> : resultStale ? <b className="stale">需要重新优化</b> : activeResult ? <b>已优化</b> : null}
+            {optimize.isPending ? <b>{t("promptTemplates.actions.optimizing")}</b> : resultStale ? <b className="stale">{t("promptTemplates.composer.needsReoptimizeShort")}</b> : activeResult ? <b>{t("promptTemplates.composer.optimized")}</b> : null}
           </div>
           <div className="composer-prompt-template-collapsed-actions">
             <PromptResultDropdown
@@ -1010,7 +1005,7 @@ export function PromptTemplateComposerPanel({
               onOpenChange={setOutputMenuOpenOnly}
               onChange={selectResult}
             />
-            <button type="button" className="composer-prompt-template-icon-btn" onClick={onClose} aria-label="关闭提示词表单">
+            <button type="button" className="composer-prompt-template-icon-btn" onClick={onClose} aria-label={t("promptTemplates.composer.close")}>
               <X size={15} />
             </button>
           </div>
@@ -1021,14 +1016,14 @@ export function PromptTemplateComposerPanel({
 
   if (!selectedTemplate) {
     return (
-      <section className="composer-prompt-template-panel is-list" aria-label="提示词表单列表">
+      <section className="composer-prompt-template-panel is-list" aria-label={t("promptTemplates.composer.listAria")}>
         <header className="composer-prompt-template-head">
           <div>
             <Sparkles size={17} />
-            <strong>提示词表单</strong>
-            <span>{templates.length > 0 ? `${templates.length} 个可用表单` : "选择表单后填写"}</span>
+            <strong>{t("sidebar.promptTemplates")}</strong>
+            <span>{templates.length > 0 ? t("promptTemplates.composer.availableForms", { count: templates.length }) : t("promptTemplates.composer.selectFormHint")}</span>
           </div>
-          <button type="button" className="composer-prompt-template-icon-btn" onClick={onClose} aria-label="关闭提示词表单">
+          <button type="button" className="composer-prompt-template-icon-btn" onClick={onClose} aria-label={t("promptTemplates.composer.close")}>
             <X size={16} />
           </button>
         </header>
@@ -1052,13 +1047,13 @@ export function PromptTemplateComposerPanel({
               setKeywordInput(nextValue);
               setKeyword(nextValue);
             }}
-            placeholder="搜索表单"
+            placeholder={t("promptTemplates.composer.searchPlaceholder")}
           />
           <button
             type="button"
             className="composer-prompt-template-search-clear"
-            aria-label="清除搜索内容"
-            title="清除"
+            aria-label={t("composer.clearInput")}
+            title={t("common.clear")}
             tabIndex={keywordInput ? 0 : -1}
             aria-hidden={keywordInput ? undefined : true}
             onMouseDown={(event) => event.preventDefault()}
@@ -1068,8 +1063,8 @@ export function PromptTemplateComposerPanel({
           </button>
         </label>
         <div className="composer-prompt-template-list">
-          {templatesQuery.isLoading ? <div className="composer-prompt-template-empty">正在加载表单</div> : null}
-          {!templatesQuery.isLoading && templates.length === 0 ? <div className="composer-prompt-template-empty">暂无匹配表单</div> : null}
+          {templatesQuery.isLoading ? <div className="composer-prompt-template-empty">{t("promptTemplates.editor.loadingForm")}</div> : null}
+          {!templatesQuery.isLoading && templates.length === 0 ? <div className="composer-prompt-template-empty">{t("promptTemplates.composer.noMatch")}</div> : null}
           {templates.map((template) => {
             const TemplateIcon = promptTemplateIconFor(template.icon);
             return (
@@ -1084,7 +1079,7 @@ export function PromptTemplateComposerPanel({
                 </span>
                 <span>
                   <strong>{template.name}</strong>
-                  <small>{template.description || "创作提示词表单"}</small>
+                  <small>{template.description || t("promptTemplates.composer.defaultDescription")}</small>
                 </span>
               </button>
             );
@@ -1097,10 +1092,10 @@ export function PromptTemplateComposerPanel({
   return (
     <>
     {optimizeControlPortal}
-    <section className="composer-prompt-template-panel is-form" aria-label="填写提示词表单">
+    <section className="composer-prompt-template-panel is-form" aria-label={t("promptTemplates.composer.formAria")}>
       <header className="composer-prompt-template-head">
         <div>
-          <button type="button" className="composer-prompt-template-back" onClick={() => setSelectedId("")} aria-label="返回表单列表">
+          <button type="button" className="composer-prompt-template-back" onClick={() => setSelectedId("")} aria-label={t("promptTemplates.composer.backToList")}>
             <ArrowLeft size={16} />
           </button>
           <strong>{selectedTemplate.name}</strong>
@@ -1118,12 +1113,12 @@ export function PromptTemplateComposerPanel({
             type="button"
             className="composer-prompt-template-icon-btn"
             onClick={() => setCollapsed(true)}
-            aria-label="收起提示词表单"
-            title="收起"
+            aria-label={t("promptTemplates.composer.collapse")}
+            title={t("common.collapse")}
           >
             <ChevronDown size={16} />
           </button>
-          <button type="button" className="composer-prompt-template-icon-btn" onClick={onClose} aria-label="关闭提示词表单">
+          <button type="button" className="composer-prompt-template-icon-btn" onClick={onClose} aria-label={t("promptTemplates.composer.close")}>
             <X size={16} />
           </button>
         </div>
@@ -1153,6 +1148,7 @@ function PromptTemplateDropdown({
   onChange: (value: string) => void;
   fallbackIcon: LucideIcon;
 }) {
+  const { t } = useI18n();
   const ref = useRef<HTMLDivElement | null>(null);
   const selected = options.find((option) => option.value === value) ?? options[0];
   const selectedIndex = Math.max(0, options.findIndex((option) => option.value === selected?.value));
@@ -1211,7 +1207,7 @@ function PromptTemplateDropdown({
         <span className="composer-prompt-template-collapsed-icon" aria-hidden="true">
           <SelectedIcon size={16} strokeWidth={2.1} />
         </span>
-        <strong>{selected?.label || "提示词表单"}</strong>
+        <strong>{selected?.label || t("sidebar.promptTemplates")}</strong>
         <ChevronDown size={15} className={open ? "open" : ""} />
       </button>
       {open ? (
@@ -1350,11 +1346,12 @@ function PromptTemplateMiniForm({
 }) {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const { t } = useI18n();
   const components = sortedPromptTemplateComponents(template.components);
   const patchValue = (id: string, value: PromptTemplateFormValue) => onChange({ ...formValues, [id]: value });
 
   if (components.length === 0) {
-    return <div className="composer-prompt-template-empty">这个表单还没有字段</div>;
+    return <div className="composer-prompt-template-empty">{t("promptTemplates.composer.noFields")}</div>;
   }
 
   return (
@@ -1488,7 +1485,7 @@ function PromptTemplateMiniForm({
                           previewUrl: nextFiles[0]?.previewUrl ?? ""
                         });
                       }
-                      if (failedCount > 0) showToast(`${failedCount} 张素材原图保存失败`, "error");
+                      if (failedCount > 0) showToast(t("promptTemplates.toast.assetUploadFailedCount", { count: failedCount }), "error");
                       input.value = "";
                     }}
                   />
@@ -1496,13 +1493,13 @@ function PromptTemplateMiniForm({
                     <Upload size={18} />
                   </span>
                   <span>
-                    <strong>选择素材</strong>
-                    <small>支持多张图片，可继续追加</small>
+                    <strong>{t("promptTemplates.preview.pickAsset")}</strong>
+                    <small>{t("promptTemplates.preview.pickAssetDesc")}</small>
                   </span>
                 </label>
                 <input
                   value={String(imageValue.note ?? "")}
-                  placeholder="素材备注"
+                  placeholder={t("promptTemplates.preview.assetNote")}
                   onChange={(event) => patchValue(component.id, { ...imageValue, note: event.target.value })}
                 />
                 {imageFiles.length > 0 ? (
@@ -1513,11 +1510,11 @@ function PromptTemplateMiniForm({
                         <div>
                           <strong>{file.fileName}</strong>
                           <span>
-                            {Number(file.width) > 0 && Number(file.height) > 0 ? `${file.width} x ${file.height}` : "尺寸未知"}
+                            {Number(file.width) > 0 && Number(file.height) > 0 ? `${file.width} x ${file.height}` : t("promptTemplates.preview.unknownSize")}
                             {formatImageFileSize(file.size) ? ` · ${formatImageFileSize(file.size)}` : ""}
                           </span>
                         </div>
-                        <button type="button" aria-label="移除素材" onClick={() => removeImageFile(file.id)}>
+                        <button type="button" aria-label={t("promptTemplates.preview.removeAsset")} onClick={() => removeImageFile(file.id)}>
                           <X size={14} />
                         </button>
                       </div>

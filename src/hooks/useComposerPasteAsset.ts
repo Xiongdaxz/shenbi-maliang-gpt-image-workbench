@@ -1,6 +1,7 @@
 import type { ClipboardEvent as ReactClipboardEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../api";
+import { useI18n } from "../i18n";
 import { getClipboardImageFile } from "../lib/clipboardImage";
 import type { AssetItem } from "../types";
 
@@ -54,6 +55,7 @@ async function temporaryAssetFromFile(file: File): Promise<AssetItem> {
 
 export function useComposerPasteAsset({ autoUploadPastedAssets, selectedAssets, setSelectedAssets, showToast }: UseComposerPasteAssetOptions) {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const pasteAsset = useMutation({
     mutationFn: async (file: File): Promise<PasteAssetResult> => {
       if (!autoUploadPastedAssets) {
@@ -72,10 +74,10 @@ export function useComposerPasteAsset({ autoUploadPastedAssets, selectedAssets, 
       if (result.uploaded) {
         queryClient.invalidateQueries({ queryKey: ["assets"] });
       }
-      showToast("图片已添加到输入框");
+      showToast(t("toast.pastedImageAdded"));
     },
     onError: (err) => {
-      showToast(err instanceof ApiError ? err.message : "粘贴图片失败", "error");
+      showToast(err instanceof ApiError ? err.message : t("toast.pastedImageFailed"), "error");
     }
   });
 
@@ -84,7 +86,7 @@ export function useComposerPasteAsset({ autoUploadPastedAssets, selectedAssets, 
     if (!imageFile) return;
     event.preventDefault();
     if (pasteAsset.isPending) {
-      showToast("图片正在添加");
+      showToast(t("toast.pastedImageAdding"));
       return;
     }
     pasteAsset.mutate(imageFile);

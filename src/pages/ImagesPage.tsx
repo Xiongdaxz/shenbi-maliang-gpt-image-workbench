@@ -5,11 +5,13 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { AddAssetFromImageModal } from "../components/AddAssetFromImageModal";
 import { AddCaseModal, type AddCaseSource } from "../components/AddCaseModal";
+import { PageHeaderViewToggle } from "../components/HorizontalScrollers";
 import { MyImageCard } from "../components/MyImageCard";
 import { LibraryEmptyState } from "../components/LibraryEmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { SearchHistoryInput } from "../components/SearchHistoryInput";
 import { ScrollJumpButton } from "../components/ScrollJumpButton";
+import { useI18n } from "../i18n";
 import { type AssetUploadMode } from "../lib/assets";
 import { cx } from "../lib/cx";
 import { groupImagesByTimeline, imageCreatedTime, imageTimelineDateParts } from "../lib/imageTimeline";
@@ -158,6 +160,7 @@ export function ImagesPage() {
   const setEditorImageRequest = useWorkbench((state) => state.setEditorImageRequest);
   const setDraftPrompt = useWorkbench((state) => state.setDraftPrompt);
   const { showToast } = useToast();
+  const { resolvedLanguage, t } = useI18n();
   const assetCategories = useQuery({ queryKey: ["asset-categories"], queryFn: api.assetCategories });
   const [caseSource, setCaseSource] = useState<AddCaseSource | null>(null);
   const [assetTarget, setAssetTarget] = useState<WorkImage | null>(null);
@@ -208,10 +211,10 @@ export function ImagesPage() {
       .filter((image) => !favoriteOnly || image.favorited)
       .filter((image) => {
         if (!normalizedKeyword) return true;
-        const dateParts = imageTimelineDateParts(image.createdAt);
+        const dateParts = imageTimelineDateParts(image.createdAt, resolvedLanguage);
         const haystack = [
           image.prompt,
-          image.kind === "edit" ? "编辑" : "生成",
+          image.kind === "edit" ? t("pages.images.edit") : t("pages.images.generation"),
           image.size,
           image.quality,
           image.providerId,
@@ -226,8 +229,8 @@ export function ImagesPage() {
         const diff = imageCreatedTime(b.createdAt) - imageCreatedTime(a.createdAt);
         return timelineSort === "desc" ? diff : -diff;
       });
-  }, [favoriteOnly, imageItems, keyword, timelineSort]);
-  const timelineGroups = useMemo(() => groupImagesByTimeline(imageList), [imageList]);
+  }, [favoriteOnly, imageItems, keyword, resolvedLanguage, t, timelineSort]);
+  const timelineGroups = useMemo(() => groupImagesByTimeline(imageList, resolvedLanguage), [imageList, resolvedLanguage]);
   const visibleTimelineGroupKeys = useMemo(() => timelineGroups.map((group) => group.key), [timelineGroups]);
   const allTimelineGroupsCollapsed = timelineGroups.length > 0 && visibleTimelineGroupKeys.every((key) => collapsedTimelineGroups.has(key));
   const collapsedTimelineGroupKey = useMemo(
@@ -277,23 +280,23 @@ export function ImagesPage() {
       queryClient.invalidateQueries({ queryKey: ["assets"] });
       setAssetTarget(null);
       if (result.created) {
-        showToast("已加入素材库");
+        showToast(t("toast.assetAdded"));
       } else {
-        showToast(result.duplicateScope === "shared" ? "已存在共享中" : "已经在素材库", "error");
+        showToast(result.duplicateScope === "shared" ? t("toast.assetDuplicateShared") : t("toast.assetDuplicatePrivate"), "error");
       }
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "加入素材库失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.assetAddFailed"), "error");
     }
   });
   const setImageFavorite = useMutation({
     mutationFn: (payload: { imageId: string; favorited: boolean }) => api.setImageFavorite(payload.imageId, payload.favorited),
     onSuccess: ({ favorited }) => {
-      showToast(favorited ? "已收藏" : "已取消收藏");
+      showToast(favorited ? t("toast.favoriteAdded") : t("toast.favoriteRemoved"));
       queryClient.invalidateQueries({ queryKey: ["images"] });
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "收藏图片失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.imageFavoriteFailed"), "error");
     }
   });
   const deleteImage = useMutation({
@@ -305,10 +308,10 @@ export function ImagesPage() {
       queryClient.invalidateQueries({
         predicate: (query) => ["messages", "session-image-jobs"].includes(String(query.queryKey[0]))
       });
-      showToast("已删除图片及关联灵感、素材");
+      showToast(t("toast.imageDeleted"));
     },
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : "删除图片失败", "error");
+      showToast(error instanceof Error ? error.message : t("toast.imageDeleteFailed"), "error");
     }
   });
   const mutateImageFavorite = setImageFavorite.mutate;
@@ -511,14 +514,14 @@ export function ImagesPage() {
                 <div className="image-timeline-date">
                   <strong>{row.group.dateLabel}</strong>
                   <span>{row.group.weekdayLabel}</span>
-                  <small>共 {row.group.items.length} 张</small>
+                  <small>{t("pages.images.count", { count: row.group.items.length })}</small>
                   <button
                     className="image-timeline-toggle"
                     type="button"
                     onClick={() => toggleTimelineGroup(row.group.key)}
                     aria-expanded={!row.collapsed}
-                    aria-label={`${row.collapsed ? "展开" : "收起"}${row.group.dateLabel}时间轴节点`}
-                    title={row.collapsed ? "展开" : "收起"}
+                    aria-label={row.collapsed ? t("pages.images.expandTimelineNode", { date: row.group.dateLabel }) : t("pages.images.collapseTimelineNode", { date: row.group.dateLabel })}
+                    title={row.collapsed ? t("common.expand") : t("common.collapse")}
                   >
                     {row.collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
                   </button>
@@ -575,6 +578,7 @@ export function ImagesPage() {
     imageList,
     openEditor,
     setImageFavorite.isPending,
+    t,
     timelineRange.end,
     timelineRange.start,
     timelineVirtual,
@@ -586,47 +590,32 @@ export function ImagesPage() {
   return (
     <section className="page-section">
       <PageHeader
-        title="我的图片"
-        desc="历史所有生成和编辑结果，支持再次编辑。"
+        title={t("pages.images.title")}
+        desc={t("pages.images.desc")}
         icon={<Images size={24} />}
         actions={
-          <span className="page-header-view-toggle" role="group" aria-label="我的图片显示模式" data-active-index={viewMode === "timeline" ? "0" : "1"}>
-            <button
-              type="button"
-              className={cx(viewMode === "timeline" && "active")}
-              onClick={() => setViewMode("timeline")}
-              aria-label="时间轴"
-              aria-pressed={viewMode === "timeline"}
-              title="时间轴"
-            >
-              <CalendarDays size={16} />
-              <span>时间轴</span>
-            </button>
-            <button
-              type="button"
-              className={cx(viewMode === "grid" && "active")}
-              onClick={() => setViewMode("grid")}
-              aria-label="平铺"
-              aria-pressed={viewMode === "grid"}
-              title="平铺"
-            >
-              <LayoutGrid size={16} />
-              <span>平铺</span>
-            </button>
-          </span>
+          <PageHeaderViewToggle
+            value={viewMode}
+            onChange={setViewMode}
+            ariaLabel={t("pages.images.viewMode")}
+            options={[
+              { value: "timeline", label: t("pages.images.timeline"), icon: <CalendarDays size={16} /> },
+              { value: "grid", label: t("pages.images.grid"), icon: <LayoutGrid size={16} /> }
+            ]}
+          />
         }
       />
       <div className="image-list-toolbar">
-        <span className="image-total-count" aria-label={`我的图片总数 ${imageFilterCounts.all} 张`} title={`我的图片共 ${imageFilterCounts.all} 张`}>
-          共 <strong>{imageFilterCounts.all}</strong> 张
+        <span className="image-total-count" aria-label={t("pages.images.totalAria", { count: imageFilterCounts.all })} title={t("pages.images.total", { count: imageFilterCounts.all })}>
+          {t("pages.images.countPrefix")} <strong>{imageFilterCounts.all}</strong> {t("pages.images.countSuffix")}
         </span>
         <button
           className={cx("case-favorite-filter-btn", favoriteOnly && "active")}
           type="button"
           onClick={() => setFavoriteOnly((value) => !value)}
-          aria-label={favoriteOnly ? "取消收藏筛选" : "只看收藏图片"}
+          aria-label={favoriteOnly ? t("pages.images.cancelFavoriteOnly") : t("pages.images.favoriteOnly")}
           aria-pressed={favoriteOnly}
-          title={favoriteOnly ? "取消收藏筛选" : "只看收藏图片"}
+          title={favoriteOnly ? t("pages.images.cancelFavoriteOnly") : t("pages.images.favoriteOnly")}
         >
           <Heart size={17} fill={favoriteOnly ? "currentColor" : "none"} />
           <span className="filter-tab-count">{imageFilterCounts.favorite}</span>
@@ -637,11 +626,11 @@ export function ImagesPage() {
             type="button"
             onClick={toggleAllTimelineGroups}
             disabled={timelineGroups.length === 0}
-            aria-label={allTimelineGroupsCollapsed ? "全部展开时间轴节点" : "全部收起时间轴节点"}
-            title={allTimelineGroupsCollapsed ? "全部展开时间轴节点" : "全部收起时间轴节点"}
+            aria-label={allTimelineGroupsCollapsed ? t("pages.images.expandAllTimeline") : t("pages.images.collapseAllTimeline")}
+            title={allTimelineGroupsCollapsed ? t("pages.images.expandAllTimeline") : t("pages.images.collapseAllTimeline")}
           >
             {allTimelineGroupsCollapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
-            {allTimelineGroupsCollapsed ? "全部展开" : "全部收起"}
+            {allTimelineGroupsCollapsed ? t("pages.images.expandAll") : t("pages.images.collapseAll")}
           </button>
         ) : null}
         <SearchHistoryInput
@@ -649,19 +638,19 @@ export function ImagesPage() {
           className="case-search image-search"
           value={keyword}
           onChange={setKeyword}
-          placeholder="搜索提示词、尺寸或日期"
-          ariaLabel="搜索我的图片"
+          placeholder={t("pages.images.searchPlaceholder")}
+          ariaLabel={t("pages.images.searchAria")}
           icon={<Search size={17} />}
         />
         <button
           className="secondary-btn image-sort-btn"
           type="button"
           onClick={() => setTimelineSort((value) => (value === "desc" ? "asc" : "desc"))}
-          aria-label={`时间轴排序：${timelineSort === "desc" ? "新到旧" : "旧到新"}`}
-          title={`时间轴排序：${timelineSort === "desc" ? "新到旧" : "旧到新"}`}
+          aria-label={t("pages.images.sort", { sort: timelineSort === "desc" ? t("pages.images.newToOld") : t("pages.images.oldToNew") })}
+          title={t("pages.images.sort", { sort: timelineSort === "desc" ? t("pages.images.newToOld") : t("pages.images.oldToNew") })}
         >
           {timelineSort === "desc" ? <CalendarArrowDown size={16} /> : <CalendarArrowUp size={16} />}
-          {timelineSort === "desc" ? "新到旧" : "旧到新"}
+          {timelineSort === "desc" ? t("pages.images.newToOld") : t("pages.images.oldToNew")}
         </button>
       </div>
       {imageContent}
@@ -670,26 +659,26 @@ export function ImagesPage() {
           <LibraryEmptyState
             compact
             imageSrc="/image/empty-states/images-empty.png"
-            imageAlt="空白画卷、画框与神笔"
-            title="没有匹配图片"
-            description="换个关键词或清除筛选后再看看。"
+            imageAlt={t("pages.images.emptyAlt")}
+            title={t("pages.images.noMatch")}
+            description={t("empty.tryDifferentFilters")}
             action={
               <button className="secondary-btn" type="button" onClick={clearImageFilters}>
                 <X size={16} />
-                清除筛选
+                {t("common.clearFilters")}
               </button>
             }
           />
         ) : (
           <LibraryEmptyState
             imageSrc="/image/empty-states/images-empty.png"
-            imageAlt="空白画卷、画框与神笔"
-            title="还没有生成图片"
-            description="从第一张图开始，生成和编辑结果会在这里沉淀。"
+            imageAlt={t("pages.images.emptyAlt")}
+            title={t("pages.images.empty")}
+            description={t("pages.images.emptyDesc")}
             action={
               <button className="primary-btn" type="button" onClick={startImageCreation}>
                 <Plus size={16} />
-                开始生图
+                {t("pages.images.create")}
               </button>
             }
           />
@@ -710,10 +699,10 @@ export function ImagesPage() {
       {caseSource ? <AddCaseModal source={caseSource} onClose={() => setCaseSource(null)} /> : null}
       <ConfirmDialog
         open={Boolean(deleteTarget)}
-        title="删除图片"
-        description="会从我的图片和对应聊天图片消息中删除；基于这张图片保存到灵感空间的灵感、加入素材库的素材也会同步删除。确认继续吗？"
-        confirmText="删除"
-        cancelText="取消"
+        title={t("pages.images.deleteTitle")}
+        description={t("pages.images.deleteDescription")}
+        confirmText={deleteImage.isPending ? t("common.deleting") : t("common.delete")}
+        cancelText={t("common.cancel")}
         destructive
         onConfirm={() => {
           if (!deleteTarget || deleteImage.isPending) return;

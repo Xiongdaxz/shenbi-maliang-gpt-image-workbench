@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Image as ImageIcon, ImagePlus, Ratio } from "lucide-react";
+import { useI18n, type Translate } from "../i18n";
 import { sizeOptionFromValue, type QualityOption, type SizeOption } from "../lib/imageOptions";
 
 function sizePreviewStyle(previewRatio?: string, box = 22) {
@@ -15,6 +16,26 @@ function sizePreviewStyle(previewRatio?: string, box = 22) {
   return { width: Math.max(7, Math.round((box * width) / height)), height: box };
 }
 
+function sizeOptionLabel(option: SizeOption, t: Translate) {
+  return option.labelKey ? t(option.labelKey) : option.label;
+}
+
+function sizeOptionDescription(option: SizeOption, t: Translate) {
+  if (!option.descriptionKey) return option.description;
+  if (option.descriptionKey === "picker.size.customDimensions") return t(option.descriptionKey, { size: option.value });
+  return t(option.descriptionKey);
+}
+
+function qualityOptionLabel(option: QualityOption, t: Translate) {
+  return option.labelKey ? t(option.labelKey) : option.label;
+}
+
+function qualityOptionDescription(option: QualityOption, t: Translate) {
+  if (!option.descriptionKey) return option.description;
+  if (option.descriptionKey === "picker.quality.custom") return t(option.descriptionKey, { quality: option.value });
+  return t(option.descriptionKey);
+}
+
 export function EditorSizePicker({
   value,
   options,
@@ -24,6 +45,7 @@ export function EditorSizePicker({
   options: SizeOption[];
   onSelect: (option: SizeOption) => void;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const selected = value ? options.find((item) => item.value === value) : null;
@@ -44,7 +66,7 @@ export function EditorSizePicker({
         <span className="size-trigger-icon" aria-hidden="true">
           {selected ? <span style={sizePreviewStyle(selected.previewRatio, 15)} /> : <Ratio size={15} />}
         </span>
-        <span>{selected?.label ?? "宽高比"}</span>
+        <span>{selected ? sizeOptionLabel(selected, t) : t("picker.aspectRatio")}</span>
         {selected ? <small>{selected.ratio}</small> : null}
         <ChevronDown size={15} className={open ? "open" : ""} />
       </button>
@@ -67,9 +89,9 @@ export function EditorSizePicker({
               </span>
               <span className="size-option-copy">
                 <strong>
-                  {option.label} {option.ratio}
+                  {sizeOptionLabel(option, t)} {option.ratio}
                 </strong>
-                <small>{option.description}</small>
+                <small>{sizeOptionDescription(option, t)}</small>
               </span>
               {option.value === value ? <Check className="size-option-check" size={16} /> : <span />}
             </button>
@@ -89,6 +111,7 @@ export function SizePicker({
   options: SizeOption[];
   onChange: (value: string) => void;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const selected = value ? options.find((item) => item.value === value) ?? sizeOptionFromValue(value) : null;
@@ -108,7 +131,7 @@ export function SizePicker({
       <button
         type="button"
         className="size-picker-trigger"
-        data-tooltip="尺寸：默认自动"
+        data-tooltip={t("picker.sizeDefaultAuto")}
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
@@ -116,7 +139,7 @@ export function SizePicker({
         <span className="size-trigger-icon" aria-hidden="true">
           {selected ? <span style={sizePreviewStyle(selected.previewRatio, 15)} /> : <Ratio size={15} />}
         </span>
-        <span>{selected?.label ?? "宽高比"}</span>
+        <span>{selected ? sizeOptionLabel(selected, t) : t("picker.aspectRatio")}</span>
         {selected ? <small>{selected.ratio}</small> : null}
         <ChevronDown size={15} className={open ? "open" : ""} />
       </button>
@@ -139,9 +162,9 @@ export function SizePicker({
               </span>
               <span className="size-option-copy">
                 <strong>
-                  {option.label} {option.ratio}
+                  {sizeOptionLabel(option, t)} {option.ratio}
                 </strong>
-                <small>{option.description}</small>
+                <small>{sizeOptionDescription(option, t)}</small>
               </span>
               {option.value === value ? <Check className="size-option-check" size={16} /> : <span />}
             </button>
@@ -161,6 +184,7 @@ export function QualityPicker({
   options: QualityOption[];
   onChange: (value: string) => void;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const selected = value ? options.find((item) => item.value === value) : null;
@@ -180,7 +204,7 @@ export function QualityPicker({
       <button
         type="button"
         className="quality-picker-trigger"
-        data-tooltip="质量：默认自动"
+        data-tooltip={t("picker.qualityDefaultAuto")}
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
@@ -188,7 +212,7 @@ export function QualityPicker({
         <span className="size-trigger-icon quality-trigger-icon" aria-hidden="true">
           <ImageIcon size={15} />
         </span>
-        <span>{selected?.label ?? "质量"}</span>
+        <span>{selected ? qualityOptionLabel(selected, t) : t("picker.quality")}</span>
         <ChevronDown size={15} className={open ? "open" : ""} />
       </button>
       {open ? (
@@ -206,8 +230,8 @@ export function QualityPicker({
               }}
             >
               <span className="quality-option-copy">
-                <strong>{option.label}</strong>
-                <small>{option.description}</small>
+                <strong>{qualityOptionLabel(option, t)}</strong>
+                <small>{qualityOptionDescription(option, t)}</small>
               </span>
               {option.value === value ? <Check className="size-option-check" size={16} /> : <span />}
             </button>
@@ -229,6 +253,7 @@ export function ImageCountStepper({
   min?: number;
   max?: number;
 }) {
+  const { t } = useI18n();
   const clamp = (nextValue: number) => (Number.isFinite(nextValue) ? Math.max(min, Math.min(max, nextValue)) : min);
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -276,7 +301,7 @@ export function ImageCountStepper({
       <button
         type="button"
         className="image-count-trigger"
-        data-tooltip="生成数量，也可以在提示词中写：分别生成几张"
+        data-tooltip={t("picker.imageCountTooltip")}
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((next) => !next)}
@@ -284,7 +309,7 @@ export function ImageCountStepper({
         <span className="size-trigger-icon image-count-trigger-icon" aria-hidden="true">
           <ImagePlus size={15} />
         </span>
-        <span>数量 {selectedValue}</span>
+        <span>{t("picker.imageCount", { count: selectedValue })}</span>
         <ChevronDown size={15} className={open ? "open" : ""} />
       </button>
       {open ? createPortal(
@@ -302,7 +327,7 @@ export function ImageCountStepper({
               }}
             >
               <span className="image-count-option-copy">
-                <strong>{option} 张</strong>
+                <strong>{t("picker.imageCountOption", { count: option })}</strong>
               </span>
               {option === selectedValue ? <Check className="size-option-check" size={16} /> : <span />}
             </button>

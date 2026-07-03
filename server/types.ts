@@ -164,6 +164,7 @@ export type ImageEditSuggestionRow = {
 
 export type UserPreferencesRow = {
   user_id: string;
+  language: string;
   edit_suggestions_enabled: number;
   edit_suggestion_tone: string;
   auto_upload_pasted_assets: number;

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Check, ChevronDown } from "lucide-react";
+import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import {
   normalizePromptTemplateColorValue,
@@ -35,6 +36,7 @@ function removeValue(values: string[] | undefined, value: string) {
 }
 
 export function PromptTemplateColorPicker({ component, value, onChange }: PromptTemplateColorPickerProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [customColor, setCustomColor] = useState("");
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -98,7 +100,7 @@ export function PromptTemplateColorPicker({ component, value, onChange }: Prompt
     ...selectedGradients.map((id) => gradientById.get(id)?.name).filter(Boolean),
     ...customColors
   ];
-  const selectedSummary = selectedLabels.length > 0 ? selectedLabels.join("、") : "选择色卡或渐变组合";
+  const selectedSummary = selectedLabels.length > 0 ? selectedLabels.join(t("common.listSeparator")) : t("promptTemplateColorPicker.placeholder");
   const selectedPreviewItems: SelectedColorPreviewItem[] = [
     ...selectedColors
       .flatMap((id): SelectedColorPreviewItem[] => {
@@ -143,7 +145,7 @@ export function PromptTemplateColorPicker({ component, value, onChange }: Prompt
       {open ? (
         <div className="prompt-template-color-menu" role="listbox" aria-multiselectable="true">
           <div className="prompt-template-color-section">
-            <span>单色</span>
+            <span>{t("promptTemplateColorPicker.solid")}</span>
             <div className="prompt-template-color-option-list">
               {colorOptions.map((option) => {
                 const active = selectedColors.includes(option.id);
@@ -165,12 +167,12 @@ export function PromptTemplateColorPicker({ component, value, onChange }: Prompt
                   </button>
                 );
               })}
-              {colorOptions.length === 0 ? <small className="prompt-template-color-empty">暂无单色色卡</small> : null}
+              {colorOptions.length === 0 ? <small className="prompt-template-color-empty">{t("promptTemplates.editor.noSolidColorSwatches")}</small> : null}
             </div>
           </div>
 
           <div className="prompt-template-color-section">
-            <span>渐变</span>
+            <span>{t("promptTemplateColorPicker.gradient")}</span>
             <div className="prompt-template-color-option-list">
               {gradientOptions.map((option) => {
                 const active = selectedGradients.includes(option.id);
@@ -192,13 +194,13 @@ export function PromptTemplateColorPicker({ component, value, onChange }: Prompt
                   </button>
                 );
               })}
-              {gradientOptions.length === 0 ? <small className="prompt-template-color-empty">暂无渐变组合</small> : null}
+              {gradientOptions.length === 0 ? <small className="prompt-template-color-empty">{t("promptTemplates.editor.noGradients")}</small> : null}
             </div>
           </div>
 
           {customColors.length > 0 ? (
             <div className="prompt-template-color-section">
-              <span>自定义</span>
+              <span>{t("promptTemplateColorPicker.custom")}</span>
               <div className="prompt-template-color-option-list">
                 {customColors.map((hex) => (
                   <button
@@ -212,7 +214,7 @@ export function PromptTemplateColorPicker({ component, value, onChange }: Prompt
                     <i className="prompt-template-color-swatch" style={{ background: hex }} />
                     <span>
                       <strong>{hex}</strong>
-                      <small>自定义色 · {hex}</small>
+                      <small>{t("promptTemplateColorPicker.customColor", { color: hex })}</small>
                     </span>
                     <Check size={14} />
                   </button>
@@ -235,7 +237,7 @@ export function PromptTemplateColorPicker({ component, value, onChange }: Prompt
                 }}
               />
               <button type="button" onClick={addCustomColor} disabled={!normalizedCustomColor}>
-                添加
+                {t("common.add")}
               </button>
             </div>
           ) : null}

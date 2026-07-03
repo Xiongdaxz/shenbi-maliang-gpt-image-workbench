@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, X } from "lucide-react";
 import { api } from "../api";
+import { useI18n } from "../i18n";
 import { ASSET_UPLOAD_MODE_OPTIONS, type AssetUploadMode } from "../lib/assets";
 import { cx } from "../lib/cx";
 import { formatImageFileSize } from "../lib/format";
@@ -38,6 +39,7 @@ export function AddAssetFromImageModal({
   onAdd: (payload: { name?: string; spaceMode: AssetUploadMode; categoryIds: string[] }) => void;
 }) {
   const queryClient = useQueryClient();
+  const { t } = useI18n();
   const [name, setName] = useState(() => initialAssetName(image));
   const [spaceMode, setSpaceMode] = useState<AssetUploadMode>("private");
   const [categoryIds, setCategoryIds] = useState<string[]>(() => initialAssetCategoryIds(image));
@@ -56,6 +58,11 @@ export function AddAssetFromImageModal({
         : "";
   const imageFileSizeLabel = formatImageFileSize(image.imageFileSize);
   const imageMetaLabels = [imageSizeLabel, imageFileSizeLabel].filter(Boolean);
+  const uploadModeOptions = ASSET_UPLOAD_MODE_OPTIONS.map((option) => ({
+    ...option,
+    label: t(`asset.uploadMode.${option.value}.label`),
+    description: t(`asset.uploadMode.${option.value}.description`)
+  }));
 
   useEffect(() => {
     nameTouchedRef.current = false;
@@ -144,20 +151,20 @@ export function AddAssetFromImageModal({
     <div className="modal-backdrop">
       <section className="case-modal compact-modal asset-from-image-modal">
         <header>
-          <h3>加入素材库</h3>
-          <button onClick={onClose} aria-label="关闭">
+          <h3>{t("pages.cases.addToAssets")}</h3>
+          <button onClick={onClose} aria-label={t("common.close")}>
             <X size={18} />
           </button>
         </header>
         <div className="asset-from-image-preview">
           <img src={image.previewUrl || image.url} alt={image.prompt} />
           <div>
-            <strong>{image.prompt || "生成图片"}</strong>
+            <strong>{image.prompt || t("pages.images.generatedImage")}</strong>
             {imageMetaLabels.length > 0 ? <span>{imageMetaLabels.join(" / ")}</span> : null}
           </div>
         </div>
         <label>
-          标签
+          {t("pages.assets.tagsLabel")}
           <CaseCategoryMultiSelect
             categories={categories}
             value={categoryIds}
@@ -165,26 +172,26 @@ export function AddAssetFromImageModal({
               categoryTouchedRef.current = true;
               setCategoryIds(nextCategoryIds);
             }}
-            labelName="标签"
-            placeholder={categorySuggestionPending ? "正在生成标签..." : "不选择标签"}
-            pendingSelectionLabel={`已生成 ${categoryIds.length} 个标签`}
+            labelName={t("pages.assets.tag")}
+            placeholder={categorySuggestionPending ? t("pages.assets.generatingTags") : t("pages.assets.noTag")}
+            pendingSelectionLabel={t("pages.assets.generatedTagCount", { count: categoryIds.length })}
           />
         </label>
         <label>
-          名称
+          {t("pages.assets.name")}
           <input
             value={name}
             onChange={(event) => {
               nameTouchedRef.current = true;
               setName(event.target.value);
             }}
-            placeholder={nameSuggestionPending ? "正在生成名称..." : "请输入素材名称"}
+            placeholder={nameSuggestionPending ? t("pages.assets.generatingName") : t("pages.assets.namePlaceholder")}
           />
         </label>
         <label className="asset-upload-field">
-          保存位置
-          <div className="asset-space-options" role="radiogroup" aria-label="保存位置">
-            {ASSET_UPLOAD_MODE_OPTIONS.map((option) => {
+          {t("pages.assets.saveLocation")}
+          <div className="asset-space-options" role="radiogroup" aria-label={t("pages.assets.saveLocation")}>
+            {uploadModeOptions.map((option) => {
               const selected = option.value === spaceMode;
               return (
                 <button
@@ -208,10 +215,10 @@ export function AddAssetFromImageModal({
         {error ? <div className="form-error">{error.message}</div> : null}
         <div className="row-actions">
           <button className="secondary-btn" type="button" onClick={onClose}>
-            取消
+            {t("common.cancel")}
           </button>
           <button className="primary-btn" type="button" onClick={submit} disabled={pending || fieldSuggestionPending}>
-            {pending ? "加入中" : fieldSuggestionPending ? "生成字段中" : "加入素材库"}
+            {pending ? t("common.adding") : fieldSuggestionPending ? t("common.generatingFields") : t("pages.cases.addToAssets")}
           </button>
         </div>
       </section>

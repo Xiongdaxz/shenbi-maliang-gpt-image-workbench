@@ -29,6 +29,52 @@ function tableExists(db: Database, table: string) {
   return Boolean(getOne<{ name: string }>(db, "select name from sqlite_master where type = 'table' and name = ?", table));
 }
 
+const LEGACY_DALLE_IMAGE_SIZES = ["1024x1024", "1792x1024", "1024x1792"];
+const EXPANDED_GPT_IMAGE_2_SIZES = ["1024x1024", "1024x1536", "1536x2048", "1152x2048", "1536x1024", "2048x1536", "2048x1152"];
+
+function providerModelBaseName(model: string) {
+  const normalized = model.trim().toLowerCase();
+  const slashIndex = normalized.lastIndexOf("/");
+  return slashIndex >= 0 ? normalized.slice(slashIndex + 1) : normalized;
+}
+
+function isGptImage2ProviderModel(model: string) {
+  const base = providerModelBaseName(model);
+  return base === DEFAULT_IMAGE_MODEL || base === "codex-gpt-image-2" || base.startsWith(`${DEFAULT_IMAGE_MODEL}-`);
+}
+
+function parseProviderSizeList(value: string) {
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map((item) => String(item).trim()).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function sameStringList(left: string[], right: string[]) {
+  if (left.length !== right.length) return false;
+  return left.every((value, index) => value === right[index]);
+}
+
+function migrateGptImageProviderSizes() {
+  const migrationId = "provider_gpt_image_2_compact_sizes_20260629";
+  if (getOne<{ id: string }>(configDb, "select id from config_migrations where id = ?", migrationId)) return;
+  const timestamp = now();
+  const rows = getAll<Pick<ProviderRow, "id" | "model" | "sizes">>(
+    configDb,
+    "select id, model, sizes from provider_configs"
+  );
+  const nextSizes = JSON.stringify(DEFAULT_IMAGE_SIZES);
+  for (const row of rows) {
+    if (!isGptImage2ProviderModel(String(row.model ?? ""))) continue;
+    const sizes = parseProviderSizeList(row.sizes);
+    if (!sameStringList(sizes, LEGACY_DALLE_IMAGE_SIZES) && !sameStringList(sizes, EXPANDED_GPT_IMAGE_2_SIZES)) continue;
+    run(configDb, "update provider_configs set sizes = ?, default_size = ?, updated_at = ? where id = ?", nextSizes, DEFAULT_REQUEST_SIZE, timestamp, row.id);
+  }
+  run(configDb, "insert into config_migrations (id, created_at) values (?, ?)", migrationId, timestamp);
+}
+
 function globalSwitchDefaultFromLegacy(type: GlobalSwitchType) {
   if (type === "self_registration" && tableExists(configDb, "registration_settings")) {
     return getOne<{ enabled: number }>(configDb, "select enabled from registration_settings where id = ? limit 1", "default")?.enabled ?? 0;
@@ -496,6 +542,7 @@ export function initAppDb() {
   appDb.run(`
     create table if not exists user_preferences (
       user_id text primary key,
+      language text not null default 'auto',
       edit_suggestions_enabled integer not null default 1,
       edit_suggestion_tone text not null default 'default',
       auto_upload_pasted_assets integer not null default 1,
@@ -507,6 +554,9 @@ export function initAppDb() {
   `);
   if (!tableColumnExists(appDb, "user_preferences", "edit_suggestions_enabled")) {
     appDb.run("alter table user_preferences add column edit_suggestions_enabled integer not null default 1");
+  }
+  if (!tableColumnExists(appDb, "user_preferences", "language")) {
+    appDb.run("alter table user_preferences add column language text not null default 'auto'");
   }
   if (!tableColumnExists(appDb, "user_preferences", "edit_suggestion_tone")) {
     appDb.run("alter table user_preferences add column edit_suggestion_tone text not null default 'default'");
@@ -523,6 +573,10 @@ export function initAppDb() {
   run(
     appDb,
     "update user_preferences set edit_suggestion_tone = 'default' where edit_suggestion_tone not in ('default', 'practical', 'creative', 'detail')"
+  );
+  run(
+    appDb,
+    "update user_preferences set language = 'auto' where language not in ('auto', 'zh-CN', 'zh-TW', 'en-US', 'ja-JP', 'ko-KR', 'es-ES', 'fr-FR', 'de-DE', 'pt-BR', 'ru-RU', 'fa-IR')"
   );
 
   appDb.run(`
@@ -608,6 +662,7 @@ export function initAppDb() {
     create table if not exists starter_daily_copies (
       date text primary key,
       copies_json text not null default '[]',
+      copies_en_json text not null default '[]',
       source text not null default 'ai',
       provider_name text not null default '',
       model text not null default '',
@@ -618,6 +673,9 @@ export function initAppDb() {
       updated_at text not null
     )
   `);
+  if (!tableColumnExists(appDb, "starter_daily_copies", "copies_en_json")) {
+    appDb.run("alter table starter_daily_copies add column copies_en_json text not null default '[]'");
+  }
   appDb.run("create index if not exists starter_daily_copies_status_idx on starter_daily_copies(status, generated_at desc)");
 
   appDb.run(`
@@ -1822,6 +1880,7 @@ export function initConfigDb() {
     "/images/edits",
     "%/images/edits"
   );
+  migrateGptImageProviderSizes();
   run(
     configDb,
     "update image_generation_settings set mode = ? where mode in (?, ?, ?, ?, ?)",

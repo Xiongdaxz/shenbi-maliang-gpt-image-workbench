@@ -3,35 +3,14 @@ import type { CSSProperties, WheelEvent as ReactWheelEvent } from "react";
 import { ArrowRight, PartyPopper, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
+import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import { visibleCaseStyleNames } from "../lib/caseMaterials";
 import { defaultCaseItems } from "../lib/defaultCases";
-import { getTimeGreeting } from "../lib/timeGreeting";
+import { defaultStarterHeadlineIdeas, isChineseStarterCopyLocale } from "../lib/starterCopy";
+import { getTimeGreetingKey } from "../lib/timeGreeting";
 import type { CaseCategory, User } from "../types";
 import { ProjectLogo } from "./ProjectLogo";
-
-const STARTER_HEADLINE_IDEAS = [
-  "给新品首发一点高级感。",
-  "把汇报封面做得更有气场。",
-  "让商品主图更像精品广告。",
-  "把卖点变成一张清晰海报。",
-  "给客户拜访做张专业配图。",
-  "让活动邀请函更有期待感。",
-  "把会议主题做成视觉主图。",
-  "给招聘海报加一点亲和力。",
-  "把流程说明画得更好懂。",
-  "做一张适合发小红书的封面。",
-  "把旅行路线变成收藏长图。",
-  "给宠物拍一组温暖写真。",
-  "把今天的菜品拍出食欲感。",
-  "给家居空间换个高级氛围。",
-  "画一个适合睡前读的绘本场景。",
-  "让节日祝福卡更像精心准备。",
-  "给头像换成电影感光影。",
-  "把品牌 Logo 放进真实样机。",
-  "做一张适合手机锁屏的壁纸。",
-  "把社群活动做得更想参加。"
-];
 
 type StarterCaseItem = CaseCategory["items"][number];
 const STARTER_CASE_IMAGE_LIMIT = 10;
@@ -144,11 +123,14 @@ export function PromptStarter({
   onPickPrompt: (item: StarterCaseItem) => void;
 }) {
   const [caseBatchSeed, setCaseBatchSeed] = useState(0);
+  const { t, resolvedLanguage } = useI18n();
+  const fallbackHeadlineIdeas = useMemo(() => defaultStarterHeadlineIdeas(resolvedLanguage), [resolvedLanguage]);
   const [dailyHeadlineIdeas, setDailyHeadlineIdeas] = useState<string[]>([]);
-  const [headlineIdeaIndex, setHeadlineIdeaIndex] = useState(() => Math.floor(Math.random() * STARTER_HEADLINE_IDEAS.length));
+  const [headlineIdeaIndex, setHeadlineIdeaIndex] = useState(() => Math.floor(Math.random() * fallbackHeadlineIdeas.length));
   useEffect(() => {
     let cancelled = false;
-    api.starterCopiesToday()
+    setDailyHeadlineIdeas([]);
+    api.starterCopiesToday(resolvedLanguage)
       .then((data) => {
         if (cancelled) return;
         const copies = Array.isArray(data.copies)
@@ -162,22 +144,25 @@ export function PromptStarter({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [resolvedLanguage]);
   const headlineIdeas = useMemo(() => {
-    return dailyHeadlineIdeas.length > 0 ? dailyHeadlineIdeas : STARTER_HEADLINE_IDEAS;
-  }, [dailyHeadlineIdeas]);
+    return dailyHeadlineIdeas.length > 0 ? dailyHeadlineIdeas : fallbackHeadlineIdeas;
+  }, [dailyHeadlineIdeas, fallbackHeadlineIdeas]);
   useEffect(() => {
     setHeadlineIdeaIndex(Math.floor(Math.random() * Math.max(headlineIdeas.length, 1)));
   }, [headlineIdeas]);
   const headlineParts = useMemo(() => {
     const displayName = user.username?.trim() || user.account?.trim();
-    const greeting = getTimeGreeting();
-    const idea = headlineIdeas[headlineIdeaIndex % headlineIdeas.length] || STARTER_HEADLINE_IDEAS[0];
+    const greeting = t(getTimeGreetingKey());
+    const idea = headlineIdeas[headlineIdeaIndex % headlineIdeas.length] || fallbackHeadlineIdeas[0] || "";
+    const isChinese = isChineseStarterCopyLocale(resolvedLanguage);
     return {
-      prefix: `${displayName ? `${displayName}，` : ""}${greeting}，`,
+      prefix: isChinese
+        ? `${displayName ? `${displayName}，` : ""}${greeting}，`
+        : `${displayName ? `${displayName}, ` : ""}${greeting}, `,
       idea
     };
-  }, [headlineIdeaIndex, headlineIdeas, user.account, user.username]);
+  }, [fallbackHeadlineIdeas, headlineIdeaIndex, headlineIdeas, resolvedLanguage, t, user.account, user.username]);
   const headline = `${headlineParts.prefix}${headlineParts.idea}`;
   const headlinePrefixChars = useMemo(() => Array.from(headlineParts.prefix), [headlineParts.prefix]);
   const headlineIdeaChars = useMemo(() => Array.from(headlineParts.idea), [headlineParts.idea]);
@@ -295,7 +280,7 @@ export function PromptStarter({
         <button
           className={cx("starter-logo", isLogoMotionPlaying && "is-playing")}
           type="button"
-          aria-label="放大工作台 logo"
+          aria-label={t("starter.logoMotion")}
           onClick={playLogoMotion}
           onAnimationEnd={() => setIsLogoMotionPlaying(false)}
         >
@@ -312,8 +297,8 @@ export function PromptStarter({
               className="starter-title-prompt"
               type="button"
               onClick={() => onUseHeadlinePrompt(headlineParts.idea)}
-              aria-label={`使用文案：${headlineParts.idea}`}
-              title="使用这条文案"
+              aria-label={t("starter.useCopy", { text: headlineParts.idea })}
+              title={t("starter.useThisCopy")}
             >
               {headlineIdeaChars.map((char, index) => (
                 <span key={`${char}-${index}`} style={{ animationDelay: `${(headlinePrefixChars.length + index) * 34}ms` }}>
@@ -373,12 +358,12 @@ export function PromptStarter({
                     } as CSSProperties
                   }
                 >
-                  <span>去灵感空间看看</span>
+                  <span>{t("starter.openInspiration")}</span>
                   <ArrowRight size={18} />
                 </Link>
               </div>
             </div>
-            <button className="starter-case-scroll-hint" type="button" onClick={scrollStarterCasesNext} aria-label="查看更多灵感">
+            <button className="starter-case-scroll-hint" type="button" onClick={scrollStarterCasesNext} aria-label={t("starter.moreInspiration")}>
               <ArrowRight size={18} />
             </button>
           </div>
@@ -387,13 +372,13 @@ export function PromptStarter({
               {casePoolCount > 1 ? (
                 <button className="starter-case-refresh" type="button" onClick={() => refreshCaseImages()}>
                   <RefreshCw size={15} />
-                  <span>换一组</span>
+                  <span>{t("starter.refreshGroup")}</span>
                 </button>
               ) : null}
               {onOpenIntro ? (
-                <button className="starter-case-refresh" type="button" onClick={onOpenIntro} aria-label="功能介绍" title="功能介绍">
+                <button className="starter-case-refresh" type="button" onClick={onOpenIntro} aria-label={t("starter.featureIntro")} title={t("starter.featureIntro")}>
                   <PartyPopper size={15} />
-                  <span>功能介绍</span>
+                  <span>{t("starter.featureIntro")}</span>
                 </button>
               ) : null}
             </div>

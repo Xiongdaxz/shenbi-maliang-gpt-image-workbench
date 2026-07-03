@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Download } from "lucide-react";
 import { api } from "../api";
+import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import type { ImageDownloadOption } from "../types";
 
@@ -46,19 +47,25 @@ function formatMimeType(value: string | null | undefined) {
   return suffix ? suffix.toUpperCase() : "";
 }
 
-function optionMeta(option: ImageDownloadOption) {
+function optionMeta(option: ImageDownloadOption, unknownSizeLabel: string) {
   const parts = [
     option.width > 0 && option.height > 0 ? `${option.width}×${option.height}` : "",
     formatMimeType(option.mimeType),
     formatDownloadFileSize(option.fileSize)
   ].filter(Boolean);
-  return parts.length > 0 ? parts.join(" · ") : "大小未知";
+  return parts.length > 0 ? parts.join(" · ") : unknownSizeLabel;
 }
 
-function optionLabel(option: ImageDownloadOption) {
-  if (option.variant === "thumb") return "缩略图";
-  if (option.variant === "preview") return "预览图";
-  return "原图";
+function optionLabel(option: ImageDownloadOption, t: (key: string) => string) {
+  if (option.variant === "thumb") return t("download.thumbnail");
+  if (option.variant === "preview") return t("download.preview");
+  return t("download.original");
+}
+
+function optionDescription(option: ImageDownloadOption, t: (key: string) => string) {
+  if (option.variant === "thumb") return t("download.thumbnailDesc");
+  if (option.variant === "preview") return t("download.previewDesc");
+  return t("download.originalDesc");
 }
 
 function fetchDownloadOptions(source: ImageDownloadSource) {
@@ -82,11 +89,12 @@ export function ImageDownloadMenu({
   className,
   rootClassName,
   iconSize = 16,
-  ariaLabel = "下载图片",
-  title = "下载图片",
+  ariaLabel,
+  title,
   placement = "top-end",
   stopMouseDownPropagation = false
 }: ImageDownloadMenuProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const [popoverStyle, setPopoverStyle] = useState<CSSProperties>({});
@@ -205,7 +213,7 @@ export function ImageDownloadMenu({
             data-state={closing ? "closing" : "open"}
             data-placement={placement}
             role="menu"
-            aria-label="下载尺寸选项"
+            aria-label={t("download.options")}
             onMouseDown={(event) => {
               if (stopMouseDownPropagation) event.stopPropagation();
             }}
@@ -216,9 +224,9 @@ export function ImageDownloadMenu({
               event.stopPropagation();
             }}
           >
-            {query.isLoading || query.isFetching ? <div className="image-download-status">加载中</div> : null}
-            {query.isError ? <div className="image-download-status error">下载选项加载失败</div> : null}
-            {!query.isLoading && !query.isError && options.length === 0 ? <div className="image-download-status">暂无可下载尺寸</div> : null}
+            {query.isLoading || query.isFetching ? <div className="image-download-status">{t("common.loading")}</div> : null}
+            {query.isError ? <div className="image-download-status error">{t("download.optionsFailed")}</div> : null}
+            {!query.isLoading && !query.isError && options.length === 0 ? <div className="image-download-status">{t("download.noOptions")}</div> : null}
             {!query.isLoading && !query.isError
               ? options.map((option) => (
                   <button
@@ -232,10 +240,10 @@ export function ImageDownloadMenu({
                     }}
                   >
                     <span className="image-download-option-copy">
-                      <strong>{optionLabel(option)}</strong>
-                      <small>{option.description}</small>
+                      <strong>{optionLabel(option, t)}</strong>
+                      <small>{optionDescription(option, t)}</small>
                     </span>
-                    <span className="image-download-option-meta">{optionMeta(option)}</span>
+                    <span className="image-download-option-meta">{optionMeta(option, t("download.unknownSize"))}</span>
                   </button>
                 ))
               : null}
@@ -263,9 +271,9 @@ export function ImageDownloadMenu({
           togglePopover();
         }}
         disabled={!source || !sourceId}
-        aria-label={ariaLabel}
+        aria-label={ariaLabel ?? t("download.image")}
         aria-expanded={open && !closing}
-        title={title}
+        title={title ?? t("download.image")}
       >
         <Download size={iconSize} />
       </button>

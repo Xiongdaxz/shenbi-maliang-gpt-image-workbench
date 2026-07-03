@@ -8,10 +8,13 @@ import {
 } from "../src/lib/promptOptimizeStyles";
 
 export type EditSuggestionTone = "default" | "practical" | "creative" | "detail";
+export type LanguagePreference = "auto" | "zh-CN" | "zh-TW" | "en-US" | "ja-JP" | "ko-KR" | "es-ES" | "fr-FR" | "de-DE" | "pt-BR" | "ru-RU" | "fa-IR";
 
 const EDIT_SUGGESTION_TONES = new Set<EditSuggestionTone>(["default", "practical", "creative", "detail"]);
+const LANGUAGE_PREFERENCES = new Set<LanguagePreference>(["auto", "zh-CN", "zh-TW", "en-US", "ja-JP", "ko-KR", "es-ES", "fr-FR", "de-DE", "pt-BR", "ru-RU", "fa-IR"]);
 
 export type PublicUserPreferences = {
+  language: LanguagePreference;
   editSuggestionsEnabled: boolean;
   editSuggestionTone: EditSuggestionTone;
   autoUploadPastedAssets: boolean;
@@ -23,8 +26,13 @@ export function normalizeEditSuggestionTone(value: unknown): EditSuggestionTone 
   return typeof value === "string" && EDIT_SUGGESTION_TONES.has(value as EditSuggestionTone) ? (value as EditSuggestionTone) : "default";
 }
 
+export function normalizeLanguagePreference(value: unknown): LanguagePreference {
+  return typeof value === "string" && LANGUAGE_PREFERENCES.has(value as LanguagePreference) ? (value as LanguagePreference) : "auto";
+}
+
 export function defaultUserPreferences(): PublicUserPreferences {
   return {
+    language: "auto",
     editSuggestionsEnabled: true,
     editSuggestionTone: "default",
     autoUploadPastedAssets: true,
@@ -47,6 +55,7 @@ function publicUserPreferences(row: UserPreferencesRow | null | undefined): Publ
   const fallback = defaultUserPreferences();
   if (!row) return fallback;
   return {
+    language: normalizeLanguagePreference(row.language),
     editSuggestionsEnabled: Boolean(row.edit_suggestions_enabled),
     editSuggestionTone: normalizeEditSuggestionTone(row.edit_suggestion_tone),
     autoUploadPastedAssets: row.auto_upload_pasted_assets !== 0,
@@ -68,6 +77,8 @@ export function userPreferences(userId: string): PublicUserPreferences {
 
 export function saveUserPreferences(userId: string, input: Record<string, unknown>) {
   const current = userPreferences(userId);
+  const language =
+    input.language === undefined ? current.language : normalizeLanguagePreference(input.language);
   const editSuggestionsEnabled =
     typeof input.editSuggestionsEnabled === "boolean" ? input.editSuggestionsEnabled : current.editSuggestionsEnabled;
   const editSuggestionTone =
@@ -86,10 +97,11 @@ export function saveUserPreferences(userId: string, input: Record<string, unknow
   run(
     appDb,
     `insert into user_preferences (
-      user_id, edit_suggestions_enabled, edit_suggestion_tone, auto_upload_pasted_assets,
+      user_id, language, edit_suggestions_enabled, edit_suggestion_tone, auto_upload_pasted_assets,
       prompt_optimize_styles_json, prompt_optimize_custom_instruction, updated_at
-    ) values (?, ?, ?, ?, ?, ?, ?)
+    ) values (?, ?, ?, ?, ?, ?, ?, ?)
     on conflict(user_id) do update set
+      language = excluded.language,
       edit_suggestions_enabled = excluded.edit_suggestions_enabled,
       edit_suggestion_tone = excluded.edit_suggestion_tone,
       auto_upload_pasted_assets = excluded.auto_upload_pasted_assets,
@@ -97,6 +109,7 @@ export function saveUserPreferences(userId: string, input: Record<string, unknow
       prompt_optimize_custom_instruction = excluded.prompt_optimize_custom_instruction,
       updated_at = excluded.updated_at`,
     userId,
+    language,
     editSuggestionsEnabled ? 1 : 0,
     editSuggestionTone,
     autoUploadPastedAssets ? 1 : 0,

@@ -1,6 +1,7 @@
 import { LayoutGrid, Rows3 } from "lucide-react";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import type { MouseEvent, ReactNode } from "react";
+import type { CSSProperties, MouseEvent, ReactNode } from "react";
+import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 
 export type LibraryFilterDisplayMode = "compact" | "tiled";
@@ -113,13 +114,14 @@ function useHorizontalScroller(dependencyKey: string, enabled = true) {
 }
 
 export function AssetTagScroller({ names }: { names: string[] }) {
+  const { t } = useI18n();
   const tagKey = names.join("\u0000");
   const { scrollRef, scrollHint } = useHorizontalScroller(tagKey);
 
   return (
     <div className={cx("asset-card-tags-wrap", scrollHint.overflow && !scrollHint.atEnd && "has-overflow")}>
       <div className="asset-card-tags" ref={scrollRef}>
-        {names.length > 0 ? names.map((name) => <span key={name}>{name}</span>) : <span className="muted">未打标签</span>}
+        {names.length > 0 ? names.map((name) => <span key={name}>{name}</span>) : <span className="muted">{t("assetTags.untagged")}</span>}
       </div>
     </div>
   );
@@ -203,6 +205,104 @@ export function FilterTabsScroller({
   );
 }
 
+type PageHeaderViewToggleOption<T extends string> = {
+  value: T;
+  label: string;
+  title?: string;
+  ariaLabel?: string;
+  icon: ReactNode;
+};
+
+export function PageHeaderViewToggle<T extends string>({
+  value,
+  options,
+  onChange,
+  ariaLabel,
+  className
+}: {
+  value: T;
+  options: Array<PageHeaderViewToggleOption<T>>;
+  onChange: (value: T) => void;
+  ariaLabel: string;
+  className?: string;
+}) {
+  const wrapRef = useRef<HTMLSpanElement | null>(null);
+  const [slider, setSlider] = useState({ left: 2, width: 0 });
+  const [sliderAnimated, setSliderAnimated] = useState(false);
+
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    let frame = 0;
+    const measure = () => {
+      const activeButton = Array.from(wrap.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.dataset.toggleValue === value);
+      if (!activeButton) return;
+      const next = {
+        left: activeButton.offsetLeft,
+        width: activeButton.offsetWidth
+      };
+      setSlider((current) => (Math.abs(current.left - next.left) <= 0.5 && Math.abs(current.width - next.width) <= 0.5 ? current : next));
+    };
+    const sync = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(measure);
+    };
+
+    measure();
+    const resizeObserver = new ResizeObserver(sync);
+    resizeObserver.observe(wrap);
+    Array.from(wrap.children).forEach((child) => resizeObserver.observe(child));
+    window.addEventListener("resize", sync);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", sync);
+    };
+  }, [options, value]);
+
+  const style = {
+    "--view-toggle-slider-left": `${slider.left}px`,
+    "--view-toggle-slider-width": `${slider.width}px`
+  } as CSSProperties;
+
+  return (
+    <span
+      className={cx("page-header-view-toggle", className)}
+      ref={wrapRef}
+      role="group"
+      aria-label={ariaLabel}
+      style={style}
+      data-slider-ready={slider.width > 0 ? "true" : "false"}
+      data-slider-animated={sliderAnimated ? "true" : "false"}
+    >
+      {options.map((option) => {
+        const active = option.value === value;
+        return (
+          <button
+            type="button"
+            key={option.value}
+            className={cx(active && "active")}
+            data-toggle-value={option.value}
+            onClick={() => {
+              if (!active) {
+                setSliderAnimated(true);
+                onChange(option.value);
+              }
+            }}
+            aria-label={option.ariaLabel ?? option.label}
+            aria-pressed={active}
+            title={option.title ?? option.label}
+          >
+            {option.icon}
+            <span>{option.label}</span>
+          </button>
+        );
+      })}
+    </span>
+  );
+}
+
 export function FilterModeToggle({
   value,
   onChange
@@ -210,33 +310,17 @@ export function FilterModeToggle({
   value: LibraryFilterDisplayMode;
   onChange: (mode: LibraryFilterDisplayMode) => void;
 }) {
+  const { t } = useI18n();
   return (
-    <span
-      className="page-header-view-toggle filter-mode-toggle"
-      role="group"
-      aria-label="筛选区域显示模式"
-      data-active-index={value === "compact" ? "0" : "1"}
-    >
-      <button
-        type="button"
-        className={cx(value === "compact" && "active")}
-        onClick={() => onChange("compact")}
-        aria-pressed={value === "compact"}
-        title="简洁"
-      >
-        <Rows3 size={15} />
-        <span>简洁</span>
-      </button>
-      <button
-        type="button"
-        className={cx(value === "tiled" && "active")}
-        onClick={() => onChange("tiled")}
-        aria-pressed={value === "tiled"}
-        title="平铺"
-      >
-        <LayoutGrid size={15} />
-        <span>平铺</span>
-      </button>
-    </span>
+    <PageHeaderViewToggle
+      className="filter-mode-toggle"
+      value={value}
+      onChange={onChange}
+      ariaLabel={t("filterDisplay.aria")}
+      options={[
+        { value: "compact", label: t("filterDisplay.compact"), icon: <Rows3 size={15} /> },
+        { value: "tiled", label: t("filterDisplay.tiled"), icon: <LayoutGrid size={15} /> }
+      ]}
+    />
   );
 }
