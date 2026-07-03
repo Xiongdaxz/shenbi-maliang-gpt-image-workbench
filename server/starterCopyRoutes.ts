@@ -46,6 +46,7 @@ const DEFAULT_STARTER_COPY_COUNT = 50;
 const MIN_STARTER_COPY_COUNT = 0;
 const MAX_STARTER_COPY_COUNT = 100;
 const MAX_STARTER_COPY_GENERATION_ATTEMPTS = 5;
+const MAX_STARTER_COPY_TRANSLATION_BATCH_SIZE = 20;
 const REQUEST_TIMEOUT_MS = 60 * 1000;
 const COPY_RELEVANCE_KEYWORDS = [
   "图",
@@ -153,6 +154,13 @@ function starterChineseCopies(row: StarterDailyCopyRow) {
 
 function starterEnglishCopies(row: StarterDailyCopyRow) {
   return starterCopyList(row.copies_en_json);
+}
+
+function starterCopyProvider() {
+  return getOne<PromptOptimizerProviderRow>(
+    configDb,
+    "select * from prompt_optimizer_providers where enabled = 1 order by sort_order asc, created_at asc limit 1"
+  );
 }
 
 function publicStarterDailyCopy(row: StarterDailyCopyRow | null, locale: "zh" | "en" = "zh") {
@@ -609,7 +617,7 @@ async function generateCopyBatchWithProvider(provider: PromptOptimizerProviderRo
   return parseGeneratedCopies(content, copyCount, existingCopies);
 }
 
-async function translateCopiesWithProvider(provider: PromptOptimizerProviderRow, copies: string[]) {
+async function translateCopyBatchWithProvider(provider: PromptOptimizerProviderRow, copies: string[]) {
   if (copies.length === 0) return [];
   const content = await requestPromptModelText(provider, [
     {
@@ -635,6 +643,20 @@ async function translateCopiesWithProvider(provider: PromptOptimizerProviderRow,
     }
   ]);
   return parseTranslatedCopies(content, copies.length);
+}
+
+async function translateCopiesWithProvider(provider: PromptOptimizerProviderRow, copies: string[]) {
+  if (copies.length === 0) return [];
+  const translatedCopies: string[] = [];
+  for (let index = 0; index < copies.length; index += MAX_STARTER_COPY_TRANSLATION_BATCH_SIZE) {
+    const batch = copies.slice(index, index + MAX_STARTER_COPY_TRANSLATION_BATCH_SIZE);
+    const translatedBatch = await translateCopyBatchWithProvider(provider, batch);
+    if (translatedBatch.length !== batch.length) {
+      throw new Error(`英文每日文案翻译失败：第 ${Math.floor(index / MAX_STARTER_COPY_TRANSLATION_BATCH_SIZE) + 1} 批需要 ${batch.length} 条，实际 ${translatedBatch.length} 条`);
+    }
+    translatedCopies.push(...translatedBatch);
+  }
+  return translatedCopies;
 }
 
 async function generateCopiesWithProvider(provider: PromptOptimizerProviderRow, copyCount: number, fallbackCopies: string[] = []) {
@@ -732,16 +754,26 @@ function starterCopyNeedsEnglish(row: StarterDailyCopyRow | null | undefined) {
   return starterEnglishCopies(row).length < copies.length;
 }
 
-async function ensureStarterCopyEnglish(row: StarterDailyCopyRow | null | undefined, provider?: PromptOptimizerProviderRow | null) {
+async function ensureStarterCopyEnglish(
+  row: StarterDailyCopyRow | null | undefined,
+  provider?: PromptOptimizerProviderRow | null,
+  options: { required?: boolean } = {}
+) {
   if (!starterCopyNeedsEnglish(row)) return row ?? null;
   const sourceRow = row as StarterDailyCopyRow;
-  const resolvedProvider =
-    provider ??
-    getOne<PromptOptimizerProviderRow>(
-      configDb,
-      "select * from prompt_optimizer_providers where enabled = 1 order by sort_order asc, created_at asc limit 1"
+  const resolvedProvider = provider ?? starterCopyProvider();
+  if (!resolvedProvider) {
+    const message = "英文版本待生成：请先在配置页启用提示词优化模型";
+    run(
+      appDb,
+      "update starter_daily_copies set error = ?, updated_at = ? where date = ?",
+      message,
+      now(),
+      sourceRow.date
     );
-  if (!resolvedProvider) return sourceRow;
+    if (options.required) throw new Error(message);
+    return getOne<StarterDailyCopyRow>(appDb, "select * from starter_daily_copies where date = ?", sourceRow.date) ?? sourceRow;
+  }
   try {
     const copiesEn = await translateCopiesWithProvider(resolvedProvider, starterChineseCopies(sourceRow));
     run(
@@ -752,7 +784,11 @@ async function ensureStarterCopyEnglish(row: StarterDailyCopyRow | null | undefi
       now(),
       sourceRow.date
     );
-    return getOne<StarterDailyCopyRow>(appDb, "select * from starter_daily_copies where date = ?", sourceRow.date) ?? sourceRow;
+    const updatedRow = getOne<StarterDailyCopyRow>(appDb, "select * from starter_daily_copies where date = ?", sourceRow.date) ?? sourceRow;
+    if (options.required && starterCopyNeedsEnglish(updatedRow)) {
+      throw new Error("英文每日文案翻译未补齐，请稍后重试或检查提示词优化模型");
+    }
+    return updatedRow;
   } catch (error) {
     const message = error instanceof Error ? error.message : "英文每日文案翻译失败";
     run(
@@ -763,6 +799,7 @@ async function ensureStarterCopyEnglish(row: StarterDailyCopyRow | null | undefi
       sourceRow.date
     );
     console.warn("每日空白页英文文案翻译失败", message);
+    if (options.required) throw new Error(message);
     return getOne<StarterDailyCopyRow>(appDb, "select * from starter_daily_copies where date = ?", sourceRow.date) ?? sourceRow;
   }
 }
@@ -792,10 +829,7 @@ export async function generateStarterCopies({ force = false }: { force?: boolean
           error: ""
         });
       }
-      const provider = getOne<PromptOptimizerProviderRow>(
-        configDb,
-        "select * from prompt_optimizer_providers where enabled = 1 order by sort_order asc, created_at asc limit 1"
-      );
+      const provider = starterCopyProvider();
       if (!provider) throw new Error("请先在配置页启用提示词优化模型");
 
       const copies = await generateCopiesWithProvider(provider, copyCount, starterCopyHistory(date));
@@ -930,7 +964,8 @@ export function registerStarterCopyRoutes(api: Hono) {
     const blocked = requireConfig(c);
     if (blocked) return blocked;
     try {
-      const row = await generateStarterCopies({ force: true });
+      const generatedRow = await generateStarterCopies({ force: true });
+      const row = await ensureStarterCopyEnglish(generatedRow, undefined, { required: true });
       audit("starter_copy_settings.regenerate", { date: shanghaiDateString() });
       return c.json({ today: publicStarterDailyCopyStatus(row) });
     } catch (error) {

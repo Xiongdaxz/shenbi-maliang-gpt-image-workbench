@@ -2,7 +2,7 @@
 
 [简体中文](README.md) | English
 
-Shenbi Maliang GPT Image Workbench is an AI image generation and image editing workbench designed for private team deployments, primarily for building a team image generation platform powered by ChatGPT `gpt-image-2`.
+Shenbi Maliang GPT Image Workbench is an AI image generation and image editing workbench designed for private team deployments. It supports ChatGPT subscription accounts, OpenAI-compatible APIs, CPA proxies, and other channels, and can route work across ChatGPT Web quota, Codex quota, and other image-generation paths.
 
 ## ✨ Highlights
 
@@ -133,6 +133,46 @@ Official versions provide the following packages in GitHub Releases:
 | Source run package | Windows / Linux / macOS | `shenbi-maliang-X.Y.Z-source-run.zip` | zip + source | Run `start-update.bat` on Windows, or `bash ./start.sh` on Linux/macOS |
 
 `shenbi-maliang-X.Y.Z-source-run.zip` does not include an executable, `node_modules`, or build output. You can also run `bun install --frozen-lockfile`, `bun run build`, and `bun run start` manually. GitHub Releases also provide the raw `Source code (zip)` and `Source code (tar.gz)` automatically. Use `git clone` if you want the full repository history. Runtime data is created in `data/`. Back up `data/` before upgrading.
+
+## 🔄 Updating a Release Build
+
+If you deploy with any `portable.zip` package, update with the new portable package for the same platform and architecture. Do not overwrite a portable deployment directly with the `source-run` package.
+
+Recommended update flow:
+
+1. Stop the running program: `ShenbiMaliang.exe` on Windows, or `shenbi-maliang` on Linux/macOS.
+2. Back up the old deployment's `data/` directory. It contains users, settings, account pools, images, assets, and history.
+3. Extract the new `portable.zip` into a temporary directory.
+4. Copy the files that need to be updated from the new `shenbi-maliang/` directory into your existing deployment directory.
+5. Start the updated program from the original deployment directory and confirm that `http://127.0.0.1:8787` and `/config` open correctly.
+6. After confirming the data is normal, delete the temporary extraction directory.
+
+Usually, you only need to replace these runtime files:
+
+- Platform executable: `ShenbiMaliang.exe` on Windows, or `shenbi-maliang` on Linux/macOS.
+- `dist/`
+
+If the release notes mention dependency updates, or if startup, upload, or image processing fails with `sharp` / native module errors, also replace:
+
+- `node_modules/`
+
+These files are included as documentation or helper files. They are not required for a portable runtime update, but you can sync them when needed:
+
+- `README.md`
+- `README.en.md`
+- `LICENSE`
+- `RUNNING.md`
+- `package.json`
+- `bun.lock`
+- `scripts/`
+
+Do not delete these files, and do not overwrite them with empty directories from a new package:
+
+- `data/`: local databases, admin settings, account pools, user data, generated images, uploaded assets, and mask files are stored here.
+- `.env` or any local environment files, startup scripts, reverse proxy settings, or other deployment files you created.
+- Backup directories, log directories, or other custom files you keep manually.
+
+The `shenbi-maliang-X.Y.Z-source-run.zip` package is updated differently: keep the old `data/` directory and local custom settings, replace the source files, then run `start-update.bat`, or manually run `bun install --frozen-lockfile`, `bun run build`, and `bun run start`. The `node_modules/` and `dist/` directories in a source-run deployment are generated at runtime, so you do not need to copy them from the old version manually.
 
 ## 🙏 Acknowledgements
 

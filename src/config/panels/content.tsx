@@ -720,7 +720,11 @@ export function StarterCopySettingsPanel() {
   });
   const regenerate = useMutation({
     mutationFn: configApi.regenerateStarterCopies,
-    onSuccess: () => {
+    onSuccess: (data) => {
+      queryClient.setQueryData<{ settings: StarterCopySettings | null; today: StarterDailyCopy | null } | undefined>(
+        ["config-starter-copy-settings"],
+        (value) => value ? { ...value, today: data.today } : value
+      );
       showToast("今日文案已更新");
       queryClient.invalidateQueries({ queryKey: ["config-starter-copy-settings"] });
     },

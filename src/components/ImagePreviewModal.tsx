@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent, ReactNode, WheelEvent as ReactWheelEvent } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import {
   ImagePreviewStage,
@@ -545,7 +546,7 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
 
   if (!previewDisplayItem) return null;
 
-  return (
+  const modal = (
     <div className="case-preview-backdrop">
       <section className={previewDragging ? "case-preview-modal is-preview-dragging" : "case-preview-modal"} aria-label={ariaLabel}>
         <button className="case-preview-close" type="button" onClick={closePreview} aria-label={t("imagePreview.close")}>
@@ -612,4 +613,6 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
       ) : null}
     </div>
   );
+
+  return typeof document === "undefined" ? modal : createPortal(modal, document.body);
 }
