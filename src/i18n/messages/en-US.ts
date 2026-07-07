@@ -1364,6 +1364,7 @@ const messages: Messages = {
   "imagePreview.author": "Author: {author}",
   "imagePreview.useCount": "Used {count} times",
   "imagePreview.favoriteCount": "Favorited {count} times",
+  "imagePreview.referenceAssets": "Assets",
   "imagePreview.tools": "Image preview tools",
   "imagePreview.rotateLeft": "Rotate left",
   "imagePreview.rotateRight": "Rotate right",

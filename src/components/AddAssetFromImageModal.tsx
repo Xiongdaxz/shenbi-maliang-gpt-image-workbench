@@ -6,6 +6,7 @@ import { useI18n } from "../i18n";
 import { ASSET_UPLOAD_MODE_OPTIONS, type AssetUploadMode } from "../lib/assets";
 import { cx } from "../lib/cx";
 import { formatImageFileSize } from "../lib/format";
+import { ModalPortal } from "../ui";
 import type { CaseCategory, CaseMaterialItem, WorkImage } from "../types";
 import { CaseCategoryMultiSelect } from "./CaseCategoryMultiSelect";
 
@@ -148,80 +149,82 @@ export function AddAssetFromImageModal({
   };
 
   return (
-    <div className="modal-backdrop">
-      <section className="case-modal compact-modal asset-from-image-modal">
-        <header>
-          <h3>{t("pages.cases.addToAssets")}</h3>
-          <button onClick={onClose} aria-label={t("common.close")}>
-            <X size={18} />
-          </button>
-        </header>
-        <div className="asset-from-image-preview">
-          <img src={image.previewUrl || image.url} alt={image.prompt} />
-          <div>
-            <strong>{image.prompt || t("pages.images.generatedImage")}</strong>
-            {imageMetaLabels.length > 0 ? <span>{imageMetaLabels.join(" / ")}</span> : null}
+    <ModalPortal>
+      <div className="modal-backdrop">
+        <section className="case-modal compact-modal asset-from-image-modal">
+          <header>
+            <h3>{t("pages.cases.addToAssets")}</h3>
+            <button onClick={onClose} aria-label={t("common.close")}>
+              <X size={18} />
+            </button>
+          </header>
+          <div className="asset-from-image-preview">
+            <img src={image.previewUrl || image.url} alt={image.prompt} />
+            <div>
+              <strong>{image.prompt || t("pages.images.generatedImage")}</strong>
+              {imageMetaLabels.length > 0 ? <span>{imageMetaLabels.join(" / ")}</span> : null}
+            </div>
           </div>
-        </div>
-        <label>
-          {t("pages.assets.tagsLabel")}
-          <CaseCategoryMultiSelect
-            categories={categories}
-            value={categoryIds}
-            onChange={(nextCategoryIds) => {
-              categoryTouchedRef.current = true;
-              setCategoryIds(nextCategoryIds);
-            }}
-            labelName={t("pages.assets.tag")}
-            placeholder={categorySuggestionPending ? t("pages.assets.generatingTags") : t("pages.assets.noTag")}
-            pendingSelectionLabel={t("pages.assets.generatedTagCount", { count: categoryIds.length })}
-          />
-        </label>
-        <label>
-          {t("pages.assets.name")}
-          <input
-            value={name}
-            onChange={(event) => {
-              nameTouchedRef.current = true;
-              setName(event.target.value);
-            }}
-            placeholder={nameSuggestionPending ? t("pages.assets.generatingName") : t("pages.assets.namePlaceholder")}
-          />
-        </label>
-        <label className="asset-upload-field">
-          {t("pages.assets.saveLocation")}
-          <div className="asset-space-options" role="radiogroup" aria-label={t("pages.assets.saveLocation")}>
-            {uploadModeOptions.map((option) => {
-              const selected = option.value === spaceMode;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  className={cx("asset-space-option-rich", selected && "active")}
-                  onClick={() => setSpaceMode(option.value)}
-                >
-                  <span className="asset-option-check">{selected ? <Check size={14} /> : null}</span>
-                  <span className="asset-space-option-copy">
-                    <span className="asset-space-option-label">{option.label}</span>
-                    <span className="asset-space-option-desc">{option.description}</span>
-                  </span>
-                </button>
-              );
-            })}
+          <label>
+            {t("pages.assets.tagsLabel")}
+            <CaseCategoryMultiSelect
+              categories={categories}
+              value={categoryIds}
+              onChange={(nextCategoryIds) => {
+                categoryTouchedRef.current = true;
+                setCategoryIds(nextCategoryIds);
+              }}
+              labelName={t("pages.assets.tag")}
+              placeholder={categorySuggestionPending ? t("pages.assets.generatingTags") : t("pages.assets.noTag")}
+              pendingSelectionLabel={t("pages.assets.generatedTagCount", { count: categoryIds.length })}
+            />
+          </label>
+          <label>
+            {t("pages.assets.name")}
+            <input
+              value={name}
+              onChange={(event) => {
+                nameTouchedRef.current = true;
+                setName(event.target.value);
+              }}
+              placeholder={nameSuggestionPending ? t("pages.assets.generatingName") : t("pages.assets.namePlaceholder")}
+            />
+          </label>
+          <label className="asset-upload-field">
+            {t("pages.assets.saveLocation")}
+            <div className="asset-space-options" role="radiogroup" aria-label={t("pages.assets.saveLocation")}>
+              {uploadModeOptions.map((option) => {
+                const selected = option.value === spaceMode;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    className={cx("asset-space-option-rich", selected && "active")}
+                    onClick={() => setSpaceMode(option.value)}
+                  >
+                    <span className="asset-option-check">{selected ? <Check size={14} /> : null}</span>
+                    <span className="asset-space-option-copy">
+                      <span className="asset-space-option-label">{option.label}</span>
+                      <span className="asset-space-option-desc">{option.description}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </label>
+          {error ? <div className="form-error">{error.message}</div> : null}
+          <div className="row-actions">
+            <button className="secondary-btn" type="button" onClick={onClose}>
+              {t("common.cancel")}
+            </button>
+            <button className="primary-btn" type="button" onClick={submit} disabled={pending || fieldSuggestionPending}>
+              {pending ? t("common.adding") : fieldSuggestionPending ? t("common.generatingFields") : t("pages.cases.addToAssets")}
+            </button>
           </div>
-        </label>
-        {error ? <div className="form-error">{error.message}</div> : null}
-        <div className="row-actions">
-          <button className="secondary-btn" type="button" onClick={onClose}>
-            {t("common.cancel")}
-          </button>
-          <button className="primary-btn" type="button" onClick={submit} disabled={pending || fieldSuggestionPending}>
-            {pending ? t("common.adding") : fieldSuggestionPending ? t("common.generatingFields") : t("pages.cases.addToAssets")}
-          </button>
-        </div>
-      </section>
-    </div>
+        </section>
+      </div>
+    </ModalPortal>
   );
 }

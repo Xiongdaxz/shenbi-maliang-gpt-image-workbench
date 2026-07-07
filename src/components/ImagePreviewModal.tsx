@@ -67,16 +67,16 @@ function buildPreviewPanAxisBounds(contentSize: number, stageSize: number, visib
   };
 }
 
+function buildPreviewCenterPan(stageSize: number, visibleSize: number, bounds: { min: number; max: number }) {
+  const safeVisibleSize = clampNumber(visibleSize > 0 ? visibleSize : stageSize, 0, stageSize);
+  return clampNumber(safeVisibleSize / 2 - stageSize / 2, bounds.min, bounds.max);
+}
+
 function buildPreviewStartPan(contentSize: number, stageSize: number, visibleSize: number) {
   const bounds = buildPreviewPanAxisBounds(contentSize, stageSize, visibleSize);
   const safeVisibleSize = clampNumber(visibleSize > 0 ? visibleSize : stageSize, 0, stageSize);
   const startPan = contentSize > safeVisibleSize ? contentSize / 2 - stageSize / 2 : 0;
   return clampNumber(startPan, bounds.min, bounds.max);
-}
-
-function buildPreviewCenterPan(stageSize: number, visibleSize: number, bounds: { min: number; max: number }) {
-  const safeVisibleSize = clampNumber(visibleSize > 0 ? visibleSize : stageSize, 0, stageSize);
-  return clampNumber(safeVisibleSize / 2 - stageSize / 2, bounds.min, bounds.max);
 }
 
 export function ImagePreviewModal<TItem extends ImagePreviewItem>({
@@ -195,15 +195,12 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
       : { x: { min: 0, max: 0 }, y: { min: 0, max: 0 } };
   const previewDefaultPan =
     previewDefaultDisplaySize && previewStageSize && previewVisibleStageSize
-      ? initialZoomMode === "contain"
-        ? {
-            x: buildPreviewCenterPan(previewStageSize.width, previewVisibleStageSize.width, previewDefaultPanBounds.x),
-            y: buildPreviewCenterPan(previewStageSize.height, previewVisibleStageSize.height, previewDefaultPanBounds.y)
-          }
-        : {
-            x: buildPreviewStartPan(previewDefaultDisplaySize.width, previewStageSize.width, previewVisibleStageSize.width),
-            y: buildPreviewStartPan(previewDefaultDisplaySize.height, previewStageSize.height, previewVisibleStageSize.height)
-          }
+      ? {
+          x: buildPreviewCenterPan(previewStageSize.width, previewVisibleStageSize.width, previewDefaultPanBounds.x),
+          y: initialZoomMode === "contain"
+            ? buildPreviewCenterPan(previewStageSize.height, previewVisibleStageSize.height, previewDefaultPanBounds.y)
+            : buildPreviewStartPan(previewDefaultDisplaySize.height, previewStageSize.height, previewVisibleStageSize.height)
+        }
       : { x: 0, y: 0 };
   const canPreviewPan = Boolean(
     previewDisplaySize &&
@@ -283,10 +280,19 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
     y: clampNumber(pan.y, previewPanBounds.y.min, previewPanBounds.y.max)
   });
 
-  const getPreviewStartPanForZoom = (zoom: number) =>
+  const getPreviewHorizontalCenterPanForZoom = (zoom: number) =>
+    previewContentSize && previewStageSize && previewVisibleStageSize
+      ? buildPreviewCenterPan(
+          previewStageSize.width,
+          previewVisibleStageSize.width,
+          buildPreviewPanAxisBounds(previewContentSize.width * zoom, previewStageSize.width, previewVisibleStageSize.width)
+        )
+      : 0;
+
+  const getPreviewStartPanWithCenteredXForZoom = (zoom: number) =>
     previewContentSize && previewStageSize && previewVisibleStageSize
       ? {
-          x: buildPreviewStartPan(previewContentSize.width * zoom, previewStageSize.width, previewVisibleStageSize.width),
+          x: getPreviewHorizontalCenterPanForZoom(zoom),
           y: buildPreviewStartPan(previewContentSize.height * zoom, previewStageSize.height, previewVisibleStageSize.height)
         }
       : { x: 0, y: 0 };
@@ -307,7 +313,7 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
     setPreviewLoadedSrc("");
     setPreviewImageSource("original");
     setPreviewZoom(1);
-    setPreviewPan(getPreviewStartPanForZoom(1));
+    setPreviewPan(getPreviewStartPanWithCenteredXForZoom(1));
     setPreviewDragging(false);
     previewDragRef.current = null;
     previewNavigatorDragRef.current = null;
@@ -479,7 +485,7 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
       return;
     }
     pendingOriginalPanRef.current = false;
-    setPreviewPan(getPreviewStartPanForZoom(1));
+    setPreviewPan(getPreviewStartPanWithCenteredXForZoom(1));
   }, [
     previewImageSrc,
     previewContentSize?.height,
@@ -495,17 +501,21 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
     if (!previewDisplayItem) return;
     const root = document.documentElement;
     const previousOverflow = document.body.style.overflow;
+    const previousPaddingRight = document.body.style.paddingRight;
     const previousOverscrollBehavior = document.body.style.overscrollBehavior;
     const previousRootOverflow = root.style.overflow;
-    const previousRootScrollbarGutter = root.style.scrollbarGutter;
+    const scrollbarWidth = Math.max(0, window.innerWidth - root.clientWidth);
+    if (scrollbarWidth > 0) {
+      const currentPaddingRight = Number.parseFloat(window.getComputedStyle(document.body).paddingRight) || 0;
+      document.body.style.paddingRight = `${currentPaddingRight + scrollbarWidth}px`;
+    }
     root.style.overflow = "hidden";
-    root.style.scrollbarGutter = "auto";
     document.body.style.overflow = "hidden";
     document.body.style.overscrollBehavior = "contain";
     return () => {
       root.style.overflow = previousRootOverflow;
-      root.style.scrollbarGutter = previousRootScrollbarGutter;
       document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPaddingRight;
       document.body.style.overscrollBehavior = previousOverscrollBehavior;
     };
   }, [previewDisplayItem?.id]);

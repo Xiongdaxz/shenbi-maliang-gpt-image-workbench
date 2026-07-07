@@ -272,8 +272,8 @@ export function ImagePreviewToolbar({
             </div>
             {actions ? <div className="case-preview-actions">{actions}</div> : null}
             {referenceImages.length > 0 ? (
-              <div className="case-preview-references" aria-label={t("composer.assets")}>
-                <span className="case-preview-reference-label">{t("composer.assets")}</span>
+              <div className="case-preview-references" aria-label={t("imagePreview.referenceAssets")}>
+                <span className="case-preview-reference-label">{t("imagePreview.referenceAssets")}</span>
                 <div className="case-preview-reference-list">
                   {referenceImages.map((reference) => (
                     <div className="case-preview-reference-item" key={reference.id}>

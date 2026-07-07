@@ -25,6 +25,11 @@ type CustomSelectProps = {
   menuAutoWidthPadding?: number;
 };
 
+export function ModalPortal({ children }: { children: ReactNode }) {
+  if (typeof document === "undefined") return <>{children}</>;
+  return createPortal(children, document.body);
+}
+
 export function CustomSelect({
   value,
   options,
@@ -177,36 +182,38 @@ export function ConfirmDialog({
   const requiresConfirmation = Boolean(confirmationText);
   const confirmationMatched = !requiresConfirmation || confirmationValue.trim() === confirmationText;
   return (
-    <div className={["modal-backdrop", backdropClassName].filter(Boolean).join(" ")}>
-      <section className={["case-modal compact-modal action-modal", className].filter(Boolean).join(" ")}>
-        <header>
-          <h3>{title}</h3>
-          <button onClick={onCancel} aria-label={t("common.close")}>
-            <X size={18} />
-          </button>
-        </header>
-        <p>{description}</p>
-        {requiresConfirmation ? (
-          <label className="confirm-phrase-field">
-            {confirmationLabel ?? `${t("common.confirm")} ${confirmationText}`}
-            <input
-              value={confirmationValue}
-              onChange={(event) => setConfirmationValue(event.target.value)}
-              placeholder={confirmationText}
-              autoFocus
-            />
-          </label>
-        ) : null}
-        <div className="row-actions">
-          <button className="secondary-btn" onClick={onCancel}>
-            {cancelText ?? t("common.cancel")}
-          </button>
-          <button className={destructive ? "danger-btn" : "primary-btn"} onClick={onConfirm} disabled={!confirmationMatched}>
-            {confirmText ?? t("common.confirm")}
-          </button>
-        </div>
-      </section>
-    </div>
+    <ModalPortal>
+      <div className={["modal-backdrop", backdropClassName].filter(Boolean).join(" ")}>
+        <section className={["case-modal compact-modal action-modal", className].filter(Boolean).join(" ")}>
+          <header>
+            <h3>{title}</h3>
+            <button onClick={onCancel} aria-label={t("common.close")}>
+              <X size={18} />
+            </button>
+          </header>
+          <p>{description}</p>
+          {requiresConfirmation ? (
+            <label className="confirm-phrase-field">
+              {confirmationLabel ?? `${t("common.confirm")} ${confirmationText}`}
+              <input
+                value={confirmationValue}
+                onChange={(event) => setConfirmationValue(event.target.value)}
+                placeholder={confirmationText}
+                autoFocus
+              />
+            </label>
+          ) : null}
+          <div className="row-actions">
+            <button className="secondary-btn" onClick={onCancel}>
+              {cancelText ?? t("common.cancel")}
+            </button>
+            <button className={destructive ? "danger-btn" : "primary-btn"} onClick={onConfirm} disabled={!confirmationMatched}>
+              {confirmText ?? t("common.confirm")}
+            </button>
+          </div>
+        </section>
+      </div>
+    </ModalPortal>
   );
 }
 
@@ -242,29 +249,31 @@ export function PromptDialog({
 
   if (!open) return null;
   return (
-    <div className="modal-backdrop">
-      <section className="case-modal compact-modal action-modal">
-        <header>
-          <h3>{title}</h3>
-          <button onClick={onCancel} aria-label={t("common.close")}>
-            <X size={18} />
-          </button>
-        </header>
-        {description ? <p>{description}</p> : null}
-        <label>
-          {label}
-          <input value={value} type={type} onChange={(event) => setValue(event.target.value)} autoFocus />
-        </label>
-        <div className="row-actions">
-          <button className="secondary-btn" onClick={onCancel}>
-            {t("common.cancel")}
-          </button>
-          <button className="primary-btn" disabled={!value.trim()} onClick={() => onSubmit(value)}>
-            {confirmText ?? t("common.confirm")}
-          </button>
-        </div>
-      </section>
-    </div>
+    <ModalPortal>
+      <div className="modal-backdrop">
+        <section className="case-modal compact-modal action-modal">
+          <header>
+            <h3>{title}</h3>
+            <button onClick={onCancel} aria-label={t("common.close")}>
+              <X size={18} />
+            </button>
+          </header>
+          {description ? <p>{description}</p> : null}
+          <label>
+            {label}
+            <input value={value} type={type} onChange={(event) => setValue(event.target.value)} autoFocus />
+          </label>
+          <div className="row-actions">
+            <button className="secondary-btn" onClick={onCancel}>
+              {t("common.cancel")}
+            </button>
+            <button className="primary-btn" disabled={!value.trim()} onClick={() => onSubmit(value)}>
+              {confirmText ?? t("common.confirm")}
+            </button>
+          </div>
+        </section>
+      </div>
+    </ModalPortal>
   );
 }
 

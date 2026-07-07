@@ -26,7 +26,7 @@ import { useScrollJump } from "../hooks/useScrollJump";
 import { useWorkbench } from "../store/workbench";
 import { type AssetUploadMode } from "../lib/assets";
 import type { CaseCategory, CaseGroupImage } from "../types";
-import { ConfirmDialog, PromptDialog, useToast } from "../ui";
+import { ConfirmDialog, ModalPortal, PromptDialog, useToast } from "../ui";
 
 function filterGalleryCaseItems(items: GalleryCaseItem[], options: { mineOnly: boolean; favoriteOnly: boolean; keyword: string }) {
   const ownedItems = options.mineOnly ? items.filter((item) => item.canDelete) : items;
@@ -118,67 +118,69 @@ function EditCaseModal({
   };
 
   return (
-    <div className="modal-backdrop">
-      <section className="case-modal">
-        <header>
-          <h3>{t("pages.cases.edit")}</h3>
-          <button onClick={onClose} aria-label={t("common.close")}>
-            <X size={18} />
-          </button>
-        </header>
-        <div className="case-modal-layout">
-          <CaseModalImagePreview
-            images={previewImages}
-            fallbackUrl={item.imageUrl}
-            alt={title}
-            activeImageId={coverImageId}
-            thumbStripLabel={t("pages.cases.coverStrip")}
-            activeThumbLabel={t("pages.cases.cover")}
-            thumbTitle={() => t("pages.cases.setCover")}
-            thumbAriaLabel={(_, index) => t("pages.cases.setNthCover", { index: index + 1 })}
-            onSelectImage={previewImages.length > 1 ? (image) => setCoverImageId(image.id) : undefined}
-          />
-          <div className="case-modal-form-pane">
-            <label className={cx("case-reference-toggle", includeReferences && "active")}>
-              <input type="checkbox" checked={includeReferences} onChange={(event) => setIncludeReferences(event.target.checked)} />
-              <span className="case-reference-toggle-check" aria-hidden="true">
-                {includeReferences ? <Check size={13} strokeWidth={2.5} /> : null}
-              </span>
-              <span className="case-reference-toggle-copy">
-                <span>{t("pages.cases.includeReferences")}</span>
-                <small>{t("pages.cases.includeReferencesDesc")}</small>
-              </span>
-            </label>
-            <label>
-              {t("pages.cases.style")}
-              <CaseCategoryMultiSelect
-                categories={categories}
-                value={categoryIds}
-                onChange={setCategoryIds}
-                labelName={t("pages.cases.style")}
-              />
-            </label>
-            <label>
-              {t("pages.cases.titleField")}
-              <input value={title} onChange={(event) => setTitle(event.target.value)} />
-            </label>
-            <label>
-              {t("pages.cases.descriptionField")}
-              <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={4} />
-            </label>
-            {error ? <div className="form-error">{error.message}</div> : null}
-            <div className="row-actions">
-              <button className="secondary-btn" type="button" onClick={onClose}>
-                {t("common.cancel")}
-              </button>
-              <button className="primary-btn" type="button" onClick={submit} disabled={!title.trim() || !prompt.trim() || pending}>
-                {pending ? t("common.saving") : t("common.save")}
-              </button>
+    <ModalPortal>
+      <div className="modal-backdrop">
+        <section className="case-modal">
+          <header>
+            <h3>{t("pages.cases.edit")}</h3>
+            <button onClick={onClose} aria-label={t("common.close")}>
+              <X size={18} />
+            </button>
+          </header>
+          <div className="case-modal-layout">
+            <CaseModalImagePreview
+              images={previewImages}
+              fallbackUrl={item.imageUrl}
+              alt={title}
+              activeImageId={coverImageId}
+              thumbStripLabel={t("pages.cases.coverStrip")}
+              activeThumbLabel={t("pages.cases.cover")}
+              thumbTitle={() => t("pages.cases.setCover")}
+              thumbAriaLabel={(_, index) => t("pages.cases.setNthCover", { index: index + 1 })}
+              onSelectImage={previewImages.length > 1 ? (image) => setCoverImageId(image.id) : undefined}
+            />
+            <div className="case-modal-form-pane">
+              <label className={cx("case-reference-toggle", includeReferences && "active")}>
+                <input type="checkbox" checked={includeReferences} onChange={(event) => setIncludeReferences(event.target.checked)} />
+                <span className="case-reference-toggle-check" aria-hidden="true">
+                  {includeReferences ? <Check size={13} strokeWidth={2.5} /> : null}
+                </span>
+                <span className="case-reference-toggle-copy">
+                  <span>{t("pages.cases.includeReferences")}</span>
+                  <small>{t("pages.cases.includeReferencesDesc")}</small>
+                </span>
+              </label>
+              <label>
+                {t("pages.cases.style")}
+                <CaseCategoryMultiSelect
+                  categories={categories}
+                  value={categoryIds}
+                  onChange={setCategoryIds}
+                  labelName={t("pages.cases.style")}
+                />
+              </label>
+              <label>
+                {t("pages.cases.titleField")}
+                <input value={title} onChange={(event) => setTitle(event.target.value)} />
+              </label>
+              <label>
+                {t("pages.cases.descriptionField")}
+                <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={4} />
+              </label>
+              {error ? <div className="form-error">{error.message}</div> : null}
+              <div className="row-actions">
+                <button className="secondary-btn" type="button" onClick={onClose}>
+                  {t("common.cancel")}
+                </button>
+                <button className="primary-btn" type="button" onClick={submit} disabled={!title.trim() || !prompt.trim() || pending}>
+                  {pending ? t("common.saving") : t("common.save")}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
-    </div>
+        </section>
+      </div>
+    </ModalPortal>
   );
 }
 
@@ -416,6 +418,7 @@ export function CasesPage() {
   };
   const useCaseAsMaterial = (item: GalleryCaseItem) => {
     const caseMaterial = caseMaterialFromCaseItem(item);
+    resetNewChatComposer();
     setSelectedCaseMaterial(caseMaterial);
     setEditImage(null);
     setMaterialPickerOpen(false);

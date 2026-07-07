@@ -137,17 +137,47 @@ function statisticsPresetDateRange(nextPreset: Exclude<StatisticsPreset, "custom
   return { startDate: inputDateValue(start), endDate: inputDateValue(end) };
 }
 
+function orderedStatisticsDates(startDate: string, endDate: string) {
+  return startDate <= endDate ? { startDate, endDate } : { startDate: endDate, endDate: startDate };
+}
+
+function statisticsRangeMatchesFilters(
+  range: ConfigStatistics["range"],
+  filters: { preset?: string; startDate?: string; endDate?: string }
+) {
+  if (filters.preset) return range.preset === filters.preset;
+  if (!filters.startDate || !filters.endDate) return false;
+  const expected = orderedStatisticsDates(filters.startDate, filters.endDate);
+  return range.preset === "custom" && range.startDate === expected.startDate && range.endDate === expected.endDate;
+}
+
 export function StatisticsPanel() {
   const [preset, setPreset] = useState<StatisticsPreset>("7d");
   const [startDate, setStartDate] = useState(inputDateOffset(-6));
   const [endDate, setEndDate] = useState(todayInputDate());
   const [category, setCategory] = useState<StatisticsCategory>("all");
-  const filters = preset === "custom" ? { startDate, endDate } : { preset };
+  const statisticsFilters = useMemo(
+    () => (preset === "custom" ? { startDate, endDate } : { preset }),
+    [endDate, preset, startDate]
+  );
+  const statisticsQueryKey = useMemo(
+    () => (
+      preset === "custom"
+        ? ["config-statistics", "custom", startDate, endDate]
+        : ["config-statistics", preset]
+    ),
+    [endDate, preset, startDate]
+  );
   const statistics = useQuery({
-    queryKey: ["config-statistics", preset, startDate, endDate],
-    queryFn: () => configApi.statistics(filters)
+    queryKey: statisticsQueryKey,
+    queryFn: ({ signal }) => configApi.statistics(statisticsFilters, { signal }),
+    gcTime: 0
   });
-  const data = statistics.data?.statistics;
+  const rawData = statistics.data?.statistics;
+  const data =
+    rawData && statisticsRangeMatchesFilters(rawData.range, statisticsFilters)
+      ? rawData
+      : undefined;
 
   function show(section: Exclude<StatisticsCategory, "all">) {
     return category === "all" || category === section;
@@ -162,10 +192,15 @@ export function StatisticsPanel() {
 
   useEffect(() => {
     const range = statistics.data?.statistics.range;
-    if (!range) return;
+    if (!range || !statisticsRangeMatchesFilters(range, statisticsFilters)) return;
     setStartDate(range.startDate);
     setEndDate(range.endDate);
-  }, [statistics.data?.statistics.range.startDate, statistics.data?.statistics.range.endDate]);
+  }, [
+    statistics.data?.statistics.range.endDate,
+    statistics.data?.statistics.range.preset,
+    statistics.data?.statistics.range.startDate,
+    statisticsFilters
+  ]);
 
   return (
     <section className="config-card statistics-page">
@@ -223,7 +258,7 @@ export function StatisticsPanel() {
           </div>
         </div>
       </div>
-      {statistics.isLoading ? <div className="settings-empty">统计数据加载中...</div> : null}
+      {statistics.isLoading || (statistics.isFetching && !data) ? <div className="settings-empty">统计数据加载中...</div> : null}
       {statistics.error ? <div className="form-error">{statistics.error.message}</div> : null}
       {data ? (
         <div className="statistics-sections">
@@ -344,7 +379,7 @@ function StatisticsSummarySection({ data }: { data: ConfigStatistics }) {
       <div className="statistics-card-grid summary">
         <StatCard label="用户数" value={data.summary.totalUsers} hint={`启用 ${numberLabel(data.summary.enabledUsers)} · 管理 ${numberLabel(data.summary.managerUsers)}`} />
         <StatCard label="图片数" value={data.summary.totalImages} hint={`生成 ${numberLabel(data.summary.generationImages)} · 编辑 ${numberLabel(data.summary.editImages)} · 重试 ${numberLabel(data.summary.retryGeneratedImages)}`} />
-        <StatCard label="今日图片数" value={data.summary.todayImages} hint={`生成 ${numberLabel(data.summary.todayGenerationImages)} · 编辑 ${numberLabel(data.summary.todayEditImages)} · 重试 ${numberLabel(data.summary.todayRetryGeneratedImages)}`} />
+        <StatCard label="今日实时图片" value={data.summary.todayImages} hint={`生成 ${numberLabel(data.summary.todayGenerationImages)} · 编辑 ${numberLabel(data.summary.todayEditImages)} · 重试 ${numberLabel(data.summary.todayRetryGeneratedImages)}`} />
         <StatCard label="请求数" value={data.summary.totalRequests} hint={`失败 ${numberLabel(data.summary.failedRequests)} · 重试 ${numberLabel(data.summary.retryRequests)}`} />
         <StatCard label="成功率" value={percentLabel(data.summary.successRate)} hint={`平均耗时 ${durationLabel(data.summary.averageDurationMs)}`} />
         <StatCard label="渠道数" value={data.summary.totalProviders} hint={`启用 ${numberLabel(data.summary.enabledProviders)}`} />

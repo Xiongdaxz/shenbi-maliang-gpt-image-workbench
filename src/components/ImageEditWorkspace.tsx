@@ -72,6 +72,11 @@ function buildPreviewPanAxisBounds(contentSize: number, stageSize: number, visib
   };
 }
 
+function buildPreviewCenterPan(stageSize: number, visibleSize: number, bounds: { min: number; max: number }) {
+  const safeVisibleSize = clampNumber(visibleSize > 0 ? visibleSize : stageSize, 0, stageSize);
+  return clampNumber(safeVisibleSize / 2 - stageSize / 2, bounds.min, bounds.max);
+}
+
 function buildPreviewStartPan(contentSize: number, stageSize: number, visibleSize: number) {
   const bounds = buildPreviewPanAxisBounds(contentSize, stageSize, visibleSize);
   const safeVisibleSize = clampNumber(visibleSize > 0 ? visibleSize : stageSize, 0, stageSize);
@@ -235,6 +240,11 @@ export function ImageEditWorkspace({
     : ({
         transform: `translate(-50%, -50%) rotate(${previewRotation}deg) scale(${previewZoom})`
       } satisfies CSSProperties);
+  const animatePreviewTransform = Boolean(
+    !selectionMode &&
+      previewCanvasPosition &&
+      (previewZoom !== 1 || normalizedPreviewRotation !== 0)
+  );
   const originalSizeImageStyle = originalSizePreviewActive
     ? ({
         width: naturalSize.width,
@@ -278,18 +288,32 @@ export function ImageEditWorkspace({
     x: clampNumber(pan.x, previewPanBounds.x.min, previewPanBounds.x.max),
     y: clampNumber(pan.y, previewPanBounds.y.min, previewPanBounds.y.max)
   });
-  const previewStartPanForZoom = (zoom: number) =>
+  const previewHorizontalCenterPanForZoom = (zoom: number) =>
     previewContentSize && stageSize.width > 0 && stageSize.height > 0 && visibleStageSize.width > 0 && visibleStageSize.height > 0
+      ? buildPreviewCenterPan(
+          stageSize.width,
+          visibleStageSize.width,
+          buildPreviewPanAxisBounds(previewContentSize.width * zoom, stageSize.width, visibleStageSize.width)
+        )
+      : 0;
+  const previewDefaultPan = () => {
+    const defaultContentSize = previewContentSize ?? (displaySize.width > 0 && displaySize.height > 0 ? displaySize : null);
+    return defaultContentSize && stageSize.width > 0 && stageSize.height > 0 && visibleStageSize.width > 0 && visibleStageSize.height > 0
       ? {
-          x: buildPreviewStartPan(previewContentSize.width * zoom, stageSize.width, visibleStageSize.width),
-          y: buildPreviewStartPan(previewContentSize.height * zoom, stageSize.height, visibleStageSize.height)
+          x: buildPreviewCenterPan(
+            stageSize.width,
+            visibleStageSize.width,
+            buildPreviewPanAxisBounds(defaultContentSize.width, stageSize.width, visibleStageSize.width)
+          ),
+          y: buildPreviewStartPan(defaultContentSize.height, stageSize.height, visibleStageSize.height)
         }
       : { x: 0, y: 0 };
-  const previewDefaultPan = () =>
-    displaySize.width > 0 && displaySize.height > 0 && stageSize.width > 0 && stageSize.height > 0 && visibleStageSize.width > 0 && visibleStageSize.height > 0
+  };
+  const previewStartPanWithCenteredXForZoom = (zoom: number) =>
+    previewContentSize && stageSize.width > 0 && stageSize.height > 0 && visibleStageSize.width > 0 && visibleStageSize.height > 0
       ? {
-          x: buildPreviewStartPan(displaySize.width, stageSize.width, visibleStageSize.width),
-          y: buildPreviewStartPan(displaySize.height, stageSize.height, visibleStageSize.height)
+          x: previewHorizontalCenterPanForZoom(zoom),
+          y: buildPreviewStartPan(previewContentSize.height * zoom, stageSize.height, visibleStageSize.height)
         }
       : { x: 0, y: 0 };
   const resetPreviewTransform = () => {
@@ -313,10 +337,14 @@ export function ImageEditWorkspace({
         visibleStageSize.width > 0 &&
         visibleStageSize.height > 0
         ? {
-            x: buildPreviewStartPan((previewRotatedSideways ? naturalSize.height : naturalSize.width) * nextZoom, stageSize.width, visibleStageSize.width),
+            x: buildPreviewCenterPan(
+              stageSize.width,
+              visibleStageSize.width,
+              buildPreviewPanAxisBounds((previewRotatedSideways ? naturalSize.height : naturalSize.width) * nextZoom, stageSize.width, visibleStageSize.width)
+            ),
             y: buildPreviewStartPan((previewRotatedSideways ? naturalSize.width : naturalSize.height) * nextZoom, stageSize.height, visibleStageSize.height)
           }
-        : previewStartPanForZoom(nextZoom)
+        : previewStartPanWithCenteredXForZoom(nextZoom)
     );
     setPreviewDragging(false);
     previewDragRef.current = null;
@@ -894,7 +922,11 @@ export function ImageEditWorkspace({
         >
           <div ref={viewportRef} className="image-editor-viewport">
             <div
-              className={cx("image-editor-canvas-wrap", originalSizePreviewActive && "is-original-size")}
+              className={cx(
+                "image-editor-canvas-wrap",
+                originalSizePreviewActive && "is-original-size",
+                animatePreviewTransform && "is-transform-animated"
+              )}
               style={previewCanvasStyle}
             >
               <img

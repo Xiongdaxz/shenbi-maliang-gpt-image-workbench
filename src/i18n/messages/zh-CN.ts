@@ -1364,6 +1364,7 @@ const messages: Messages = {
   "imagePreview.author": "作者：{author}",
   "imagePreview.useCount": "使用：{count} 次",
   "imagePreview.favoriteCount": "收藏：{count} 次",
+  "imagePreview.referenceAssets": "素材",
   "imagePreview.tools": "图片预览工具",
   "imagePreview.rotateLeft": "向左旋转",
   "imagePreview.rotateRight": "向右旋转",

@@ -304,13 +304,13 @@ export const configApi = {
       method: "POST",
       body: JSON.stringify({ reason })
     }),
-  statistics: (filters?: { preset?: string; startDate?: string; endDate?: string }) => {
+  statistics: (filters?: { preset?: string; startDate?: string; endDate?: string }, init?: RequestInit) => {
     const params = new URLSearchParams();
     if (filters?.preset) params.set("preset", filters.preset);
     if (filters?.startDate) params.set("startDate", filters.startDate);
     if (filters?.endDate) params.set("endDate", filters.endDate);
     const suffix = params.toString() ? `?${params.toString()}` : "";
-    return request<{ statistics: ConfigStatistics }>(`/api/config/statistics${suffix}`);
+    return request<{ statistics: ConfigStatistics }>(`/api/config/statistics${suffix}`, init);
   },
   changelog: () =>
     request<{ entries: ChangelogEntry[] }>("/api/config/changelog"),

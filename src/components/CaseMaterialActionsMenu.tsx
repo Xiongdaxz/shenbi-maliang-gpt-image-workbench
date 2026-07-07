@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { FolderOpen, MoreHorizontal, Send } from "lucide-react";
+import { FolderOpen, ImageUp, MoreHorizontal } from "lucide-react";
 import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 
@@ -158,7 +158,7 @@ export function CaseMaterialActionsMenu({ buttonClassName, onUseAsMaterial, onAd
                   onUseAsMaterial();
                 }}
               >
-                <Send size={16} />
+                <ImageUp size={16} />
                 <span>{t("pages.cases.useAsMaterial")}</span>
               </button>
               <button

@@ -498,13 +498,18 @@
   max-height: 100%;
   box-shadow: 0 18px 44px rgba(15, 23, 42, 0.15);
   transform-origin: center;
-  transition: transform 160ms ease;
-  will-change: transform;
+  transition: none;
+  will-change: auto;
 }
 
 .image-editor-canvas-wrap.is-original-size {
   max-width: none;
   max-height: none;
+}
+
+.image-editor-canvas-wrap.is-transform-animated {
+  transition: transform 160ms ease;
+  will-change: transform;
 }
 
 .image-editor-stage.is-dragging .image-editor-canvas-wrap {

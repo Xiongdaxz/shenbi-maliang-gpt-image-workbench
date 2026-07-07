@@ -165,11 +165,11 @@ export function LightweightLineChart<TData extends { label: string }>({
         ))}
         <line className="light-chart-axis-line" x1={plot.left} y1={baselineY} x2={width - plot.right} y2={baselineY} />
         {pointRows.map((item) => (
-          <g key={item.id}>
+          <g key={`${item.id}-${data.map((row) => row.label).join("|")}`}>
             <path className={cx("light-chart-line", item.tone)} d={smoothPath(item.points)} fill="none" />
             {item.points.map((point, index) => (
               <circle
-                key={`${item.id}-${index}`}
+                key={`${item.id}-${data[index]?.label ?? index}-${point.value}`}
                 className={cx("light-chart-point", item.tone, hoverIndex === index && "active")}
                 cx={point.x}
                 cy={point.y}
@@ -203,7 +203,7 @@ export function LightweightLineChart<TData extends { label: string }>({
             })
           : null}
         {axisLabels.map((index) => (
-          <g key={index}>
+          <g key={`${data[index]?.label ?? "-"}-${index}`}>
             <line
               className="light-chart-axis-tick"
               x1={xForIndex(index)}

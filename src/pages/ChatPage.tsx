@@ -1792,6 +1792,7 @@ export function ChatPage({ user }: { user: User }) {
         quality={quality}
         qualityOptions={qualityOptions}
         selectedAssets={selectedAssets}
+        selectedCaseMaterials={selectedCaseMaterials}
         size={size}
         sizeOptions={sizeOptions}
         textareaRef={textareaRef}
@@ -1802,6 +1803,7 @@ export function ChatPage({ user }: { user: User }) {
         onPaste={handleComposerPaste}
         onQualityChange={setQuality}
         onSelectedAssetsChange={setSelectedAssets}
+        onSelectedCaseMaterialsChange={setSelectedCaseMaterials}
         onSizeChange={setSize}
         onSubmit={submitDraft}
         onToggleAsset={toggleAsset}

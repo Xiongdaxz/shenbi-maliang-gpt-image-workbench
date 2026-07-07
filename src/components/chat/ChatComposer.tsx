@@ -26,7 +26,7 @@ import {
 import { useI18n } from "../../i18n";
 import type { QualityOption, SizeOption } from "../../lib/imageOptions";
 import type { ComposerPromptTemplateDraft, ComposerPromptTemplatePanelDraft } from "../../store/workbench";
-import type { AssetItem, ImageEditSuggestion } from "../../types";
+import type { AssetItem, CaseMaterialItem, ImageEditSuggestion } from "../../types";
 import { useToast } from "../../ui";
 
 type QuickMenuSource = "plus" | "slash";
@@ -65,6 +65,7 @@ type ChatComposerProps = {
   quality: string;
   qualityOptions: QualityOption[];
   selectedAssets: AssetItem[];
+  selectedCaseMaterials: CaseMaterialItem[];
   size: string;
   sizeOptions: SizeOption[];
   textareaRef: RefObject<HTMLTextAreaElement | null>;
@@ -75,6 +76,7 @@ type ChatComposerProps = {
   onPaste: ClipboardEventHandler<HTMLTextAreaElement>;
   onQualityChange: (value: string) => void;
   onSelectedAssetsChange: (assets: AssetItem[]) => void;
+  onSelectedCaseMaterialsChange: (caseMaterials: CaseMaterialItem[]) => void;
   onSizeChange: (value: string) => void;
   onSubmit: () => void;
   onToggleAsset: (asset: AssetItem) => void;
@@ -150,6 +152,7 @@ export function ChatComposer({
   quality,
   qualityOptions,
   selectedAssets,
+  selectedCaseMaterials,
   size,
   sizeOptions,
   textareaRef,
@@ -160,6 +163,7 @@ export function ChatComposer({
   onPaste,
   onQualityChange,
   onSelectedAssetsChange,
+  onSelectedCaseMaterialsChange,
   onSizeChange,
   onSubmit,
   onToggleAsset,
@@ -211,8 +215,9 @@ export function ChatComposer({
     ? promptCustomColorSchemeHexFromInjection(promptColorSchemeInjection)
     : "";
   const hasDraftPrompt = Boolean(draftPrompt.trim());
-  const hasClearableInput = hasDraftPrompt || selectedAssets.length > 0;
-  const clearInputLabel = selectedAssets.length > 0 ? t("composer.clearInputWithAssets") : t("composer.clearInput");
+  const hasSelectedMaterials = selectedAssets.length > 0 || selectedCaseMaterials.length > 0;
+  const hasClearableInput = hasDraftPrompt || hasSelectedMaterials;
+  const clearInputLabel = hasSelectedMaterials ? t("composer.clearInputWithAssets") : t("composer.clearInput");
   const visibleEditSuggestions = editSuggestions.slice(0, 3);
   const showEditSuggestions = editSuggestionsLoading || visibleEditSuggestions.length > 0;
   const previewItems = previews.map((preview) => ({
@@ -634,6 +639,7 @@ export function ChatComposer({
     if (imageCount !== 1) onImageCountChange(1);
     onDraftPromptChange("");
     if (selectedAssets.length > 0) onSelectedAssetsChange([]);
+    if (selectedCaseMaterials.length > 0) onSelectedCaseMaterialsChange([]);
     window.setTimeout(() => textareaRef.current?.focus(), 0);
   }
 
