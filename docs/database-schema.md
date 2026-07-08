@@ -37,7 +37,7 @@
 | `phone` | 用户手机号，非空时唯一；自助手机号注册时同时作为 `account` |
 | `password_hash` | 登录密码哈希 |
 | `avatar_path` / `avatar_mime_type` | 用户头像加密文件路径和 MIME 类型 |
-| `appearance_mode` | 用户工作台主题偏好，`system`、`dark`、`light` 或 `maliang` |
+| `appearance_mode` | 用户工作台主题偏好，`system`、`dark`、`light`、`maliang` 或 `chunyu` |
 | `disabled` | 是否禁用，`0` 否、`1` 是 |
 | `has_config_access` | 是否允许访问后台配置，`0` 否、`1` 是 |
 | `email_verified_at` | 邮箱验证时间 |

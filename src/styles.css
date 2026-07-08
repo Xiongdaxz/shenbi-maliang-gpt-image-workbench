@@ -206,6 +206,72 @@ html[data-appearance="maliang"] {
   --app-scrollbar-thumb: rgba(201, 100, 66, 0.30);
 }
 
+html[data-appearance="chunyu"] {
+  color-scheme: light;
+  --app-bg: #f1f6ee;
+  --app-chat-scrollbar-gutter-bg: var(--app-bg);
+  --app-surface: #fbfcf7;
+  --app-surface-muted: #edf3e7;
+  --app-surface-soft: #f6f9f2;
+  --app-surface-raised: rgba(251, 252, 247, 0.97);
+  --app-sidebar-bg: #e6eee0;
+  --app-card-bg: rgba(251, 252, 247, 0.95);
+  --app-menu-bg: rgba(251, 252, 247, 0.98);
+  --app-input-bg: rgba(255, 255, 250, 0.84);
+  --app-preview-bg: #e1eadb;
+  --app-bubble-bg: rgba(232, 240, 225, 0.94);
+  --app-bubble-fade: linear-gradient(180deg, rgba(232, 240, 225, 0), rgba(232, 240, 225, 0.98) 86%);
+  --app-text: #1d2c22;
+  --app-text-inverted: #fbfff7;
+  --app-muted: rgba(55, 77, 61, 0.72);
+  --app-subtle: rgba(55, 77, 61, 0.52);
+  --app-label: #344c3a;
+  --app-body-text: #2f4234;
+  --app-link: #8a6a3f;
+  --app-activity-color: #2f7d56;
+  --app-activity-soft: rgba(47, 125, 86, 0.20);
+  --app-border: rgba(65, 93, 72, 0.18);
+  --app-border-soft: rgba(65, 93, 72, 0.12);
+  --app-border-strong: rgba(65, 93, 72, 0.34);
+  --app-border-muted: rgba(65, 93, 72, 0.24);
+  --app-hover-bg: rgba(47, 125, 86, 0.10);
+  --app-active-bg: rgba(47, 125, 86, 0.16);
+  --app-selected-bg: rgba(47, 125, 86, 0.17);
+  --app-selected-soft-bg: rgba(47, 125, 86, 0.08);
+  --app-overlay-bg: rgba(29, 44, 34, 0.30);
+  --app-overlay-soft-bg: rgba(29, 44, 34, 0.18);
+  --app-shadow: 0 18px 52px rgba(43, 70, 48, 0.14);
+  --app-modal-shadow: 0 28px 90px rgba(43, 70, 48, 0.20);
+  --app-danger: #b42318;
+  --app-danger-bg: rgba(180, 35, 24, 0.08);
+  --app-danger-border: rgba(180, 35, 24, 0.24);
+  --button-default-bg: rgba(251, 252, 247, 0.70);
+  --button-default-hover-bg: rgba(47, 125, 86, 0.12);
+  --button-default-border: rgba(65, 93, 72, 0.30);
+  --app-select-menu-bg: rgba(251, 252, 247, 0.98);
+  --app-select-menu-shadow: 0 18px 54px rgba(43, 70, 48, 0.14);
+  --app-settings-backdrop-bg: rgba(29, 44, 34, 0.18);
+  --app-archived-backdrop-bg: rgba(29, 44, 34, 0.16);
+  --app-settings-modal-border: rgba(65, 93, 72, 0.30);
+  --app-settings-side-border: rgba(65, 93, 72, 0.16);
+  --app-settings-summary-bg: rgba(251, 252, 247, 0.68);
+  --app-settings-avatar-bg: rgba(47, 125, 86, 0.12);
+  --app-archived-modal-border: rgba(65, 93, 72, 0.28);
+  --app-archived-modal-shadow: 0 24px 80px rgba(43, 70, 48, 0.18);
+  --danger-outline-border: rgba(180, 35, 24, 0.30);
+  --danger-outline-hover-border: rgba(180, 35, 24, 0.58);
+  --danger-outline-hover-bg: rgba(180, 35, 24, 0.08);
+  --button-primary-bg: #2f7d56;
+  --button-primary-hover-bg: #286b49;
+  --button-primary-text: #fbfff7;
+  --button-danger-bg: #b42318;
+  --button-danger-hover-bg: #991b1b;
+  --control-focus-border: rgba(47, 125, 86, 0.68);
+  --control-focus-ring: rgba(47, 125, 86, 0.14);
+  --control-selected-border: #2f7d56;
+  --app-scrollbar-thumb: rgba(47, 125, 86, 0.30);
+}
+
 html {
   scrollbar-gutter: auto;
 }

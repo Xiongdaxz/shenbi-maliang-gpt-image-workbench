@@ -536,7 +536,7 @@ export function initAppDb() {
   }
   run(
     appDb,
-    "update users set appearance_mode = 'system' where appearance_mode not in ('system', 'dark', 'light', 'maliang')"
+    "update users set appearance_mode = 'system' where appearance_mode not in ('system', 'dark', 'light', 'maliang', 'chunyu')"
   );
 
   appDb.run(`

@@ -1095,7 +1095,9 @@ export function WorkbenchShell({ user }: { user: User }) {
             title={session.title}
             pinned={pinned}
             disabled={sessionActionPending}
-            onOpenChange={(open) => setOpenSessionMenuId(open ? session.id : null)}
+            onOpenChange={(open) => {
+              setOpenSessionMenuId((current) => (open ? session.id : current === session.id ? null : current));
+            }}
             onRename={(title) => renameChat.mutate({ sessionId: session.id, title })}
             onPin={() => pinChat.mutate({ sessionId: session.id, pinned: nextPinned })}
             onArchive={() => archiveChat.mutate({ sessionId: session.id, archived: true })}

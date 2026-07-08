@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Archive, Database, Github, KeyRound, Monitor, Moon, Palette, Pencil, Settings, Smile, Sun, Trash2, UserRound, X } from "lucide-react";
+import { Archive, Database, Github, KeyRound, Leaf, Monitor, Moon, Palette, Pencil, Settings, Smile, Sun, Sunset, Trash2, UserRound, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api } from "../../api";
 import {
@@ -41,9 +41,10 @@ const settingsSectionTitleKeys: Record<SettingsSectionId, string> = {
 
 const appearanceOptions: Array<{ value: AppearanceMode; labelKey: string; icon: LucideIcon }> = [
   { value: "system", labelKey: "appearance.system", icon: Monitor },
-  { value: "dark", labelKey: "appearance.dark", icon: Moon },
   { value: "light", labelKey: "appearance.light", icon: Sun },
-  { value: "maliang", labelKey: "appearance.maliang", icon: Palette }
+  { value: "dark", labelKey: "appearance.dark", icon: Moon },
+  { value: "maliang", labelKey: "appearance.maliang", icon: Sunset },
+  { value: "chunyu", labelKey: "appearance.chunyu", icon: Leaf }
 ];
 
 const editSuggestionToneOptions: Array<{ value: EditSuggestionTone; labelKey: string; descriptionKey: string }> = [
@@ -142,6 +143,7 @@ export function AppSettingsDialog({
   const visibleColorSchemes = colorSchemeList.filter((scheme) => scheme.visible);
   const visibleColorSchemeCategoryCount = new Set(visibleColorSchemes.map((scheme) => scheme.category?.trim() || t("promptColorScheme.customCategory"))).size;
   const visibleColorSchemeCount = visibleColorSchemes.length;
+  const activeAppearanceIndex = Math.max(0, appearanceOptions.findIndex((option) => option.value === appearanceMode));
 
   return (
     <div
@@ -183,7 +185,12 @@ export function AppSettingsDialog({
                   <strong>{t("settings.general.appearance.title")}</strong>
                   <span>{t("settings.general.appearance.desc")}</span>
                 </div>
-                <div className="appearance-mode-control" role="group" aria-label={t("settings.general.appearance.title")}>
+                <div
+                  className="appearance-mode-control"
+                  data-active-index={activeAppearanceIndex}
+                  role="group"
+                  aria-label={t("settings.general.appearance.title")}
+                >
                   {appearanceOptions.map((option) => {
                     const Icon = option.icon;
                     const active = option.value === appearanceMode;

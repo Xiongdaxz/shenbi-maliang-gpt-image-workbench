@@ -869,7 +869,7 @@ export const frontstageCoreOverrides: Record<CoreOverrideLocale, Messages> = {
     "promptTemplates.library.noMatch": "Подходящих форм нет"
   },
   "fa-IR": {
-    "appearance.maliang": "مالیانگ",
+    "appearance.maliang": "گرگ و میش",
     "promptTemplates.language.zh": "چینی"
   }
 };

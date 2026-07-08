@@ -1,9 +1,9 @@
-export type AppearanceMode = "system" | "dark" | "light" | "maliang";
-export type ResolvedAppearance = "dark" | "light" | "maliang";
+export type AppearanceMode = "system" | "dark" | "light" | "maliang" | "chunyu";
+export type ResolvedAppearance = "dark" | "light" | "maliang" | "chunyu";
 
 export const APPEARANCE_STORAGE_KEY = "gpt-image.appearance-mode";
 
-const APPEARANCE_MODES = new Set<AppearanceMode>(["system", "dark", "light", "maliang"]);
+const APPEARANCE_MODES = new Set<AppearanceMode>(["system", "dark", "light", "maliang", "chunyu"]);
 const DARK_SCHEME_QUERY = "(prefers-color-scheme: dark)";
 
 export function normalizeAppearanceMode(value: unknown): AppearanceMode {
@@ -29,7 +29,7 @@ export function writeAppearanceMode(mode: AppearanceMode) {
 }
 
 export function resolveAppearanceMode(mode: AppearanceMode = readAppearanceMode()): ResolvedAppearance {
-  if (mode === "dark" || mode === "light" || mode === "maliang") return mode;
+  if (mode === "dark" || mode === "light" || mode === "maliang" || mode === "chunyu") return mode;
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") return "light";
   return window.matchMedia(DARK_SCHEME_QUERY).matches ? "dark" : "light";
 }

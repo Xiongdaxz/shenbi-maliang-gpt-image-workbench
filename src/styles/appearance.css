@@ -26,7 +26,6 @@ html[data-appearance="light"] .sidebar-head-search:hover,
 html[data-appearance="light"] .sidebar .nav-item:hover,
 html[data-appearance="light"] .recent-row:hover,
 html[data-appearance="light"] .collapsed-recent-card-link:hover,
-html[data-appearance="light"] .session-menu-trigger:hover,
 html[data-appearance="light"] .session-action-card button:hover,
 html[data-appearance="light"] .user-footer-panel:hover {
   background: #f4f4f4;
@@ -43,6 +42,18 @@ html[data-appearance="light"] .user-footer-panel.is-open {
   background: #ededed;
 }
 
+html[data-appearance="light"] .session-pin-trigger:hover,
+html[data-appearance="light"] .session-pin-trigger.is-pinned:hover,
+html[data-appearance="light"] .session-menu-trigger:hover,
+html[data-appearance="light"] .session-menu-trigger[aria-expanded="true"],
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .session-pin-trigger:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .session-pin-trigger.is-pinned:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .session-menu-trigger:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .session-menu-trigger[aria-expanded="true"],
+html[data-appearance="light"] .recent-row.active .session-pin-trigger:hover,
+html[data-appearance="light"] .recent-row.active .session-pin-trigger.is-pinned:hover,
+html[data-appearance="light"] .recent-row.menu-open .session-pin-trigger:hover,
+html[data-appearance="light"] .recent-row.menu-open .session-pin-trigger.is-pinned:hover,
 html[data-appearance="light"] .recent-row.active .session-menu-trigger:hover,
 html[data-appearance="light"] .recent-row.active .session-menu-trigger[aria-expanded="true"],
 html[data-appearance="light"] .recent-row.menu-open .session-menu-trigger:hover,
@@ -50,182 +61,201 @@ html[data-appearance="light"] .recent-row.menu-open .session-menu-trigger[aria-e
   background: transparent;
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) body {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .recent-row.active .session-pin-trigger:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .recent-row.active .session-pin-trigger.is-pinned:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .recent-row.menu-open .session-pin-trigger:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .recent-row.menu-open .session-pin-trigger.is-pinned:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .recent-row.active .session-menu-trigger:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .recent-row.active .session-menu-trigger[aria-expanded="true"],
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .recent-row.menu-open .session-menu-trigger:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .recent-row.menu-open .session-menu-trigger[aria-expanded="true"] {
+  background: transparent;
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) body {
   background: var(--app-bg);
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .app-shell,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .content,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .chat-page,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .page-section {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .app-shell,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .content,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .chat-page,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .page-section {
   background: var(--app-bg);
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .sidebar,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .sidebar-fixed,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .user-footer {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .sidebar,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .sidebar-fixed,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .user-footer {
   background: var(--app-sidebar-bg);
   border-color: var(--app-border-soft);
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .sidebar-toggle,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .sidebar-head-search,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .mobile-menu-btn,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .nav-item,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .recent-item,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .session-menu-trigger,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-tool-btn,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .message-version-actions button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .assistant-image-toolbar button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-timeline-toggle,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-category-select-trigger,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .search-new-chat,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .search-result-group button {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .sidebar-toggle,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .sidebar-head-search,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .mobile-menu-btn,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .nav-item,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .recent-item,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .session-pin-trigger,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .session-menu-trigger,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-tool-btn,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .message-version-actions button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .assistant-image-toolbar button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-timeline-toggle,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-category-select-trigger,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .search-new-chat,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .search-result-group button {
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .recent-title,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .session-group-title,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .session-group-title h2,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .recent-generation-status,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .session-menu-trigger,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .user-footer-name span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .message-version-actions,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .message-version-actions button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .assistant-image-toolbar button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .rendering-title,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-timeline-date,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-empty,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .search-result-group time,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .search-empty,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .muted,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .page-header p,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .chat-topbar p {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .recent-title,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .session-group-title,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .session-group-title h2,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .recent-generation-status,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .session-pin-trigger,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .session-menu-trigger,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .user-footer-name span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .message-version-actions,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .message-version-actions button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .assistant-image-toolbar button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .rendering-title,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-timeline-date,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-empty,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .search-result-group time,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .search-empty,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .muted,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .page-header p,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .chat-topbar p {
   color: var(--app-muted);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .user-footer-name strong,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .page-header h1,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .chat-topbar h1,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-card h3,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-card-title-row h3,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-file-card strong,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-reference-card-body h4,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .search-modal h3,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-timeline-date strong {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .session-pin-trigger:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .session-pin-trigger.is-pinned:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .session-menu-trigger:hover {
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .user-avatar,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .page-header-icon {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .user-footer-name strong,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .page-header h1,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .chat-topbar h1,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-card h3,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-card-title-row h3,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-file-card strong,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-reference-card-body h4,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .search-modal h3,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-timeline-date strong {
+  color: var(--app-text);
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .user-avatar,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .page-header-icon {
   color: var(--app-text);
   background: var(--app-preview-bg);
   border-color: var(--app-border);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .collapsed-recent-card,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .session-action-card,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .message-more-card,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .user-info-card,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-more-action-card,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-quick-menu,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-panel,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-collapsed,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-category-select-menu,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-menu,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .custom-select-menu,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .search-modal {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .collapsed-recent-card,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .session-action-card,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .message-more-card,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .user-info-card,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-more-action-card,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-quick-menu,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-panel,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-collapsed,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-category-select-menu,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-color-menu,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .custom-select-menu,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .search-modal {
   border-color: var(--app-border-muted);
   background: var(--app-menu-bg);
   color: var(--app-text);
   box-shadow: var(--app-shadow);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .user-info-card-head,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .user-info-list > div:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .user-info-action:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .collapsed-recent-card-link:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .collapsed-recent-card-link.active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .collapsed-recent-card-link[aria-current="page"],
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .sidebar-head-search:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-category-select-menu button.active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-category-select-menu button:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-quick-menu button:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-quick-menu button.active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .search-new-chat:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .search-result-group button:hover {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .user-info-card-head,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .user-info-list > div:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .user-info-action:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .collapsed-recent-card-link:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .collapsed-recent-card-link.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .collapsed-recent-card-link[aria-current="page"],
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .sidebar-head-search:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-category-select-menu button.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-category-select-menu button:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-quick-menu button:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-quick-menu button.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .search-new-chat:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .search-result-group button:hover {
   background: var(--app-hover-bg);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .user-info-card-head strong,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .user-info-card dd,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .user-info-action,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .session-action-card button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .collapsed-recent-card-link,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-more-action-card button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-category-select-menu button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-quick-menu button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-template-select-trigger {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .user-info-card-head strong,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .user-info-card dd,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .user-info-action,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .session-action-card button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .collapsed-recent-card-link,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-more-action-card button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-category-select-menu button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-quick-menu button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-template-select-trigger {
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .session-group-title:hover h2,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .session-group-title:focus-visible h2 {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .session-group-title:hover h2,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .session-group-title:focus-visible h2 {
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .user-info-card-head > div > span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .user-info-card dt,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .collapsed-recent-card header,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .collapsed-recent-empty,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-quick-menu small,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-category-empty,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-category-select-trigger .placeholder {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .user-info-card-head > div > span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .user-info-card dt,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .collapsed-recent-card header,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .collapsed-recent-empty,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-quick-menu small,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-category-empty,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-category-select-trigger .placeholder {
   color: var(--app-muted);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .chat-topbar,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .search-modal-head {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .chat-topbar,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .search-modal-head {
   border-color: var(--app-border-soft);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .user-message,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .edit-request-message .user-message-content-bubble,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .direct-image-message .user-message-content-bubble,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .message-edit-panel {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .user-message,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .edit-request-message .user-message-content-bubble,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .direct-image-message .user-message-content-bubble,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .message-edit-panel {
   background: var(--app-bubble-bg);
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .user-message.user-message-collapsed::after,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .user-message-content-bubble.is-collapsed::after {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .user-message.user-message-collapsed::after,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .user-message-content-bubble.is-collapsed::after {
   background: var(--app-bubble-fade);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .message-edit-preview-card,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .edit-request-thumb,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .direct-image-preview,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .direct-image-preview img,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-result,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-result-thumbs button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .reference-image-thumbs button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-preview-card,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-image-frame,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-card-frame,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-image-frame,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-load-shell,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-modal-preview-frame {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .message-edit-preview-card,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .edit-request-thumb,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .direct-image-preview,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .direct-image-preview img,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-result,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-result-thumbs button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .reference-image-thumbs button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-preview-card,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-image-frame,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-card-frame,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-image-frame,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-load-shell,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-modal-preview-frame {
   background: var(--app-preview-bg);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-result-thumbs-wrap.is-scrollable::before {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-result-thumbs-wrap.is-scrollable::before {
   background: linear-gradient(180deg, var(--app-bg) 0%, transparent 100%);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-result-thumbs-wrap.is-scrollable::after {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-result-thumbs-wrap.is-scrollable::after {
   background: linear-gradient(0deg, var(--app-bg) 0%, transparent 100%);
 }
 
@@ -414,24 +444,24 @@ html[data-appearance="dark"] .editor-size-menu .size-option-copy small {
   color: var(--app-muted);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer {
   border-color: var(--app-border-strong);
   background: var(--app-surface-raised);
   box-shadow: 0 14px 44px rgba(0, 0, 0, 0.36);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer textarea,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-textarea-typewriter {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer textarea,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-textarea-typewriter {
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-textarea-shell.is-loading textarea,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-textarea-shell.is-typing textarea {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-textarea-shell.is-loading textarea,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-textarea-shell.is-typing textarea {
   color: transparent;
   caret-color: transparent;
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-textarea-shell.is-loading::before {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-textarea-shell.is-loading::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -441,25 +471,25 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-textare
   pointer-events: none;
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-textarea-typewriter::after {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-textarea-typewriter::after {
   background: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-textarea-skeleton span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .session-title-skeleton > span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .recent-skeleton-row::before,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-load-skeleton {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-textarea-skeleton span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .session-title-skeleton > span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .recent-skeleton-row::before,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-load-skeleton {
   background:
     linear-gradient(90deg, transparent, rgba(244, 241, 234, 0.16), transparent),
     var(--app-preview-bg);
   background-size: 220% 100%;
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-textarea-skeleton {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-textarea-skeleton {
   z-index: 2;
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-edit-suggestion {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-edit-suggestion {
   border-color: rgba(244, 241, 234, 0.16);
   color: var(--app-text);
   background: rgba(244, 241, 234, 0.07);
@@ -468,7 +498,7 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-edit-su
     0 12px 28px rgba(0, 0, 0, 0.18);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-edit-suggestion:hover {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-edit-suggestion:hover {
   border-color: rgba(244, 241, 234, 0.24);
   background: rgba(244, 241, 234, 0.12);
   box-shadow:
@@ -476,7 +506,7 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-edit-su
     0 14px 32px rgba(0, 0, 0, 0.24);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-edit-suggestion-skeleton {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-edit-suggestion-skeleton {
   border-color: rgba(244, 241, 234, 0.12);
   background:
     linear-gradient(90deg, transparent, rgba(244, 241, 234, 0.16), transparent),
@@ -560,475 +590,515 @@ html[data-appearance="maliang"] .rendering-dot-field::after {
     linear-gradient(180deg, rgba(236, 232, 221, 0.78) 0, rgba(236, 232, 221, 0.34) 8%, transparent 15%, transparent 85%, rgba(236, 232, 221, 0.34) 92%, rgba(236, 232, 221, 0.78) 100%);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .starter-title-text,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .starter-title-prompt,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .starter-case-more,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .starter-case-more span {
+html[data-appearance="chunyu"] .rendering-card {
+  --rendering-dot-rgb: 47, 125, 86;
+  background:
+    radial-gradient(circle at 24% 18%, rgba(251, 252, 247, 0.72), transparent 38%),
+    radial-gradient(circle at 82% 84%, rgba(138, 106, 63, 0.10), transparent 42%),
+    var(--app-preview-bg);
+  box-shadow:
+    inset 0 1px 0 rgba(251, 252, 247, 0.62),
+    0 18px 44px rgba(43, 70, 48, 0.14);
+}
+
+html[data-appearance="chunyu"] .rendering-card::before {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(251, 252, 247, 0.32), transparent 42%),
+    radial-gradient(circle at 86% 86%, rgba(47, 125, 86, 0.12), transparent 44%);
+}
+
+html[data-appearance="chunyu"] .rendering-card::after {
+  background: linear-gradient(
+    108deg,
+    transparent 28%,
+    rgba(47, 125, 86, 0.06) 39%,
+    rgba(251, 252, 247, 0.82) 48%,
+    rgba(255, 255, 250, 0.52) 52%,
+    rgba(138, 106, 63, 0.06) 62%,
+    transparent 74%
+  );
+  opacity: 0.52;
+}
+
+html[data-appearance="chunyu"] .rendering-dot-field::before {
+  background: radial-gradient(circle at 50% 50%, transparent 0 84%, rgba(225, 234, 219, 0.08) 94%, rgba(225, 234, 219, 0.24) 100%);
+}
+
+html[data-appearance="chunyu"] .rendering-dot-field::after {
+  background:
+    linear-gradient(90deg, rgba(225, 234, 219, 0.78) 0, rgba(225, 234, 219, 0.34) 8%, transparent 15%, transparent 85%, rgba(225, 234, 219, 0.34) 92%, rgba(225, 234, 219, 0.78) 100%),
+    linear-gradient(180deg, rgba(225, 234, 219, 0.78) 0, rgba(225, 234, 219, 0.34) 8%, transparent 15%, transparent 85%, rgba(225, 234, 219, 0.34) 92%, rgba(225, 234, 219, 0.78) 100%);
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .starter-title-text,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .starter-title-prompt,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .starter-case-more,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .starter-case-more span {
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .starter-case-thumb,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .starter-case-more,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-card,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-card,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-card,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-group,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .toolbar-card,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .config-card,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-reference-card {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .starter-case-thumb,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .starter-case-more,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-card,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-card,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-card,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-group,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .toolbar-card,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .config-card,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-reference-card {
   border-color: var(--app-border);
   background: var(--app-card-bg);
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .starter-case-more {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .starter-case-more {
   background: linear-gradient(135deg, var(--app-surface) 0%, var(--app-preview-bg) 100%);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .starter-case-thumb-prompt,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-card p,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-card-meta,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-file-card small,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-space-option-desc,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-shared-note,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-reference-card-body p,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-reference-dialog-header p {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .starter-case-thumb-prompt,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-card p,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-card-meta,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-file-card small,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-space-option-desc,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-shared-note,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-reference-card-body p,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-reference-dialog-header p {
   color: var(--app-muted);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .starter-case-style-tags span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-card-tags span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .filter-tab-count {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .starter-case-style-tags span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-card-tags span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .filter-tab-count {
   color: var(--app-muted);
   background: var(--app-preview-bg);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-card-tags-wrap.has-overflow::after {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-card-tags-wrap.has-overflow::after {
   background: linear-gradient(90deg, rgba(32, 32, 29, 0), var(--app-card-bg) 78%);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-search,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-search,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-search,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-reference-search,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-category-search,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-name-input-row {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-search,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-search,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-search,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-reference-search,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-category-search,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-name-input-row {
   border-color: var(--app-border-strong);
   background: var(--app-input-bg);
   color: var(--app-muted);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .library-filter-row::before {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .library-filter-row::before {
   background: rgba(21, 21, 19, 0.72);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-favorite-filter-btn,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-total-count,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .page-header-view-toggle,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-space-filter-tabs button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .pill-tabs button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-filter-pinned-tabs button {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-favorite-filter-btn,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-total-count,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .page-header-view-toggle,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-space-filter-tabs button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .pill-tabs button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-filter-pinned-tabs button {
   border-color: var(--button-default-border);
   background: var(--button-default-bg);
   color: var(--app-text);
   box-shadow: none;
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-total-count {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-total-count {
   color: var(--app-muted);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-total-count strong {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-total-count strong {
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .page-header-view-toggle::before,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .pill-tabs .active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-filter-pinned-tabs .active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-space-filter-tabs button.active {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .page-header-view-toggle::before,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .pill-tabs .active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-filter-pinned-tabs .active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-space-filter-tabs button.active {
   border-color: var(--button-primary-bg);
   background: var(--button-primary-bg);
   color: var(--button-primary-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-favorite-filter-btn.active {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-favorite-filter-btn.active {
   color: #fb7185;
   border-color: rgba(251, 113, 133, 0.42);
   background: rgba(159, 18, 57, 0.22);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .modal-backdrop,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .search-modal-backdrop {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .modal-backdrop,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .search-modal-backdrop {
   background: var(--app-overlay-bg);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-modal,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-reference-dialog {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-modal,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-reference-dialog {
   border-color: var(--app-border-muted);
   background: var(--app-surface-raised);
   color: var(--app-text);
   box-shadow: var(--app-modal-shadow);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-modal h3,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-reference-dialog-header h3,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-reference-form-title strong,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-from-image-preview strong,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-space-option-label,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-reference-toggle-copy span {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-modal h3,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-reference-dialog-header h3,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-reference-form-title strong,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-from-image-preview strong,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-space-option-label,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-reference-toggle-copy span {
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .action-modal p,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-from-image-preview span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-reference-toggle-copy small,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .confirm-phrase-field {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .action-modal p,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-from-image-preview span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-reference-toggle-copy small,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .confirm-phrase-field {
   color: var(--app-muted);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-modal-preview-frame,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-preview-thumb-strip,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-reference-toggle,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-reference-toggle-check,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-reference-form,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-from-image-preview,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-file-card,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-file-row,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-shared-note,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-space-options button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-option-check {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-modal-preview-frame,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-preview-thumb-strip,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-reference-toggle,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-reference-toggle-check,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-reference-form,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-from-image-preview,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-file-card,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-file-row,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-shared-note,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-space-options button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-option-check {
   border-color: var(--app-border-strong);
   background: var(--app-surface-soft);
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-reference-toggle:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-reference-toggle.active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-file-card:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-space-options button:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-space-options button.active {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-reference-toggle:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-reference-toggle.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-file-card:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-space-options button:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-space-options button.active {
   background: var(--app-selected-bg);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-reference-toggle.active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-space-options button.active {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-reference-toggle.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-space-options button.active {
   border-color: var(--button-primary-bg);
   box-shadow: inset 0 0 0 1px var(--button-primary-bg);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-reference-toggle-check,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-option-check {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-reference-toggle-check,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-option-check {
   border-color: var(--app-text);
   background: var(--app-input-bg);
   color: transparent;
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-reference-toggle.active .case-reference-toggle-check,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .asset-space-options button.active .asset-option-check {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-reference-toggle.active .case-reference-toggle-check,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-space-options button.active .asset-option-check {
   border-color: var(--button-primary-bg);
   background: var(--button-primary-bg);
   color: var(--button-primary-text);
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .settings-switch-track {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .settings-switch-track {
   border-color: var(--app-border-strong);
   background: var(--app-input-bg);
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .settings-switch-control.checked .settings-switch-track {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .settings-switch-control.checked .settings-switch-track {
   border-color: var(--button-primary-bg);
   background: var(--button-primary-bg);
   color: var(--button-primary-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .page-header-view-toggle button.active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .page-header-view-toggle button.active:hover {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .page-header-view-toggle button.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .page-header-view-toggle button.active:hover {
   color: var(--button-primary-text);
   background: transparent;
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .toast-card,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .toast-card.info,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .toast-card.success {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .toast-card,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .toast-card.info,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .toast-card.success {
   border-color: var(--app-border-strong);
   background: var(--app-surface-raised);
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .toast-card.error {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .toast-card.error {
   border-color: rgba(248, 113, 113, 0.42);
   background: rgba(127, 29, 29, 0.92);
   color: #fff;
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-search,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-optimize-control,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-color-select .custom-select-trigger,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-result-select-trigger,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .size-picker-trigger,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .quality-picker-trigger,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-count-trigger {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-search,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-optimize-control,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-color-select .custom-select-trigger,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-result-select-trigger,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .size-picker-trigger,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .quality-picker-trigger,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-count-trigger {
   border-color: var(--button-default-border);
   background: var(--button-default-bg);
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-card,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-template-multi-options button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .material-tag-filter button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .material-grid button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .history-list a,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-add-tag {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-card,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-template-multi-options button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .material-tag-filter button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .material-grid button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .history-list a,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-add-tag {
   border-color: var(--app-border);
   background: var(--app-card-bg);
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-card:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-template-multi-options button:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .material-tag-filter button:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .material-grid button:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-add-tag:hover {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-card:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-template-multi-options button:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .material-tag-filter button:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .material-grid button:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-add-tag:hover {
   border-color: var(--app-border-strong);
   background: var(--app-hover-bg);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-card-icon,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .size-trigger-icon,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .size-option-icon,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .quality-trigger-icon,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-count-trigger-icon,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-optimize-submit,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-undo-submit,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-clear-submit,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-optimize-control .custom-select-trigger {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-card-icon,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .size-trigger-icon,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .size-option-icon,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .quality-trigger-icon,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-count-trigger-icon,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-optimize-submit,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-undo-submit,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-clear-submit,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-optimize-control .custom-select-trigger {
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-card-icon {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-card-icon {
   background: var(--app-preview-bg);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-card small,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-result-select-menu small,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .size-picker-trigger small,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .size-picker-trigger svg,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .quality-picker-trigger svg,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-count-trigger svg,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-color-select .custom-select-trigger > svg,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-color-select .custom-select-value > svg,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-optimize-submit svg,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-optimize-control .custom-select-trigger > svg,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .quality-option-copy small,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .image-count-option-copy small,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .size-option-copy small,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .material-grid span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .history-list span {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-card small,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-result-select-menu small,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .size-picker-trigger small,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .size-picker-trigger svg,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .quality-picker-trigger svg,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-count-trigger svg,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-color-select .custom-select-trigger > svg,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-color-select .custom-select-value > svg,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-optimize-submit svg,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-optimize-control .custom-select-trigger > svg,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .quality-option-copy small,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-count-option-copy small,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .size-option-copy small,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .material-grid span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .history-list span {
   color: var(--app-muted);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-result-select-menu,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .size-picker-menu {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-result-select-menu,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .size-picker-menu {
   border-color: var(--app-border-muted);
   background: var(--app-menu-bg);
   box-shadow: var(--app-shadow);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-result-select-menu button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .size-picker-menu button {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-result-select-menu button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .size-picker-menu button {
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-result-select-menu button:hover:not(:disabled),
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-result-select-menu button.active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-result-select-menu button.keyboard-active:not(:disabled),
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .size-picker-menu button:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .size-picker-menu button.active {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-result-select-menu button:hover:not(:disabled),
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-result-select-menu button.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-result-select-menu button.keyboard-active:not(:disabled),
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .size-picker-menu button:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .size-picker-menu button.active {
   background: var(--app-hover-bg);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-result-select-menu button:disabled,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-result-select-menu button:disabled small {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-result-select-menu button:disabled,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-result-select-menu button:disabled small {
   color: var(--app-subtle);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-template-multi-options button.active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .material-tag-filter button.active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .material-grid button.active {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-template-multi-options button.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .material-tag-filter button.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .material-grid button.active {
   border-color: var(--button-primary-bg);
   background: var(--button-primary-bg);
   color: var(--button-primary-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-prompt-template-empty {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-empty {
   border-color: var(--app-border-strong);
   background: var(--app-surface-soft);
   color: var(--app-muted);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .material-picker,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-picker-modal {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .material-picker,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-picker-modal {
   border-color: var(--app-border);
   background: var(--app-surface-raised);
   color: var(--app-text);
   box-shadow: var(--app-modal-shadow);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-material-drawer {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-material-drawer {
   border-color: var(--app-border);
   background: var(--app-surface-raised);
   box-shadow: var(--app-modal-shadow);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .composer-material-drawer > .material-picker {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-material-drawer > .material-picker {
   box-shadow: none;
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-picker-pinned-tabs button {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-picker-pinned-tabs button {
   border-color: var(--button-default-border);
   background: var(--button-default-bg);
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-picker-pinned-tabs button:hover {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-picker-pinned-tabs button:hover {
   background: var(--button-default-hover-bg);
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-picker-pinned-tabs button.active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-picker-pinned-tabs .active {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-picker-pinned-tabs button.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-picker-pinned-tabs .active {
   border-color: var(--button-primary-bg);
   background: var(--button-primary-bg);
   color: var(--button-primary-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-picker-pinned-tabs button.active:hover {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-picker-pinned-tabs button.active:hover {
   border-color: var(--button-primary-hover-bg);
   background: var(--button-primary-hover-bg);
   color: var(--button-primary-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-picker-pinned-tabs .filter-tab-count {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-picker-pinned-tabs .filter-tab-count {
   color: var(--app-muted);
   background: var(--app-preview-bg);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-picker-pinned-tabs .active .filter-tab-count {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-picker-pinned-tabs .active .filter-tab-count {
   color: rgba(255, 255, 255, 0.92);
   background: rgba(255, 255, 255, 0.22);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .material-clear-selected {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .material-clear-selected {
   color: var(--app-muted);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .material-clear-selected:hover {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .material-clear-selected:hover {
   color: var(--app-text);
   background: var(--app-hover-bg);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-action-icon,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-action-icon.case-favorite-btn.active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-multi-image-badge,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-preview-close,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-reference-lightbox-close,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-reference-lightbox-download {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-action-icon,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-action-icon.case-favorite-btn.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-multi-image-badge,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-preview-close,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-reference-lightbox-close,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-reference-lightbox-download {
   border-color: rgba(244, 241, 234, 0.18);
   background: rgba(31, 31, 28, 0.82);
   color: var(--app-text);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.34);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-action-icon:hover:not(:disabled),
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-action-icon.case-favorite-btn.active:hover:not(:disabled),
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-preview-close:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-reference-lightbox-close:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-reference-lightbox-download:hover {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-action-icon:hover:not(:disabled),
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-action-icon.case-favorite-btn.active:hover:not(:disabled),
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-preview-close:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-reference-lightbox-close:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-reference-lightbox-download:hover {
   border-color: rgba(244, 241, 234, 0.28);
   background: rgba(49, 49, 44, 0.92);
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-action-icon.danger {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-action-icon.danger {
   color: #f87171;
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-action-icon.case-favorite-btn.active {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-action-icon.case-favorite-btn.active {
   color: #fb7185;
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-preview-backdrop.fullscreen {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-preview-backdrop.fullscreen {
   background: rgba(5, 5, 4, 0.72);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-preview-navigator {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-preview-navigator {
   border-color: rgba(244, 241, 234, 0.2);
   background: rgba(31, 31, 28, 0.78);
   box-shadow: 0 14px 38px rgba(0, 0, 0, 0.38);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-preview-toolbar {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-preview-toolbar {
   border-color: rgba(244, 241, 234, 0.16);
-  background: rgba(17, 17, 15, 0.86);
+  background: rgba(17, 17, 15, 0.70);
   color: var(--app-muted);
   box-shadow: 0 -16px 42px rgba(0, 0, 0, 0.42);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-preview-info h3,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-preview-zoom {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-preview-info h3,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-preview-zoom {
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-preview-description,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-preview-description-text,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-preview-info-meta {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-preview-description,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-preview-description-text,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-preview-info-meta {
   color: var(--app-muted);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-preview-description:focus-visible .case-preview-description-text {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-preview-description:focus-visible .case-preview-description-text {
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-preview-description-popover {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-preview-description-popover {
   border-color: var(--app-border);
   background: var(--app-surface-raised);
   color: var(--app-text);
   box-shadow: var(--app-shadow);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-preview-divider {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-preview-divider {
   background: rgba(244, 241, 234, 0.14);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-preview-transform-tools {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-preview-transform-tools {
   border-color: rgba(244, 241, 234, 0.12);
-  background: rgba(244, 241, 234, 0.08);
+  background: rgba(31, 31, 28, 0.50);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-preview-tool,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-preview-actions .secondary-btn {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-preview-tool,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-preview-actions .secondary-btn {
   border-color: rgba(244, 241, 234, 0.2);
-  background: rgba(31, 31, 28, 0.9);
+  background: rgba(31, 31, 28, 0.70);
   color: var(--app-text);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-preview-tool:hover:not(:disabled),
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-preview-actions .secondary-btn:hover {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-preview-tool:hover:not(:disabled),
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-preview-actions .secondary-btn:hover {
   border-color: rgba(244, 241, 234, 0.34);
-  background: rgba(49, 49, 44, 0.96);
+  background: rgba(49, 49, 44, 0.82);
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .case-preview-tool.favorite.active {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-preview-tool.favorite.active {
   border-color: rgba(251, 113, 133, 0.42);
   background: rgba(127, 29, 29, 0.72);
   color: #fecdd3;
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .mobile-menu-btn {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .mobile-menu-btn {
   border-color: var(--button-default-border);
   background: var(--button-default-bg);
   color: var(--app-text);
@@ -1107,7 +1177,7 @@ html[data-appearance="maliang"] .case-preview-navigator {
 
 html[data-appearance="maliang"] .case-preview-toolbar {
   border-color: rgba(120, 94, 78, 0.24);
-  background: rgba(250, 249, 245, 0.90);
+  background: rgba(250, 249, 245, 0.70);
   color: var(--app-muted);
   box-shadow: 0 -16px 42px rgba(67, 52, 43, 0.16);
 }
@@ -1144,14 +1214,14 @@ html[data-appearance="maliang"] .case-preview-divider {
 
 html[data-appearance="maliang"] .case-preview-transform-tools {
   border-color: rgba(120, 94, 78, 0.22);
-  background: rgba(250, 249, 245, 0.68);
+  background: rgba(250, 249, 245, 0.50);
 }
 
 html[data-appearance="maliang"] .case-preview-tool,
 html[data-appearance="maliang"] .case-preview-actions .secondary-btn,
 html[data-appearance="maliang"] .case-preview-actions .danger-btn {
   border-color: rgba(120, 94, 78, 0.30);
-  background: rgba(250, 249, 245, 0.84);
+  background: rgba(250, 249, 245, 0.66);
   color: var(--app-text);
   box-shadow: 0 10px 26px rgba(67, 52, 43, 0.13);
 }
@@ -1160,7 +1230,7 @@ html[data-appearance="maliang"] .case-preview-tool:hover:not(:disabled),
 html[data-appearance="maliang"] .case-preview-actions .secondary-btn:hover,
 html[data-appearance="maliang"] .case-preview-actions .danger-btn:hover {
   border-color: rgba(201, 100, 66, 0.46);
-  background: rgba(250, 249, 245, 0.98);
+  background: rgba(250, 249, 245, 0.82);
   color: var(--app-text);
 }
 
@@ -1181,219 +1251,367 @@ html[data-appearance="maliang"] .case-preview-tool.favorite.active:hover:not(:di
   color: var(--app-danger);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-page,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-edit-page {
+html[data-appearance="chunyu"] .asset-card-tags-wrap.has-overflow::after {
+  background: linear-gradient(90deg, rgba(251, 252, 247, 0), var(--app-card-bg) 78%);
+}
+
+html[data-appearance="chunyu"] .library-filter-row::before {
+  background: rgba(241, 246, 238, 0.94);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-appearance="chunyu"] .composer {
+  box-shadow: 0 14px 44px rgba(43, 70, 48, 0.14);
+}
+
+html[data-appearance="chunyu"] .composer-textarea-skeleton span,
+html[data-appearance="chunyu"] .session-title-skeleton > span,
+html[data-appearance="chunyu"] .recent-skeleton-row::before,
+html[data-appearance="chunyu"] .image-load-skeleton {
+  background:
+    linear-gradient(90deg, transparent, rgba(47, 125, 86, 0.14), transparent),
+    var(--app-preview-bg);
+  background-size: 220% 100%;
+}
+
+html[data-appearance="chunyu"] .case-action-icon,
+html[data-appearance="chunyu"] .case-action-icon.case-favorite-btn.active,
+html[data-appearance="chunyu"] .case-multi-image-badge,
+html[data-appearance="chunyu"] .case-preview-close,
+html[data-appearance="chunyu"] .case-reference-lightbox-close,
+html[data-appearance="chunyu"] .case-reference-lightbox-download {
+  border-color: rgba(65, 93, 72, 0.26);
+  background: rgba(251, 252, 247, 0.90);
+  color: var(--app-text);
+  box-shadow: 0 12px 30px rgba(43, 70, 48, 0.16);
+}
+
+html[data-appearance="chunyu"] .case-action-icon:hover:not(:disabled),
+html[data-appearance="chunyu"] .case-action-icon.case-favorite-btn.active:hover:not(:disabled),
+html[data-appearance="chunyu"] .case-preview-close:hover,
+html[data-appearance="chunyu"] .case-reference-lightbox-close:hover,
+html[data-appearance="chunyu"] .case-reference-lightbox-download:hover {
+  border-color: rgba(47, 125, 86, 0.42);
+  background: rgba(251, 252, 247, 0.98);
+  color: var(--app-text);
+}
+
+html[data-appearance="chunyu"] .case-action-icon.danger {
+  color: var(--app-danger);
+}
+
+html[data-appearance="chunyu"] .case-action-icon.case-favorite-btn.active {
+  border-color: rgba(180, 35, 24, 0.26);
+  background: rgba(255, 244, 239, 0.92);
+  color: var(--app-danger);
+}
+
+html[data-appearance="chunyu"] .case-action-icon.case-favorite-btn.active:hover:not(:disabled) {
+  border-color: rgba(180, 35, 24, 0.40);
+  background: rgba(255, 237, 229, 0.98);
+  color: var(--app-danger);
+}
+
+html[data-appearance="chunyu"] .case-preview-backdrop.fullscreen {
+  background: rgba(29, 44, 34, 0.30);
+}
+
+html[data-appearance="chunyu"] .case-preview-navigator {
+  border-color: rgba(65, 93, 72, 0.24);
+  background: rgba(251, 252, 247, 0.78);
+  box-shadow: 0 14px 34px rgba(43, 70, 48, 0.16);
+}
+
+html[data-appearance="chunyu"] .case-preview-toolbar {
+  border-color: rgba(65, 93, 72, 0.24);
+  background: rgba(251, 252, 247, 0.70);
+  color: var(--app-muted);
+  box-shadow: 0 -16px 42px rgba(43, 70, 48, 0.16);
+}
+
+html[data-appearance="chunyu"] .case-preview-info h3,
+html[data-appearance="chunyu"] .case-preview-zoom {
+  color: var(--app-text);
+}
+
+html[data-appearance="chunyu"] .case-preview-description,
+html[data-appearance="chunyu"] .case-preview-description-text,
+html[data-appearance="chunyu"] .case-preview-info-meta {
+  color: var(--app-muted);
+}
+
+html[data-appearance="chunyu"] .case-preview-info-meta span + span {
+  border-left-color: rgba(65, 93, 72, 0.24);
+}
+
+html[data-appearance="chunyu"] .case-preview-description:focus-visible .case-preview-description-text {
+  color: var(--app-text);
+}
+
+html[data-appearance="chunyu"] .case-preview-description-popover {
+  border-color: rgba(65, 93, 72, 0.28);
+  background: rgba(251, 252, 247, 0.98);
+  color: var(--app-text);
+  box-shadow: 0 18px 54px rgba(43, 70, 48, 0.16);
+}
+
+html[data-appearance="chunyu"] .case-preview-divider {
+  background: rgba(47, 125, 86, 0.20);
+}
+
+html[data-appearance="chunyu"] .case-preview-transform-tools {
+  border-color: rgba(65, 93, 72, 0.22);
+  background: rgba(251, 252, 247, 0.50);
+}
+
+html[data-appearance="chunyu"] .case-preview-tool,
+html[data-appearance="chunyu"] .case-preview-actions .secondary-btn,
+html[data-appearance="chunyu"] .case-preview-actions .danger-btn {
+  border-color: rgba(65, 93, 72, 0.30);
+  background: rgba(251, 252, 247, 0.70);
+  color: var(--app-text);
+  box-shadow: 0 10px 26px rgba(43, 70, 48, 0.13);
+}
+
+html[data-appearance="chunyu"] .case-preview-tool:hover:not(:disabled),
+html[data-appearance="chunyu"] .case-preview-actions .secondary-btn:hover,
+html[data-appearance="chunyu"] .case-preview-actions .danger-btn:hover {
+  border-color: rgba(47, 125, 86, 0.46);
+  background: rgba(251, 252, 247, 0.82);
+  color: var(--app-text);
+}
+
+html[data-appearance="chunyu"] .case-preview-tool.danger,
+html[data-appearance="chunyu"] .case-preview-actions .danger-btn {
+  color: var(--app-danger);
+}
+
+html[data-appearance="chunyu"] .case-preview-tool.favorite.active {
+  border-color: rgba(180, 35, 24, 0.30);
+  background: rgba(255, 244, 239, 0.92);
+  color: var(--app-danger);
+}
+
+html[data-appearance="chunyu"] .case-preview-tool.favorite.active:hover:not(:disabled) {
+  border-color: rgba(180, 35, 24, 0.44);
+  background: rgba(255, 237, 229, 0.98);
+  color: var(--app-danger);
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-page,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-edit-page {
   background: var(--app-bg);
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-library,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-canvas,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-result-panel,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-empty,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-edit-topbar,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-builder-section,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-editor-preview-panel,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-property-panel,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-settings-card,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .result-block,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-download-dialog {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-library,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-canvas,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-result-panel,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-empty,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-edit-topbar,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-builder-section,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-editor-preview-panel,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-property-panel,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-settings-card,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .result-block,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-download-dialog {
   border-color: var(--app-border);
   background: var(--app-surface-raised);
   color: var(--app-text);
   box-shadow: var(--app-shadow);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-modebar,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .component-list-empty,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-upload,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-language-switch,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-diff-switch.active {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-modebar,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .component-list-empty,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-upload,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-language-switch,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-diff-switch.active {
   border-color: var(--app-border);
   background: var(--app-surface-soft);
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-page .primary-btn,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-page .secondary-btn,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-edit-page .primary-btn,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-edit-page .secondary-btn,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-history-modal .primary-btn,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-history-modal .secondary-btn,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-scope-tabs button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .language-tabs button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-toggle button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .component-add-grid button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-card,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-card-actions button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .secondary-icon-btn,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .component-detail-head button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-upload-pick,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-upload-item,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-upload-item button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .component-list-item,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .component-list-actions button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-property-tabs button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .result-block-action button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-optimize-control,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .result-block-action .result-block-action-group .prompt-optimize-style-select .custom-select-trigger,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-final-actions .primary-btn,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-final-actions .secondary-btn {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-page .primary-btn,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-page .secondary-btn,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-edit-page .primary-btn,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-edit-page .secondary-btn,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-history-modal .primary-btn,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-history-modal .secondary-btn,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-scope-tabs button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .language-tabs button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-toggle button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .component-add-grid button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-card,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-card-actions button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .secondary-icon-btn,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .component-detail-head button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-upload-pick,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-upload-item,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-upload-item button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .component-list-item,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .component-list-actions button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-property-tabs button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .result-block-action button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-optimize-control,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .result-block-action .result-block-action-group .prompt-optimize-style-select .custom-select-trigger,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-final-actions .primary-btn,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-final-actions .secondary-btn {
   border-color: var(--button-default-border);
   background: var(--button-default-bg);
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-page .primary-btn:hover:not(:disabled),
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-page .secondary-btn:hover:not(:disabled),
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-edit-page .primary-btn:hover:not(:disabled),
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-edit-page .secondary-btn:hover:not(:disabled),
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-card:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .component-list-item:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .component-list-item.active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-upload-pick:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-upload-pick:focus-within,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-multi-select-menu button:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-multi-select-menu button.active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-option:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-gradient-option:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-option.active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-gradient-option.active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .component-drag-handle:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-property-tabs button:hover {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-page .primary-btn:hover:not(:disabled),
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-page .secondary-btn:hover:not(:disabled),
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-edit-page .primary-btn:hover:not(:disabled),
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-edit-page .secondary-btn:hover:not(:disabled),
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-card:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .component-list-item:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .component-list-item.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-upload-pick:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-upload-pick:focus-within,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-multi-select-menu button:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-multi-select-menu button.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-color-option:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-gradient-option:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-color-option.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-gradient-option.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .component-drag-handle:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-property-tabs button:hover {
   border-color: var(--app-border-strong);
   background: var(--app-hover-bg);
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-card.active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-preview-selectable.selected::before,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .component-list-item.drop-target {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-card.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-preview-selectable.selected::before,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .component-list-item.drop-target {
   border-color: var(--button-primary-bg);
   background: var(--app-selected-soft-bg);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-scope-tabs button.active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .language-tabs button.active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-toggle button.active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-property-tabs button.active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-language-switch button.active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-checkbox input:checked {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-scope-tabs button.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .language-tabs button.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-toggle button.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-property-tabs button.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-language-switch button.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-checkbox input:checked {
   border-color: var(--button-primary-bg);
   background: var(--button-primary-bg);
   color: var(--button-primary-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-card-icon,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-title-icon,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-upload-pick-icon,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .component-list-item.drop-before .component-drag-handle,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .component-list-item.drop-after .component-drag-handle {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-card-icon,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-title-icon,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-upload-pick-icon,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .component-list-item.drop-before .component-drag-handle,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .component-list-item.drop-after .component-drag-handle {
   background: var(--button-primary-bg);
   color: var(--button-primary-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-title h1,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-card-body strong,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-edit-title h1,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-preview-empty strong,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-field,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-settings-card label,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .component-settings-card .template-setting-label,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-meta-card .template-setting-label,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .component-select-button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-chip,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-option,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-gradient-option,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-color-settings-head strong,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .result-block pre,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-diff-switch.active,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .result-block-action .result-block-action-group .prompt-optimize-style-select .custom-select-trigger {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-title h1,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-card-body strong,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-edit-title h1,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-preview-empty strong,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-field,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-settings-card label,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .component-settings-card .template-setting-label,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-meta-card .template-setting-label,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .component-select-button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-color-chip,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-color-option,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-gradient-option,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-color-settings-head strong,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .result-block pre,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-diff-switch.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .result-block-action .result-block-action-group .prompt-optimize-style-select .custom-select-trigger {
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-card-body p,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-title p,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-usebar span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-edit-title span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-preview-empty,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-field small,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-upload-pick small,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-upload-item span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-placeholder,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-summary.placeholder,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-section > span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-option small,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-gradient-option small,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-empty,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-color-settings-tip,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-color-settings-head strong span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-gradient-stop-add span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-builder-head span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-editor-preview-head span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .component-list small,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .result-block-negative span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-language-switch button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-diff-switch {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-card-body p,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-title p,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-usebar span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-edit-title span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-preview-empty,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-field small,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-upload-pick small,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-upload-item span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-color-placeholder,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-color-summary.placeholder,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-color-section > span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-color-option small,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-gradient-option small,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-color-empty,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-color-settings-tip,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-color-settings-head strong span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-gradient-stop-add span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-builder-head span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-editor-preview-head span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .component-list small,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .result-block-negative span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-language-switch button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-diff-switch {
   color: var(--app-muted);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-search,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-field input,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-field textarea,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-settings-card input,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-settings-card textarea,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-selected,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-checkbox input {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-search,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-field input,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-field textarea,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-settings-card input,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-settings-card textarea,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-color-selected,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-checkbox input {
   border-color: var(--app-border-strong);
   background: var(--app-input-bg);
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-chip,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-option,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-gradient-option,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-color-settings,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-color-settings-head button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-color-swatch-picker,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-gradient-stop,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-color-setting-row button {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-color-chip,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-color-option,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-gradient-option,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-color-settings,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-color-settings-head button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-color-swatch-picker,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-gradient-stop,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-color-setting-row button {
   border-color: var(--app-border);
   background: var(--app-card-bg);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-chip button {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-color-chip button {
   color: var(--app-muted);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-chip button:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-color-settings-head button:hover,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-color-setting-row .template-gradient-stop-add:hover:not(:disabled) {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-color-chip button:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-color-settings-head button:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-color-setting-row .template-gradient-stop-add:hover:not(:disabled) {
   background: var(--app-hover-bg);
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-color-settings-head button:disabled,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-color-setting-row button:disabled {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-color-settings-head button:disabled,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-color-setting-row button:disabled {
   border-color: var(--app-border);
   background: var(--app-surface-soft);
   color: var(--app-subtle);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-custom button:not(:disabled) {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-color-custom button:not(:disabled) {
   border-color: var(--button-primary-bg);
   background: var(--button-primary-bg);
   color: var(--button-primary-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-color-custom button:disabled {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-color-custom button:disabled {
   border-color: var(--app-border);
   background: var(--app-surface-soft);
   color: var(--app-subtle);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-multi-select-menu,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-icon-select-menu {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-multi-select-menu,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-icon-select-menu {
   border-color: var(--app-border-muted);
   background: var(--app-menu-bg);
   color: var(--app-text);
@@ -1401,50 +1619,50 @@ html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-icon-se
   scrollbar-color: var(--app-scrollbar-thumb) var(--app-scrollbar-track);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-multi-select-menu button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-icon-select-menu button,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-icon-select-menu button.active {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-multi-select-menu button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-icon-select-menu button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-icon-select-menu button.active {
   color: var(--app-text);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .scope-count,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-shared-owner,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .component-detail-head span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-upload-thumb {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .scope-count,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-shared-owner,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .component-detail-head span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-upload-thumb {
   background: var(--app-preview-bg);
   color: var(--app-muted);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-list-empty,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .component-list-empty {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-list-empty,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .component-list-empty {
   border-color: var(--app-border-strong);
   color: var(--app-muted);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-skeleton,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .result-skeleton span {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-skeleton,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .result-skeleton span {
   background:
     linear-gradient(90deg, transparent, rgba(244, 241, 234, 0.16), transparent),
     var(--app-preview-bg);
   background-size: 220% 100%;
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-resize-handle span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-result-height-handle span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-diff-switch span {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-resize-handle span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-result-height-handle span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-diff-switch span {
   background: var(--app-border-strong);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-resize-handle:hover span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-resize-handle:focus-visible span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-page.resizing-result .prompt-template-resize-handle span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-result-height-handle:hover span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-result-height-handle:focus-visible span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-template-page.resizing-result-height .prompt-template-result-height-handle span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .component-list-item.drop-before::before,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .component-list-item.drop-after::after,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-diff-switch.active span,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .result-block pre.typing::after {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-resize-handle:hover span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-resize-handle:focus-visible span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-page.resizing-result .prompt-template-resize-handle span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-result-height-handle:hover span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-result-height-handle:focus-visible span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-template-page.resizing-result-height .prompt-template-result-height-handle span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .component-list-item.drop-before::before,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .component-list-item.drop-after::after,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-diff-switch.active span,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .result-block pre.typing::after {
   background: var(--button-primary-bg);
 }
 
@@ -1467,6 +1685,17 @@ html[data-appearance="maliang"] .prompt-diff-switch.active {
     0 0 0 3px rgba(201, 100, 66, 0.20);
 }
 
+html[data-appearance="chunyu"] .prompt-diff-switch.active {
+  border-color: #2f7d56;
+  background: #2f7d56;
+  color: #fbfff7;
+  font-weight: 800;
+  text-shadow: 0 1px 1px rgba(29, 44, 34, 0.22);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16),
+    0 0 0 3px rgba(47, 125, 86, 0.20);
+}
+
 html[data-appearance="dark"] .prompt-diff-switch.active:hover {
   border-color: rgba(30, 144, 255, 0.82);
   background: rgba(30, 144, 255, 0.22);
@@ -1479,11 +1708,17 @@ html[data-appearance="maliang"] .prompt-diff-switch.active:hover {
   color: #fff;
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-diff-switch.active span {
+html[data-appearance="chunyu"] .prompt-diff-switch.active:hover {
+  border-color: #286b49;
+  background: #286b49;
+  color: #fbfff7;
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-diff-switch.active span {
   background: rgba(255, 255, 255, 0.38);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .prompt-diff-switch.active span::after {
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .prompt-diff-switch.active span::after {
   background: #fff;
   box-shadow: 0 0 0 1px rgba(17, 24, 39, 0.12);
 }
@@ -1502,8 +1737,14 @@ html[data-appearance="maliang"] .result-block-diff-mark {
   box-shadow: inset 0 0 0 1px rgba(201, 100, 66, 0.22);
 }
 
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .result-block-negative,
-html:is([data-appearance="dark"], [data-appearance="maliang"]) .template-section-title {
+html[data-appearance="chunyu"] .result-block-diff-mark {
+  background: rgba(47, 125, 86, 0.16);
+  color: var(--app-text);
+  box-shadow: inset 0 0 0 1px rgba(47, 125, 86, 0.22);
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .result-block-negative,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .template-section-title {
   border-color: var(--app-border);
 }
 
@@ -1511,6 +1752,14 @@ html[data-appearance="maliang"] .prompt-template-skeleton,
 html[data-appearance="maliang"] .result-skeleton span {
   background:
     linear-gradient(90deg, transparent, rgba(201, 100, 66, 0.14), transparent),
+    var(--app-preview-bg);
+  background-size: 220% 100%;
+}
+
+html[data-appearance="chunyu"] .prompt-template-skeleton,
+html[data-appearance="chunyu"] .result-skeleton span {
+  background:
+    linear-gradient(90deg, transparent, rgba(47, 125, 86, 0.14), transparent),
     var(--app-preview-bg);
   background-size: 220% 100%;
 }

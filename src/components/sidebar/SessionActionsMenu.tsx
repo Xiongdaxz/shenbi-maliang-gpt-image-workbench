@@ -103,7 +103,7 @@ export function SessionActionsMenu({ open, title, pinned, disabled, onOpenChange
       const rect = rootRef.current?.getBoundingClientRect();
       if (!rect) return;
       const viewportPadding = 10;
-      const menuWidth = renaming ? 220 : 136;
+      const menuWidth = renaming ? 220 : 160;
       setMenuStyle({
         top: rect.bottom + 4,
         left: Math.min(rect.left, window.innerWidth - menuWidth - viewportPadding)
