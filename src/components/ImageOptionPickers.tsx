@@ -258,19 +258,19 @@ export function ImageCountStepper({
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const [menuStyle, setMenuStyle] = useState<CSSProperties>({ top: -10000, left: -10000, width: 112 });
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({ top: -10000, left: -10000 });
   const selectedValue = clamp(value || min);
   const options = Array.from({ length: Math.max(0, max - min + 1) }, (_, index) => min + index);
 
   function updateMenuPosition() {
     const rect = wrapRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const width = 112;
+    const width = Math.ceil(menuRef.current?.offsetWidth ?? rect.width);
     const menuHeight = menuRef.current?.offsetHeight ?? 272;
     const top = Math.max(12, rect.top - menuHeight - 8);
     const maxLeft = Math.max(12, window.innerWidth - width - 12);
     const left = Math.min(Math.max(12, rect.left), maxLeft);
-    setMenuStyle({ top, left, width });
+    setMenuStyle({ top, left });
   }
 
   useEffect(() => {

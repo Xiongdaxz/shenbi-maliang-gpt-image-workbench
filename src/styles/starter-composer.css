@@ -2174,7 +2174,9 @@
 }
 
 .quality-picker-menu {
-  width: 112px;
+  width: max-content;
+  min-width: 148px;
+  max-width: min(240px, calc(100vw - 24px));
 }
 
 .image-count-menu {
@@ -2182,7 +2184,9 @@
   right: auto;
   bottom: auto;
   z-index: 260;
-  width: 112px;
+  width: max-content;
+  min-width: 94px;
+  max-width: min(160px, calc(100vw - 24px));
   max-height: 272px;
   overflow-y: auto;
 }
@@ -2245,6 +2249,17 @@
   margin-top: 2px;
   color: #6b7280;
   font-size: 12px;
+}
+
+.quality-option-copy small {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.35;
+}
+
+.quality-picker-menu .quality-option-copy small {
+  max-width: calc(240px - 58px);
 }
 
 .size-picker-menu:not(.quality-picker-menu) .size-option-copy small {

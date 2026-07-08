@@ -945,7 +945,7 @@
 }
 
 .modal-backdrop-top {
-  z-index: 240;
+  z-index: 340;
 }
 
 @media (prefers-reduced-motion: reduce) {

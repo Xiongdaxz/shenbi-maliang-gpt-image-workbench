@@ -118,6 +118,24 @@ export function AppSettingsDialog({
     queryFn: () => api.promptColorSchemes(),
     enabled: open && (activeSection === "personalization" || promptColorSchemeSettingsOpen)
   });
+  const promptOptimizeStyleGroups = useMemo(
+    () => sanitizePromptOptimizeStyleGroups(user.preferences?.promptOptimizeStyleGroups),
+    [user.preferences?.promptOptimizeStyleGroups]
+  );
+  const preferences = useMemo(() => ({
+    editSuggestionsEnabled: user.preferences?.editSuggestionsEnabled ?? true,
+    editSuggestionTone: user.preferences?.editSuggestionTone ?? "default" as const,
+    autoUploadPastedAssets: user.preferences?.autoUploadPastedAssets ?? true,
+    language: normalizeLanguagePreference(user.preferences?.language ?? language),
+    promptOptimizeStyleGroups
+  }), [
+    language,
+    promptOptimizeStyleGroups,
+    user.preferences?.autoUploadPastedAssets,
+    user.preferences?.editSuggestionTone,
+    user.preferences?.editSuggestionsEnabled,
+    user.preferences?.language
+  ]);
 
   useEffect(() => {
     if (!open) setActiveSection("general");
@@ -129,13 +147,6 @@ export function AppSettingsDialog({
   const latestEntry = entries[0];
   const avatarSource = user.username?.trim() || user.account?.trim() || "U";
   const avatarText = avatarSource.slice(0, 1).toUpperCase();
-  const preferences = {
-    editSuggestionsEnabled: user.preferences?.editSuggestionsEnabled ?? true,
-    editSuggestionTone: user.preferences?.editSuggestionTone ?? "default" as const,
-    autoUploadPastedAssets: user.preferences?.autoUploadPastedAssets ?? true,
-    language: normalizeLanguagePreference(user.preferences?.language ?? language),
-    promptOptimizeStyleGroups: sanitizePromptOptimizeStyleGroups(user.preferences?.promptOptimizeStyleGroups)
-  };
   const toneDisabled = !preferences.editSuggestionsEnabled;
   const promptStyleGroupCount = preferences.promptOptimizeStyleGroups.length;
   const promptSubStyleCount = preferences.promptOptimizeStyleGroups.reduce((total, group) => total + (group.children?.length ?? 0), 0);

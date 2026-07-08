@@ -1109,6 +1109,7 @@ export const frontstageJaOverrides: Messages = {
   "promptColorSettings.toast.categoryRequired": "カテゴリ名は必須です",
   "promptColorSettings.toast.categoryDuplicate": "カテゴリ名はすでに存在します",
   "promptColorSettings.toast.savedChanges": "{count} 件の配色変更を保存しました",
+  "promptColorSettings.toast.restored": "標準配色を復元しました。保存すると反映されます。",
 
   "asset.uploadMode.shared.label": "共有を申請",
   "asset.uploadMode.shared.description": "管理者レビューに提出します。承認後、他のユーザーが表示・使用できます。",
@@ -1174,6 +1175,7 @@ export const frontstageJaOverrides: Messages = {
   "promptStyleSettings.closeDescription": "未保存のAI最適化スタイル変更があります。「保存して閉じる」で現在の設定を書き込み、「閉じるのみ」で破棄します。",
   "promptStyleSettings.saveAndClose": "保存して閉じる",
   "promptStyleSettings.closeOnly": "閉じるのみ",
+  "promptStyleSettings.toast.restored": "標準AI最適化スタイルを復元しました。保存すると反映されます。",
 
   "promptTemplateColorPicker.placeholder": "スウォッチまたはグラデーションを選択",
   "promptTemplateColorPicker.solid": "単色",

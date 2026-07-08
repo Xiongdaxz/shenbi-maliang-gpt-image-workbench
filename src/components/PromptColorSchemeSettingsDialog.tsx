@@ -716,6 +716,7 @@ export function PromptColorSchemeSettingsDialog({ open, onClose }: PromptColorSc
         onConfirm={() => {
           restoreDefaultsDraft();
           setRestoreConfirmOpen(false);
+          showToast(t("promptColorSettings.toast.restored"), "info");
         }}
       />
       <ConfirmDialog

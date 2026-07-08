@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, Eye, EyeOff, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
 import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
-import { ConfirmDialog } from "../ui";
+import { ConfirmDialog, useToast } from "../ui";
 import {
   cloneDefaultPromptOptimizeStyleGroups,
   createPromptOptimizeStyleValue,
@@ -32,6 +32,7 @@ export function PromptOptimizeStyleSettingsDialog({
   onSave
 }: PromptOptimizeStyleSettingsDialogProps) {
   const { t } = useI18n();
+  const { showToast } = useToast();
   const savedGroups = useMemo(() => sanitizePromptOptimizeStyleGroups(groups), [groups]);
   const [draft, setDraft] = useState<PromptOptimizeStyleGroup[]>(() => savedGroups);
   const [activeGroupValue, setActiveGroupValue] = useState(savedGroups[0]?.value ?? "");
@@ -413,6 +414,7 @@ export function PromptOptimizeStyleSettingsDialog({
         onConfirm={() => {
           restoreDefaults();
           setRestoreConfirmOpen(false);
+          showToast(t("promptStyleSettings.toast.restored"), "info");
         }}
       />
       <ConfirmDialog
