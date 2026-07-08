@@ -41,7 +41,7 @@ const messages: Messages = {
   "settings.nav.data": "数据管理",
   "settings.nav.about": "关于",
   "settings.general.appearance.title": "外观",
-  "settings.general.appearance.desc": "选择工作台界面的显示模式",
+  "settings.general.appearance.desc": "显示模式",
   "settings.general.appearance.toast": "外观已更新",
   "settings.language.title": "语言",
   "settings.language.desc": "选择工作台界面语言",

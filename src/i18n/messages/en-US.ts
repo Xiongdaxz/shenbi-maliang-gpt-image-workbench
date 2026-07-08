@@ -41,7 +41,7 @@ const messages: Messages = {
   "settings.nav.data": "Data",
   "settings.nav.about": "About",
   "settings.general.appearance.title": "Appearance",
-  "settings.general.appearance.desc": "Choose the display mode for the workbench",
+  "settings.general.appearance.desc": "Display mode",
   "settings.general.appearance.toast": "Appearance updated",
   "settings.language.title": "Language",
   "settings.language.desc": "Choose the workbench interface language",

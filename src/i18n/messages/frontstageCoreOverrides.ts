@@ -7,7 +7,7 @@ export const frontstageCoreOverrides: Record<CoreOverrideLocale, Messages> = {
   "ko-KR": {
     "settings.dialog.menu": "설정 메뉴",
     "settings.close": "설정 닫기",
-    "settings.general.appearance.desc": "워크벤치 표시 모드를 선택합니다",
+    "settings.general.appearance.desc": "표시 모드",
     "settings.general.appearance.toast": "화면 모드가 업데이트되었습니다",
     "settings.general.autoUpload.desc": "켜면 붙여넣은 이미지가 소재 라이브러리에 저장됩니다. 끄면 현재 입력에서만 사용됩니다.",
     "settings.personalization.editSuggestions.desc": "입력창 위의 후속 이미지 편집 제안 3개와 제안 성향을 설정합니다.",
@@ -151,7 +151,7 @@ export const frontstageCoreOverrides: Record<CoreOverrideLocale, Messages> = {
     "settings.dialog.menu": "Menú de ajustes",
     "settings.close": "Cerrar ajustes",
     "settings.nav.general": "Configuración general",
-    "settings.general.appearance.desc": "Elige el modo de visualización del espacio de trabajo",
+    "settings.general.appearance.desc": "Modo de visualización",
     "settings.general.appearance.toast": "Apariencia actualizada",
     "settings.general.autoUpload.desc": "Al activarlo, las imágenes pegadas se guardan en la biblioteca de recursos. Al desactivarlo, solo se usan en la entrada actual.",
     "settings.personalization.editSuggestions.desc": "Controla las 3 sugerencias de edición de imagen sobre el compositor y elige su tendencia.",
@@ -294,7 +294,7 @@ export const frontstageCoreOverrides: Record<CoreOverrideLocale, Messages> = {
   "fr-FR": {
     "settings.dialog.menu": "Menu des paramètres",
     "settings.close": "Fermer les paramètres",
-    "settings.general.appearance.desc": "Choisissez le mode d’affichage de l’espace de travail",
+    "settings.general.appearance.desc": "Mode d’affichage",
     "settings.general.appearance.toast": "Apparence mise à jour",
     "settings.general.autoUpload.desc": "Quand cette option est activée, les images collées sont enregistrées dans la bibliothèque de ressources. Sinon, elles ne servent qu’à la saisie actuelle.",
     "settings.personalization.editSuggestions.desc": "Contrôlez les 3 suggestions d’édition d’image au-dessus du composeur et choisissez leur tendance.",
@@ -438,7 +438,7 @@ export const frontstageCoreOverrides: Record<CoreOverrideLocale, Messages> = {
   "de-DE": {
     "settings.dialog.menu": "Einstellungsmenü",
     "settings.close": "Einstellungen schließen",
-    "settings.general.appearance.desc": "Anzeigemodus für den Arbeitsbereich auswählen",
+    "settings.general.appearance.desc": "Anzeigemodus",
     "settings.general.appearance.toast": "Darstellung aktualisiert",
     "settings.general.autoUpload.desc": "Wenn aktiviert, werden eingefügte Bilder in der Materialbibliothek gespeichert. Wenn deaktiviert, werden sie nur für die aktuelle Eingabe verwendet.",
     "settings.personalization.editSuggestions.desc": "Steuert die 3 Folge-Vorschläge zur Bildbearbeitung über dem Eingabefeld und deren Ausrichtung.",
@@ -585,7 +585,7 @@ export const frontstageCoreOverrides: Record<CoreOverrideLocale, Messages> = {
   "pt-BR": {
     "settings.dialog.menu": "Menu de configurações",
     "settings.close": "Fechar configurações",
-    "settings.general.appearance.desc": "Escolha o modo de exibição do espaço de trabalho",
+    "settings.general.appearance.desc": "Modo de exibição",
     "settings.general.appearance.toast": "Aparência atualizada",
     "settings.general.autoUpload.desc": "Quando ativado, imagens coladas são salvas na biblioteca de materiais. Quando desativado, são usadas apenas na entrada atual.",
     "settings.personalization.editSuggestions.desc": "Controla as 3 sugestões de edição de imagem acima do compositor e escolhe a tendência delas.",
@@ -728,7 +728,7 @@ export const frontstageCoreOverrides: Record<CoreOverrideLocale, Messages> = {
   "ru-RU": {
     "settings.dialog.menu": "Меню настроек",
     "settings.close": "Закрыть настройки",
-    "settings.general.appearance.desc": "Выберите режим отображения рабочей области",
+    "settings.general.appearance.desc": "Режим отображения",
     "settings.general.appearance.toast": "Оформление обновлено",
     "settings.general.autoUpload.desc": "Если включено, вставленные изображения сохраняются в библиотеку материалов. Если выключено, они используются только в текущем вводе.",
     "settings.personalization.editSuggestions.desc": "Управляйте 3 подсказками для дальнейшего редактирования изображения над полем ввода и выбирайте их направленность.",

@@ -146,7 +146,7 @@
 }
 
 .settings-appearance-row {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(150px, 1fr) minmax(390px, 500px);
 }
 
 .settings-language-row {
@@ -155,6 +155,7 @@
 
 .appearance-mode-control {
   position: relative;
+  width: 100%;
   min-width: 390px;
   height: 38px;
   display: inline-grid;
@@ -235,9 +236,13 @@
 }
 
 .appearance-mode-button span {
+  min-width: 0;
+  overflow: hidden;
   color: inherit;
   font-size: inherit;
   line-height: inherit;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .appearance-mode-button:hover {

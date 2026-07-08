@@ -3,7 +3,7 @@ import type { Messages } from "./types";
 export const frontstageJaOverrides: Messages = {
   "settings.dialog.menu": "設定メニュー",
   "settings.close": "設定を閉じる",
-  "settings.general.appearance.desc": "ワークベンチの表示モードを選択します",
+  "settings.general.appearance.desc": "表示モード",
   "settings.general.appearance.toast": "外観を更新しました",
   "settings.general.autoUpload.desc": "有効にすると、貼り付けた画像は素材ライブラリに保存されます。無効にすると、現在の入力だけで使用されます。",
   "settings.personalization.editSuggestions.desc": "入力欄上部に表示される3つの画像編集候補と、その傾向を設定します。",

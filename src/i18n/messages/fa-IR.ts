@@ -56,7 +56,7 @@ const messages: Messages = {
   "settings.nav.data": "داده ها",
   "settings.nav.about": "درباره",
   "settings.general.appearance.title": "ظاهر",
-  "settings.general.appearance.desc": "حالت نمایش میز کار را انتخاب کنید",
+  "settings.general.appearance.desc": "حالت نمایش",
   "settings.general.appearance.toast": "ظاهر به روز شد",
   "settings.language.title": "زبان",
   "settings.language.desc": "زبان رابط کاربری میز کار را انتخاب کنید",

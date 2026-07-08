@@ -40,7 +40,7 @@ const messages: Messages = {
   "settings.nav.data": "Данные",
   "settings.nav.about": "О программе",
   "settings.general.appearance.title": "Внешний вид",
-  "settings.general.appearance.desc": "Выберите режим отображения рабочей области",
+  "settings.general.appearance.desc": "Режим отображения",
   "settings.general.appearance.toast": "Внешний вид обновлен",
   "settings.language.title": "Язык",
   "settings.language.desc": "Выберите язык интерфейса рабочей области",
