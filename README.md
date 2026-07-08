@@ -1,6 +1,21 @@
-# 神笔马良 GPT Image Workbench
+<div align="center">
 
-简体中文 | [English](README.en.md)
+# 🪄 神笔马良 GPT Image Workbench
+
+**面向团队私有部署的 AI 图片生成与图片编辑工作台**
+
+🖼️ AI 生图与改图 · 💬 ChatGPT 风格工作台 · 🧭 前后台分离 · 🔌 多渠道接入 · 🔐 本地优先
+
+<p>
+  <a href="README.md"><kbd>🇨🇳 简体中文</kbd></a>
+  <a href="README.en.md"><kbd>🇺🇸 English</kbd></a>
+  <a href="docs/readme/README.ja.md"><kbd>🇯🇵 日本語</kbd></a>
+  <a href="docs/readme/README.ko.md"><kbd>🇰🇷 한국어</kbd></a>
+  <a href="docs/readme/README.ru.md"><kbd>🇷🇺 Русский</kbd></a>
+  <a href="docs/readme/README.fa-IR.md"><kbd>🇮🇷 فارسی</kbd></a>
+</p>
+
+</div>
 
 神笔马良 GPT Image Workbench 是一个面向团队内部私有部署的 AI 图片生成与图片编辑工作台，支持 ChatGPT 订阅账号、OpenAI 兼容接口和 CPA 代理等渠道，并可在官网额度、Codex 额度等多链路间调度。
 

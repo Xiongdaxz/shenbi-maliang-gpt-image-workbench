@@ -1,6 +1,21 @@
-# Shenbi Maliang GPT Image Workbench
+<div align="center">
 
-[简体中文](README.md) | English
+# 🪄 Shenbi Maliang GPT Image Workbench
+
+**An AI image generation and editing workbench for private team deployments**
+
+🖼️ Generate and edit images · 💬 ChatGPT-style workspace · 🧭 Admin console · 🔌 Multi-channel routing · 🔐 Local-first data
+
+<p>
+  <a href="README.md"><kbd>🇨🇳 简体中文</kbd></a>
+  <a href="README.en.md"><kbd>🇺🇸 English</kbd></a>
+  <a href="docs/readme/README.ja.md"><kbd>🇯🇵 日本語</kbd></a>
+  <a href="docs/readme/README.ko.md"><kbd>🇰🇷 한국어</kbd></a>
+  <a href="docs/readme/README.ru.md"><kbd>🇷🇺 Русский</kbd></a>
+  <a href="docs/readme/README.fa-IR.md"><kbd>🇮🇷 فارسی</kbd></a>
+</p>
+
+</div>
 
 Shenbi Maliang GPT Image Workbench is an AI image generation and image editing workbench designed for private team deployments. It supports ChatGPT subscription accounts, OpenAI-compatible APIs, CPA proxies, and other channels, and can route work across ChatGPT Web quota, Codex quota, and other image-generation paths.
 
