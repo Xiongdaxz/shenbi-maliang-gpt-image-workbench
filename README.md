@@ -1,7 +1,7 @@
 <div align="center">
 
 <h1>
-  <img src="public/image/logo-small.webp" alt="神笔马良 Logo" width="48" align="absmiddle" style="vertical-align: middle; margin-right: 10px;" />
+  <img src="public/image/logo-small.webp" alt="神笔马良 Logo" width="48" align="texttop" />
   神笔马良 GPT Image Workbench
 </h1>
 
