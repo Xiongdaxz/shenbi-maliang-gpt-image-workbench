@@ -1,12 +1,13 @@
 <div align="center">
 
-<img src="../../public/image/logo-small.webp" alt="Shenbi Maliang Logo" width="92" />
-
-# Shenbi Maliang GPT Image Workbench
-
-🖼️ 이미지 생성과 편집 · 💬 ChatGPT 스타일 작업 공간 · 🧭 관리자 콘솔 · 🔌 다중 채널 라우팅 · 🔐 로컬 우선 데이터
+<h1>
+  <img src="../../public/image/logo-small.webp" alt="Shenbi Maliang Logo" width="48" />
+  Shenbi Maliang GPT Image Workbench
+</h1>
 
 [简体中文](../../README.md) | [English](../../README.en.md) | [日本語](README.ja.md) | 한국어 | [Русский](README.ru.md) | [فارسی](README.fa-IR.md)
+
+🖼️ 이미지 생성과 편집 · 💬 ChatGPT 스타일 작업 공간 · 🧭 관리자 콘솔 · 🔌 다중 채널 라우팅 · 🔐 로컬 우선 데이터
 
 </div>
 

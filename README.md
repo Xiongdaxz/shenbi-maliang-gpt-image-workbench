@@ -1,12 +1,13 @@
 <div align="center">
 
-<img src="public/image/logo-small.webp" alt="神笔马良 Logo" width="92" />
-
-# 神笔马良 GPT Image Workbench
-
-🖼️ AI 生图与改图 · 💬 ChatGPT 风格工作台 · 🧭 前后台分离 · 🔌 多渠道接入 · 🔐 本地优先
+<h1>
+  <img src="public/image/logo-small.webp" alt="神笔马良 Logo" width="48" />
+  神笔马良 GPT Image Workbench
+</h1>
 
 简体中文 | [English](README.en.md) | [日本語](docs/readme/README.ja.md) | [한국어](docs/readme/README.ko.md) | [Русский](docs/readme/README.ru.md) | [فارسی](docs/readme/README.fa-IR.md)
+
+🖼️ AI 生图与改图 · 💬 ChatGPT 风格工作台 · 🧭 前后台分离 · 🔌 多渠道接入 · 🔐 本地优先
 
 </div>
 
