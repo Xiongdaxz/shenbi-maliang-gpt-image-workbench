@@ -1,19 +1,12 @@
 <div align="center">
 
-# 🪄 Shenbi Maliang GPT Image Workbench
+<img src="public/image/logo-small.webp" alt="Shenbi Maliang Logo" width="92" />
 
-**An AI image generation and editing workbench for private team deployments**
+# Shenbi Maliang GPT Image Workbench
 
 🖼️ Generate and edit images · 💬 ChatGPT-style workspace · 🧭 Admin console · 🔌 Multi-channel routing · 🔐 Local-first data
 
-<p>
-  <a href="README.md"><kbd>🇨🇳 简体中文</kbd></a>
-  <a href="README.en.md"><kbd>🇺🇸 English</kbd></a>
-  <a href="docs/readme/README.ja.md"><kbd>🇯🇵 日本語</kbd></a>
-  <a href="docs/readme/README.ko.md"><kbd>🇰🇷 한국어</kbd></a>
-  <a href="docs/readme/README.ru.md"><kbd>🇷🇺 Русский</kbd></a>
-  <a href="docs/readme/README.fa-IR.md"><kbd>🇮🇷 فارسی</kbd></a>
-</p>
+[简体中文](README.md) | English | [日本語](docs/readme/README.ja.md) | [한국어](docs/readme/README.ko.md) | [Русский](docs/readme/README.ru.md) | [فارسی](docs/readme/README.fa-IR.md)
 
 </div>
 

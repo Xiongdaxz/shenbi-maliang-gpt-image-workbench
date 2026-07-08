@@ -1,19 +1,12 @@
 <div align="center">
 
-# 🪄 神笔马良 GPT Image Workbench
+<img src="public/image/logo-small.webp" alt="神笔马良 Logo" width="92" />
 
-**面向团队私有部署的 AI 图片生成与图片编辑工作台**
+# 神笔马良 GPT Image Workbench
 
 🖼️ AI 生图与改图 · 💬 ChatGPT 风格工作台 · 🧭 前后台分离 · 🔌 多渠道接入 · 🔐 本地优先
 
-<p>
-  <a href="README.md"><kbd>🇨🇳 简体中文</kbd></a>
-  <a href="README.en.md"><kbd>🇺🇸 English</kbd></a>
-  <a href="docs/readme/README.ja.md"><kbd>🇯🇵 日本語</kbd></a>
-  <a href="docs/readme/README.ko.md"><kbd>🇰🇷 한국어</kbd></a>
-  <a href="docs/readme/README.ru.md"><kbd>🇷🇺 Русский</kbd></a>
-  <a href="docs/readme/README.fa-IR.md"><kbd>🇮🇷 فارسی</kbd></a>
-</p>
+简体中文 | [English](README.en.md) | [日本語](docs/readme/README.ja.md) | [한국어](docs/readme/README.ko.md) | [Русский](docs/readme/README.ru.md) | [فارسی](docs/readme/README.fa-IR.md)
 
 </div>
 

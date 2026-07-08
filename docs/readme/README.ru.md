@@ -1,19 +1,12 @@
 <div align="center">
 
-# 🪄 Shenbi Maliang GPT Image Workbench
+<img src="../../public/image/logo-small.webp" alt="Shenbi Maliang Logo" width="92" />
 
-**Рабочая среда для генерации и редактирования изображений ИИ в частных командных развертываниях**
+# Shenbi Maliang GPT Image Workbench
 
 🖼️ Генерация и редактирование · 💬 Интерфейс в стиле ChatGPT · 🧭 Админ-консоль · 🔌 Несколько каналов · 🔐 Локальные данные
 
-<p>
-  <a href="../../README.md"><kbd>🇨🇳 简体中文</kbd></a>
-  <a href="../../README.en.md"><kbd>🇺🇸 English</kbd></a>
-  <a href="README.ja.md"><kbd>🇯🇵 日本語</kbd></a>
-  <a href="README.ko.md"><kbd>🇰🇷 한국어</kbd></a>
-  <a href="README.ru.md"><kbd>🇷🇺 Русский</kbd></a>
-  <a href="README.fa-IR.md"><kbd>🇮🇷 فارسی</kbd></a>
-</p>
+[简体中文](../../README.md) | [English](../../README.en.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | Русский | [فارسی](README.fa-IR.md)
 
 </div>
 
