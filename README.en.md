@@ -1,7 +1,7 @@
 <div align="center">
 
 <h1>
-  <img src="public/image/logo-small.webp" alt="Shenbi Maliang Logo" width="44" align="absmiddle" style="vertical-align: middle; margin-right: 10px;" />
+  <img src="public/image/logo-small.webp" alt="Shenbi Maliang Logo" width="48" align="absmiddle" style="vertical-align: middle; margin-right: 10px;" />
   Shenbi Maliang GPT Image Workbench
 </h1>
 
