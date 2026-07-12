@@ -172,6 +172,43 @@
   position: relative;
 }
 
+.image-card.selection-mode {
+  cursor: pointer;
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.image-card.selection-mode.selected {
+  border-color: var(--control-selected-border);
+  box-shadow: 0 0 0 2px var(--app-selected-bg), var(--app-shadow);
+}
+
+.image-card-select {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 5;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 2px solid rgba(255, 255, 255, 0.94);
+  border-radius: 999px;
+  color: var(--button-primary-text);
+  background: rgba(17, 24, 39, 0.5);
+  box-shadow: 0 5px 16px rgba(15, 23, 42, 0.22);
+}
+
+.image-card-select.selected {
+  border-color: var(--button-primary-bg);
+  background: var(--button-primary-bg);
+}
+
+.image-card-select:disabled,
+.image-card.selection-mode .image-card-image-btn:disabled {
+  cursor: wait;
+}
+
 .image-card.compact .case-action-icon {
   width: 30px;
   height: 30px;

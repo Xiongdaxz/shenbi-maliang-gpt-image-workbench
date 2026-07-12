@@ -41,11 +41,15 @@ function initialCategoryIds(source: AddCaseSource) {
 export function AddCaseModal({
   source,
   onClose,
-  autoGenerateFields = false
+  autoGenerateFields = false,
+  forceAllImages = false,
+  onSaved
 }: {
   source: AddCaseSource;
   onClose: () => void;
   autoGenerateFields?: boolean;
+  forceAllImages?: boolean;
+  onSaved?: (result: { caseItems: Array<Record<string, string | number | boolean | string[]>>; skipped: number; createdImageIds?: string[]; skippedImageIds?: string[] }) => void;
 }) {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
@@ -72,7 +76,8 @@ export function AddCaseModal({
     [source.id, source.images, source.promptSeed, source.type, source.url]
   );
   const canAddAll = source.type === "image" && sourceImages.length > 1;
-  const [includeAllImages, setIncludeAllImages] = useState(canAddAll);
+  const [includeAllImagesState, setIncludeAllImages] = useState(canAddAll);
+  const includeAllImages = forceAllImages ? canAddAll : includeAllImagesState;
   const [selectedImageId, setSelectedImageId] = useState(source.id);
   const [coverImageId, setCoverImageId] = useState(source.id);
   const canSave = Boolean(prompt.trim()) && Boolean(title.trim()) && !caseSuggestionPending;
@@ -81,8 +86,8 @@ export function AddCaseModal({
     mutationFn: () =>
       api.addCase({
         ...(source.type === "image"
-          ? includeAllImages && sourceImages.length > 1
-            ? { imageIds: sourceImages.map((image) => image.id), coverImageId }
+          ? forceAllImages || (includeAllImages && sourceImages.length > 1)
+            ? { imageIds: sourceImages.map((image) => image.id), coverImageId, duplicateMode: "skip" as const }
             : { imageId: selectedImageId, coverImageId: selectedImageId }
           : { assetId: source.id }),
         categoryIds,
@@ -91,7 +96,8 @@ export function AddCaseModal({
         autoCategory: false,
         includeReferences
       }),
-    onSuccess: ({ caseItems, skipped }) => {
+    onSuccess: (result) => {
+      const { caseItems, skipped } = result;
       queryClient.invalidateQueries({ queryKey: ["cases"] });
       if (skipped > 0) {
         showToast(caseItems.length === 0 ? t("toast.caseDuplicate") : t("toast.casePartialAdded"), "error");
@@ -99,6 +105,7 @@ export function AddCaseModal({
         const reviewStatus = String(caseItems[0]?.reviewStatus ?? "");
         showToast(reviewStatus === "pending" ? t("toast.caseReviewSubmitted") : t("toast.caseAdded"));
       }
+      onSaved?.(result);
       onClose();
     },
     onError: (error) => {
@@ -113,7 +120,10 @@ export function AddCaseModal({
     setTitle(initialCaseTitle(source));
     setCategoryIds(initialCategoryIds(source));
     setPrompt(source.promptSeed);
-  }, [source.id, source.promptSeed]);
+    setIncludeAllImages(canAddAll);
+    setSelectedImageId(source.id);
+    setCoverImageId(source.id);
+  }, [canAddAll, source.id, source.promptSeed]);
 
   useEffect(() => {
     if (source.type !== "image") return;
@@ -189,7 +199,7 @@ export function AddCaseModal({
             }
           />
           <div className="case-modal-form-pane">
-            {canAddAll ? (
+            {canAddAll && !forceAllImages ? (
               <label className={cx("case-reference-toggle", includeAllImages && "active")}>
                 <input
                   type="checkbox"

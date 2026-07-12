@@ -266,7 +266,67 @@ function uniquePaths(rows: Array<{ path: string | null }>) {
   return Array.from(new Set(rows.map((row) => String(row.path ?? "").trim()).filter(Boolean)));
 }
 
-async function deleteImagesMatching(userId: string, imageFilterSql: string, params: string[]) {
+export type ImageDeleteImpact = {
+  images: number;
+  assets: number;
+  caseGroups: number;
+  caseItems: number;
+  hasAssociated: boolean;
+};
+
+type DeleteImagesResult = {
+  deleted: number;
+  cleanupWarnings: number;
+};
+
+function imageDeleteScope(userId: string, imageIds: string[]) {
+  const normalizedIds = normalizeIdList(imageIds);
+  const placeholders = normalizedIds.map(() => "?").join(", ");
+  return {
+    imageIds: normalizedIds,
+    imageFilterSql: `select id from images where user_id = ? and id in (${placeholders})`,
+    params: [userId, ...normalizedIds]
+  };
+}
+
+export function imageDeleteImpact(userId: string, imageIds: string[]): ImageDeleteImpact {
+  const scope = imageDeleteScope(userId, imageIds);
+  if (scope.imageIds.length === 0) {
+    return { images: 0, assets: 0, caseGroups: 0, caseItems: 0, hasAssociated: false };
+  }
+  const assetFilterSql = `select id from assets where user_id = ? and path in (select path from images where id in (${scope.imageFilterSql}))`;
+  const assetParams = [userId, ...scope.params];
+  const groupFilterSql = `
+    select distinct group_id
+    from case_group_images
+    where image_id in (${scope.imageFilterSql})
+       or asset_id in (${assetFilterSql})
+  `;
+  const groupParams = [...scope.params, ...assetParams];
+  const images = getOne<{ total: number }>(appDb, `select count(*) as total from images where id in (${scope.imageFilterSql})`, ...scope.params)?.total ?? 0;
+  const assets = getOne<{ total: number }>(appDb, `select count(*) as total from assets where id in (${assetFilterSql})`, ...assetParams)?.total ?? 0;
+  const caseGroups = getOne<{ total: number }>(appDb, `select count(*) as total from (${groupFilterSql})`, ...groupParams)?.total ?? 0;
+  const caseItems = getOne<{ total: number }>(
+    appDb,
+    `select count(distinct id) as total
+     from case_items
+     where group_id in (${groupFilterSql})
+        or image_id in (${scope.imageFilterSql})
+        or asset_id in (${assetFilterSql})`,
+    ...groupParams,
+    ...scope.params,
+    ...assetParams
+  )?.total ?? 0;
+  return {
+    images,
+    assets,
+    caseGroups,
+    caseItems,
+    hasAssociated: assets > 0 || caseGroups > 0 || caseItems > 0
+  };
+}
+
+async function deleteImagesMatching(userId: string, imageFilterSql: string, params: string[]): Promise<DeleteImagesResult> {
   const assetFilterSql = `select id from assets where user_id = ? and path in (select path from images where id in (${imageFilterSql}))`;
   const assetParams = [userId, ...params];
   const imageIds = getAll<{ id: string }>(appDb, `select id from images where id in (${imageFilterSql})`, ...params).map((row) => row.id);
@@ -283,35 +343,51 @@ async function deleteImagesMatching(userId: string, imageFilterSql: string, para
     ...getAll<{ path: string }>(appDb, `select path from image_asset_references where image_id in (${imageFilterSql})`, ...params),
     ...imageDerivativePathsForSources(derivativeSources)
   ]);
-  run(appDb, `delete from case_prompt_usage_events where case_item_id in (select id from case_items where image_id in (${imageFilterSql}))`, ...params);
-  run(appDb, `delete from case_prompt_usage_events where source_type = 'image' and source_id in (${imageFilterSql})`, ...params);
-  run(appDb, `delete from case_prompt_usage_events where source_type = 'case_group' and source_id in (select group_id from case_group_images where image_id in (${imageFilterSql}))`, ...params);
-  run(appDb, `delete from case_prompt_usage_events where case_item_id in (select id from case_items where asset_id in (${assetFilterSql}))`, ...assetParams);
-  run(appDb, `delete from case_prompt_usage_events where source_type = 'asset' and source_id in (${assetFilterSql})`, ...assetParams);
-  run(appDb, `delete from case_prompt_usage_events where source_type = 'case_group' and source_id in (select group_id from case_group_images where asset_id in (${assetFilterSql}))`, ...assetParams);
-  run(appDb, `delete from case_favorites where source_type = 'image' and source_id in (${imageFilterSql})`, ...params);
-  run(appDb, `delete from case_favorites where source_type = 'case_group' and source_id in (select group_id from case_group_images where image_id in (${imageFilterSql}))`, ...params);
-  run(appDb, `delete from case_favorites where source_type = 'asset' and source_id in (${assetFilterSql})`, ...assetParams);
-  run(appDb, `delete from case_favorites where source_type = 'case_group' and source_id in (select group_id from case_group_images where asset_id in (${assetFilterSql}))`, ...assetParams);
-  run(appDb, `delete from case_items where group_id in (select group_id from case_group_images where image_id in (${imageFilterSql}))`, ...params);
-  run(appDb, `delete from case_items where group_id in (select group_id from case_group_images where asset_id in (${assetFilterSql}))`, ...assetParams);
-  run(appDb, `delete from case_group_images where group_id in (select group_id from case_group_images where image_id in (${imageFilterSql}))`, ...params);
-  run(appDb, `delete from case_group_images where group_id in (select group_id from case_group_images where asset_id in (${assetFilterSql}))`, ...assetParams);
-  run(appDb, `delete from case_items where image_id in (${imageFilterSql})`, ...params);
-  run(appDb, `delete from case_items where asset_id in (${assetFilterSql})`, ...assetParams);
-  run(appDb, `update image_asset_references set source_asset_id = null where source_asset_id in (${assetFilterSql})`, ...assetParams);
-  run(appDb, `delete from asset_categories where asset_id in (${assetFilterSql})`, ...assetParams);
-  run(appDb, `delete from assets where id in (${assetFilterSql})`, ...assetParams);
-  run(appDb, `delete from messages where image_id in (${imageFilterSql})`, ...params);
-  run(appDb, `update images set parent_image_id = null where parent_image_id in (${imageFilterSql})`, ...params);
-  run(appDb, `update image_jobs set result_image_id = null where result_image_id in (${imageFilterSql})`, ...params);
-  run(appDb, `delete from image_edit_suggestions where image_id in (${imageFilterSql})`, ...params);
-  run(appDb, `delete from image_favorites where image_id in (${imageFilterSql})`, ...params);
-  run(appDb, `delete from image_asset_references where image_id in (${imageFilterSql})`, ...params);
-  deleteImageDerivativesForSources(derivativeSources);
-  const result = run(appDb, `delete from images where id in (${imageFilterSql})`, ...params);
-  await deleteStoredFilesIfUnreferenced(pathsToDelete);
-  return Number(result.changes ?? 0);
+  const deleteRecords = appDb.transaction(() => {
+    run(appDb, `delete from case_prompt_usage_events where case_item_id in (select id from case_items where image_id in (${imageFilterSql}))`, ...params);
+    run(appDb, `delete from case_prompt_usage_events where source_type = 'image' and source_id in (${imageFilterSql})`, ...params);
+    run(appDb, `delete from case_prompt_usage_events where source_type = 'case_group' and source_id in (select group_id from case_group_images where image_id in (${imageFilterSql}))`, ...params);
+    run(appDb, `delete from case_prompt_usage_events where case_item_id in (select id from case_items where asset_id in (${assetFilterSql}))`, ...assetParams);
+    run(appDb, `delete from case_prompt_usage_events where source_type = 'asset' and source_id in (${assetFilterSql})`, ...assetParams);
+    run(appDb, `delete from case_prompt_usage_events where source_type = 'case_group' and source_id in (select group_id from case_group_images where asset_id in (${assetFilterSql}))`, ...assetParams);
+    run(appDb, `delete from case_favorites where source_type = 'image' and source_id in (${imageFilterSql})`, ...params);
+    run(appDb, `delete from case_favorites where source_type = 'case_group' and source_id in (select group_id from case_group_images where image_id in (${imageFilterSql}))`, ...params);
+    run(appDb, `delete from case_favorites where source_type = 'asset' and source_id in (${assetFilterSql})`, ...assetParams);
+    run(appDb, `delete from case_favorites where source_type = 'case_group' and source_id in (select group_id from case_group_images where asset_id in (${assetFilterSql}))`, ...assetParams);
+    run(appDb, `delete from case_items where group_id in (select group_id from case_group_images where image_id in (${imageFilterSql}))`, ...params);
+    run(appDb, `delete from case_items where group_id in (select group_id from case_group_images where asset_id in (${assetFilterSql}))`, ...assetParams);
+    run(appDb, `delete from case_group_images where group_id in (select group_id from case_group_images where image_id in (${imageFilterSql}))`, ...params);
+    run(appDb, `delete from case_group_images where group_id in (select group_id from case_group_images where asset_id in (${assetFilterSql}))`, ...assetParams);
+    run(appDb, `delete from case_items where image_id in (${imageFilterSql})`, ...params);
+    run(appDb, `delete from case_items where asset_id in (${assetFilterSql})`, ...assetParams);
+    run(appDb, `update image_asset_references set source_asset_id = null where source_asset_id in (${assetFilterSql})`, ...assetParams);
+    run(appDb, `delete from asset_categories where asset_id in (${assetFilterSql})`, ...assetParams);
+    run(appDb, `delete from assets where id in (${assetFilterSql})`, ...assetParams);
+    run(
+      appDb,
+      `update messages
+       set image_id = null,
+           content = case when role = 'assistant' then '图片已删除' else content end
+       where image_id in (${imageFilterSql})`,
+      ...params
+    );
+    run(appDb, `update images set parent_image_id = null where parent_image_id in (${imageFilterSql})`, ...params);
+    run(appDb, `update image_jobs set result_image_id = null where result_image_id in (${imageFilterSql})`, ...params);
+    run(appDb, `delete from image_edit_suggestions where image_id in (${imageFilterSql})`, ...params);
+    run(appDb, `delete from image_favorites where image_id in (${imageFilterSql})`, ...params);
+    run(appDb, `delete from image_asset_references where image_id in (${imageFilterSql})`, ...params);
+    deleteImageDerivativesForSources(derivativeSources);
+    return run(appDb, `delete from images where id in (${imageFilterSql})`, ...params);
+  });
+  const result = deleteRecords();
+  let cleanupWarnings = 0;
+  try {
+    await deleteStoredFilesIfUnreferenced(pathsToDelete);
+  } catch (error) {
+    cleanupWarnings = pathsToDelete.length;
+    console.warn("批量图片文件清理失败", error);
+  }
+  return { deleted: Number(result.changes ?? 0), cleanupWarnings };
 }
 
 function deleteSessionImages(userId: string, sessionId: string) {
@@ -330,7 +406,21 @@ export async function deleteImageRecords(userId: string, imageId: string) {
   const image = getOne<{ id: string }>(appDb, "select id from images where id = ? and user_id = ?", imageId, userId);
   if (!image) return false;
   const deleted = await deleteImagesMatching(userId, "select id from images where user_id = ? and id = ?", [userId, imageId]);
-  return deleted > 0;
+  return deleted.deleted > 0;
+}
+
+export async function deleteImageRecordsBatch(userId: string, imageIds: string[]) {
+  const scope = imageDeleteScope(userId, imageIds);
+  if (scope.imageIds.length === 0) {
+    return { deleted: 0, cleanupWarnings: 0, deletedImageIds: [], notFoundIds: [], impact: imageDeleteImpact(userId, []) };
+  }
+  const existingRows = getAll<{ id: string }>(appDb, `select id from images where id in (${scope.imageFilterSql})`, ...scope.params);
+  const existingIds = new Set(existingRows.map((row) => row.id));
+  const deletedImageIds = scope.imageIds.filter((id) => existingIds.has(id));
+  const notFoundIds = scope.imageIds.filter((id) => !existingIds.has(id));
+  const impact = imageDeleteImpact(userId, deletedImageIds);
+  const result = await deleteImagesMatching(userId, scope.imageFilterSql, scope.params);
+  return { ...result, deletedImageIds, notFoundIds, impact };
 }
 
 export async function deleteSessionRecords(userId: string, sessionId: string) {

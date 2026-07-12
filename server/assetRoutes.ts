@@ -24,6 +24,8 @@ import {
   visibleAssetSql
 } from "./utils";
 import { requireUser } from "./auth";
+import { imageBatchResult, parseImageBatchIds } from "./imageBatch";
+import { suggestAssetCategoryIds } from "./assetSuggestions";
 
 const DEFAULT_ASSET_NAME_MAX_LENGTH = 18;
 
@@ -191,6 +193,130 @@ function applyDuplicateUploadOptions({
     );
   }
   if (asset.user_id === userId && hasCategoryIds) replaceAssetCategories(asset.id, categoryIds);
+}
+
+type AssetCreationSource = {
+  path: string;
+  mimeType: string;
+  fileSize: number;
+  imageWidth: number;
+  imageHeight: number;
+  prompt: string;
+  suggestedName: string;
+};
+
+async function createAssetFromSource({
+  source,
+  userId,
+  body,
+  uploadMode,
+  hasSpaceMode,
+  hasCategoryIds,
+  categoryIds,
+  skipDuplicates,
+  allowAiName
+}: {
+  source: AssetCreationSource;
+  userId: string;
+  body: Record<string, unknown>;
+  uploadMode: ReturnType<typeof normalizeAssetUploadMode>;
+  hasSpaceMode: boolean;
+  hasCategoryIds: boolean;
+  categoryIds: string[];
+  skipDuplicates: boolean;
+  allowAiName: boolean;
+}) {
+  const sharedExisting =
+    uploadMode !== "private"
+      ? getOne<AssetRow>(
+          appDb,
+          `select assets.*, users.username as source_username
+           from assets
+           left join users on users.id = assets.user_id
+           where assets.path = ?
+             and ${approvedSharedAssetSql("assets")}`,
+          source.path
+        )
+      : null;
+  if (sharedExisting) {
+    const categories = assetCategoryMap([sharedExisting.id]);
+    return { asset: publicAsset(sharedExisting, categories, userId), created: false, duplicateScope: "shared" as const };
+  }
+
+  const existing = getOne<AssetRow>(
+    appDb,
+    `select assets.*, users.username as source_username
+     from assets
+     left join users on users.id = assets.user_id
+     where assets.user_id = ? and assets.path = ?`,
+    userId,
+    source.path
+  );
+  if (existing) {
+    if (!skipDuplicates) {
+      if (!existing.content_hash) {
+        const contentHash = await assetContentHashFromPath(existing.path);
+        if (contentHash) run(appDb, "update assets set content_hash = ? where id = ? and user_id = ?", contentHash, existing.id, userId);
+      }
+      const nextName = Object.prototype.hasOwnProperty.call(body, "name") ? normalizeAssetNameInput(body.name, existing) : "";
+      if (hasSpaceMode) {
+        const timestamp = now();
+        const shareState = assetShareStateFromUploadMode(uploadMode, timestamp);
+        run(
+          appDb,
+          `update assets
+           set space = 'private', shared = ?, share_status = ?, share_requested_at = ?,
+               share_reviewed_at = ?, share_reviewed_by = ?, share_reject_reason = ''
+           where id = ? and user_id = ?`,
+          shareState.shared,
+          shareState.shareStatus,
+          shareState.shareRequestedAt,
+          shareState.shareReviewedAt,
+          shareState.shareReviewedBy,
+          existing.id,
+          userId
+        );
+      }
+      if (nextName) run(appDb, "update assets set name = ? where id = ? and user_id = ?", nextName, existing.id, userId);
+      if (hasCategoryIds) replaceAssetCategories(existing.id, categoryIds);
+    }
+    return { asset: publicAssetById(existing.id, userId), created: false, duplicateScope: "own" as const };
+  }
+
+  const id = makeId("asset");
+  const extension = `.${imageExtensionFromMime(source.mimeType)}`;
+  const generatedName = allowAiName ? await generateAssetNameFromPrompt(source.prompt) : defaultAssetNameFromPrompt(source.prompt);
+  const nameSeed = String(body.name ?? "").trim() || source.suggestedName.trim() || generatedName;
+  const name = `${nameSeed.replace(/[\\/]/g, " ").replace(/\s+/g, " ").trim() || "素材图片"}${extension}`;
+  const contentHash = await assetContentHashFromPath(source.path);
+  const createdAt = now();
+  const shareState = assetShareStateFromUploadMode(uploadMode, createdAt);
+  run(
+    appDb,
+    `insert into assets (
+      id, user_id, space, shared, share_status, share_requested_at, share_reviewed_at, share_reviewed_by, name, path, mime_type,
+      size, content_hash, image_width, image_height, created_at
+    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    id,
+    userId,
+    "private",
+    shareState.shared,
+    shareState.shareStatus,
+    shareState.shareRequestedAt,
+    shareState.shareReviewedAt,
+    shareState.shareReviewedBy,
+    name,
+    source.path,
+    source.mimeType,
+    source.fileSize,
+    contentHash,
+    source.imageWidth,
+    source.imageHeight,
+    createdAt
+  );
+  void warmImageDerivatives("asset", id, source.path);
+  replaceAssetCategories(id, categoryIds);
+  return { asset: publicAssetById(id, userId), created: true };
 }
 
 type AssetListFilters = {
@@ -472,7 +598,6 @@ api.post("/assets/from-image", async (c) => {
   const caseItemId = String(body.caseItemId ?? "").trim();
   const hasSpaceMode = Object.prototype.hasOwnProperty.call(body, "spaceMode") || Object.prototype.hasOwnProperty.call(body, "space");
   const uploadMode = normalizeAssetUploadMode(body.spaceMode, body.space);
-  const space: AssetSpace = "private";
   const hasCategoryIds = Object.prototype.hasOwnProperty.call(body, "categoryIds");
   const categoryIds = normalizeIdList(body.categoryIds);
   if ((!imageId && !caseItemId) || (imageId && caseItemId)) return c.json({ error: "请选择要加入素材库的图片" }, 400);
@@ -506,113 +631,99 @@ api.post("/assets/from-image", async (c) => {
       : null;
   if (!source) return c.json({ error: "图片不存在" }, 404);
 
-  const sharedExisting =
-    uploadMode !== "private"
-      ? getOne<AssetRow>(
+  return c.json(
+    await createAssetFromSource({
+      source,
+      userId: user.id,
+      body,
+      uploadMode,
+      hasSpaceMode,
+      hasCategoryIds,
+      categoryIds,
+      skipDuplicates: false,
+      allowAiName: true
+    })
+  );
+});
+
+api.post("/assets/from-images", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return c.json({ error: "未登录" }, 401);
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = parseImageBatchIds(body.imageIds, 100);
+  if (parsed.error) return c.json({ error: parsed.error }, 400);
+  const commonCategoryIds = normalizeIdList(body.categoryIds);
+  if (!ensureCategoryIds(commonCategoryIds, "asset")) return c.json({ error: "素材标签不存在" }, 400);
+  const autoCategory = body.autoCategory !== false;
+  const uploadMode = normalizeAssetUploadMode(body.spaceMode, body.space);
+  const placeholders = parsed.imageIds.map(() => "?").join(", ");
+  const images = getAll<ImageRow>(
+    appDb,
+    `select * from images where user_id = ? and id in (${placeholders})`,
+    user.id,
+    ...parsed.imageIds
+  );
+  const imageById = new Map(images.map((image) => [image.id, image]));
+  const originPrompts = imageOriginPromptsByImageIds(images.map((image) => image.id));
+  const items = [];
+  for (const imageId of parsed.imageIds) {
+    const image = imageById.get(imageId);
+    if (!image) {
+      items.push({ imageId, status: "not_found" as const, reason: "图片不存在" });
+      continue;
+    }
+    try {
+      const ownDuplicate = getOne<{ id: string }>(appDb, "select id from assets where user_id = ? and path = ?", user.id, image.path);
+      const sharedDuplicate = uploadMode !== "private"
+        ? getOne<{ id: string }>(appDb, `select id from assets where path = ? and ${approvedSharedAssetSql("assets")} limit 1`, image.path)
+        : null;
+      const duplicate = sharedDuplicate ?? ownDuplicate;
+      if (duplicate) {
+        items.push({ imageId, status: "duplicate" as const, targetId: duplicate.id, reason: "素材已存在" });
+        continue;
+      }
+      const prompt = originPrompts.get(image.id) ?? image.prompt;
+      const categoryIds = autoCategory ? await suggestAssetCategoryIds(prompt) : commonCategoryIds;
+      if (!ensureCategoryIds(categoryIds, "asset")) throw new Error("自动生成的素材标签不存在");
+      if (autoCategory) {
+        run(
           appDb,
-          `select assets.*, users.username as source_username
-           from assets
-           left join users on users.id = assets.user_id
-           where assets.path = ?
-             and ${approvedSharedAssetSql("assets")}`,
-          source.path
-        )
-      : null;
-  if (sharedExisting) {
-    const categories = assetCategoryMap([sharedExisting.id]);
-    return c.json({ asset: publicAsset(sharedExisting, categories, user.id), created: false, duplicateScope: "shared" });
-  }
-
-  const existing = getOne<AssetRow>(
-    appDb,
-    `select assets.*, users.username as source_username
-     from assets
-     left join users on users.id = assets.user_id
-     where assets.user_id = ? and assets.path = ?`,
-    user.id,
-    source.path
-  );
-  if (existing) {
-    if (!existing.content_hash) {
-      const contentHash = await assetContentHashFromPath(existing.path);
-      if (contentHash) run(appDb, "update assets set content_hash = ? where id = ? and user_id = ?", contentHash, existing.id, user.id);
+          "update images set suggested_asset_category_ids_json = ? where id = ? and user_id = ?",
+          JSON.stringify(categoryIds),
+          image.id,
+          user.id
+        );
+      }
+      const result = await createAssetFromSource({
+        source: {
+          path: image.path,
+          mimeType: image.mime_type,
+          fileSize: image.image_file_size,
+          imageWidth: image.image_width,
+          imageHeight: image.image_height,
+          prompt,
+          suggestedName: image.suggested_case_title
+        },
+        userId: user.id,
+        body,
+        uploadMode,
+        hasSpaceMode: true,
+        hasCategoryIds: true,
+        categoryIds,
+        skipDuplicates: true,
+        allowAiName: false
+      });
+      items.push({
+        imageId,
+        status: result.created ? ("created" as const) : ("duplicate" as const),
+        targetId: result.asset?.id,
+        reason: result.created ? undefined : "素材已存在"
+      });
+    } catch (error) {
+      items.push({ imageId, status: "failed" as const, reason: error instanceof Error ? error.message : "创建素材失败" });
     }
-    const nextName = Object.prototype.hasOwnProperty.call(body, "name") ? normalizeAssetNameInput(body.name, existing) : "";
-    if (hasSpaceMode) {
-      const timestamp = now();
-      const shareState = assetShareStateFromUploadMode(uploadMode, timestamp);
-      run(
-        appDb,
-        `update assets
-         set space = ?, shared = ?, share_status = ?, share_requested_at = ?,
-             share_reviewed_at = ?, share_reviewed_by = ?, share_reject_reason = ''
-         where id = ? and user_id = ?`,
-        space,
-        shareState.shared,
-        shareState.shareStatus,
-        shareState.shareRequestedAt,
-        shareState.shareReviewedAt,
-        shareState.shareReviewedBy,
-        existing.id,
-        user.id
-      );
-    }
-    if (nextName) run(appDb, "update assets set name = ? where id = ? and user_id = ?", nextName, existing.id, user.id);
-    if (hasCategoryIds) replaceAssetCategories(existing.id, categoryIds);
-    const updated = getOne<AssetRow>(
-      appDb,
-      `select assets.*, users.username as source_username
-       from assets
-       left join users on users.id = assets.user_id
-       where assets.id = ?`,
-      existing.id
-    );
-    const categories = assetCategoryMap([existing.id]);
-    return c.json({ asset: updated ? publicAsset(updated, categories, user.id) : publicAsset(existing, categories, user.id), created: false, duplicateScope: "own" });
   }
-
-  const id = makeId("asset");
-  const extension = `.${imageExtensionFromMime(source.mimeType)}`;
-  const nameSeed = String(body.name ?? "").trim() || source.suggestedName.trim() || await generateAssetNameFromPrompt(source.prompt);
-  const name = `${nameSeed.replace(/[\\/]/g, " ").replace(/\s+/g, " ").trim() || "素材图片"}${extension}`;
-  const contentHash = await assetContentHashFromPath(source.path);
-  const createdAt = now();
-  const shareState = assetShareStateFromUploadMode(uploadMode, createdAt);
-  run(
-    appDb,
-    `insert into assets (
-      id, user_id, space, shared, share_status, share_requested_at, share_reviewed_at, share_reviewed_by, name, path, mime_type,
-      size, content_hash, image_width, image_height, created_at
-    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    id,
-    user.id,
-    space,
-    shareState.shared,
-    shareState.shareStatus,
-    shareState.shareRequestedAt,
-    shareState.shareReviewedAt,
-    shareState.shareReviewedBy,
-    name,
-    source.path,
-    source.mimeType,
-    source.fileSize,
-    contentHash,
-    source.imageWidth,
-    source.imageHeight,
-    createdAt
-  );
-  void warmImageDerivatives("asset", id, source.path);
-  replaceAssetCategories(id, categoryIds);
-  const asset = getOne<AssetRow>(
-    appDb,
-    `select assets.*, users.username as source_username
-     from assets
-     left join users on users.id = assets.user_id
-     where assets.id = ?`,
-    id
-  );
-  const categories = assetCategoryMap([id]);
-  return c.json({ asset: asset ? publicAsset(asset, categories, user.id) : null, created: true });
+  return c.json(imageBatchResult(items));
 });
 
 api.patch("/assets/:assetId", async (c) => {

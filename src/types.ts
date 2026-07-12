@@ -854,6 +854,42 @@ export type WorkImage = {
   createdAt: string;
 };
 
+export type ImageBatchItemResult = {
+  imageId: string;
+  status: "updated" | "created" | "deleted" | "duplicate" | "not_found" | "failed";
+  targetId?: string;
+  reason?: string;
+};
+
+export type ImageBatchResult = {
+  requested: number;
+  succeeded: number;
+  skipped: number;
+  failed: number;
+  items: ImageBatchItemResult[];
+};
+
+export type ImageDeleteImpact = {
+  images: number;
+  assets: number;
+  caseGroups: number;
+  caseItems: number;
+  hasAssociated: boolean;
+};
+
+export type ImageBatchDeleteResult = ImageBatchResult & {
+  impact: ImageDeleteImpact;
+  cleanupWarnings: number;
+};
+
+export type ImageBatchDownloadVariant = "original" | "preview" | "thumb";
+
+export type ImageBatchDownloadTicket = {
+  downloadUrl: string;
+  expiresAt: number;
+  estimatedBytes: number;
+};
+
 export type ImageEditSuggestion = {
   id: string;
   label: string;

@@ -1,15 +1,16 @@
 import type { Hono } from "hono";
 import { UNCATEGORIZED_CASE_CATEGORY_ID, ensureCategoryIds, makeCategorySlug } from "./categories";
-import { generateCaseTitle, resolveCaseCategoryIds } from "./caseSuggestions";
+import { generateCaseTitle, resolveCaseCategoryIds, suggestCaseFields } from "./caseSuggestions";
 import { caseUsageSourceFromCaseItem, caseUsageSourceKey, type CaseUsageSource } from "./caseUsage";
 import { appDb, getAll, getOne, run } from "./db";
 import { globalSwitchEnabled } from "./globalSwitches";
 import { ensureImageSourceReferences } from "./imageReferenceBackfill";
 import { pageInfo, paginationFromQuery, pageSlice } from "./pagination";
-import { assetUrlFromAssetId, imageReferencesByImageIds, imageUrlFromImageId } from "./serializers";
+import { assetUrlFromAssetId, imageOriginPromptsByImageIds, imageReferencesByImageIds, imageUrlFromImageId } from "./serializers";
 import type { AssetRow, ImageRow } from "./types";
 import { makeId, normalizeIdList, normalizeReviewStatus, now, visibleAssetSql, visibleCaseSql, type ReviewStatus } from "./utils";
 import { requireUser } from "./auth";
+import { imageBatchResult, parseImageBatchIds } from "./imageBatch";
 
 type CaseItemRow = {
   id: string;
@@ -564,6 +565,120 @@ api.post("/cases/categories", async (c) => {
   return c.json({ category: { id, name, slug, items: [] } });
 });
 
+api.post("/cases/from-images", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return c.json({ error: "未登录" }, 401);
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = parseImageBatchIds(body.imageIds, 20);
+  if (parsed.error) return c.json({ error: parsed.error }, 400);
+  const includeReferences = body.includeReferences !== false ? 1 : 0;
+  const placeholders = parsed.imageIds.map(() => "?").join(", ");
+  const images = getAll<ImageRow>(
+    appDb,
+    `select * from images where user_id = ? and id in (${placeholders})`,
+    user.id,
+    ...parsed.imageIds
+  );
+  const imageById = new Map(images.map((image) => [image.id, image]));
+  const originPrompts = imageOriginPromptsByImageIds(images.map((image) => image.id));
+  const duplicateRows = getAll<{ image_id: string }>(
+    appDb,
+    `select distinct image_id
+     from case_group_images
+     where user_id = ? and image_id in (${placeholders})`,
+    user.id,
+    ...parsed.imageIds
+  );
+  const duplicateIds = new Set(duplicateRows.map((row) => row.image_id));
+  const items = [];
+  for (const imageId of parsed.imageIds) {
+    const image = imageById.get(imageId);
+    if (!image) {
+      items.push({ imageId, status: "not_found" as const, reason: "图片不存在" });
+      continue;
+    }
+    if (duplicateIds.has(image.id)) {
+      items.push({ imageId, status: "duplicate" as const, reason: "已经加入灵感空间" });
+      continue;
+    }
+    try {
+      const prompt = originPrompts.get(image.id) ?? image.prompt;
+      const suggestion = await suggestCaseFields(prompt);
+      const categoryIds = suggestion.categoryIds.length > 0 && ensureCategoryIds(suggestion.categoryIds, "case")
+        ? suggestion.categoryIds
+        : [UNCATEGORIZED_CASE_CATEGORY_ID];
+      const title = suggestion.title.trim() || await generateCaseTitle(prompt);
+      run(
+        appDb,
+        "update images set suggested_case_title = ?, suggested_case_category_ids_json = ? where id = ? and user_id = ?",
+        title,
+        JSON.stringify(categoryIds),
+        image.id,
+        user.id
+      );
+      if (includeReferences) {
+        await ensureImageSourceReferences(user.id, image).catch((error) => {
+          console.warn("批量灵感素材来源补全失败", image.id, error);
+        });
+      }
+      const createdAt = now();
+      const groupId = makeId("casegrp");
+      const reviewState = caseReviewState(createdAt);
+      const createRecords = appDb.transaction(() => {
+        run(
+          appDb,
+          `insert into case_group_images (
+            id, group_id, user_id, image_id, asset_id, image_url, sort_order, is_cover, created_at
+          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          makeId("caseimg"),
+          groupId,
+          user.id,
+          image.id,
+          null,
+          imageUrlFromImageId(image.id),
+          0,
+          1,
+          createdAt
+        );
+        let firstCaseItemId = "";
+        for (const categoryId of categoryIds) {
+          const caseItemId = makeId("case");
+          if (!firstCaseItemId) firstCaseItemId = caseItemId;
+          run(
+            appDb,
+            `insert into case_items (
+              id, group_id, category_id, user_id, image_id, asset_id, include_references,
+              review_status, review_requested_at, reviewed_at, reviewed_by, reject_reason,
+              title, prompt, image_url, created_at
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            caseItemId,
+            groupId,
+            categoryId,
+            user.id,
+            image.id,
+            null,
+            includeReferences,
+            reviewState.reviewStatus,
+            reviewState.reviewRequestedAt,
+            reviewState.reviewedAt,
+            reviewState.reviewedBy,
+            reviewState.rejectReason,
+            title,
+            prompt,
+            imageUrlFromImageId(image.id),
+            createdAt
+          );
+        }
+        return firstCaseItemId;
+      });
+      items.push({ imageId, status: "created" as const, targetId: createRecords() });
+    } catch (error) {
+      items.push({ imageId, status: "failed" as const, reason: error instanceof Error ? error.message : "创建灵感失败" });
+    }
+  }
+  return c.json(imageBatchResult(items));
+});
+
 api.post("/cases", async (c) => {
   const user = await requireUser(c);
   if (!user) return c.json({ error: "未登录" }, 401);
@@ -571,6 +686,7 @@ api.post("/cases", async (c) => {
   const bodyImageIds = normalizeIdList(body.imageIds);
   const singleImageId = String(body.imageId ?? "").trim();
   const imageIds = bodyImageIds.length > 0 ? bodyImageIds : singleImageId ? [singleImageId] : [];
+  const skipDuplicates = body.duplicateMode === "skip" && bodyImageIds.length > 0;
   const assetId = String(body.assetId ?? "").trim();
   const rawCategoryIds: unknown[] = Array.isArray(body.categoryIds) ? body.categoryIds : [body.categoryId];
   const categoryIds: string[] = Array.from(
@@ -587,14 +703,16 @@ api.post("/cases", async (c) => {
   if ((imageIds.length === 0 && !assetId) || (imageIds.length > 0 && assetId)) {
     return c.json({ error: "请选择图片" }, 400);
   }
+  if (imageIds.length > 20) return c.json({ error: "单次最多加入 20 张图片" }, 400);
   if (!rawPrompt) return c.json({ error: "请填写提示内容" }, 400);
 
   const images = imageIds.length > 0
     ? getAll<ImageRow>(appDb, `select * from images where user_id = ? and id in (${imageIds.map(() => "?").join(", ")})`, user.id, ...imageIds)
     : [];
   const imageById = new Map(images.map((image) => [image.id, image]));
-  const orderedImages = imageIds.map((id) => imageById.get(id)).filter((image): image is ImageRow => Boolean(image));
-  if (imageIds.length > 0 && orderedImages.length !== imageIds.length) return c.json({ error: "图片不存在" }, 404);
+  const missingImageIds = imageIds.filter((id) => !imageById.has(id));
+  const loadedOrderedImages = imageIds.map((id) => imageById.get(id)).filter((image): image is ImageRow => Boolean(image));
+  if (imageIds.length > 0 && missingImageIds.length > 0 && !skipDuplicates) return c.json({ error: "图片不存在" }, 404);
   const asset = assetId
     ? getOne<AssetRow>(
         appDb,
@@ -606,7 +724,8 @@ api.post("/cases", async (c) => {
   if (assetId && !asset) return c.json({ error: "素材不存在" }, 404);
   if (categoryIds.length > 0 && !ensureCategoryIds(categoryIds, "case")) return c.json({ error: "灵感风格不存在" }, 400);
 
-  if (orderedImages.length > 0) {
+  let duplicateImageIds: string[] = [];
+  if (loadedOrderedImages.length > 0) {
     const existingImages = getAll<{ image_id: string }>(
       appDb,
       `select distinct image_id
@@ -615,7 +734,10 @@ api.post("/cases", async (c) => {
       user.id,
       ...imageIds
     );
-    if (existingImages.length > 0) return c.json({ error: orderedImages.length > 1 ? "部分图片已经加入灵感空间" : "已经加入了" }, 409);
+    duplicateImageIds = existingImages.map((item) => item.image_id);
+    if (duplicateImageIds.length > 0 && !skipDuplicates) {
+      return c.json({ error: loadedOrderedImages.length > 1 ? "部分图片已经加入灵感空间" : "已经加入了" }, 409);
+    }
   } else if (asset) {
     const existingAsset = getOne<{ id: string }>(
       appDb,
@@ -624,6 +746,15 @@ api.post("/cases", async (c) => {
       asset.id
     );
     if (existingAsset) return c.json({ error: "已经加入了" }, 409);
+  }
+
+  const duplicateImageIdSet = new Set(duplicateImageIds);
+  const orderedImages = skipDuplicates
+    ? loadedOrderedImages.filter((image) => !duplicateImageIdSet.has(image.id))
+    : loadedOrderedImages;
+  const skippedImageIds = imageIds.filter((id) => missingImageIds.includes(id) || duplicateImageIdSet.has(id));
+  if (imageIds.length > 0 && orderedImages.length === 0) {
+    return c.json({ caseItems: [], skipped: skippedImageIds.length, createdImageIds: [], skippedImageIds });
   }
 
   const prompt = rawPrompt;
@@ -738,7 +869,9 @@ api.post("/cases", async (c) => {
   }
   return c.json({
     caseItems,
-    skipped: 0
+    skipped: skippedImageIds.length,
+    createdImageIds: orderedImages.map((image) => image.id),
+    skippedImageIds
   });
 });
 

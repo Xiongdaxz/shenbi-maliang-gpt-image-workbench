@@ -1,14 +1,32 @@
 import type { Context, Hono } from "hono";
+import { ZipArchive, type Archiver } from "archiver";
+import { once } from "node:events";
+import { randomBytes } from "node:crypto";
+import { PassThrough, Readable } from "node:stream";
 import { isConfigAuthed, requireUser } from "./auth";
-import { appDb, getOne } from "./db";
+import { appDb, getAll, getOne } from "./db";
 import { getOrCreateImageDerivative, normalizeImageVariant, type ImageDerivativeSourceType } from "./imageDerivatives";
+import { parseImageBatchIds } from "./imageBatch";
 import { imageExtensionFromMime, mimeTypeFromPath } from "./imageFiles";
 import { readStoredFile } from "./secureFiles";
+import { imageOriginPromptsByImageIds } from "./serializers";
 import type { AssetRow, ImageAssetReferenceRow, ImageRow, MessageSourceReferenceRow, UserRow } from "./types";
 import { createHash } from "node:crypto";
 import { approvedCaseSql, reviewableCaseSql, reviewableSharedAssetSql, visibleAssetSql } from "./utils";
 
 type DownloadOptionVariant = "thumb" | "preview" | "original";
+
+type BatchDownloadToken = {
+  userId: string;
+  imageIds: string[];
+  variant: DownloadOptionVariant;
+  includeManifest: boolean;
+  expiresAt: number;
+};
+
+const BATCH_DOWNLOAD_MAX_BYTES = 500 * 1024 * 1024;
+const BATCH_DOWNLOAD_TOKEN_TTL_MS = 10 * 60 * 1000;
+const batchDownloadTokens = new Map<string, BatchDownloadToken>();
 
 type DownloadSource = {
   sourceType: ImageDerivativeSourceType;
@@ -105,6 +123,49 @@ async function imageDownloadOptions(source: DownloadSource) {
     options.push(await downloadOptionForVariant(source, config.variant));
   }
   return options;
+}
+
+function purgeExpiredBatchDownloadTokens() {
+  const timestamp = Date.now();
+  for (const [token, item] of batchDownloadTokens) {
+    if (item.expiresAt <= timestamp) batchDownloadTokens.delete(token);
+  }
+}
+
+async function batchDownloadImage(image: ImageRow, variant: DownloadOptionVariant) {
+  if (variant === "original") {
+    return {
+      buffer: await readStoredFile(image.path),
+      mimeType: image.mime_type || mimeTypeFromPath(image.path)
+    };
+  }
+  const derivative = await getOrCreateImageDerivative(
+    { sourceType: "image", sourceId: image.id, path: image.path },
+    variant
+  );
+  return { buffer: derivative.buffer, mimeType: derivative.mimeType };
+}
+
+function csvCell(value: unknown) {
+  const text = String(value ?? "");
+  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+function batchDownloadFilename() {
+  const date = new Date();
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `images-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}.zip`;
+}
+
+function batchImageFilename(image: ImageRow, index: number, mimeType: string) {
+  const shortId = image.id.replace(/[^a-zA-Z0-9_-]/g, "").slice(-12) || `image-${index + 1}`;
+  return `${String(index + 1).padStart(3, "0")}_${shortId}.${imageExtensionFromMime(mimeType)}`;
+}
+
+async function appendArchiveBuffer(archive: Archiver, buffer: Buffer, name: string) {
+  const stream = Readable.from(buffer);
+  archive.append(stream, { name, store: true });
+  await once(stream, "end");
 }
 
 function imageResponse(buffer: Buffer, mimeType: string) {
@@ -212,6 +273,130 @@ async function storedImageResponse(
 }
 
 export function registerFileRoutes(api: Hono) {
+  api.post("/files/images/batch-downloads", async (c) => {
+    const user = await requireUser(c);
+    if (!user) return c.json({ error: "未登录" }, 401);
+    const body = await c.req.json().catch(() => ({}));
+    const parsed = parseImageBatchIds(body.imageIds, 50);
+    if (parsed.error) return c.json({ error: parsed.error }, 400);
+    const variantValue = String(body.variant ?? "original").trim().toLowerCase();
+    if (variantValue !== "original" && variantValue !== "preview" && variantValue !== "thumb") {
+      return c.json({ error: "下载规格不支持" }, 400);
+    }
+    const placeholders = parsed.imageIds.map(() => "?").join(", ");
+    const images = getAll<ImageRow>(
+      appDb,
+      `select * from images where user_id = ? and id in (${placeholders})`,
+      user.id,
+      ...parsed.imageIds
+    );
+    if (images.length === 0) return c.json({ error: "图片不存在" }, 404);
+    const estimatedBytes = images.reduce((total, image) => total + Math.max(0, Number(image.image_file_size) || 0), 0);
+    if (estimatedBytes > BATCH_DOWNLOAD_MAX_BYTES) {
+      return c.json({ error: "所选图片预计超过 500 MB，请分批下载", estimatedBytes }, 413);
+    }
+    const imageById = new Map(images.map((image) => [image.id, image]));
+    let hasReadableImage = false;
+    for (const imageId of parsed.imageIds) {
+      const image = imageById.get(imageId);
+      if (!image) continue;
+      try {
+        await batchDownloadImage(image, variantValue);
+        hasReadableImage = true;
+        break;
+      } catch {
+        continue;
+      }
+    }
+    if (!hasReadableImage) return c.json({ error: "所选图片文件均不可用" }, 422);
+    purgeExpiredBatchDownloadTokens();
+    const token = randomBytes(24).toString("base64url");
+    const expiresAt = Date.now() + BATCH_DOWNLOAD_TOKEN_TTL_MS;
+    batchDownloadTokens.set(token, {
+      userId: user.id,
+      imageIds: parsed.imageIds,
+      variant: variantValue,
+      includeManifest: body.includeManifest !== false,
+      expiresAt
+    });
+    return c.json({
+      downloadUrl: `/api/files/images/batch-downloads/${encodeURIComponent(token)}`,
+      expiresAt,
+      estimatedBytes
+    });
+  });
+
+  api.get("/files/images/batch-downloads/:token", async (c) => {
+    const user = await requireUser(c);
+    if (!user) return c.json({ error: "未登录" }, 401);
+    purgeExpiredBatchDownloadTokens();
+    const tokenValue = c.req.param("token");
+    const token = batchDownloadTokens.get(tokenValue);
+    if (!token || token.userId !== user.id || token.expiresAt <= Date.now()) {
+      return c.json({ error: "下载链接已失效" }, 404);
+    }
+    batchDownloadTokens.delete(tokenValue);
+    const placeholders = token.imageIds.map(() => "?").join(", ");
+    const rows = getAll<ImageRow>(
+      appDb,
+      `select * from images where user_id = ? and id in (${placeholders})`,
+      user.id,
+      ...token.imageIds
+    );
+    const imageById = new Map(rows.map((image) => [image.id, image]));
+    const originPrompts = imageOriginPromptsByImageIds(rows.map((image) => image.id));
+    const output = new PassThrough();
+    const archive = new ZipArchive({ zlib: { level: 0 } });
+    archive.on("error", (error: Error) => output.destroy(error));
+    archive.pipe(output);
+    void (async () => {
+      const manifest: Array<Record<string, string | number>> = [];
+      const errors: string[] = [];
+      for (const [index, imageId] of token.imageIds.entries()) {
+        const image = imageById.get(imageId);
+        if (!image) {
+          errors.push(`${imageId}: 图片不存在或已删除`);
+          continue;
+        }
+        try {
+          const file = await batchDownloadImage(image, token.variant);
+          const filename = batchImageFilename(image, index, file.mimeType);
+          await appendArchiveBuffer(archive, file.buffer, filename);
+          manifest.push({
+            filename,
+            imageId: image.id,
+            originPrompt: originPrompts.get(image.id) ?? image.prompt,
+            prompt: image.prompt,
+            kind: image.kind,
+            size: image.size,
+            quality: image.quality,
+            providerId: image.provider_id,
+            createdAt: image.created_at,
+            sessionId: image.session_id ?? ""
+          });
+        } catch (error) {
+          errors.push(`${image.id}: ${error instanceof Error ? error.message : "图片文件不可用"}`);
+        }
+      }
+      if (token.includeManifest) {
+        const headers = ["filename", "imageId", "originPrompt", "prompt", "kind", "size", "quality", "providerId", "createdAt", "sessionId"];
+        const csv = [headers.join(","), ...manifest.map((item) => headers.map((header) => csvCell(item[header])).join(","))].join("\r\n");
+        archive.append(Buffer.from(`\uFEFF${csv}`, "utf8"), { name: "manifest.csv" });
+        archive.append(Buffer.from(JSON.stringify(manifest, null, 2), "utf8"), { name: "manifest.json" });
+      }
+      if (errors.length > 0) archive.append(Buffer.from(errors.join("\r\n"), "utf8"), { name: "_errors.txt" });
+      await archive.finalize();
+    })().catch((error) => output.destroy(error));
+    return new Response(Readable.toWeb(output) as unknown as BodyInit, {
+      headers: {
+        "Content-Type": "application/zip",
+        "Content-Disposition": `attachment; filename="${batchDownloadFilename()}"`,
+        "Cache-Control": "private, no-store",
+        "Vary": "Cookie"
+      }
+    });
+  });
+
   api.get("/files/user-avatar/:userId", async (c) => {
     const user = await requireUser(c);
     if (!user) return c.json({ error: "未登录" }, 401);

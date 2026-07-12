@@ -39,7 +39,16 @@ import { userPreferences } from "./userPreferences";
 import { inferChannelFromType, makeId, normalizeIdList, normalizeProviderChannel, now, safeJson, visibleAssetSql } from "./utils";
 import { requireUser } from "./auth";
 import { markProviderRequestPostProcessFailure } from "./auditLog";
-import { deleteImageRecords, ensureChatSession, expireStaleImageJobs, insertMessage, serializeJob } from "./chatStore";
+import {
+  deleteImageRecords,
+  deleteImageRecordsBatch,
+  ensureChatSession,
+  expireStaleImageJobs,
+  imageDeleteImpact,
+  insertMessage,
+  serializeJob
+} from "./chatStore";
+import { imageBatchResult, parseImageBatchIds } from "./imageBatch";
 
 function providerPrompt(prompt: string, imageCount: number) {
   if (imageCount <= 1) return prompt;
@@ -866,6 +875,82 @@ api.get("/images/:imageId/edit-suggestions", async (c) => {
     c.req.query("language") || preferences.language
   );
   return c.json(result);
+});
+
+api.put("/images/batch/favorite", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return c.json({ error: "未登录" }, 401);
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = parseImageBatchIds(body.imageIds, 200);
+  if (parsed.error) return c.json({ error: parsed.error }, 400);
+  const favorited = Boolean(body.favorited);
+  const placeholders = parsed.imageIds.map(() => "?").join(", ");
+  const existingRows = getAll<{ id: string }>(
+    appDb,
+    `select id from images where user_id = ? and id in (${placeholders})`,
+    user.id,
+    ...parsed.imageIds
+  );
+  const existingIds = new Set(existingRows.map((row) => row.id));
+  const updateFavorites = appDb.transaction(() => {
+    for (const imageId of parsed.imageIds) {
+      if (!existingIds.has(imageId)) continue;
+      if (favorited) {
+        run(
+          appDb,
+          "insert or ignore into image_favorites (id, user_id, image_id, created_at) values (?, ?, ?, ?)",
+          makeId("imgfav"),
+          user.id,
+          imageId,
+          now()
+        );
+      } else {
+        run(appDb, "delete from image_favorites where user_id = ? and image_id = ?", user.id, imageId);
+      }
+    }
+  });
+  updateFavorites();
+  return c.json({
+    ...imageBatchResult(
+      parsed.imageIds.map((imageId) =>
+        existingIds.has(imageId)
+          ? { imageId, status: "updated" as const }
+          : { imageId, status: "not_found" as const, reason: "图片不存在" }
+      )
+    ),
+    favorited
+  });
+});
+
+api.post("/images/batch/delete-preview", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return c.json({ error: "未登录" }, 401);
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = parseImageBatchIds(body.imageIds, 200);
+  if (parsed.error) return c.json({ error: parsed.error }, 400);
+  const impact = imageDeleteImpact(user.id, parsed.imageIds);
+  return c.json({ requested: parsed.imageIds.length, impact });
+});
+
+api.post("/images/batch/delete", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return c.json({ error: "未登录" }, 401);
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = parseImageBatchIds(body.imageIds, 200);
+  if (parsed.error) return c.json({ error: parsed.error }, 400);
+  const impact = imageDeleteImpact(user.id, parsed.imageIds);
+  if (impact.hasAssociated && body.confirmAssociated !== true) {
+    return c.json({ error: "这些图片包含关联内容，请确认后再删除", impact }, 409);
+  }
+  const deleted = await deleteImageRecordsBatch(user.id, parsed.imageIds);
+  return c.json({
+    ...imageBatchResult([
+      ...deleted.deletedImageIds.map((imageId) => ({ imageId, status: "deleted" as const })),
+      ...deleted.notFoundIds.map((imageId) => ({ imageId, status: "not_found" as const, reason: "图片不存在" }))
+    ]),
+    impact: deleted.impact,
+    cleanupWarnings: deleted.cleanupWarnings
+  });
 });
 
 api.put("/images/:imageId/favorite", async (c) => {

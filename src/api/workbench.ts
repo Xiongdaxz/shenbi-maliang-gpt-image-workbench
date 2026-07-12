@@ -4,6 +4,11 @@ import type {
   ChatSession,
   ChangelogEntry,
   ImageDownloadOption,
+  ImageBatchDeleteResult,
+  ImageBatchDownloadTicket,
+  ImageBatchDownloadVariant,
+  ImageBatchResult,
+  ImageDeleteImpact,
   ImageEditSuggestion,
   ImageGenerationMode,
   ImageJob,
@@ -872,14 +877,39 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload)
     }),
+  addAssetsFromImages: (payload: { imageIds: string[]; spaceMode: "private" | "shared" | "private_shared"; autoCategory: true; duplicateMode: "skip" }) =>
+    request<ImageBatchResult>("/api/assets/from-images", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
   setImageFavorite: (imageId: string, favorited: boolean) =>
     request<{ favorited: boolean; favoriteCount: number }>(`/api/images/${imageId}/favorite`, {
       method: "PUT",
       body: JSON.stringify({ favorited })
     }),
+  setImageBatchFavorite: (imageIds: string[], favorited: boolean) =>
+    request<ImageBatchResult & { favorited: boolean }>("/api/images/batch/favorite", {
+      method: "PUT",
+      body: JSON.stringify({ imageIds, favorited })
+    }),
   deleteImage: (imageId: string) =>
     request<{ ok: boolean }>(`/api/images/${imageId}`, {
       method: "DELETE"
+    }),
+  imageBatchDeletePreview: (imageIds: string[]) =>
+    request<{ requested: number; impact: ImageDeleteImpact }>("/api/images/batch/delete-preview", {
+      method: "POST",
+      body: JSON.stringify({ imageIds })
+    }),
+  deleteImagesBatch: (imageIds: string[], confirmAssociated: boolean) =>
+    request<ImageBatchDeleteResult>("/api/images/batch/delete", {
+      method: "POST",
+      body: JSON.stringify({ imageIds, confirmAssociated })
+    }),
+  createImageBatchDownload: (payload: { imageIds: string[]; variant: ImageBatchDownloadVariant; includeManifest: boolean }) =>
+    request<ImageBatchDownloadTicket>("/api/files/images/batch-downloads", {
+      method: "POST",
+      body: JSON.stringify(payload)
     }),
   updateAsset: (assetId: string, payload: { name?: string; space?: AssetItem["space"]; shared?: boolean; categoryIds?: string[] }) =>
     request<{ asset: AssetItem }>(`/api/assets/${assetId}`, {
@@ -896,8 +926,13 @@ export const api = {
     request<{ options: ImageDownloadOption[] }>(`/api/files/assets/${encodeURIComponent(assetId)}/download-options`),
   imageReferenceDownloadOptions: (referenceId: string) =>
     request<{ options: ImageDownloadOption[] }>(`/api/files/image-references/${encodeURIComponent(referenceId)}/download-options`),
-  addCase: (payload: { imageId?: string; imageIds?: string[]; assetId?: string; coverImageId?: string; categoryIds: string[]; title: string; prompt: string; includeReferences?: boolean; autoCategory?: boolean }) =>
-    request<{ caseItems: Array<Record<string, string | number | boolean | string[]>>; skipped: number }>("/api/cases", {
+  addCase: (payload: { imageId?: string; imageIds?: string[]; assetId?: string; coverImageId?: string; categoryIds: string[]; title: string; prompt: string; includeReferences?: boolean; autoCategory?: boolean; duplicateMode?: "skip" }) =>
+    request<{ caseItems: Array<Record<string, string | number | boolean | string[]>>; skipped: number; createdImageIds?: string[]; skippedImageIds?: string[] }>("/api/cases", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
+  addCasesFromImages: (payload: { imageIds: string[]; includeReferences: boolean }) =>
+    request<ImageBatchResult>("/api/cases/from-images", {
       method: "POST",
       body: JSON.stringify(payload)
     }),

@@ -127,6 +127,8 @@ export function ImageEditWorkspace({
   const imageRef = useRef<HTMLImageElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const brushCursorRef = useRef<HTMLSpanElement | null>(null);
+  const brushSizeRef = useRef(80);
+  const lastBrushCursorPointRef = useRef<{ clientX: number; clientY: number } | null>(null);
   const thumbListRef = useRef<HTMLDivElement | null>(null);
   const activeThumbRef = useRef<HTMLButtonElement | null>(null);
   const thumbWheelThrottleRef = useRef<number | null>(null);
@@ -281,9 +283,50 @@ export function ImageEditWorkspace({
           };
         })()
       : null;
-  const adjustBrushSize = (delta: number) => {
-    setBrushSize((value) => Math.max(BRUSH_MIN_SIZE, Math.min(BRUSH_MAX_SIZE, value + delta)));
-  };
+  function mapClientPoint(clientX: number, clientY: number, size = brushSizeRef.current) {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    return {
+      x: clampRatio((clientX - rect.left) / rect.width),
+      y: clampRatio((clientY - rect.top) / rect.height),
+      offsetX: clientX - rect.left,
+      offsetY: clientY - rect.top,
+      sizeRatio: size / Math.min(rect.width, rect.height)
+    };
+  }
+
+  function updateBrushCursor(clientX: number, clientY: number, size = brushSizeRef.current) {
+    const point = mapClientPoint(clientX, clientY, size);
+    if (!point) {
+      hideBrushCursor();
+      return null;
+    }
+    lastBrushCursorPointRef.current = { clientX, clientY };
+    const cursor = brushCursorRef.current;
+    if (cursor) {
+      cursor.style.display = "block";
+      cursor.style.width = `${size}px`;
+      cursor.style.height = `${size}px`;
+      cursor.style.transform = `translate(${point.offsetX - size / 2}px, ${point.offsetY - size / 2}px)`;
+    }
+    return point;
+  }
+
+  function setBrushSizeValue(value: number, cursorPoint = lastBrushCursorPointRef.current) {
+    const nextSize = Math.max(BRUSH_MIN_SIZE, Math.min(BRUSH_MAX_SIZE, value));
+    brushSizeRef.current = nextSize;
+    setBrushSize(nextSize);
+    if (selectionMode && !isSubmitting && cursorPoint) {
+      updateBrushCursor(cursorPoint.clientX, cursorPoint.clientY, nextSize);
+    }
+    return nextSize;
+  }
+
+  function adjustBrushSize(delta: number) {
+    setBrushSizeValue(brushSizeRef.current + delta);
+  }
   const clampPreviewPan = (pan: { x: number; y: number }) => ({
     x: clampNumber(pan.x, previewPanBounds.x.min, previewPanBounds.x.max),
     y: clampNumber(pan.y, previewPanBounds.y.min, previewPanBounds.y.max)
@@ -440,6 +483,7 @@ export function ImageEditWorkspace({
   };
 
   function hideBrushCursor() {
+    lastBrushCursorPointRef.current = null;
     const cursor = brushCursorRef.current;
     if (cursor) cursor.style.display = "none";
   }
@@ -698,34 +742,6 @@ export function ImageEditWorkspace({
     setSelectionMode(false);
     clearSelection();
   };
-  const mapClientPoint = (clientX: number, clientY: number) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return null;
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return null;
-    return {
-      x: clampRatio((clientX - rect.left) / rect.width),
-      y: clampRatio((clientY - rect.top) / rect.height),
-      offsetX: clientX - rect.left,
-      offsetY: clientY - rect.top,
-      sizeRatio: brushSize / Math.min(rect.width, rect.height)
-    };
-  };
-  const updateBrushCursor = (clientX: number, clientY: number) => {
-    const point = mapClientPoint(clientX, clientY);
-    if (!point) {
-      hideBrushCursor();
-      return null;
-    }
-    const cursor = brushCursorRef.current;
-    if (cursor) {
-      cursor.style.display = "block";
-      cursor.style.width = `${brushSize}px`;
-      cursor.style.height = `${brushSize}px`;
-      cursor.style.transform = `translate(${point.offsetX - brushSize / 2}px, ${point.offsetY - brushSize / 2}px)`;
-    }
-    return point;
-  };
   const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (!selectionMode || isSubmitting) return;
     event.preventDefault();
@@ -762,6 +778,17 @@ export function ImageEditWorkspace({
     if (Math.hypot(point.x - lastPoint.x, point.y - lastPoint.y) * Math.min(displaySize.width, displaySize.height) < 1.5) return;
     currentStrokeRef.current.points.push({ x: point.x, y: point.y });
     drawSelectionOverlay();
+  };
+  const handleSelectionWheel = (event: ReactWheelEvent<HTMLCanvasElement>) => {
+    if (!selectionMode || isSubmitting) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+    if (Math.abs(delta) < 1) return;
+    setBrushSizeValue(
+      brushSizeRef.current + (delta < 0 ? BRUSH_SIZE_STEP : -BRUSH_SIZE_STEP),
+      { clientX: event.clientX, clientY: event.clientY }
+    );
   };
   const finishStroke = (hideCursor = false) => {
     pointerActiveRef.current = false;
@@ -878,7 +905,7 @@ export function ImageEditWorkspace({
         previewZoomLabel={previewZoomLabel}
         showPreviewControls={!selectionMode}
         onAdjustBrushSize={adjustBrushSize}
-        onBrushSizeChange={(value) => setBrushSize(Math.max(BRUSH_MIN_SIZE, Math.min(BRUSH_MAX_SIZE, value)))}
+        onBrushSizeChange={setBrushSizeValue}
         onClearSelection={clearSelection}
         onClose={onClose}
         onEnterSelectionMode={enterSelectionMode}
@@ -950,6 +977,7 @@ export function ImageEditWorkspace({
                 }}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
+                onWheel={handleSelectionWheel}
                 onPointerEnter={(event) => {
                   if (selectionMode && !isSubmitting) updateBrushCursor(event.clientX, event.clientY);
                 }}

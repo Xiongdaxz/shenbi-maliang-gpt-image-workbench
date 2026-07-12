@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarArrowDown, CalendarArrowUp, CalendarDays, ChevronDown, ChevronUp, Heart, Images, LayoutGrid, Plus, Search, X } from "lucide-react";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
+import { CalendarArrowDown, CalendarArrowUp, CalendarDays, ChevronDown, ChevronUp, Heart, Images, LayoutGrid, ListChecks, Plus, Search, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../api";
+import { api, ApiError } from "../api";
 import { AddAssetFromImageModal } from "../components/AddAssetFromImageModal";
 import { AddCaseModal, type AddCaseSource } from "../components/AddCaseModal";
 import { PageHeaderViewToggle } from "../components/HorizontalScrollers";
 import { MyImageCard } from "../components/MyImageCard";
+import { ImageBatchAssetDialog } from "../components/images/ImageBatchAssetDialog";
+import { ImageBatchCaseDialog } from "../components/images/ImageBatchCaseDialog";
+import { ImageBatchDeleteDialog } from "../components/images/ImageBatchDeleteDialog";
+import { ImageBatchDownloadDialog } from "../components/images/ImageBatchDownloadDialog";
+import { ImageBatchResultDialog } from "../components/images/ImageBatchResultDialog";
+import { ImageBatchToolbar, type ImageBatchAction } from "../components/images/ImageBatchToolbar";
 import { LibraryEmptyState } from "../components/LibraryEmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { SearchHistoryInput } from "../components/SearchHistoryInput";
@@ -20,10 +26,12 @@ import { newestWorkImages } from "../lib/workImages";
 import { useInfinitePageLoader } from "../hooks/useInfinitePageLoader";
 import { useScrollJump } from "../hooks/useScrollJump";
 import { useWorkbench } from "../store/workbench";
-import type { WorkImage } from "../types";
+import type { ImageBatchResult, ImageDeleteImpact, WorkImage } from "../types";
 import { ConfirmDialog, useToast } from "../ui";
 
 type ImagesViewMode = "grid" | "timeline";
+type ImageInfiniteData = InfiniteData<Awaited<ReturnType<typeof api.images>>, number>;
+type BatchResultState = { title: string; result: ImageBatchResult };
 
 const IMAGES_VIEW_MODE_STORAGE_KEY = "gpt-image.images.viewMode";
 const VIRTUAL_OVERSCAN_PX = 900;
@@ -165,6 +173,14 @@ export function ImagesPage() {
   const [caseSource, setCaseSource] = useState<AddCaseSource | null>(null);
   const [assetTarget, setAssetTarget] = useState<WorkImage | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WorkImage | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(() => new Set());
+  const [pendingBatchAction, setPendingBatchAction] = useState<ImageBatchAction | null>(null);
+  const [batchAssetOpen, setBatchAssetOpen] = useState(false);
+  const [batchDownloadOpen, setBatchDownloadOpen] = useState(false);
+  const [batchDeleteImpact, setBatchDeleteImpact] = useState<ImageDeleteImpact | null>(null);
+  const [batchResult, setBatchResult] = useState<BatchResultState | null>(null);
+  const [batchCaseOpen, setBatchCaseOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ImagesViewMode>(storedImagesViewMode);
   const [keyword, setKeyword] = useState("");
   const [favoriteOnly, setFavoriteOnly] = useState(false);
@@ -230,6 +246,9 @@ export function ImagesPage() {
         return timelineSort === "desc" ? diff : -diff;
       });
   }, [favoriteOnly, imageItems, keyword, resolvedLanguage, t, timelineSort]);
+  const selectedImages = useMemo(() => imageList.filter((image) => selectedImageIds.has(image.id)), [imageList, selectedImageIds]);
+  const selectableLoadedImages = useMemo(() => imageList.slice(0, 200), [imageList]);
+  const allLoadedSelected = selectableLoadedImages.length > 0 && selectableLoadedImages.every((image) => selectedImageIds.has(image.id));
   const timelineGroups = useMemo(() => groupImagesByTimeline(imageList, resolvedLanguage), [imageList, resolvedLanguage]);
   const visibleTimelineGroupKeys = useMemo(() => timelineGroups.map((group) => group.key), [timelineGroups]);
   const allTimelineGroupsCollapsed = timelineGroups.length > 0 && visibleTimelineGroupKeys.every((key) => collapsedTimelineGroups.has(key));
@@ -267,6 +286,47 @@ export function ImagesPage() {
       return changed ? next : value;
     });
   }, [autoCollapseTimelineGroups, visibleTimelineGroupKeys]);
+
+  const updateCachedImages = useCallback((updater: (items: WorkImage[]) => WorkImage[]) => {
+    queryClient.setQueriesData<ImageInfiniteData>({ queryKey: ["images"] }, (data) => {
+      if (!data) return data;
+      return {
+        ...data,
+        pages: data.pages.map((page) => ({ ...page, images: updater(page.images) }))
+      };
+    });
+  }, [queryClient]);
+
+  const exitBatchMode = useCallback(() => {
+    if (pendingBatchAction) return;
+    setSelectionMode(false);
+    setSelectedImageIds(new Set());
+    setBatchAssetOpen(false);
+    setBatchCaseOpen(false);
+    setBatchDownloadOpen(false);
+    setBatchDeleteImpact(null);
+    setBatchResult(null);
+  }, [pendingBatchAction]);
+
+  useEffect(() => {
+    if (!selectionMode) return;
+    const visibleIds = new Set(imageList.map((image) => image.id));
+    setSelectedImageIds((value) => {
+      const next = new Set(Array.from(value).filter((id) => visibleIds.has(id)));
+      return next.size === value.size ? value : next;
+    });
+  }, [imageList, selectionMode]);
+
+  useEffect(() => {
+    if (!selectionMode || batchAssetOpen || batchCaseOpen || batchDownloadOpen || batchDeleteImpact || batchResult || caseSource) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      exitBatchMode();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [batchAssetOpen, batchCaseOpen, batchDeleteImpact, batchDownloadOpen, batchResult, caseSource, exitBatchMode, selectionMode]);
 
   const addAsset = useMutation({
     mutationFn: (payload: { image: WorkImage; name?: string; spaceMode: AssetUploadMode; categoryIds: string[] }) =>
@@ -314,6 +374,97 @@ export function ImagesPage() {
       showToast(error instanceof Error ? error.message : t("toast.imageDeleteFailed"), "error");
     }
   });
+  const setImageBatchFavorite = useMutation({
+    mutationFn: (payload: { imageIds: string[]; favorited: boolean }) => api.setImageBatchFavorite(payload.imageIds, payload.favorited),
+    onMutate: (payload) => setPendingBatchAction(payload.favorited ? "favorite" : "unfavorite"),
+    onSuccess: (result, payload) => {
+      const updatedIds = new Set(result.items.filter((item) => item.status === "updated").map((item) => item.imageId));
+      updateCachedImages((items) => items.map((image) => updatedIds.has(image.id) ? { ...image, favorited: payload.favorited } : image));
+      queryClient.invalidateQueries({ queryKey: ["images"] });
+      showToast(t(payload.favorited ? "toast.imageBatchFavorited" : "toast.imageBatchUnfavorited", { count: result.succeeded }));
+      if (result.skipped > 0 || result.failed > 0) setBatchResult({ title: t("pages.images.batch.favoriteResult"), result });
+    },
+    onError: (error) => showToast(error instanceof Error ? error.message : t("toast.imageFavoriteFailed"), "error"),
+    onSettled: () => setPendingBatchAction(null)
+  });
+  const addImageBatchAssets = useMutation({
+    mutationFn: (payload: { spaceMode: AssetUploadMode }) =>
+      api.addAssetsFromImages({ imageIds: selectedImages.map((image) => image.id), ...payload, autoCategory: true, duplicateMode: "skip" }),
+    onMutate: () => setPendingBatchAction("asset"),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["assets"] });
+      setBatchAssetOpen(false);
+      showToast(t("toast.imageBatchAssetsAdded", { count: result.succeeded }));
+      if (result.skipped > 0 || result.failed > 0) setBatchResult({ title: t("pages.images.batch.assetResult"), result });
+    },
+    onError: (error) => showToast(error instanceof Error ? error.message : t("toast.assetAddFailed"), "error"),
+    onSettled: () => setPendingBatchAction(null)
+  });
+  const addImageBatchCases = useMutation({
+    mutationFn: (payload: { includeReferences: boolean }) =>
+      api.addCasesFromImages({ imageIds: selectedImages.map((image) => image.id), ...payload }),
+    onMutate: () => setPendingBatchAction("case"),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["cases"] });
+      queryClient.invalidateQueries({ queryKey: ["images"] });
+      setBatchCaseOpen(false);
+      showToast(t("toast.imageBatchCasesAdded", { count: result.succeeded }));
+      if (result.skipped > 0 || result.failed > 0) setBatchResult({ title: t("pages.images.batch.caseResult"), result });
+    },
+    onError: (error) => showToast(error instanceof Error ? error.message : t("toast.caseAddFailed"), "error"),
+    onSettled: () => setPendingBatchAction(null)
+  });
+  const createImageBatchDownload = useMutation({
+    mutationFn: (payload: { variant: "original" | "preview" | "thumb"; includeManifest: boolean }) =>
+      api.createImageBatchDownload({ imageIds: selectedImages.map((image) => image.id), ...payload }),
+    onMutate: () => setPendingBatchAction("download"),
+    onSuccess: (result) => {
+      setBatchDownloadOpen(false);
+      const link = document.createElement("a");
+      link.href = result.downloadUrl;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      showToast(t("toast.imageBatchDownloadStarted"));
+    },
+    onError: (error) => showToast(error instanceof Error ? error.message : t("toast.imageBatchDownloadFailed"), "error"),
+    onSettled: () => setPendingBatchAction(null)
+  });
+  const previewImageBatchDelete = useMutation({
+    mutationFn: (imageIds: string[]) => api.imageBatchDeletePreview(imageIds),
+    onMutate: () => setPendingBatchAction("delete"),
+    onSuccess: ({ impact }) => setBatchDeleteImpact(impact),
+    onError: (error) => showToast(error instanceof Error ? error.message : t("toast.imageDeleteFailed"), "error"),
+    onSettled: () => setPendingBatchAction(null)
+  });
+  const deleteImageBatch = useMutation({
+    mutationFn: (payload: { imageIds: string[]; confirmAssociated: boolean }) => api.deleteImagesBatch(payload.imageIds, payload.confirmAssociated),
+    onMutate: () => setPendingBatchAction("delete"),
+    onSuccess: (result) => {
+      const deletedIds = new Set(result.items.filter((item) => item.status === "deleted").map((item) => item.imageId));
+      updateCachedImages((items) => items.filter((image) => !deletedIds.has(image.id)));
+      setSelectedImageIds((value) => new Set(Array.from(value).filter((id) => !deletedIds.has(id))));
+      setBatchDeleteImpact(null);
+      queryClient.invalidateQueries({ queryKey: ["images"] });
+      queryClient.invalidateQueries({ queryKey: ["cases"] });
+      queryClient.invalidateQueries({ queryKey: ["assets"] });
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      queryClient.invalidateQueries({
+        predicate: (query) => ["messages", "session-image-jobs"].includes(String(query.queryKey[0]))
+      });
+      showToast(t("toast.imageBatchDeleted", { count: result.succeeded }));
+      if (result.cleanupWarnings > 0) showToast(t("toast.imageBatchCleanupWarning"), "error");
+      if (result.skipped > 0 || result.failed > 0) setBatchResult({ title: t("pages.images.batch.deleteResult"), result });
+    },
+    onError: (error, payload) => {
+      if (error instanceof ApiError && error.status === 409) {
+        void api.imageBatchDeletePreview(payload.imageIds).then(({ impact }) => setBatchDeleteImpact(impact)).catch(() => undefined);
+      }
+      showToast(error instanceof Error ? error.message : t("toast.imageDeleteFailed"), "error");
+    },
+    onSettled: () => setPendingBatchAction(null)
+  });
   const mutateImageFavorite = setImageFavorite.mutate;
   const hasImageFilters = favoriteOnly || Boolean(keyword.trim());
 
@@ -346,6 +497,37 @@ export function ImagesPage() {
       suggestedCategoryIds: image.suggestedCaseCategoryIds
     });
   }, []);
+
+  const enterBatchMode = useCallback(() => {
+    if (imageList.length === 0) return;
+    setSelectedImageIds(new Set());
+    setSelectionMode(true);
+  }, [imageList.length]);
+
+  const toggleSelectedImage = useCallback((image: WorkImage) => {
+    if (pendingBatchAction) return;
+    if (!selectedImageIds.has(image.id) && selectedImageIds.size >= 200) {
+      showToast(t("pages.images.batch.limit", { count: 200 }), "error");
+      return;
+    }
+    setSelectedImageIds((value) => {
+      const next = new Set(value);
+      if (next.has(image.id)) next.delete(image.id);
+      else next.add(image.id);
+      return next;
+    });
+  }, [pendingBatchAction, selectedImageIds, showToast, t]);
+
+  const toggleAllLoadedImages = useCallback(() => {
+    if (pendingBatchAction) return;
+    if (allLoadedSelected) {
+      setSelectedImageIds(new Set());
+      return;
+    }
+    const selectedIds = selectableLoadedImages.map((image) => image.id);
+    setSelectedImageIds(new Set(selectedIds));
+    if (imageList.length > 200) showToast(t("pages.images.batch.selectLimitReached", { count: 200 }), "error");
+  }, [allLoadedSelected, imageList.length, pendingBatchAction, selectableLoadedImages, showToast, t]);
 
   const toggleImageFavorite = useCallback((image: WorkImage) => {
     mutateImageFavorite({ imageId: image.id, favorited: !image.favorited });
@@ -481,11 +663,15 @@ export function ImagesPage() {
                     assetPending={addAsset.isPending}
                     deletePending={deleteImage.isPending}
                     favoritePending={setImageFavorite.isPending}
+                    selectionMode={selectionMode}
+                    selected={selectedImageIds.has(image.id)}
+                    selectionDisabled={Boolean(pendingBatchAction)}
                     onOpenEditor={openEditor}
                     onAddCase={addCaseFromImage}
                     onAddAsset={setAssetTarget}
                     onDelete={setDeleteTarget}
                     onToggleFavorite={toggleImageFavorite}
+                    onToggleSelected={toggleSelectedImage}
                   />
                 ))}
               </div>
@@ -555,11 +741,15 @@ export function ImagesPage() {
                     assetPending={addAsset.isPending}
                     deletePending={deleteImage.isPending}
                     favoritePending={setImageFavorite.isPending}
+                    selectionMode={selectionMode}
+                    selected={selectedImageIds.has(image.id)}
+                    selectionDisabled={Boolean(pendingBatchAction)}
                     onOpenEditor={openEditor}
                     onAddCase={addCaseFromImage}
                     onAddAsset={setAssetTarget}
                     onDelete={setDeleteTarget}
                     onToggleFavorite={toggleImageFavorite}
+                    onToggleSelected={toggleSelectedImage}
                   />
                 ))}
               </div>
@@ -577,18 +767,22 @@ export function ImagesPage() {
     gridVirtual,
     imageList,
     openEditor,
+    pendingBatchAction,
+    selectedImageIds,
+    selectionMode,
     setImageFavorite.isPending,
     t,
     timelineRange.end,
     timelineRange.start,
     timelineVirtual,
     toggleImageFavorite,
+    toggleSelectedImage,
     toggleTimelineGroup,
     viewMode
   ]);
 
   return (
-    <section className="page-section">
+    <section className={cx("page-section", selectionMode && "image-batch-active")}>
       <PageHeader
         title={t("pages.images.title")}
         desc={t("pages.images.desc")}
@@ -605,7 +799,21 @@ export function ImagesPage() {
           />
         }
       />
-      <div className="image-list-toolbar">
+      {selectionMode ? (
+        <ImageBatchToolbar
+          selectedCount={selectedImages.length}
+          loadedCount={imageList.length}
+          allLoadedSelected={allLoadedSelected}
+          pendingAction={pendingBatchAction}
+          onToggleAllLoaded={toggleAllLoadedImages}
+          onFavorite={(favorited) => setImageBatchFavorite.mutate({ imageIds: selectedImages.map((image) => image.id), favorited })}
+          onAddAsset={() => setBatchAssetOpen(true)}
+          onAddCase={() => setBatchCaseOpen(true)}
+          onDownload={() => setBatchDownloadOpen(true)}
+          onDelete={() => previewImageBatchDelete.mutate(selectedImages.map((image) => image.id))}
+          onExit={exitBatchMode}
+        />
+      ) : <div className="image-list-toolbar">
         <span className="image-total-count" aria-label={t("pages.images.totalAria", { count: imageFilterCounts.all })} title={t("pages.images.total", { count: imageFilterCounts.all })}>
           {t("pages.images.countPrefix")} <strong>{imageFilterCounts.all}</strong> {t("pages.images.countSuffix")}
         </span>
@@ -652,7 +860,11 @@ export function ImagesPage() {
           {timelineSort === "desc" ? <CalendarArrowDown size={16} /> : <CalendarArrowUp size={16} />}
           {timelineSort === "desc" ? t("pages.images.newToOld") : t("pages.images.oldToNew")}
         </button>
-      </div>
+        <button className="secondary-btn image-batch-enter" type="button" onClick={enterBatchMode} disabled={imageList.length === 0}>
+          <ListChecks size={16} />
+          {t("pages.images.batch.manage")}
+        </button>
+      </div>}
       {imageContent}
       {!images.isLoading && imageList.length === 0 ? (
         hasImageFilters ? (
@@ -696,7 +908,55 @@ export function ImagesPage() {
           onAdd={(payload) => addAsset.mutate({ image: assetTarget, ...payload })}
         />
       ) : null}
+      {batchAssetOpen ? (
+        <ImageBatchAssetDialog
+          images={selectedImages}
+          pending={addImageBatchAssets.isPending}
+          error={addImageBatchAssets.error instanceof Error ? addImageBatchAssets.error : null}
+          onClose={() => {
+            if (!addImageBatchAssets.isPending) setBatchAssetOpen(false);
+          }}
+          onSubmit={(payload) => addImageBatchAssets.mutate(payload)}
+        />
+      ) : null}
+      {batchDownloadOpen ? (
+        <ImageBatchDownloadDialog
+          images={selectedImages}
+          pending={createImageBatchDownload.isPending}
+          error={createImageBatchDownload.error instanceof Error ? createImageBatchDownload.error : null}
+          onClose={() => {
+            if (!createImageBatchDownload.isPending) setBatchDownloadOpen(false);
+          }}
+          onSubmit={(payload) => createImageBatchDownload.mutate(payload)}
+        />
+      ) : null}
+      {batchCaseOpen ? (
+        <ImageBatchCaseDialog
+          images={selectedImages}
+          pending={addImageBatchCases.isPending}
+          error={addImageBatchCases.error instanceof Error ? addImageBatchCases.error : null}
+          onClose={() => {
+            if (!addImageBatchCases.isPending) setBatchCaseOpen(false);
+          }}
+          onSubmit={(payload) => addImageBatchCases.mutate(payload)}
+        />
+      ) : null}
       {caseSource ? <AddCaseModal source={caseSource} onClose={() => setCaseSource(null)} /> : null}
+      {batchDeleteImpact ? (
+        <ImageBatchDeleteDialog
+          selectedCount={selectedImages.length}
+          impact={batchDeleteImpact}
+          pending={deleteImageBatch.isPending}
+          onClose={() => {
+            if (!deleteImageBatch.isPending) setBatchDeleteImpact(null);
+          }}
+          onConfirm={() => deleteImageBatch.mutate({
+            imageIds: selectedImages.map((image) => image.id),
+            confirmAssociated: batchDeleteImpact.hasAssociated
+          })}
+        />
+      ) : null}
+      {batchResult ? <ImageBatchResultDialog title={batchResult.title} result={batchResult.result} onClose={() => setBatchResult(null)} /> : null}
       <ConfirmDialog
         open={Boolean(deleteTarget)}
         title={t("pages.images.deleteTitle")}
