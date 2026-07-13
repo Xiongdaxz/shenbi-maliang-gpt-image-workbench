@@ -77,6 +77,7 @@ import { registerPromptColorSchemeRoutes } from "./promptColorSchemeRoutes";
 import { registerPromptReferenceLinkRoutes } from "./promptReferenceLinkRoutes";
 import { registerPromptTemplateRoutes } from "./promptTemplateRoutes";
 import { registerSearchHistoryRoutes } from "./searchHistoryRoutes";
+import { registerSearchRoutes } from "./searchRoutes";
 import { registerSafetyReviewRoutes } from "./safetyReview";
 import { registerStarterCopyRoutes, startStarterCopyScheduler } from "./starterCopyRoutes";
 import { registerUserRoutes } from "./userRoutes";
@@ -284,6 +285,8 @@ registerImageRoutes(api);
 registerAssetRoutes(api);
 
 registerSearchHistoryRoutes(api);
+
+registerSearchRoutes(api);
 
 registerChangelogRoutes(api);
 

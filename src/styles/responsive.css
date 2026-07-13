@@ -5,6 +5,11 @@
     grid-template-columns: 1fr;
   }
 
+  .app-shell,
+  .app-shell.sidebar-collapsed {
+    --app-sidebar-width: 0px;
+  }
+
   .config-shell {
     height: auto;
     min-height: 100vh;

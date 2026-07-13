@@ -712,6 +712,10 @@ html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance=
   color: var(--app-text);
 }
 
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .page-header-view-toggle button {
+  color: var(--app-text);
+}
+
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .page-header-view-toggle::before,
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .pill-tabs .active,
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-filter-pinned-tabs .active,

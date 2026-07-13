@@ -4,7 +4,7 @@ import { appDb, getAll, getOne, run } from "./db";
 import type { SearchHistoryRow } from "./types";
 import { makeId, now } from "./utils";
 
-const SEARCH_HISTORY_SCOPES = new Set(["chat", "cases", "assets", "images", "promptTemplates"]);
+const SEARCH_HISTORY_SCOPES = new Set(["chat", "cases", "assets", "images", "promptTemplates", "global"]);
 const MAX_SEARCH_KEYWORD_LENGTH = 120;
 
 function normalizeScope(value: unknown) {

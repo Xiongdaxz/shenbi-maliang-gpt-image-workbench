@@ -290,6 +290,121 @@ function coverGroupImage(groupId: string) {
   );
 }
 
+function publicVisibleCaseDetail(caseId: string, userId: string) {
+  const item = resolveVisibleCaseItem(caseId, userId);
+  if (!item) return null;
+  const groupId = groupIdFromItem(item);
+  const categoryRows = getAll<{ id: string; name: string }>(
+    appDb,
+    `select distinct case_categories.id, case_categories.name, case_categories.sort_order
+     from case_items
+     join case_categories on case_categories.id = case_items.category_id
+     where coalesce(nullif(case_items.group_id, ''), case_items.id) = ?
+       and case_categories.type = 'case'
+     order by case_categories.sort_order asc, case_categories.rowid asc`,
+    groupId
+  );
+  const visibleCategories = categoryRows.filter((category) => category.id !== UNCATEGORIZED_CASE_CATEGORY_ID);
+  const groupRows = groupImageRowsByGroupIds([groupId]).get(groupId) ?? [];
+  const imageIds = groupRows.map((row) => row.image_id ?? "").filter(Boolean);
+  const referenceMap = imageReferencesByImageIds(imageIds);
+  const groupImages = groupRows
+    .map((row) => publicGroupImage(row, referenceMap, item.include_references !== 0))
+    .sort((left, right) => left.sortOrder - right.sortOrder);
+  const fallbackImageUrl = item.image_id
+    ? imageUrlFromImageId(item.image_id)
+    : item.asset_id
+      ? assetUrlFromAssetId(item.asset_id)
+      : item.image_url;
+  const fallbackPreviewUrl = item.image_id
+    ? imageUrlFromImageId(item.image_id, "preview")
+    : item.asset_id
+      ? assetUrlFromAssetId(item.asset_id, "preview")
+      : fallbackImageUrl;
+  const fallbackThumbnailUrl = item.image_id
+    ? imageUrlFromImageId(item.image_id, "thumb")
+    : item.asset_id
+      ? assetUrlFromAssetId(item.asset_id, "thumb")
+      : fallbackPreviewUrl;
+  const groupCounts = new Map([[groupId, groupRows.length || 1]]);
+  const source = sourceFromCaseItemWithGroupCount(item, groupCounts);
+  const sourceUserId = source.sourceUserId || "";
+  const useCount = getOne<{ total: number }>(
+    appDb,
+    `select count(*) as total
+     from case_prompt_usage_events
+     where source_user_id = ? and source_type = ? and source_id = ?`,
+    sourceUserId,
+    source.sourceType,
+    source.sourceId
+  )?.total ?? 0;
+  const favorite = getOne<{ total: number; current_user_favorited: number }>(
+    appDb,
+    `select count(*) as total,
+            max(case when user_id = ? then 1 else 0 end) as current_user_favorited
+     from case_favorites
+     where source_user_id = ? and source_type = ? and source_id = ?`,
+    userId,
+    sourceUserId,
+    source.sourceType,
+    source.sourceId
+  );
+  const baseItem: PublicCaseItem = {
+    id: item.id,
+    title: item.title,
+    prompt: item.prompt,
+    imageUrl: fallbackImageUrl,
+    imageOriginalUrl: fallbackImageUrl,
+    imagePreviewUrl: fallbackPreviewUrl,
+    imageThumbnailUrl: fallbackThumbnailUrl,
+    downloadSourceType: item.image_id ? "image" : item.asset_id ? "asset" : null,
+    downloadSourceId: item.image_id ?? item.asset_id ?? null,
+    createdAt: item.created_at,
+    imageWidth: item.image_width ?? 0,
+    imageHeight: item.image_height ?? 0,
+    imageFileSize: item.image_file_size ?? 0,
+    useCount,
+    favoriteCount: Number(favorite?.total ?? 0),
+    favorited: Boolean(favorite?.current_user_favorited),
+    sourceUsername: item.source_username ?? "未知用户",
+    canDelete: item.user_id === userId,
+    groupId,
+    categoryIds: visibleCategories.map((category) => category.id),
+    categoryNames: visibleCategories.map((category) => category.name),
+    includeReferences: item.include_references !== 0,
+    reviewStatus: normalizeReviewStatus(item.review_status),
+    reviewRequestedAt: item.review_requested_at ?? "",
+    reviewedAt: item.reviewed_at ?? "",
+    rejectReason: item.reject_reason ?? "",
+    images: [],
+    imageCount: 1,
+    coverImageId: item.image_id ?? item.asset_id ?? item.image_url,
+    referenceImages: item.include_references !== 0 && item.image_id ? referenceMap.get(item.image_id) ?? [] : [],
+    _categoryId: item.category_id,
+    _imageId: item.image_id,
+    _includeReferences: item.include_references !== 0
+  };
+  const publicImages = groupImages.length > 0 ? groupImages : [fallbackGroupImageFromCaseItem(baseItem)];
+  const cover = publicImages.find((image) => image.isCover) ?? publicImages[0];
+  const { _categoryId, _imageId, _includeReferences, ...publicItem } = baseItem;
+  return {
+    ...publicItem,
+    imageUrl: cover.imageUrl,
+    imageOriginalUrl: cover.imageOriginalUrl,
+    imagePreviewUrl: cover.imagePreviewUrl,
+    imageThumbnailUrl: cover.imageThumbnailUrl,
+    downloadSourceType: cover.downloadSourceType,
+    downloadSourceId: cover.downloadSourceId,
+    imageWidth: cover.imageWidth,
+    imageHeight: cover.imageHeight,
+    imageFileSize: cover.imageFileSize,
+    images: publicImages,
+    imageCount: publicImages.length,
+    coverImageId: cover.sourceId,
+    referenceImages: cover.referenceImages
+  };
+}
+
 export function registerCaseRoutes(api: Hono) {
 api.get("/cases", async (c) => {
   const user = await requireUser(c);
@@ -533,6 +648,14 @@ api.get("/cases", async (c) => {
       items: publicItemsByCategory.get(category.id) ?? []
     }))
   });
+});
+
+api.get("/cases/:caseId", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return c.json({ error: "未登录" }, 401);
+  const caseItem = publicVisibleCaseDetail(c.req.param("caseId"), user.id);
+  if (!caseItem) return c.json({ error: "灵感不存在" }, 404);
+  return c.json({ caseItem });
 });
 
 api.post("/cases/categories", async (c) => {

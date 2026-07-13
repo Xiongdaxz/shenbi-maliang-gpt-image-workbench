@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
@@ -54,7 +55,7 @@ export function ImageLightbox({
     onChangeIndex(nextIndex);
   };
 
-  return (
+  return createPortal(
     <div className={cx("reference-image-lightbox", canSwitch && "has-thumbs")} onMouseDown={onClose} role="dialog" aria-modal="true" aria-label={t("imageLightbox.preview")}>
       <button
         type="button"
@@ -106,6 +107,7 @@ export function ImageLightbox({
           </div>
         </>
       ) : null}
-    </div>
+    </div>,
+    document.body
   );
 }

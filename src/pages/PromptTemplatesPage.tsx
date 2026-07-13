@@ -118,6 +118,7 @@ import { SearchHistoryInput } from "../components/SearchHistoryInput";
 import { useI18n, type LocaleCode, type Translate } from "../i18n";
 import { copyTextToClipboard } from "../lib/clipboard";
 import { cx } from "../lib/cx";
+import { promptTemplateIconFor, promptTemplateIconMap } from "../lib/promptTemplateIcons";
 import {
   normalizePromptOptimizeStyle,
   promptOptimizeStyleOption,
@@ -182,96 +183,8 @@ const PROMPT_DIFF_MAX_CELLS = 160000;
 const PROMPT_TEMPLATE_HISTORY_PAGE_SIZE = 20;
 const PROMPT_TEMPLATE_EXPORT_DOWNLOAD_PAGE_SIZE = 12;
 
-const iconMap: Record<string, LucideIcon> = {
-  Sparkles,
-  Sparkle,
-  Image: ImageIcon,
-  Megaphone,
-  Film,
-  Camera,
-  Clapperboard,
-  Video,
-  Tv,
-  PanelsTopLeft,
-  Palette,
-  Brush,
-  PenTool,
-  Shapes,
-  Layers,
-  Frame,
-  LayoutTemplate,
-  Type,
-  FileText,
-  Newspaper,
-  ScrollText,
-  ClipboardList,
-  BookOpen,
-  WandSparkles,
-  Box,
-  Package,
-  PackageCheck,
-  ShoppingBag,
-  ShoppingCart,
-  Store,
-  Tag,
-  BadgePercent,
-  ReceiptText,
-  WalletCards,
-  Shirt,
-  Gem,
-  Gift,
-  Crown,
-  BadgeCheck,
-  Calendar,
-  Ticket,
-  PartyPopper,
-  Trophy,
-  MapPin,
-  House,
-  Building2,
-  Landmark,
-  Hotel,
-  Car,
-  Plane,
-  Truck,
-  Globe,
-  Mountain,
-  Waves,
-  Sun,
-  Trees,
-  Leaf,
-  Sprout,
-  Flower2,
-  Umbrella,
-  Utensils,
-  Coffee,
-  Pizza,
-  Music,
-  Podcast,
-  Radio,
-  Mic,
-  Gamepad2,
-  Heart,
-  Star,
-  Smile,
-  Users,
-  Smartphone,
-  Laptop,
-  Monitor,
-  Lightbulb,
-  Rocket,
-  Target,
-  Workflow,
-  ScanEye,
-  Zap,
-  Briefcase,
-  Handshake,
-  Sofa,
-  Armchair
-};
-
 function promptTemplateIconOptions(t: Translate) {
-  return Object.entries(iconMap).map(([name, Icon]) => ({
+  return Object.entries(promptTemplateIconMap).map(([name, Icon]) => ({
     value: name,
     label: t(`promptTemplates.icons.${name}`),
     description: name,
@@ -1032,10 +945,6 @@ function ColorComponentSettings({
       </div>
     </>
   );
-}
-
-function iconFor(name: string) {
-  return iconMap[name] ?? Sparkles;
 }
 
 function defaultComponentWidth(type: PromptTemplateComponentType): PromptTemplateComponentWidth {
@@ -2043,7 +1952,7 @@ export function PromptTemplatesPage() {
         <div className="prompt-template-list">
           {templatesQuery.isLoading ? Array.from({ length: 6 }).map((_, index) => <div className="prompt-template-skeleton" key={index} />) : null}
           {templates.map((item) => {
-            const Icon = iconFor(item.icon);
+            const Icon = promptTemplateIconFor(item.icon);
             const ownerLabel = sharedOwnerLabel(item, t);
             return (
               <article
@@ -2119,7 +2028,7 @@ export function PromptTemplatesPage() {
     );
   }
 
-  const TemplateIcon = iconFor(template.icon);
+  const TemplateIcon = promptTemplateIconFor(template.icon);
   const resultBlockRows = `minmax(0, ${resultBlockSplit.toFixed(4)}fr) 12px minmax(0, ${(1 - resultBlockSplit).toFixed(4)}fr)`;
   return (
     <div
@@ -2711,7 +2620,7 @@ export function PromptTemplateEditorPage() {
     );
   }
 
-  const TemplateIcon = iconFor(template.icon);
+  const TemplateIcon = promptTemplateIconFor(template.icon);
 
   return (
     <div className="prompt-template-edit-page">

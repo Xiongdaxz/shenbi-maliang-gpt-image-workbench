@@ -17,6 +17,7 @@ type SearchHistoryInputProps = {
   className?: string;
   icon?: ReactNode;
   onKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void;
+  recordEnabled?: boolean;
 };
 
 function setForwardedRef<T>(ref: Ref<T> | undefined, value: T | null) {
@@ -44,7 +45,7 @@ function formatRelativeTime(value: string, t: Translate) {
 }
 
 export const SearchHistoryInput = forwardRef<HTMLInputElement, SearchHistoryInputProps>(function SearchHistoryInput(
-  { scope, value, onChange, placeholder, ariaLabel, autoFocus, className, icon, onKeyDown },
+  { scope, value, onChange, placeholder, ariaLabel, autoFocus, className, icon, onKeyDown, recordEnabled = true },
   forwardedRef
 ) {
   const { t } = useI18n();
@@ -77,17 +78,11 @@ export const SearchHistoryInput = forwardRef<HTMLInputElement, SearchHistoryInpu
     onSuccess: invalidateHistory
   });
   const history = historyQuery.data?.history ?? [];
-  const visibleHistory = useMemo(() => {
-    const normalizedValue = inputValue.trim().toLocaleLowerCase();
-    const source = normalizedValue
-      ? history.filter((item) => item.keyword.toLocaleLowerCase().includes(normalizedValue))
-      : history;
-    return source.slice(0, 8);
-  }, [history, inputValue]);
-  const shouldShowMenu = open && visibleHistory.length > 0;
+  const visibleHistory = useMemo(() => history.slice(0, 8), [history]);
+  const shouldShowMenu = open && !inputValue.trim() && visibleHistory.length > 0;
 
   function recordKeyword(rawKeyword = value) {
-    if (isComposingRef.current || isComposing) return;
+    if (!recordEnabled || isComposingRef.current || isComposing) return;
     const keyword = rawKeyword.trim();
     if (!keyword) return;
     const key = `${scope}:${keyword.toLocaleLowerCase()}`;
@@ -98,12 +93,12 @@ export const SearchHistoryInput = forwardRef<HTMLInputElement, SearchHistoryInpu
   }
 
   useEffect(() => {
-    if (isComposingRef.current || isComposing) return;
+    if (!recordEnabled || isComposingRef.current || isComposing) return;
     const keyword = value.trim();
     if (!keyword) return;
     const timer = window.setTimeout(() => recordKeyword(keyword), 900);
     return () => window.clearTimeout(timer);
-  }, [isComposing, scope, value]);
+  }, [isComposing, recordEnabled, scope, value]);
 
   useEffect(() => {
     if (isComposingRef.current || isComposing) return;
@@ -135,7 +130,7 @@ export const SearchHistoryInput = forwardRef<HTMLInputElement, SearchHistoryInpu
         onChange={(event) => {
           const nextValue = event.target.value;
           setInputValue(nextValue);
-          setOpen(true);
+          setOpen(!nextValue.trim());
           if (isComposingRef.current || isComposing || (event.nativeEvent as InputEvent).isComposing) return;
           onChange(nextValue);
         }}
@@ -149,10 +144,10 @@ export const SearchHistoryInput = forwardRef<HTMLInputElement, SearchHistoryInpu
           setIsComposing(false);
           setInputValue(nextValue);
           onChange(nextValue);
-          setOpen(true);
+          setOpen(!nextValue.trim());
         }}
         onFocus={() => {
-          setOpen(true);
+          setOpen(!inputValue.trim());
           historyQuery.refetch();
         }}
         onBlur={() => {

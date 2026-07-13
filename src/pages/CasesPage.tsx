@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Balloon, Check, Heart, Images as ImagesIcon, Lightbulb, Link2, Pencil, Plus, RefreshCw, Search, Send, Trash2, X } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { AddAssetFromImageModal } from "../components/AddAssetFromImageModal";
 import { CaseModalImagePreview, type CaseModalPreviewImage } from "../components/CaseModalImagePreview";
@@ -45,6 +45,14 @@ function caseReviewStatusLabel(status: GalleryCaseItem["reviewStatus"], t: (key:
   if (status === "pending") return t("status.pendingReview");
   if (status === "rejected") return t("status.rejected");
   return t("status.approved");
+}
+
+function galleryCaseFromDetail(item: CaseCategory["items"][number]): GalleryCaseItem {
+  return {
+    ...item,
+    styleId: item.categoryIds[0] ?? "",
+    styleName: item.categoryNames[0] ?? ""
+  };
 }
 
 function EditCaseModal({
@@ -186,6 +194,7 @@ function EditCaseModal({
 
 export function CasesPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const setDraftPrompt = useWorkbench((state) => state.setDraftPrompt);
   const resetNewChatComposer = useWorkbench((state) => state.resetNewChatComposer);
@@ -194,10 +203,13 @@ export function CasesPage() {
   const setMaterialPickerOpen = useWorkbench((state) => state.setMaterialPickerOpen);
   const { showToast } = useToast();
   const { t } = useI18n();
+  const openCaseId = searchParams.get("open")?.trim() ?? "";
+  const urlKeyword = searchParams.get("keyword") ?? "";
+  const failedOpenCaseRef = useRef("");
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [mineOnly, setMineOnly] = useState(false);
   const [favoriteOnly, setFavoriteOnly] = useState(false);
-  const [keyword, setKeyword] = useState("");
+  const [keyword, setKeyword] = useState(() => urlKeyword);
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<GalleryCaseItem | null>(null);
   const [editTarget, setEditTarget] = useState<GalleryCaseItem | null>(null);
@@ -205,6 +217,17 @@ export function CasesPage() {
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [promptReferenceOpen, setPromptReferenceOpen] = useState(false);
   const [filterDisplayMode, setFilterDisplayMode] = useLibraryFilterDisplayMode();
+  const clearOpenCase = useCallback(() => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("open");
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, setSearchParams]);
+  const openCase = useQuery({
+    queryKey: ["case-detail", openCaseId],
+    queryFn: ({ signal }) => api.caseDetail(openCaseId, { signal }),
+    enabled: Boolean(openCaseId),
+    retry: false
+  });
   const cases = useInfiniteQuery({
     queryKey: ["cases", "paged", selectedCategoryIds.join(","), mineOnly, favoriteOnly, keyword],
     queryFn: ({ pageParam }) =>
@@ -345,6 +368,11 @@ export function CasesPage() {
       selectedCategoryIds.length === 0 ? categories : categories.filter((category) => selectedCategorySet.has(category.id));
     return filterGalleryCaseItems(buildGalleryCaseItems(sourceCategories), { mineOnly, favoriteOnly, keyword });
   }, [categories, favoriteOnly, keyword, mineOnly, selectedCategoryIds]);
+  const previewSourceItems = useMemo(() => {
+    const target = openCase.data?.caseItem ? galleryCaseFromDetail(openCase.data.caseItem) : null;
+    if (!openCaseId || !target || visibleItems.some((item) => (item.groupId || item.id) === openCaseId)) return visibleItems;
+    return [target, ...visibleItems];
+  }, [openCase.data?.caseItem, openCaseId, visibleItems]);
   const caseFilterCounts = useMemo(() => {
     const serverCounts = cases.data?.pages[0]?.counts;
     if (serverCounts) return { ...serverCounts, favorite: serverCounts.favorite ?? 0, byCategory: new Map(Object.entries(serverCounts.byCategory)) };
@@ -363,7 +391,7 @@ export function CasesPage() {
   }, [caseStyleCategories, cases.data?.pages, categories, keyword]);
   const casePreviewItems = useMemo(
     () =>
-      visibleItems.map((item) => {
+      previewSourceItems.map((item) => {
         const styleNames = visibleCaseStyleNames(item);
         const originalUrl = item.imageOriginalUrl ?? item.imageUrl;
         const groupImages = (item.images ?? []).map((image) => ({
@@ -388,7 +416,7 @@ export function CasesPage() {
           ]
         };
       }),
-    [t, visibleItems]
+    [previewSourceItems, t]
   );
   const caseFilterHintKey = useMemo(
     () =>
@@ -441,10 +469,27 @@ export function CasesPage() {
   }, [caseStyleCategories, selectedCategoryIds.length]);
 
   useEffect(() => {
-    if (previewIndex !== null && previewIndex >= visibleItems.length) {
-      setPreviewIndex(visibleItems.length > 0 ? visibleItems.length - 1 : null);
+    if (previewIndex !== null && previewIndex >= previewSourceItems.length) {
+      setPreviewIndex(previewSourceItems.length > 0 ? previewSourceItems.length - 1 : null);
     }
-  }, [previewIndex, visibleItems.length]);
+  }, [previewIndex, previewSourceItems.length]);
+
+  useEffect(() => {
+    setKeyword((current) => (current === urlKeyword ? current : urlKeyword));
+  }, [urlKeyword]);
+
+  useEffect(() => {
+    if (!openCaseId || !openCase.data?.caseItem) return;
+    const nextIndex = previewSourceItems.findIndex((item) => (item.groupId || item.id) === openCaseId);
+    if (nextIndex >= 0) setPreviewIndex(nextIndex);
+  }, [openCase.data?.caseItem, openCaseId, previewSourceItems]);
+
+  useEffect(() => {
+    if (!openCaseId || !openCase.isError || failedOpenCaseRef.current === openCaseId) return;
+    failedOpenCaseRef.current = openCaseId;
+    showToast(t("globalSearch.openUnavailable"), "error");
+    clearOpenCase();
+  }, [clearOpenCase, openCase.isError, openCaseId, showToast, t]);
 
   const scopeFilterButtons = (
     <>
@@ -655,7 +700,10 @@ export function CasesPage() {
           ariaLabel={t("pages.cases.preview")}
           initialZoomMode="contain"
           onIndexChange={setPreviewIndex}
-          onClose={() => setPreviewIndex(null)}
+          onClose={() => {
+            setPreviewIndex(null);
+            if (openCaseId) clearOpenCase();
+          }}
           renderActions={(item) => (
             <>
               <button

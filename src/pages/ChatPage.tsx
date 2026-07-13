@@ -1629,6 +1629,7 @@ export function ChatPage({ user }: { user: User }) {
     <section
       className={cx(
         "chat-page",
+        !showStarter && "has-conversation",
         composerPreviews.length > 0 && "has-composer-preview",
         showComposerEditSuggestions && "has-edit-suggestions",
         branchSwitchOptions.length > 1 && "has-branch-switch"

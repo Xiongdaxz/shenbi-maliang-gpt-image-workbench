@@ -79,6 +79,19 @@ export function useScrollJump({ disabled = false, syncKey = "" }: UseScrollJumpO
     };
 
     const handleResize = () => syncScrollJump(true);
+    let layoutSyncFrame: number | null = null;
+    const scheduleLayoutSync = () => {
+      if (layoutSyncFrame !== null) return;
+      layoutSyncFrame = requestAnimationFrame(() => {
+        layoutSyncFrame = null;
+        syncScrollJump(true);
+      });
+    };
+
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(scheduleLayoutSync);
+    resizeObserver?.observe(document.documentElement);
+    resizeObserver?.observe(document.body);
+
     lastScrollTopRef.current = readScroll().scrollTop;
     const frame = requestAnimationFrame(() => syncScrollJump(true));
     const lateSyncTimer = window.setTimeout(() => syncScrollJump(true), 520);
@@ -88,6 +101,8 @@ export function useScrollJump({ disabled = false, syncKey = "" }: UseScrollJumpO
 
     return () => {
       cancelAnimationFrame(frame);
+      if (layoutSyncFrame !== null) cancelAnimationFrame(layoutSyncFrame);
+      resizeObserver?.disconnect();
       window.clearTimeout(lateSyncTimer);
       if (scrollStopTimerRef.current) window.clearTimeout(scrollStopTimerRef.current);
       window.removeEventListener("scroll", handleScroll);

@@ -539,6 +539,13 @@
   background: transparent;
 }
 
+.chat-page.has-conversation .composer-wrap {
+  position: fixed;
+  left: var(--app-sidebar-width, 260px);
+  right: 0;
+  width: min(840px, calc(100vw - var(--app-sidebar-width, 260px)));
+}
+
 .chat-branch-switch {
   position: fixed;
   top: 18px;

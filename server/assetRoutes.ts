@@ -493,6 +493,22 @@ api.post("/assets/categories", async (c) => {
   return c.json({ category: { id, name, slug, items: [] } });
 });
 
+api.get("/assets/:assetId", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return c.json({ error: "未登录" }, 401);
+  const asset = getOne<AssetRow>(
+    appDb,
+    `select assets.*, users.username as source_username
+     from assets
+     left join users on users.id = assets.user_id
+     where assets.id = ? and ${visibleAssetSql("assets")}`,
+    c.req.param("assetId"),
+    user.id
+  );
+  if (!asset) return c.json({ error: "素材不存在" }, 404);
+  return c.json({ asset: publicAsset(asset, assetCategoryMap([asset.id]), user.id) });
+});
+
 api.post("/assets/upload", async (c) => {
   const user = await requireUser(c);
   if (!user) return c.json({ error: "未登录" }, 401);

@@ -15,7 +15,7 @@
   place-items: center;
   border: 0;
   border-radius: 999px;
-  color: #9ca3af;
+  color: var(--app-muted);
   background: transparent;
   padding: 0;
   opacity: 1;
@@ -26,7 +26,7 @@
 }
 
 .search-history-input-clear:hover {
-  color: #111827;
+  color: var(--app-text);
   background: var(--button-default-hover-bg);
 }
 
@@ -50,9 +50,9 @@
   max-width: calc(100vw - 32px);
   display: grid;
   gap: 4px;
-  border: 1px solid rgba(209, 213, 219, 0.9);
+  border: 1px solid var(--app-border);
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--app-surface-raised);
   padding: 9px;
   box-shadow: 0 28px 90px rgba(15, 23, 42, 0.22);
   backdrop-filter: blur(2px);
@@ -67,7 +67,7 @@
   justify-content: space-between;
   gap: 8px;
   padding: 2px 5px 7px 10px;
-  color: #8b929e;
+  color: var(--app-muted);
   font-size: 12px;
 }
 
@@ -89,14 +89,14 @@
   border: 0;
   border-radius: 999px;
   padding: 6px 8px;
-  color: #6b7280;
+  color: var(--app-muted);
   background: transparent;
   font-size: 12px;
   white-space: nowrap;
 }
 
 .search-history-clear:hover {
-  color: #111827;
+  color: var(--app-text);
   background: var(--button-default-hover-bg);
 }
 
@@ -107,13 +107,13 @@
   place-items: center;
   border: 0;
   border-radius: 999px;
-  color: #8b929e;
+  color: var(--app-muted);
   background: transparent;
   padding: 0;
 }
 
 .search-history-close:hover {
-  color: #111827;
+  color: var(--app-text);
   background: var(--button-default-hover-bg);
 }
 
@@ -140,7 +140,7 @@
   border: 0;
   border-radius: 999px;
   padding: 8px 9px;
-  color: #111827;
+  color: var(--app-text);
   background: transparent;
   text-align: left;
 }
@@ -150,7 +150,7 @@
 }
 
 .search-history-select svg {
-  color: #9ca3af;
+  color: var(--app-muted);
 }
 
 .search-history-select span {
@@ -161,7 +161,7 @@
 }
 
 .search-history-select time {
-  color: #8b929e;
+  color: var(--app-muted);
   font-size: 12px;
   white-space: nowrap;
 }
@@ -173,7 +173,7 @@
   place-items: center;
   border: 0;
   border-radius: 999px;
-  color: #9ca3af;
+  color: var(--app-muted);
   background: transparent;
   padding: 0;
 }
@@ -194,7 +194,7 @@
   grid-template-columns: 18px minmax(0, 1fr) 30px;
   align-items: center;
   gap: 10px;
-  color: #6b7280;
+  color: var(--app-muted);
 }
 
 .search-modal-input input {
@@ -207,11 +207,11 @@
   display: grid;
   place-items: center;
   border-radius: 999px;
-  color: #9ca3af;
+  color: var(--app-muted);
 }
 
 .search-modal-head .search-history-input-clear:hover {
-  color: #111827;
+  color: var(--app-text);
   background: var(--button-default-hover-bg);
 }
 

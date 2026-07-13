@@ -1141,10 +1141,10 @@ export function WorkbenchShell({ user }: { user: User }) {
                   <button
                     className="sidebar-head-search"
                     type="button"
-                    aria-label={t("sidebar.searchChats")}
-                    onMouseEnter={(event) => showSidebarFloatingTip(event, { label: t("sidebar.searchChats"), shortcut: "Ctrl + K" })}
+                    aria-label={t("sidebar.globalSearch")}
+                    onMouseEnter={(event) => showSidebarFloatingTip(event, { label: t("sidebar.globalSearch"), shortcut: "Ctrl + K" })}
                     onMouseLeave={hideSidebarFloatingTip}
-                    onFocus={(event) => showSidebarFloatingTip(event, { label: t("sidebar.searchChats"), shortcut: "Ctrl + K" })}
+                    onFocus={(event) => showSidebarFloatingTip(event, { label: t("sidebar.globalSearch"), shortcut: "Ctrl + K" })}
                     onBlur={hideSidebarFloatingTip}
                     onClick={() => {
                       hideSidebarFloatingTip();
@@ -1200,16 +1200,16 @@ export function WorkbenchShell({ user }: { user: User }) {
                 <button
                   type="button"
                   className={cx("nav-item", "nav-item-with-shortcut-tip", searchOpen && "active")}
-                  aria-label={t("sidebar.searchChats")}
+                  aria-label={t("sidebar.globalSearch")}
                   onClick={() => {
                     setSearchOpen(true);
                     setMobileMenuOpen(false);
                   }}
                 >
                   <Search size={18} />
-                  <span>{t("sidebar.searchChats")}</span>
+                  <span>{t("sidebar.globalSearch")}</span>
                   <div className="sidebar-shortcut-tip" role="tooltip" aria-hidden="true">
-                    <strong>{t("sidebar.searchChats")}</strong>
+                    <strong>{t("sidebar.globalSearch")}</strong>
                     <kbd>Ctrl + K</kbd>
                   </div>
                 </button>

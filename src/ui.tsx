@@ -59,7 +59,16 @@ export function CustomSelect({
       const viewportPadding = 12;
       const minWidth = Math.max(rect.width, Number(menuWidth ?? 0), 1);
       const maxWidth = Math.max(window.innerWidth - viewportPadding * 2, 1);
-      const contentWidth = menuAutoWidth ? Math.ceil(menuRef.current?.scrollWidth ?? 0) + menuAutoWidthPadding : 0;
+      let contentWidth = 0;
+      if (menuAutoWidth && menuRef.current) {
+        const menu = menuRef.current;
+        const previousWidth = menu.style.width;
+        const computedStyle = window.getComputedStyle(menu);
+        const horizontalPadding = Number.parseFloat(computedStyle.paddingLeft) + Number.parseFloat(computedStyle.paddingRight);
+        menu.style.width = "0px";
+        contentWidth = Math.ceil(Math.max(0, menu.scrollWidth - horizontalPadding)) + menuAutoWidthPadding;
+        menu.style.width = previousWidth;
+      }
       const width = Math.min(Math.max(minWidth, contentWidth), maxWidth);
       const maxLeft = Math.max(viewportPadding, window.innerWidth - width - viewportPadding);
       const left = Math.min(Math.max(viewportPadding, rect.left), maxLeft);

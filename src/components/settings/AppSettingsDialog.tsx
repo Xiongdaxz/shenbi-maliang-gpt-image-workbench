@@ -296,7 +296,7 @@ export function AppSettingsDialog({
                     menuClassName="settings-edit-suggestion-menu"
                     menuWidth={300}
                     menuAutoWidth
-                    menuAutoWidthPadding={10}
+                    menuAutoWidthPadding={28}
                   />
                 </div>
               </div>

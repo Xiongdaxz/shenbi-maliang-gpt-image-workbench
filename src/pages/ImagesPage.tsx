@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { CalendarArrowDown, CalendarArrowUp, CalendarDays, ChevronDown, ChevronUp, Heart, Images, LayoutGrid, ListChecks, Plus, Search, X } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../api";
 import { AddAssetFromImageModal } from "../components/AddAssetFromImageModal";
 import { AddCaseModal, type AddCaseSource } from "../components/AddCaseModal";
 import { PageHeaderViewToggle } from "../components/HorizontalScrollers";
 import { MyImageCard } from "../components/MyImageCard";
+import { ImagePreviewModal } from "../components/ImagePreviewModal";
 import { ImageBatchAssetDialog } from "../components/images/ImageBatchAssetDialog";
 import { ImageBatchCaseDialog } from "../components/images/ImageBatchCaseDialog";
 import { ImageBatchDeleteDialog } from "../components/images/ImageBatchDeleteDialog";
@@ -164,12 +165,16 @@ function useWindowVirtualRange<T extends HTMLElement>(
 export function ImagesPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const setEditImage = useWorkbench((state) => state.setEditImage);
   const setEditorImageRequest = useWorkbench((state) => state.setEditorImageRequest);
   const setDraftPrompt = useWorkbench((state) => state.setDraftPrompt);
   const { showToast } = useToast();
   const { resolvedLanguage, t } = useI18n();
   const assetCategories = useQuery({ queryKey: ["asset-categories"], queryFn: api.assetCategories });
+  const openImageId = searchParams.get("open")?.trim() ?? "";
+  const urlKeyword = searchParams.get("keyword") ?? "";
+  const failedOpenImageRef = useRef("");
   const [caseSource, setCaseSource] = useState<AddCaseSource | null>(null);
   const [assetTarget, setAssetTarget] = useState<WorkImage | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WorkImage | null>(null);
@@ -182,7 +187,7 @@ export function ImagesPage() {
   const [batchResult, setBatchResult] = useState<BatchResultState | null>(null);
   const [batchCaseOpen, setBatchCaseOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ImagesViewMode>(storedImagesViewMode);
-  const [keyword, setKeyword] = useState("");
+  const [keyword, setKeyword] = useState(() => urlKeyword);
   const [favoriteOnly, setFavoriteOnly] = useState(false);
   const [collapsedTimelineGroups, setCollapsedTimelineGroups] = useState<Set<string>>(() => new Set());
   const [autoCollapseTimelineGroups, setAutoCollapseTimelineGroups] = useState(false);
@@ -192,6 +197,17 @@ export function ImagesPage() {
   const gridWidth = useElementWidth(gridVirtualRef, viewMode);
   const timelineWidth = useElementWidth(timelineVirtualRef, viewMode);
   const [timelineSort, setTimelineSort] = useState<"desc" | "asc">("desc");
+  const clearOpenImage = useCallback(() => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("open");
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, setSearchParams]);
+  const openImage = useQuery({
+    queryKey: ["image-detail", openImageId],
+    queryFn: ({ signal }) => api.imageDetail(openImageId, { signal }),
+    enabled: Boolean(openImageId),
+    retry: false
+  });
   const images = useInfiniteQuery({
     queryKey: ["images", "paged", keyword, favoriteOnly, timelineSort],
     queryFn: ({ pageParam }) =>
@@ -206,6 +222,32 @@ export function ImagesPage() {
     getNextPageParam: (lastPage) => (lastPage.pageInfo.hasMore ? lastPage.pageInfo.offset + lastPage.pageInfo.limit : undefined)
   });
   const imageItems = useMemo(() => images.data?.pages.flatMap((page) => page.images) ?? [], [images.data?.pages]);
+  const openImagePreviewItems = useMemo(() => {
+    const image = openImage.data?.image;
+    if (!image) return [];
+    return [{
+      id: image.id,
+      title: image.prompt,
+      description: image.originPrompt?.trim() || image.prompt,
+      imageUrl: image.previewUrl || image.url,
+      originalUrl: image.originalUrl || image.url,
+      previewUrl: image.previewUrl || image.url,
+      thumbnailUrl: image.thumbnailUrl || image.previewUrl || image.url,
+      imageWidth: image.imageWidth,
+      imageHeight: image.imageHeight,
+      imageFileSize: image.imageFileSize,
+      downloadSourceType: "image" as const,
+      downloadSourceId: image.id,
+      favoriteCount: image.favoriteCount,
+      favorited: image.favorited,
+      referenceImages: image.referenceImages,
+      metaItems: [
+        image.kind === "edit" ? t("pages.images.edit") : t("pages.images.generation"),
+        image.size,
+        image.quality
+      ].filter(Boolean)
+    }];
+  }, [openImage.data?.image, t]);
   const imageLoadMoreRef = useInfinitePageLoader({
     fetchNextPage: () => images.fetchNextPage(),
     hasNextPage: Boolean(images.hasNextPage),
@@ -213,6 +255,17 @@ export function ImagesPage() {
   });
   const assetCategoryList = assetCategories.data?.categories ?? [];
   const allImagesNewestFirst = useMemo(() => newestWorkImages(imageItems), [imageItems]);
+
+  useEffect(() => {
+    setKeyword((current) => (current === urlKeyword ? current : urlKeyword));
+  }, [urlKeyword]);
+
+  useEffect(() => {
+    if (!openImageId || !openImage.isError || failedOpenImageRef.current === openImageId) return;
+    failedOpenImageRef.current = openImageId;
+    showToast(t("globalSearch.openUnavailable"), "error");
+    clearOpenImage();
+  }, [clearOpenImage, openImage.isError, openImageId, showToast, t]);
   const imageFilterCounts = useMemo(() => {
     const serverCounts = images.data?.pages[0]?.counts;
     if (serverCounts) return serverCounts;
@@ -898,6 +951,16 @@ export function ImagesPage() {
       ) : null}
       <div ref={imageLoadMoreRef} className="page-load-sentinel" aria-hidden="true" />
       <ScrollJumpButton className="page-scroll-jump-btn" scrollJump={scrollJump} onClick={jumpToScrollEdge} />
+      {openImageId && openImagePreviewItems.length > 0 ? (
+        <ImagePreviewModal
+          items={openImagePreviewItems}
+          index={0}
+          ariaLabel={t("globalSearch.imagePreview")}
+          initialZoomMode="contain"
+          onIndexChange={() => undefined}
+          onClose={clearOpenImage}
+        />
+      ) : null}
       {assetTarget ? (
         <AddAssetFromImageModal
           image={assetTarget}

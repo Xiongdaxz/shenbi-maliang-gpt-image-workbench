@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FolderOpen, Pencil, Plus, Search, Send, Share2, Trash2, X } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { AssetEditModal } from "../components/AssetEditModal";
 import { AssetUploadModal } from "../components/AssetUploadModal";
@@ -42,20 +42,35 @@ function assetMatchesKeyword(asset: AssetItem, normalizedKeyword: string) {
 export function AssetsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { showToast } = useToast();
   const { t } = useI18n();
   const resetNewChatComposer = useWorkbench((state) => state.resetNewChatComposer);
   const setSelectedAssets = useWorkbench((state) => state.setSelectedAssets);
   const assetCategories = useQuery({ queryKey: ["asset-categories"], queryFn: api.assetCategories });
+  const openAssetId = searchParams.get("open")?.trim() ?? "";
+  const urlKeyword = searchParams.get("keyword") ?? "";
+  const failedOpenAssetRef = useRef("");
   const [spaceFilter, setSpaceFilter] = useState<"all" | AssetItem["space"]>("all");
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
-  const [keyword, setKeyword] = useState("");
+  const [keyword, setKeyword] = useState(() => urlKeyword);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<AssetItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AssetItem | null>(null);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [filterDisplayMode, setFilterDisplayMode] = useLibraryFilterDisplayMode();
+  const clearOpenAsset = useCallback(() => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("open");
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, setSearchParams]);
+  const openAsset = useQuery({
+    queryKey: ["asset-detail", openAssetId],
+    queryFn: ({ signal }) => api.assetDetail(openAssetId, { signal }),
+    enabled: Boolean(openAssetId),
+    retry: false
+  });
   const assets = useInfiniteQuery({
     queryKey: ["assets", "paged", spaceFilter, selectedCategoryIds.join(","), keyword],
     queryFn: ({ pageParam }) =>
@@ -169,6 +184,11 @@ export function AssetsPage() {
       .filter((asset) => assetMatchesKeyword(asset, normalizedKeyword))
       .sort((a, b) => imageCreatedTime(b.createdAt) - imageCreatedTime(a.createdAt));
   }, [assetItems, keyword, selectedCategoryIds, spaceFilter]);
+  const previewSourceAssets = useMemo(() => {
+    const target = openAsset.data?.asset;
+    if (!openAssetId || !target || visibleAssets.some((asset) => asset.id === target.id)) return visibleAssets;
+    return [target, ...visibleAssets];
+  }, [openAsset.data?.asset, openAssetId, visibleAssets]);
   const assetTagFilterCounts = useMemo(() => {
     const serverCounts = assets.data?.pages[0]?.counts?.tags;
     if (serverCounts) return { all: serverCounts.all, byCategory: new Map(Object.entries(serverCounts.byCategory)) };
@@ -203,7 +223,7 @@ export function AssetsPage() {
   };
   const assetPreviewItems = useMemo(
     () =>
-      visibleAssets.map((asset) => ({
+      previewSourceAssets.map((asset) => ({
         ...asset,
         title: asset.name,
         description: asset.categoryNames.length > 0 ? asset.categoryNames.join(" / ") : assetSpaceLabelText(asset),
@@ -213,7 +233,7 @@ export function AssetsPage() {
         thumbnailUrl: asset.thumbnailUrl ?? asset.previewUrl ?? asset.url,
         imageFileSize: asset.size
       })),
-    [t, visibleAssets]
+    [previewSourceAssets, t]
   );
   const assetFilterHintKey = useMemo(
     () => ["asset-filter", spaceFilter, selectedCategoryIds.join(","), ...categories.map((category) => `${category.id}:${category.name}`)].join("\u0000"),
@@ -251,10 +271,27 @@ export function AssetsPage() {
   }, [categories, selectedCategoryIds.length]);
 
   useEffect(() => {
-    if (previewIndex !== null && previewIndex >= visibleAssets.length) {
-      setPreviewIndex(visibleAssets.length > 0 ? visibleAssets.length - 1 : null);
+    if (previewIndex !== null && previewIndex >= previewSourceAssets.length) {
+      setPreviewIndex(previewSourceAssets.length > 0 ? previewSourceAssets.length - 1 : null);
     }
-  }, [previewIndex, visibleAssets.length]);
+  }, [previewIndex, previewSourceAssets.length]);
+
+  useEffect(() => {
+    setKeyword((current) => (current === urlKeyword ? current : urlKeyword));
+  }, [urlKeyword]);
+
+  useEffect(() => {
+    if (!openAssetId || !openAsset.data?.asset) return;
+    const nextIndex = previewSourceAssets.findIndex((asset) => asset.id === openAssetId);
+    if (nextIndex >= 0) setPreviewIndex(nextIndex);
+  }, [openAsset.data?.asset, openAssetId, previewSourceAssets]);
+
+  useEffect(() => {
+    if (!openAssetId || !openAsset.isError || failedOpenAssetRef.current === openAssetId) return;
+    failedOpenAssetRef.current = openAssetId;
+    showToast(t("globalSearch.openUnavailable"), "error");
+    clearOpenAsset();
+  }, [clearOpenAsset, openAsset.isError, openAssetId, showToast, t]);
 
   return (
     <section className="page-section">
@@ -419,7 +456,10 @@ export function AssetsPage() {
           ariaLabel={t("pages.assets.preview")}
           initialZoomMode="contain"
           onIndexChange={setPreviewIndex}
-          onClose={() => setPreviewIndex(null)}
+          onClose={() => {
+            setPreviewIndex(null);
+            if (openAssetId) clearOpenAsset();
+          }}
           renderActions={(item) => (
             <>
               <button className="case-preview-tool" type="button" onClick={() => useAssetInNewChat(item)} aria-label={t("pages.assets.useAsset")} title={t("pages.assets.useAsset")}>

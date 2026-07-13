@@ -3,6 +3,8 @@ import type {
   CaseCategory,
   ChatSession,
   ChangelogEntry,
+  GlobalSearchResponse,
+  GlobalSearchScope,
   ImageDownloadOption,
   ImageBatchDeleteResult,
   ImageBatchDownloadTicket,
@@ -134,6 +136,7 @@ type AssetPageQuery = PageQuery & {
 type ImagePageQuery = PageQuery & {
   sort?: "asc" | "desc";
   favoriteOnly?: boolean;
+  sessionId?: string;
 };
 
 type PromptTemplateScope = "all" | "mine" | "shared";
@@ -668,6 +671,16 @@ export const api = {
       `/api/image-jobs/${jobId}/retry`,
       { method: "POST" }
     ),
+  globalSearch: (params: { q: string; scope?: GlobalSearchScope; limit?: number; offset?: number }, init?: RequestInit) =>
+    request<GlobalSearchResponse>(
+      `/api/search${queryString({
+        q: params.q,
+        scope: params.scope,
+        limit: params.limit,
+        offset: params.offset
+      })}`,
+      init
+    ),
   searchHistory: (scope: SearchHistoryScope, limit = 12) =>
     request<{ history: SearchHistoryItem[] }>(`/api/search-history?scope=${encodeURIComponent(scope)}&limit=${encodeURIComponent(String(limit))}`),
   recordSearchHistory: (payload: { scope: SearchHistoryScope; keyword: string }) =>
@@ -694,6 +707,8 @@ export const api = {
         favoriteOnly: params?.favoriteOnly
       })}`
     ),
+  caseDetail: (caseId: string, init?: RequestInit) =>
+    request<{ caseItem: CaseCategory["items"][number] }>(`/api/cases/${encodeURIComponent(caseId)}`, init),
   createCaseCategory: (name: string) =>
     request<{ category: CaseCategory }>("/api/cases/categories", {
       method: "POST",
@@ -830,9 +845,12 @@ export const api = {
         offset: params?.offset,
         keyword: params?.keyword,
         sort: params?.sort,
-        favoriteOnly: params?.favoriteOnly
+        favoriteOnly: params?.favoriteOnly,
+        sessionId: params?.sessionId
       })}`
     ),
+  imageDetail: (imageId: string, init?: RequestInit) =>
+    request<{ image: WorkImage | null }>(`/api/images/${encodeURIComponent(imageId)}`, init),
   suggestImageAssetCategories: (imageId: string) =>
     request<{ image: WorkImage; categoryIds: string[]; generated: boolean }>(
       `/api/images/${encodeURIComponent(imageId)}/asset-suggestions`,
@@ -867,6 +885,8 @@ export const api = {
         space: params?.space
       })}`
     ),
+  assetDetail: (assetId: string, init?: RequestInit) =>
+    request<{ asset: AssetItem }>(`/api/assets/${encodeURIComponent(assetId)}`, init),
   uploadAsset: (form: FormData) =>
     request<{ asset: AssetItem; created?: boolean; duplicateScope?: "shared" | "own" }>("/api/assets/upload", {
       method: "POST",

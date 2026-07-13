@@ -736,8 +736,13 @@ api.get("/images", async (c) => {
   const keyword = String(c.req.query("keyword") ?? "").trim().toLowerCase();
   const sort = String(c.req.query("sort") ?? "desc").trim() === "asc" ? "asc" : "desc";
   const favoriteOnly = c.req.query("favoriteOnly") === "true" || c.req.query("favoriteOnly") === "1";
+  const sessionId = String(c.req.query("sessionId") ?? "").trim();
   const where = ["user_id = ?"];
   const params: Array<string | number> = [user.id];
+  if (sessionId) {
+    where.push("session_id = ?");
+    params.push(sessionId);
+  }
   if (keyword) {
     const like = `%${keyword}%`;
     const kindClauses: string[] = [];
@@ -820,6 +825,38 @@ api.get("/images", async (c) => {
       favorite: favoriteCount
     },
     pageInfo: pageInfo(total, pagination)
+  });
+});
+
+api.get("/images/:imageId", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return c.json({ error: "未登录" }, 401);
+  const image = getOne<ImageRow>(
+    appDb,
+    "select * from images where id = ? and user_id = ?",
+    c.req.param("imageId"),
+    user.id
+  );
+  if (!image) return c.json({ error: "图片不存在" }, 404);
+  const favorite = getOne<{ favorite_count: number; current_user_favorited: number }>(
+    appDb,
+    `select count(*) as favorite_count,
+            max(case when user_id = ? then 1 else 0 end) as current_user_favorited
+     from image_favorites
+     where image_id = ?`,
+    user.id,
+    image.id
+  );
+  const referenceMap = imageReferencesByImageIds([image.id]);
+  const publicImage = publicImagesWithReferences([image], referenceMap)[0];
+  return c.json({
+    image: publicImage
+      ? {
+          ...publicImage,
+          favoriteCount: Number(favorite?.favorite_count ?? 0),
+          favorited: Boolean(favorite?.current_user_favorited)
+        }
+      : null
   });
 });
 

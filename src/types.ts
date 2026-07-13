@@ -568,7 +568,7 @@ export type ChatSession = {
   updatedAt: string;
 };
 
-export type SearchHistoryScope = "chat" | "cases" | "assets" | "images" | "promptTemplates";
+export type SearchHistoryScope = "chat" | "cases" | "assets" | "images" | "promptTemplates" | "global";
 
 export type SearchHistoryItem = {
   id: string;
@@ -602,6 +602,91 @@ export type PromptTemplateColorOption = {
   name: string;
   role: string;
   hex: string;
+};
+
+export type GlobalSearchScope = "all" | "chat" | "images" | "assets" | "cases" | "promptTemplates";
+export type GlobalSearchResultScope = Exclude<GlobalSearchScope, "all">;
+
+export type GlobalSearchPageInfo = {
+  limit: number;
+  offset: number;
+  total: number;
+  hasMore: boolean;
+};
+
+export type GlobalSearchChatItem = {
+  scope: "chat";
+  id: string;
+  title: string;
+  matchedPrompt: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type GlobalSearchImageItem = {
+  scope: "images";
+  id: string;
+  title: string;
+  prompt: string;
+  thumbnailUrl: string;
+  kind: "generation" | "edit";
+  size: string;
+  quality: string;
+  createdAt: string;
+};
+
+export type GlobalSearchAssetItem = {
+  scope: "assets";
+  id: string;
+  title: string;
+  thumbnailUrl: string;
+  categoryNames: string[];
+  sourceUsername: string;
+  space: "private" | "shared";
+  createdAt: string;
+};
+
+export type GlobalSearchCaseItem = {
+  scope: "cases";
+  id: string;
+  title: string;
+  prompt: string;
+  thumbnailUrl: string;
+  categoryNames: string[];
+  imageCount: number;
+  createdAt: string;
+};
+
+export type GlobalSearchPromptTemplateItem = {
+  scope: "promptTemplates";
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  icon: string;
+  ownerName: string;
+  visibility: "private" | "shared";
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type GlobalSearchItem =
+  | GlobalSearchChatItem
+  | GlobalSearchImageItem
+  | GlobalSearchAssetItem
+  | GlobalSearchCaseItem
+  | GlobalSearchPromptTemplateItem;
+
+export type GlobalSearchGroup = {
+  scope: GlobalSearchResultScope;
+  total: number;
+  items: GlobalSearchItem[];
+  pageInfo: GlobalSearchPageInfo;
+};
+
+export type GlobalSearchResponse = {
+  keyword: string;
+  groups: GlobalSearchGroup[];
 };
 
 export type PromptTemplateGradientOption = {
