@@ -55,7 +55,6 @@ import type {
   ImageAccountImportPreviewItem,
   ImageAccountImportSource,
   ImageGenerationMode,
-  GlobalSwitchType,
   ModelRequestLog,
   PromptOptimizerProvider,
   ProviderConfig,
@@ -74,6 +73,7 @@ import type { ConfigAssetReviewItem, ConfigCaseReviewItem } from "../../api/conf
 import { ConfirmDialog, CustomSelect, PromptDialog, useToast } from "../../ui";
 import {
   ConfigHeader,
+  GlobalSwitchRow,
   REQUEST_LOG_PAGE_SIZE,
   SwitchControl,
   durationLabel,
@@ -94,51 +94,6 @@ import {
 
 type AssetReviewStatusFilter = "pending" | "approved" | "rejected" | "all";
 type CaseReviewStatusFilter = "pending" | "approved" | "rejected" | "all";
-
-function GlobalSwitchRow({
-  type,
-  title,
-  desc,
-  defaultEnabled,
-  invalidateQueryKeys
-}: {
-  type: GlobalSwitchType;
-  title: string;
-  desc: string;
-  defaultEnabled: boolean;
-  invalidateQueryKeys?: string[];
-}) {
-  const queryClient = useQueryClient();
-  const { showToast } = useToast();
-  const switches = useQuery({ queryKey: ["config-global-switches"], queryFn: configApi.globalSwitches });
-  const setting = switches.data?.switches.find((item) => item.type === type);
-  const enabled = setting?.enabled ?? defaultEnabled;
-  const save = useMutation({
-    mutationFn: (nextEnabled: boolean) => configApi.saveGlobalSwitch(type, nextEnabled),
-    onSuccess: (data) => {
-      showToast(data.switch.enabled ? `${title}已开启` : `${title}已关闭`);
-      queryClient.invalidateQueries({ queryKey: ["config-global-switches"] });
-      for (const key of invalidateQueryKeys ?? []) {
-        queryClient.invalidateQueries({ queryKey: [key] });
-      }
-    },
-    onError: (error) => showToast(error instanceof Error ? error.message : "开关保存失败", "error")
-  });
-  return (
-    <div className="switch-row global-switch-row">
-      <div className="switch-row-copy">
-        <span>{title}</span>
-        <small>{desc}</small>
-      </div>
-      <SwitchControl
-        checked={enabled}
-        disabled={switches.isLoading || save.isPending}
-        label={enabled ? "已开启" : "已关闭"}
-        onChange={(nextEnabled) => save.mutate(nextEnabled)}
-      />
-    </div>
-  );
-}
 
 const assetReviewStatusOptions: Array<{ value: AssetReviewStatusFilter; label: string }> = [
   { value: "pending", label: "待审核" },

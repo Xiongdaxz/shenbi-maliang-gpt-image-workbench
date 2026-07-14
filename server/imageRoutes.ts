@@ -2,7 +2,14 @@ import type { Hono } from "hono";
 import { applyAssetFieldSuggestionsToImages, ensureAssetFieldSuggestionsForImage } from "./assetSuggestions";
 import { caseMaterialReferenceFromSource, caseMaterialSourcesByIds } from "./caseMaterialSources";
 import { applyCaseFieldSuggestionsToImages, ensureCaseFieldSuggestionsForImage } from "./caseSuggestions";
-import { AUTO_PROVIDER_ID, requestImageCount, requestImageSize, resolveImageResultRetryCount } from "./constants";
+import {
+  AUTO_PROVIDER_ID,
+  IMAGE_JOB_RUNNING_TIMEOUT_MS,
+  IMAGE_JOB_TIMEOUT_ERROR,
+  requestImageCount,
+  requestImageSize,
+  resolveImageResultRetryCount
+} from "./constants";
 import { recordCasePromptUsage } from "./caseUsage";
 import { appDb, getAll, getOne, run } from "./db";
 import { fileToDataUrl, saveProviderImageResults, snapshotImageReferences, type ImageReferenceSnapshotInput } from "./imageFiles";
@@ -36,7 +43,16 @@ import {
 import { imageGenerationSettings } from "./settingsStore";
 import type { ImageReferenceSourceAsset, ImageRow, ProviderImageContext, ProviderRow, RuntimeProviderRow } from "./types";
 import { userPreferences } from "./userPreferences";
-import { inferChannelFromType, makeId, normalizeIdList, normalizeProviderChannel, now, safeJson, visibleAssetSql } from "./utils";
+import {
+  inferChannelFromType,
+  localTimestamp,
+  makeId,
+  normalizeIdList,
+  normalizeProviderChannel,
+  now,
+  safeJson,
+  visibleAssetSql
+} from "./utils";
 import { requireUser } from "./auth";
 import { markProviderRequestPostProcessFailure } from "./auditLog";
 import {
@@ -711,6 +727,78 @@ function imageReferenceInputsFromMessageSources(
   }));
 }
 
+function imageReferenceSnapshotKey(source: {
+  sourceType?: string | null;
+  sourceId?: string | null;
+  sourceAssetId?: string | null;
+  sourceCaseItemId?: string | null;
+}) {
+  return JSON.stringify([
+    source.sourceType ?? "",
+    source.sourceId ?? source.sourceAssetId ?? "",
+    source.sourceAssetId ?? "",
+    source.sourceCaseItemId ?? ""
+  ]);
+}
+
+async function ensureImageReferenceSnapshots(
+  userId: string,
+  sessionId: string,
+  imageId: string,
+  sources: ImageReferenceSnapshotInput[]
+) {
+  if (sources.length === 0) return;
+  const existing = getAll<{
+    source_type: string | null;
+    source_id: string | null;
+    source_asset_id: string | null;
+    source_case_item_id: string | null;
+  }>(
+    appDb,
+    `select source_type, source_id, source_asset_id, source_case_item_id
+     from image_asset_references where image_id = ? and user_id = ?`,
+    imageId,
+    userId
+  );
+  const existingKeys = new Set(
+    existing.map((item) => imageReferenceSnapshotKey({
+      sourceType: item.source_type,
+      sourceId: item.source_id,
+      sourceAssetId: item.source_asset_id,
+      sourceCaseItemId: item.source_case_item_id
+    }))
+  );
+  const missing = sources.filter((source) => !existingKeys.has(imageReferenceSnapshotKey(source)));
+  if (missing.length > 0) await snapshotImageReferences(userId, sessionId, imageId, missing);
+}
+
+function storedEditImageReferenceSources(job: StoredImageJobRow) {
+  const sourceIds = retrySourceIds(job.source_image_ids);
+  const sourceImages = sourceIds.imageIds
+    .map((id) => getOne<ImageRow>(appDb, "select * from images where id = ? and user_id = ?", id, job.user_id))
+    .filter(Boolean) as ImageRow[];
+  const sourceAssets = sourceIds.assetIds
+    .map((id) => getOne<ImageReferenceSourceAsset>(
+      appDb,
+      `select id, name, path, mime_type, size, image_width, image_height from assets where id = ? and ${visibleAssetSql("assets")}`,
+      id,
+      job.user_id
+    ))
+    .filter(Boolean) as ImageReferenceSourceAsset[];
+  const sourceCases = caseMaterialSourcesByIds(sourceIds.caseItemIds, job.user_id).filter(Boolean) as NonNullable<
+    ReturnType<typeof caseMaterialSourcesByIds>[number]
+  >[];
+  const sourceReferences = messageSourceReferencesByIds(sourceIds.referenceIds, job.user_id).filter(Boolean) as NonNullable<
+    ReturnType<typeof messageSourceReferencesByIds>[number]
+  >[];
+  return [
+    ...imageReferenceInputsFromImages(sourceImages),
+    ...imageReferenceInputsFromAssets(sourceAssets),
+    ...imageReferenceInputsFromCases(sourceCases),
+    ...imageReferenceInputsFromMessageSources(sourceReferences)
+  ];
+}
+
 function jobUserMessageMetadata(userId: string, sessionId: string | null, jobId: string) {
   if (!sessionId) return {};
   const rows = getAll<{ metadata: string | null }>(
@@ -724,6 +812,714 @@ function jobUserMessageMetadata(userId: string, sessionId: string | null, jobId:
     if (String(metadata.jobId ?? "").trim() === jobId) return metadata;
   }
   return {};
+}
+
+type StoredImageJobRow = {
+  id: string;
+  user_id: string;
+  session_id: string | null;
+  type: "generation" | "edit";
+  status: string;
+  prompt: string;
+  source_image_ids: string | null;
+  provider_id: string;
+  error: string | null;
+  result_image_id: string | null;
+  request_json: string | null;
+  response_json: string | null;
+  auto_retry_count: number | null;
+  manual_retry_count: number | null;
+  recovery_count: number | null;
+  max_auto_retries: number | null;
+  succeeded_on_retry: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type StoredImageJobTrigger = "manual" | "startup";
+
+class ImageJobClaimError extends Error {}
+class ImageJobExecutionSupersededError extends Error {}
+
+const MAX_STARTUP_IMAGE_JOB_RECOVERIES = 1;
+
+function imageJobExecutionIsActive(jobId: string, manualRetryCount: number, recoveryCount: number) {
+  return Boolean(
+    getOne<{ id: string }>(
+      appDb,
+      `select id from image_jobs
+       where id = ? and status = ?
+         and coalesce(manual_retry_count, 0) = ?
+         and coalesce(recovery_count, 0) = ?`,
+      jobId,
+      "running",
+      manualRetryCount,
+      recoveryCount
+    )
+  );
+}
+
+function assertImageJobExecutionIsActive(jobId: string, manualRetryCount: number, recoveryCount: number) {
+  if (!imageJobExecutionIsActive(jobId, manualRetryCount, recoveryCount)) {
+    throw new ImageJobExecutionSupersededError("任务执行已被新的重试接管");
+  }
+}
+
+function storedImageJobImages(job: StoredImageJobRow) {
+  return getAll<ImageRow>(
+    appDb,
+    "select * from images where job_id = ? and user_id = ? order by created_at asc, rowid asc",
+    job.id,
+    job.user_id
+  );
+}
+
+function reconcileStoredImageJobMessages({
+  job,
+  requestPayload,
+  images,
+  retrySessionId,
+  revisionMetadata,
+  branchMetadata
+}: {
+  job: StoredImageJobRow;
+  requestPayload: Record<string, unknown>;
+  images: ImageRow[];
+  retrySessionId: string;
+  revisionMetadata: Record<string, unknown>;
+  branchMetadata: Record<string, unknown>;
+}) {
+  const requestedImageCount = numberFromPayload(requestPayload.n, 1);
+  const sourceIds = retrySourceIds(job.source_image_ids);
+  for (const [index, image] of images.entries()) {
+    const existingMessage = getOne<{ id: string }>(
+      appDb,
+      "select id from messages where user_id = ? and session_id = ? and role = ? and image_id = ? limit 1",
+      job.user_id,
+      retrySessionId,
+      "assistant",
+      image.id
+    );
+    if (existingMessage) continue;
+    insertMessage(
+      job.user_id,
+      retrySessionId,
+      "assistant",
+      job.type === "edit" ? "已完成图片编辑" : "已生成图片",
+      image.id,
+      {
+        mode: job.type,
+        jobId: job.id,
+        ...(job.type === "edit"
+          ? {
+              parentImageId: image.parent_image_id ?? null,
+              sourceAssetIds: sourceIds.assetIds,
+              sourceReferenceIds: sourceIds.referenceIds,
+              hasMask: Boolean(requestPayload.mask)
+            }
+          : {}),
+        n: requestedImageCount,
+        imageIndex: index + 1,
+        imageTotal: requestedImageCount,
+        ...revisionMetadata,
+        ...branchMetadata
+      }
+    );
+  }
+}
+
+async function finalizeStoredImageJobFromExisting({
+  job,
+  requestPayload,
+  images,
+  retrySessionId,
+  revisionMetadata,
+  branchMetadata,
+  maxAutoRetries,
+  previousAutoRetryCount,
+  nextManualRetryCount,
+  expectedRecoveryCount
+}: {
+  job: StoredImageJobRow;
+  requestPayload: Record<string, unknown>;
+  images: ImageRow[];
+  retrySessionId: string;
+  revisionMetadata: Record<string, unknown>;
+  branchMetadata: Record<string, unknown>;
+  maxAutoRetries: number;
+  previousAutoRetryCount: number;
+  nextManualRetryCount: number;
+  expectedRecoveryCount: number;
+}) {
+  if (job.type === "edit") {
+    try {
+      const referenceSources = storedEditImageReferenceSources(job);
+      for (const image of images) {
+        await ensureImageReferenceSnapshots(job.user_id, retrySessionId, image.id, referenceSources);
+      }
+    } catch (error) {
+      console.warn("恢复编辑图片素材引用失败", error);
+    }
+  }
+  reconcileStoredImageJobMessages({
+    job,
+    requestPayload,
+    images,
+    retrySessionId,
+    revisionMetadata,
+    branchMetadata
+  });
+  const imageIds = images.map((image) => image.id);
+  await applyImageFieldSuggestions(imageIds, job.type === "generation" ? job.prompt : undefined);
+  await ensureImageEditSuggestionsForImages(job.user_id, imageIds);
+  const resultImageId = imageIds[0] ?? job.result_image_id;
+  const completed = run(
+    appDb,
+    `update image_jobs
+     set status = ?, error = null, result_image_id = ?, auto_retry_count = ?, manual_retry_count = ?, max_auto_retries = ?, succeeded_on_retry = 1, updated_at = ?
+     where id = ? and status = ? and coalesce(manual_retry_count, 0) = ? and coalesce(recovery_count, 0) = ?`,
+    "succeeded",
+    resultImageId,
+    previousAutoRetryCount,
+    nextManualRetryCount,
+    maxAutoRetries,
+    now(),
+    job.id,
+    "running",
+    nextManualRetryCount,
+    expectedRecoveryCount
+  );
+  if (Number(completed.changes ?? 0) > 0) {
+    emitJobStatus(job.user_id, retrySessionId, job.id, "succeeded", job.type, { resultImageId });
+  }
+}
+
+function markInterruptedImageJobFailed(job: StoredImageJobRow, message: string) {
+  const result = run(
+    appDb,
+    "update image_jobs set status = ?, error = ?, updated_at = ? where id = ? and status = ?",
+    "failed",
+    message,
+    now(),
+    job.id,
+    "running"
+  );
+  if (Number(result.changes ?? 0) > 0) {
+    emitJobStatus(job.user_id, job.session_id, job.id, "failed", job.type, { error: message });
+  }
+}
+
+async function runStoredImageJob({
+  job,
+  providers,
+  provider,
+  requestPayload,
+  retrySessionId,
+  revisionMetadata,
+  branchMetadata,
+  maxAutoRetries,
+  previousAutoRetryCount,
+  nextManualRetryCount,
+  expectedRecoveryCount
+}: {
+  job: StoredImageJobRow;
+  providers: RuntimeProviderRow[];
+  provider: RuntimeProviderRow;
+  requestPayload: Record<string, unknown>;
+  retrySessionId: string;
+  revisionMetadata: Record<string, unknown>;
+  branchMetadata: Record<string, unknown>;
+  maxAutoRetries: number;
+  previousAutoRetryCount: number;
+  nextManualRetryCount: number;
+  expectedRecoveryCount: number;
+}) {
+  try {
+    const existingImages = storedImageJobImages(job);
+    const requestedImageCount = numberFromPayload(requestPayload.n, 1);
+    const remainingImageCount = Math.max(0, requestedImageCount - existingImages.length);
+    const sourceIds = retrySourceIds(job.source_image_ids);
+
+    if (remainingImageCount === 0) {
+      await finalizeStoredImageJobFromExisting({
+        job,
+        requestPayload,
+        images: existingImages,
+        retrySessionId,
+        revisionMetadata,
+        branchMetadata,
+        maxAutoRetries,
+        previousAutoRetryCount,
+        nextManualRetryCount,
+        expectedRecoveryCount
+      });
+      return;
+    }
+
+    reconcileStoredImageJobMessages({
+      job,
+      requestPayload,
+      images: existingImages,
+      retrySessionId,
+      revisionMetadata,
+      branchMetadata
+    });
+    const size = String(requestPayload.size ?? "");
+    const quality = String(requestPayload.quality ?? provider.default_quality ?? "");
+
+    if (job.type === "generation") {
+      const retryPayload = {
+        ...requestPayload,
+        prompt: providerPrompt(job.prompt, remainingImageCount),
+        n: remainingImageCount
+      };
+      const preparedEditSuggestions = prepareImageEditSuggestionsForJob({
+        userId: job.user_id,
+        prompt: job.prompt,
+        kind: "generation",
+        promptHistory: [job.prompt]
+      });
+      const { provider: actualProvider, responseJson, savedImages, attemptNo, retryCount } = await saveProviderImagesWithRetry({
+        providers,
+        mode: "generation",
+        requestPayload: retryPayload,
+        userId: job.user_id,
+        sessionId: retrySessionId,
+        jobId: job.id,
+        retryCount: maxAutoRetries
+      });
+      assertImageJobExecutionIsActive(job.id, nextManualRetryCount, expectedRecoveryCount);
+      const autoRetryCount = previousAutoRetryCount + Math.max(0, attemptNo - 1);
+      const savedImageIds: string[] = [];
+      for (const saved of savedImages) {
+        assertImageJobExecutionIsActive(job.id, nextManualRetryCount, expectedRecoveryCount);
+        const imageIndex = existingImages.length + savedImageIds.length + 1;
+        const createdAt = now();
+        run(
+          appDb,
+          `insert into images (
+            id, user_id, session_id, job_id, path, prompt, kind, size, quality,
+            provider_id, mime_type, parent_image_id,
+            provider_file_id, provider_gen_id, provider_conversation_id, provider_parent_message_id, provider_source_account_id,
+            image_width, image_height, image_file_size, generated_attempt_no, generated_by_retry, created_at
+          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          saved.id,
+          job.user_id,
+          retrySessionId,
+          job.id,
+          saved.file.path,
+          job.prompt,
+          "generation",
+          size,
+          quality,
+          actualProvider.id,
+          saved.file.mimeType,
+          null,
+          ...providerImageContextValues(saved.providerContext),
+          saved.file.width,
+          saved.file.height,
+          saved.file.fileSize,
+          attemptNo,
+          1,
+          createdAt
+        );
+        savedImageIds.push(saved.id);
+        insertMessage(job.user_id, retrySessionId, "assistant", "已生成图片", saved.id, {
+          mode: "generation",
+          jobId: job.id,
+          n: requestedImageCount,
+          imageIndex,
+          imageTotal: requestedImageCount,
+          ...revisionMetadata,
+          ...branchMetadata
+        });
+        run(
+          appDb,
+          `update image_jobs set result_image_id = coalesce(result_image_id, ?), updated_at = ?
+           where id = ? and status = ? and coalesce(manual_retry_count, 0) = ? and coalesce(recovery_count, 0) = ?`,
+          saved.id,
+          now(),
+          job.id,
+          "running",
+          nextManualRetryCount,
+          expectedRecoveryCount
+        );
+      }
+      const allImageIds = [...existingImages.map((image) => image.id), ...savedImageIds];
+      if (allImageIds.length < requestedImageCount) {
+        throw new Error(`渠道返回图片数量不足：期望 ${requestedImageCount} 张，实际 ${allImageIds.length} 张`);
+      }
+      await applyImageFieldSuggestions(allImageIds, job.prompt);
+      await ensureImageEditSuggestionsForImages(job.user_id, allImageIds, preparedEditSuggestions);
+      const resultImageId = allImageIds[0] ?? null;
+      const completed = run(
+        appDb,
+        `update image_jobs
+         set status = ?, result_image_id = ?, response_json = ?, auto_retry_count = ?, manual_retry_count = ?, max_auto_retries = ?, succeeded_on_retry = 1, updated_at = ?
+         where id = ? and status = ? and coalesce(manual_retry_count, 0) = ? and coalesce(recovery_count, 0) = ?`,
+        "succeeded",
+        resultImageId,
+        providerResponseSnapshot(responseJson),
+        autoRetryCount,
+        nextManualRetryCount,
+        retryCount,
+        now(),
+        job.id,
+        "running",
+        nextManualRetryCount,
+        expectedRecoveryCount
+      );
+      if (Number(completed.changes ?? 0) > 0) {
+        emitJobStatus(job.user_id, retrySessionId, job.id, "succeeded", "generation", { resultImageId });
+      }
+      return;
+    }
+
+    const sourceImages = sourceIds.imageIds.map((id) =>
+      getOne<ImageRow>(appDb, "select * from images where id = ? and user_id = ?", id, job.user_id)
+    );
+    const sourceAssets = sourceIds.assetIds.map((id) =>
+      getOne<ImageReferenceSourceAsset>(
+        appDb,
+        `select id, name, path, mime_type, size, image_width, image_height from assets where id = ? and ${visibleAssetSql("assets")}`,
+        id,
+        job.user_id
+      )
+    );
+    const sourceCases = caseMaterialSourcesByIds(sourceIds.caseItemIds, job.user_id);
+    const sourceReferences = messageSourceReferencesByIds(sourceIds.referenceIds, job.user_id);
+    if (sourceImages.some((item) => !item)) throw new Error("源图片不存在");
+    if (sourceAssets.some((item) => !item)) throw new Error("素材不存在");
+    if (sourceCases.some((item) => !item)) throw new Error("灵感不存在或来源不可用");
+    if (sourceReferences.some((item) => !item)) throw new Error("引用素材不存在或来源不可用");
+    const validSourceImages = sourceImages.filter(Boolean) as ImageRow[];
+    const validSourceAssets = sourceAssets.filter(Boolean) as ImageReferenceSourceAsset[];
+    const validSourceCases = sourceCases.filter(Boolean) as NonNullable<(typeof sourceCases)[number]>[];
+    const validSourceReferences = sourceReferences.filter(Boolean) as NonNullable<(typeof sourceReferences)[number]>[];
+    const imageReferenceSources = [
+      ...imageReferenceInputsFromImages(validSourceImages),
+      ...imageReferenceInputsFromAssets(validSourceAssets),
+      ...imageReferenceInputsFromCases(validSourceCases),
+      ...imageReferenceInputsFromMessageSources(validSourceReferences)
+    ];
+    for (const image of existingImages) {
+      await ensureImageReferenceSnapshots(job.user_id, retrySessionId, image.id, imageReferenceSources);
+      assertImageJobExecutionIsActive(job.id, nextManualRetryCount, expectedRecoveryCount);
+    }
+    const imageUrls = [
+      ...(await Promise.all(validSourceImages.map((item) => fileToDataUrl(item.path, item.mime_type)))),
+      ...(await Promise.all(validSourceAssets.map((item) => fileToDataUrl(item.path, item.mime_type)))),
+      ...(await Promise.all(validSourceCases.map((item) => fileToDataUrl(item.path, item.mimeType)))),
+      ...(await Promise.all(validSourceReferences.map((item) => fileToDataUrl(item.path, item.mime_type))))
+    ];
+    if (imageUrls.length === 0) throw new Error("请选择要编辑的图片或素材");
+
+    const messageMetadata = jobUserMessageMetadata(job.user_id, retrySessionId, job.id);
+    const maskWasRequested = Boolean(requestPayload.mask);
+    const maskPath = String(requestPayload.maskPath ?? messageMetadata.maskPath ?? "").trim();
+    const maskDataUrl = maskWasRequested && maskPath
+      ? await imageEditMaskSnapshotDataUrl(maskPath).catch(() => "")
+      : "";
+    if (maskWasRequested && !maskDataUrl) throw new Error("原编辑遮罩已丢失，请重新涂抹后发送");
+
+    const retryPayload: Record<string, unknown> = {
+      ...requestPayload,
+      prompt: providerEditPrompt(job.prompt, remainingImageCount, provider, Boolean(maskDataUrl)),
+      n: remainingImageCount,
+      images: imageUrls.map((image_url) => ({ image_url }))
+    };
+    delete retryPayload.maskPath;
+    delete retryPayload.debug;
+    if (maskDataUrl) retryPayload.mask = maskDataUrl;
+    else delete retryPayload.mask;
+
+    const primarySourceImage = validSourceImages[0] ?? null;
+    const preparedEditSuggestions = prepareImageEditSuggestionsForJob({
+      userId: job.user_id,
+      prompt: job.prompt,
+      kind: "edit",
+      promptHistory: editPromptHistoryForSourceImage(primarySourceImage, job.prompt)
+    });
+    assertImageJobExecutionIsActive(job.id, nextManualRetryCount, expectedRecoveryCount);
+    const { provider: actualProvider, responseJson, savedImages, attemptNo, retryCount } = await saveProviderImagesWithRetry({
+      providers,
+      mode: "edit",
+      requestPayload: retryPayload,
+      userId: job.user_id,
+      sessionId: retrySessionId,
+      jobId: job.id,
+      retryCount: maxAutoRetries
+    });
+    assertImageJobExecutionIsActive(job.id, nextManualRetryCount, expectedRecoveryCount);
+    const autoRetryCount = previousAutoRetryCount + Math.max(0, attemptNo - 1);
+    const savedImageIds: string[] = [];
+    for (const saved of savedImages) {
+      assertImageJobExecutionIsActive(job.id, nextManualRetryCount, expectedRecoveryCount);
+      const imageIndex = existingImages.length + savedImageIds.length + 1;
+      const createdAt = now();
+      run(
+        appDb,
+        `insert into images (
+          id, user_id, session_id, job_id, path, prompt, kind, size, quality,
+          provider_id, mime_type, parent_image_id,
+          provider_file_id, provider_gen_id, provider_conversation_id, provider_parent_message_id, provider_source_account_id,
+          image_width, image_height, image_file_size, generated_attempt_no, generated_by_retry, created_at
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        saved.id,
+        job.user_id,
+        retrySessionId,
+        job.id,
+        saved.file.path,
+        job.prompt,
+        "edit",
+        size,
+        quality,
+        actualProvider.id,
+        saved.file.mimeType,
+        primarySourceImage?.id ?? null,
+        ...providerImageContextValues(saved.providerContext),
+        saved.file.width,
+        saved.file.height,
+        saved.file.fileSize,
+        attemptNo,
+        1,
+        createdAt
+      );
+      try {
+        await snapshotImageReferences(job.user_id, retrySessionId, saved.id, imageReferenceSources);
+      } catch (error) {
+        console.warn("图片素材引用快照保存失败", error);
+      }
+      assertImageJobExecutionIsActive(job.id, nextManualRetryCount, expectedRecoveryCount);
+      savedImageIds.push(saved.id);
+      insertMessage(job.user_id, retrySessionId, "assistant", "已完成图片编辑", saved.id, {
+        mode: "edit",
+        jobId: job.id,
+        parentImageId: primarySourceImage?.id ?? null,
+        sourceAssetIds: sourceIds.assetIds,
+        sourceReferenceIds: sourceIds.referenceIds,
+        hasMask: Boolean(maskDataUrl),
+        n: requestedImageCount,
+        imageIndex,
+        imageTotal: requestedImageCount,
+        ...revisionMetadata,
+        ...branchMetadata
+      });
+      run(
+        appDb,
+        `update image_jobs set result_image_id = coalesce(result_image_id, ?), updated_at = ?
+         where id = ? and status = ? and coalesce(manual_retry_count, 0) = ? and coalesce(recovery_count, 0) = ?`,
+        saved.id,
+        now(),
+        job.id,
+        "running",
+        nextManualRetryCount,
+        expectedRecoveryCount
+      );
+    }
+    const allImageIds = [...existingImages.map((image) => image.id), ...savedImageIds];
+    if (allImageIds.length < requestedImageCount) {
+      throw new Error(`渠道返回图片数量不足：期望 ${requestedImageCount} 张，实际 ${allImageIds.length} 张`);
+    }
+    await applyImageFieldSuggestions(allImageIds);
+    await ensureImageEditSuggestionsForImages(job.user_id, allImageIds, preparedEditSuggestions);
+    const resultImageId = allImageIds[0] ?? null;
+    const completed = run(
+      appDb,
+      `update image_jobs
+       set status = ?, result_image_id = ?, response_json = ?, auto_retry_count = ?, manual_retry_count = ?, max_auto_retries = ?, succeeded_on_retry = 1, updated_at = ?
+       where id = ? and status = ? and coalesce(manual_retry_count, 0) = ? and coalesce(recovery_count, 0) = ?`,
+      "succeeded",
+      resultImageId,
+      providerResponseSnapshot(responseJson),
+      autoRetryCount,
+      nextManualRetryCount,
+      retryCount,
+      now(),
+      job.id,
+      "running",
+      nextManualRetryCount,
+      expectedRecoveryCount
+    );
+    if (Number(completed.changes ?? 0) > 0) {
+      emitJobStatus(job.user_id, retrySessionId, job.id, "succeeded", "edit", { resultImageId });
+    }
+  } catch (error) {
+    if (error instanceof ImageJobExecutionSupersededError) return;
+    const message = errorMessage(error, job.type === "edit" ? "编辑失败" : "生成失败");
+    const failedAutoRetryCount = previousAutoRetryCount + autoRetryCountFromError(error, 0);
+    const failed = run(
+      appDb,
+      `update image_jobs
+       set status = ?, error = ?, auto_retry_count = ?, manual_retry_count = ?, max_auto_retries = ?, succeeded_on_retry = 0, updated_at = ?
+       where id = ? and status = ? and coalesce(manual_retry_count, 0) = ? and coalesce(recovery_count, 0) = ?`,
+      "failed",
+      message,
+      failedAutoRetryCount,
+      nextManualRetryCount,
+      maxAutoRetries,
+      now(),
+      job.id,
+      "running",
+      nextManualRetryCount,
+      expectedRecoveryCount
+    );
+    if (Number(failed.changes ?? 0) > 0) {
+      emitJobStatus(job.user_id, retrySessionId, job.id, "failed", job.type, { error: message });
+    }
+  }
+}
+
+function startStoredImageJob(job: StoredImageJobRow, trigger: StoredImageJobTrigger) {
+  if (!job.session_id) throw new Error("任务缺少对话信息，无法重试");
+  const retrySessionId = job.session_id;
+  const requestPayload = safeJson<Record<string, unknown>>(job.request_json, {});
+  if (Object.keys(requestPayload).length === 0) throw new Error("任务请求信息不完整，无法重试");
+  const providers = providerChainById(job.provider_id);
+  const provider = providers[0];
+  const messageMetadata = jobUserMessageMetadata(job.user_id, retrySessionId, job.id);
+  const revisionMetadata = requestRevisionMetadata(messageMetadata);
+  const branchMetadata = requestBranchMetadata(messageMetadata);
+  const maxAutoRetries = trigger === "startup"
+    ? 0
+    : resolveImageResultRetryCount(imageGenerationSettings().resultRetryCount);
+  const previousAutoRetryCount = Math.max(0, Math.trunc(Number(job.auto_retry_count ?? 0)) || 0);
+  const currentManualRetryCount = Math.max(0, Math.trunc(Number(job.manual_retry_count ?? 0)) || 0);
+  const currentRecoveryCount = Math.max(0, Math.trunc(Number(job.recovery_count ?? 0)) || 0);
+  const nextManualRetryCount = trigger === "manual" ? currentManualRetryCount + 1 : currentManualRetryCount;
+  const expectedRecoveryCount = trigger === "startup" ? currentRecoveryCount + 1 : 0;
+
+  const claim = trigger === "manual"
+    ? run(
+        appDb,
+        "update image_jobs set status = ?, error = null, response_json = null, manual_retry_count = ?, recovery_count = 0, max_auto_retries = ?, updated_at = ? where id = ? and status = ?",
+        "running",
+        nextManualRetryCount,
+        maxAutoRetries,
+        now(),
+        job.id,
+        "failed"
+      )
+    : run(
+        appDb,
+        "update image_jobs set error = null, response_json = null, recovery_count = ?, max_auto_retries = ?, updated_at = ? where id = ? and status = ? and coalesce(recovery_count, 0) = ?",
+        expectedRecoveryCount,
+        maxAutoRetries,
+        now(),
+        job.id,
+        "running",
+        currentRecoveryCount
+      );
+  if (Number(claim.changes ?? 0) === 0) throw new ImageJobClaimError("任务状态已变化");
+
+  emitJobStatus(job.user_id, retrySessionId, job.id, "running", job.type);
+  const runningJob = getOne<StoredImageJobRow>(appDb, "select * from image_jobs where id = ?", job.id);
+  void runStoredImageJob({
+    job,
+    providers,
+    provider,
+    requestPayload,
+    retrySessionId,
+    revisionMetadata,
+    branchMetadata,
+    maxAutoRetries,
+    previousAutoRetryCount,
+    nextManualRetryCount,
+    expectedRecoveryCount
+  }).catch((error) => {
+    const message = errorMessage(error, "图片任务后台执行失败");
+    console.warn("图片任务后台执行失败", error);
+    const latestJob = getOne<StoredImageJobRow>(appDb, "select * from image_jobs where id = ?", job.id);
+    if (latestJob && imageJobExecutionIsActive(job.id, nextManualRetryCount, expectedRecoveryCount)) {
+      markInterruptedImageJobFailed(latestJob, message);
+    }
+  });
+  return { retrySessionId, runningJob, branchMetadata };
+}
+
+function finalizeInterruptedImageJobIfComplete(job: StoredImageJobRow) {
+  if (!job.session_id) return false;
+  const requestPayload = safeJson<Record<string, unknown>>(job.request_json, {});
+  if (Object.keys(requestPayload).length === 0) return false;
+  const images = storedImageJobImages(job);
+  const requestedImageCount = numberFromPayload(requestPayload.n, 1);
+  if (images.length < requestedImageCount) return false;
+
+  const recoveryCount = Math.max(0, Math.trunc(Number(job.recovery_count ?? 0)) || 0);
+  const claim = run(
+    appDb,
+    "update image_jobs set error = null, updated_at = ? where id = ? and status = ? and coalesce(recovery_count, 0) = ?",
+    now(),
+    job.id,
+    "running",
+    recoveryCount
+  );
+  if (Number(claim.changes ?? 0) === 0) return true;
+
+  const retrySessionId = job.session_id;
+  const messageMetadata = jobUserMessageMetadata(job.user_id, retrySessionId, job.id);
+  const revisionMetadata = requestRevisionMetadata(messageMetadata);
+  const branchMetadata = requestBranchMetadata(messageMetadata);
+  const maxAutoRetries = Math.max(0, Math.trunc(Number(job.max_auto_retries ?? 0)) || 0);
+  const previousAutoRetryCount = Math.max(0, Math.trunc(Number(job.auto_retry_count ?? 0)) || 0);
+  const nextManualRetryCount = Math.max(0, Math.trunc(Number(job.manual_retry_count ?? 0)) || 0);
+  void finalizeStoredImageJobFromExisting({
+    job,
+    requestPayload,
+    images,
+    retrySessionId,
+    revisionMetadata,
+    branchMetadata,
+    maxAutoRetries,
+    previousAutoRetryCount,
+    nextManualRetryCount,
+    expectedRecoveryCount: recoveryCount
+  }).catch((error) => {
+    const latestJob = getOne<StoredImageJobRow>(appDb, "select * from image_jobs where id = ?", job.id);
+    if (latestJob && imageJobExecutionIsActive(job.id, nextManualRetryCount, recoveryCount)) {
+      markInterruptedImageJobFailed(latestJob, errorMessage(error, "任务结果恢复失败，请重新生成"));
+    }
+  });
+  return true;
+}
+
+export function startInterruptedImageJobRecovery() {
+  const interruptedJobs = getAll<StoredImageJobRow>(
+    appDb,
+    "select * from image_jobs where status = ? order by created_at asc, rowid asc",
+    "running"
+  );
+  if (interruptedJobs.length === 0) return;
+
+  const recoveryCutoff = localTimestamp(new Date(Date.now() - IMAGE_JOB_RUNNING_TIMEOUT_MS));
+  let resumed = 0;
+  let failed = 0;
+  for (const job of interruptedJobs) {
+    if (finalizeInterruptedImageJobIfComplete(job)) {
+      resumed += 1;
+      continue;
+    }
+    if (job.updated_at < recoveryCutoff) {
+      markInterruptedImageJobFailed(job, IMAGE_JOB_TIMEOUT_ERROR);
+      failed += 1;
+      continue;
+    }
+    const recoveryCount = Math.max(0, Math.trunc(Number(job.recovery_count ?? 0)) || 0);
+    if (recoveryCount >= MAX_STARTUP_IMAGE_JOB_RECOVERIES) {
+      markInterruptedImageJobFailed(job, "任务自动恢复未完成，请重新生成");
+      failed += 1;
+      continue;
+    }
+    try {
+      startStoredImageJob(job, "startup");
+      resumed += 1;
+    } catch (error) {
+      if (error instanceof ImageJobClaimError) continue;
+      markInterruptedImageJobFailed(job, errorMessage(error, "任务自动恢复失败，请重新生成"));
+      failed += 1;
+    }
+  }
+  console.info(`图片任务启动恢复完成：接管 ${resumed} 个，失败 ${failed} 个`);
 }
 
 const IMAGE_WEEKDAY_LABELS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
@@ -1133,9 +1929,11 @@ api.post("/images/generate", async (c) => {
         jobId,
         retryCount: maxAutoRetries
       });
+      assertImageJobExecutionIsActive(jobId, 0, 0);
       const autoRetryCount = Math.max(0, attemptNo - 1);
       const generatedByRetry = autoRetryCount > 0 ? 1 : 0;
       for (const saved of savedImages) {
+        assertImageJobExecutionIsActive(jobId, 0, 0);
         const imageIndex = savedImageIds.length + 1;
         const createdAt = now();
         run(
@@ -1178,17 +1976,24 @@ api.post("/images/generate", async (c) => {
         });
         run(
           appDb,
-          "update image_jobs set result_image_id = coalesce(result_image_id, ?), updated_at = ? where id = ?",
+          `update image_jobs set result_image_id = coalesce(result_image_id, ?), updated_at = ?
+           where id = ? and status = ? and coalesce(manual_retry_count, 0) = 0 and coalesce(recovery_count, 0) = 0`,
           saved.id,
           now(),
-          jobId
+          jobId,
+          "running"
         );
+      }
+      if (savedImageIds.length < imageCount) {
+        throw new Error(`渠道返回图片数量不足：期望 ${imageCount} 张，实际 ${savedImageIds.length} 张`);
       }
       await applyImageFieldSuggestions(savedImageIds, prompt);
       await ensureImageEditSuggestionsForImages(user.id, savedImageIds, preparedEditSuggestions);
-      run(
+      const completed = run(
         appDb,
-        "update image_jobs set status = ?, result_image_id = ?, response_json = ?, auto_retry_count = ?, max_auto_retries = ?, succeeded_on_retry = ?, updated_at = ? where id = ?",
+        `update image_jobs
+         set status = ?, result_image_id = ?, response_json = ?, auto_retry_count = ?, max_auto_retries = ?, succeeded_on_retry = ?, updated_at = ?
+         where id = ? and status = ? and coalesce(manual_retry_count, 0) = 0 and coalesce(recovery_count, 0) = 0`,
         "succeeded",
         savedImageIds[0] ?? null,
         providerResponseSnapshot(responseJson),
@@ -1196,24 +2001,33 @@ api.post("/images/generate", async (c) => {
         retryCount,
         generatedByRetry,
         now(),
-        jobId
+        jobId,
+        "running"
       );
-      emitJobStatus(user.id, sessionId, jobId, "succeeded", "generation", { resultImageId: savedImageIds[0] ?? null });
+      if (Number(completed.changes ?? 0) > 0) {
+        emitJobStatus(user.id, sessionId, jobId, "succeeded", "generation", { resultImageId: savedImageIds[0] ?? null });
+      }
       return savedImageIds;
     } catch (error) {
+      if (error instanceof ImageJobExecutionSupersededError) return [];
       const message = error instanceof Error ? error.message : "生成失败";
       const failedAutoRetryCount = autoRetryCountFromError(error, maxAutoRetries);
-      run(
+      const failed = run(
         appDb,
-        "update image_jobs set status = ?, error = ?, auto_retry_count = ?, max_auto_retries = ?, succeeded_on_retry = 0, updated_at = ? where id = ?",
+        `update image_jobs
+         set status = ?, error = ?, auto_retry_count = ?, max_auto_retries = ?, succeeded_on_retry = 0, updated_at = ?
+         where id = ? and status = ? and coalesce(manual_retry_count, 0) = 0 and coalesce(recovery_count, 0) = 0`,
         "failed",
         message,
         failedAutoRetryCount,
         maxAutoRetries,
         now(),
-        jobId
+        jobId,
+        "running"
       );
-      emitJobStatus(user.id, sessionId, jobId, "failed", "generation", { error: message });
+      if (Number(failed.changes ?? 0) > 0) {
+        emitJobStatus(user.id, sessionId, jobId, "failed", "generation", { error: message });
+      }
       throw error;
     }
   };
@@ -1537,11 +2351,13 @@ api.post("/images/edit", async (c) => {
       }
     });
     responseJson = result.responseJson;
+    assertImageJobExecutionIsActive(jobId, 0, 0);
     const actualProvider = result.provider;
     const savedImages = result.savedImages;
     const autoRetryCount = Math.max(0, result.attemptNo - 1);
     const generatedByRetry = autoRetryCount > 0 ? 1 : 0;
     for (const [index, saved] of savedImages.entries()) {
+      assertImageJobExecutionIsActive(jobId, 0, 0);
       const createdAt = now();
       run(
         appDb,
@@ -1576,6 +2392,7 @@ api.post("/images/edit", async (c) => {
       } catch (error) {
         console.warn("图片素材引用快照保存失败", error);
       }
+      assertImageJobExecutionIsActive(jobId, 0, 0);
       insertMessage(user.id, sessionId, "assistant", "已完成图片编辑", saved.id, {
         mode: "edit",
         jobId,
@@ -1590,12 +2407,17 @@ api.post("/images/edit", async (c) => {
       });
     }
     const savedImageIds = savedImages.map((image) => image.id);
+    if (savedImageIds.length < imageCount) {
+      throw new Error(`渠道返回图片数量不足：期望 ${imageCount} 张，实际 ${savedImageIds.length} 张`);
+    }
     await applyImageFieldSuggestions(savedImageIds);
     await ensureImageEditSuggestionsForImages(user.id, savedImageIds, preparedEditSuggestions);
     const resultImageId = savedImageIds[0] ?? null;
-    run(
+    const completed = run(
       appDb,
-      "update image_jobs set status = ?, result_image_id = ?, response_json = ?, auto_retry_count = ?, max_auto_retries = ?, succeeded_on_retry = ?, updated_at = ? where id = ?",
+      `update image_jobs
+       set status = ?, result_image_id = ?, response_json = ?, auto_retry_count = ?, max_auto_retries = ?, succeeded_on_retry = ?, updated_at = ?
+       where id = ? and status = ? and coalesce(manual_retry_count, 0) = 0 and coalesce(recovery_count, 0) = 0`,
       "succeeded",
       resultImageId,
       providerResponseSnapshot(responseJson),
@@ -1603,26 +2425,35 @@ api.post("/images/edit", async (c) => {
       result.retryCount,
       generatedByRetry,
       now(),
-      jobId
+      jobId,
+      "running"
     );
-    emitJobStatus(user.id, sessionId, jobId, "succeeded", "edit", { resultImageId });
+    if (Number(completed.changes ?? 0) > 0) {
+      emitJobStatus(user.id, sessionId, jobId, "succeeded", "edit", { resultImageId });
+    }
     return;
   } catch (error) {
+    if (error instanceof ImageJobExecutionSupersededError) return;
     const message = error instanceof Error ? error.message : "编辑失败";
     const responseJsonText = responseJson === null ? null : providerResponseSnapshot(responseJson);
     const failedAutoRetryCount = autoRetryCountFromError(error, maxAutoRetries);
-    run(
+    const failed = run(
       appDb,
-      "update image_jobs set status = ?, error = ?, response_json = coalesce(?, response_json), auto_retry_count = ?, max_auto_retries = ?, succeeded_on_retry = 0, updated_at = ? where id = ?",
+      `update image_jobs
+       set status = ?, error = ?, response_json = coalesce(?, response_json), auto_retry_count = ?, max_auto_retries = ?, succeeded_on_retry = 0, updated_at = ?
+       where id = ? and status = ? and coalesce(manual_retry_count, 0) = 0 and coalesce(recovery_count, 0) = 0`,
       "failed",
       message,
       responseJsonText,
       failedAutoRetryCount,
       maxAutoRetries,
       now(),
-      jobId
+      jobId,
+      "running"
     );
-    emitJobStatus(user.id, sessionId, jobId, "failed", "edit", { error: message });
+    if (Number(failed.changes ?? 0) > 0) {
+      emitJobStatus(user.id, sessionId, jobId, "failed", "edit", { error: message });
+    }
     return;
   }
   };
@@ -1636,307 +2467,31 @@ api.post("/images/edit", async (c) => {
 api.post("/image-jobs/:id/retry", async (c) => {
   const user = await requireUser(c);
   if (!user) return c.json({ error: "未登录" }, 401);
-  const jobId = c.req.param("id");
-  const job = getOne<{
-    id: string;
-    user_id: string;
-    session_id: string | null;
-    type: "generation" | "edit";
-    status: string;
-    prompt: string;
-    source_image_ids: string | null;
-    provider_id: string;
-    error: string | null;
-    result_image_id: string | null;
-    request_json: string | null;
-    response_json: string | null;
-    auto_retry_count: number | null;
-    manual_retry_count: number | null;
-    max_auto_retries: number | null;
-    succeeded_on_retry: number | null;
-    created_at: string;
-    updated_at: string;
-  }>(appDb, "select * from image_jobs where id = ? and user_id = ?", jobId, user.id);
+  const job = getOne<StoredImageJobRow>(
+    appDb,
+    "select * from image_jobs where id = ? and user_id = ?",
+    c.req.param("id"),
+    user.id
+  );
   if (!job) return c.json({ error: "任务不存在" }, 404);
   if (!job.session_id) return c.json({ error: "任务缺少对话信息，无法重试" }, 400);
-  const retrySessionId = job.session_id;
   if (job.status === "running") return c.json({ error: "任务正在处理中" }, 409);
   if (job.status !== "failed") return c.json({ error: "只有失败的任务可以重试" }, 400);
 
-  const requestPayload = safeJson<Record<string, unknown>>(job.request_json, {});
-  if (Object.keys(requestPayload).length === 0) return c.json({ error: "任务请求信息不完整，无法重试" }, 400);
-  if (job.type === "edit" && requestPayload.mask) {
-    return c.json({ error: "带遮罩的编辑无法自动重试，请重新涂抹后发送" }, 400);
-  }
-
-  let providers: RuntimeProviderRow[];
   try {
-    providers = providerChainById(job.provider_id);
-  } catch (error) {
-    return c.json({ error: errorMessage(error, "渠道配置不可用") }, 400);
-  }
-  const provider = providers[0];
-
-  const messageMetadata = jobUserMessageMetadata(user.id, retrySessionId, job.id);
-  const revisionMetadata = requestRevisionMetadata(messageMetadata);
-  const branchMetadata = requestBranchMetadata(messageMetadata);
-  const size = String(requestPayload.size ?? "");
-  const quality = String(requestPayload.quality ?? provider.default_quality ?? "");
-  const imageCount = numberFromPayload(requestPayload.n, 1);
-  const maxAutoRetries = resolveImageResultRetryCount(imageGenerationSettings().resultRetryCount);
-  const previousAutoRetryCount = Math.max(0, Math.trunc(Number(job.auto_retry_count ?? 0)) || 0);
-  const nextManualRetryCount = Math.max(0, Math.trunc(Number(job.manual_retry_count ?? 0)) || 0) + 1;
-
-  run(
-    appDb,
-    "update image_jobs set status = ?, error = null, result_image_id = null, response_json = null, manual_retry_count = ?, max_auto_retries = ?, updated_at = ? where id = ?",
-    "running",
-    nextManualRetryCount,
-    maxAutoRetries,
-    now(),
-    job.id
-  );
-  emitJobStatus(user.id, retrySessionId, job.id, "running", job.type);
-
-  const runningJob = getOne<typeof job>(appDb, "select * from image_jobs where id = ?", job.id);
-  const runRetryJob = async () => {
-  try {
-    if (job.type === "generation") {
-      const savedImageIds: string[] = [];
-      const preparedEditSuggestions = prepareImageEditSuggestionsForJob({
-        userId: user.id,
-        prompt: job.prompt,
-        kind: "generation",
-        promptHistory: [job.prompt]
-      });
-      const { provider: actualProvider, responseJson, savedImages, attemptNo, retryCount } = await saveProviderImagesWithRetry({
-        providers,
-        mode: "generation",
-        requestPayload,
-        userId: user.id,
-        sessionId: retrySessionId,
-        jobId: job.id,
-        retryCount: maxAutoRetries
-      });
-      const autoRetryCount = previousAutoRetryCount + Math.max(0, attemptNo - 1);
-      for (const saved of savedImages) {
-        const imageIndex = savedImageIds.length + 1;
-        const createdAt = now();
-        run(
-          appDb,
-          `insert into images (
-            id, user_id, session_id, job_id, path, prompt, kind, size, quality,
-            provider_id, mime_type, parent_image_id,
-            provider_file_id, provider_gen_id, provider_conversation_id, provider_parent_message_id, provider_source_account_id,
-            image_width, image_height, image_file_size, generated_attempt_no, generated_by_retry, created_at
-          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          saved.id,
-          user.id,
-          retrySessionId,
-          job.id,
-          saved.file.path,
-          job.prompt,
-          "generation",
-          size,
-          quality,
-          actualProvider.id,
-          saved.file.mimeType,
-          null,
-          ...providerImageContextValues(saved.providerContext),
-          saved.file.width,
-          saved.file.height,
-          saved.file.fileSize,
-          attemptNo,
-          1,
-          createdAt
-        );
-        savedImageIds.push(saved.id);
-        insertMessage(user.id, retrySessionId, "assistant", "已生成图片", saved.id, {
-          mode: "generation",
-          jobId: job.id,
-          n: imageCount,
-          imageIndex,
-          imageTotal: imageCount,
-          ...revisionMetadata,
-          ...branchMetadata
-        });
-        run(
-          appDb,
-          "update image_jobs set result_image_id = coalesce(result_image_id, ?), updated_at = ? where id = ?",
-          saved.id,
-          now(),
-          job.id
-        );
-      }
-      await applyImageFieldSuggestions(savedImageIds, job.prompt);
-      await ensureImageEditSuggestionsForImages(user.id, savedImageIds, preparedEditSuggestions);
-      run(
-        appDb,
-        "update image_jobs set status = ?, result_image_id = ?, response_json = ?, auto_retry_count = ?, manual_retry_count = ?, max_auto_retries = ?, succeeded_on_retry = 1, updated_at = ? where id = ?",
-        "succeeded",
-        savedImageIds[0] ?? null,
-        providerResponseSnapshot(responseJson),
-        autoRetryCount,
-        nextManualRetryCount,
-        retryCount,
-        now(),
-        job.id
-      );
-      emitJobStatus(user.id, retrySessionId, job.id, "succeeded", "generation", { resultImageId: savedImageIds[0] ?? null });
-      return;
-    }
-
-    const sourceIds = retrySourceIds(job.source_image_ids);
-    const sourceImages = sourceIds.imageIds.map((id) =>
-      getOne<ImageRow>(appDb, "select * from images where id = ? and user_id = ?", id, user.id)
-    );
-    const sourceAssets = sourceIds.assetIds.map((id) =>
-      getOne<ImageReferenceSourceAsset>(
-        appDb,
-        `select id, name, path, mime_type, size, image_width, image_height from assets where id = ? and ${visibleAssetSql("assets")}`,
-        id,
-        user.id
-      )
-    );
-    const sourceCases = caseMaterialSourcesByIds(sourceIds.caseItemIds, user.id);
-    const sourceReferences = messageSourceReferencesByIds(sourceIds.referenceIds, user.id);
-    if (sourceImages.some((item) => !item)) throw new Error("源图片不存在");
-    if (sourceAssets.some((item) => !item)) throw new Error("素材不存在");
-    if (sourceCases.some((item) => !item)) throw new Error("灵感不存在或来源不可用");
-    if (sourceReferences.some((item) => !item)) throw new Error("引用素材不存在或来源不可用");
-    const validSourceImages = sourceImages.filter(Boolean) as ImageRow[];
-    const validSourceAssets = sourceAssets.filter(Boolean) as ImageReferenceSourceAsset[];
-    const validSourceCases = sourceCases.filter(Boolean) as NonNullable<(typeof sourceCases)[number]>[];
-    const validSourceReferences = sourceReferences.filter(Boolean) as NonNullable<(typeof sourceReferences)[number]>[];
-    const imageReferenceSources = [
-      ...imageReferenceInputsFromImages(validSourceImages),
-      ...imageReferenceInputsFromAssets(validSourceAssets),
-      ...imageReferenceInputsFromCases(validSourceCases),
-      ...imageReferenceInputsFromMessageSources(validSourceReferences)
-    ];
-    const imageUrls = [
-      ...(await Promise.all(validSourceImages.map((item) => fileToDataUrl(item.path, item.mime_type)))),
-      ...(await Promise.all(validSourceAssets.map((item) => fileToDataUrl(item.path, item.mime_type)))),
-      ...(await Promise.all(validSourceCases.map((item) => fileToDataUrl(item.path, item.mimeType)))),
-      ...(await Promise.all(validSourceReferences.map((item) => fileToDataUrl(item.path, item.mime_type))))
-    ];
-    if (imageUrls.length === 0) throw new Error("请选择要编辑的图片或素材");
-    const retryPayload = {
-      ...requestPayload,
-      images: imageUrls.map((image_url) => ({ image_url }))
-    };
-    const primarySourceImage = validSourceImages[0] ?? null;
-    const preparedEditSuggestions = prepareImageEditSuggestionsForJob({
-      userId: user.id,
-      prompt: job.prompt,
-      kind: "edit",
-      promptHistory: editPromptHistoryForSourceImage(primarySourceImage, job.prompt)
-    });
-    const { provider: actualProvider, responseJson, savedImages, attemptNo, retryCount } = await saveProviderImagesWithRetry({
-      providers,
-      mode: "edit",
-      requestPayload: retryPayload,
-      userId: user.id,
+    const { retrySessionId, runningJob, branchMetadata } = startStoredImageJob(job, "manual");
+    return c.json({
       sessionId: retrySessionId,
-      jobId: job.id,
-      retryCount: maxAutoRetries
-    });
-    const autoRetryCount = previousAutoRetryCount + Math.max(0, attemptNo - 1);
-    for (const [index, saved] of savedImages.entries()) {
-      const createdAt = now();
-      run(
-        appDb,
-        `insert into images (
-          id, user_id, session_id, job_id, path, prompt, kind, size, quality,
-          provider_id, mime_type, parent_image_id,
-          provider_file_id, provider_gen_id, provider_conversation_id, provider_parent_message_id, provider_source_account_id,
-          image_width, image_height, image_file_size, generated_attempt_no, generated_by_retry, created_at
-        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        saved.id,
-        user.id,
-        retrySessionId,
-        job.id,
-        saved.file.path,
-        job.prompt,
-        "edit",
-        size,
-        quality,
-        actualProvider.id,
-        saved.file.mimeType,
-        primarySourceImage?.id ?? null,
-        ...providerImageContextValues(saved.providerContext),
-        saved.file.width,
-        saved.file.height,
-        saved.file.fileSize,
-        attemptNo,
-        1,
-        createdAt
-      );
-      try {
-        await snapshotImageReferences(user.id, retrySessionId, saved.id, imageReferenceSources);
-      } catch (error) {
-        console.warn("图片素材引用快照保存失败", error);
-      }
-      insertMessage(user.id, retrySessionId, "assistant", "已完成图片编辑", saved.id, {
-        mode: "edit",
-        jobId: job.id,
-        parentImageId: primarySourceImage?.id ?? null,
-        sourceAssetIds: sourceIds.assetIds,
-        sourceReferenceIds: sourceIds.referenceIds,
-        hasMask: false,
-        n: imageCount,
-        imageIndex: index + 1,
-        imageTotal: savedImages.length,
-        ...revisionMetadata,
-        ...branchMetadata
-      });
-    }
-    const savedImageIds = savedImages.map((image) => image.id);
-    await applyImageFieldSuggestions(savedImageIds);
-    await ensureImageEditSuggestionsForImages(user.id, savedImageIds, preparedEditSuggestions);
-    const resultImageId = savedImageIds[0] ?? null;
-    run(
-      appDb,
-      "update image_jobs set status = ?, result_image_id = ?, response_json = ?, auto_retry_count = ?, manual_retry_count = ?, max_auto_retries = ?, succeeded_on_retry = 1, updated_at = ? where id = ?",
-      "succeeded",
-      resultImageId,
-      providerResponseSnapshot(responseJson),
-      autoRetryCount,
-      nextManualRetryCount,
-      retryCount,
-      now(),
-      job.id
-    );
-    emitJobStatus(user.id, retrySessionId, job.id, "succeeded", "edit", { resultImageId });
-    return;
+      job: runningJob ? serializeJob({ ...runningJob, ...branchMetadata }) : null,
+      image: null,
+      images: []
+    }, 202);
   } catch (error) {
-    const message = errorMessage(error, job.type === "edit" ? "编辑失败" : "生成失败");
-    const failedAutoRetryCount = previousAutoRetryCount + autoRetryCountFromError(error, 0);
-    run(
-      appDb,
-      "update image_jobs set status = ?, error = ?, auto_retry_count = ?, manual_retry_count = ?, max_auto_retries = ?, succeeded_on_retry = 0, updated_at = ? where id = ?",
-      "failed",
-      message,
-      failedAutoRetryCount,
-      nextManualRetryCount,
-      maxAutoRetries,
-      now(),
-      job.id
-    );
-    emitJobStatus(user.id, retrySessionId, job.id, "failed", job.type, { error: message });
-    return;
+    if (error instanceof ImageJobClaimError) {
+      return c.json({ error: "任务正在处理中" }, 409);
+    }
+    return c.json({ error: errorMessage(error, "任务重试失败") }, 400);
   }
-  };
-
-  void runRetryJob().catch((error) => {
-    console.warn("图片任务后台重试失败", error);
-  });
-  return c.json({
-    sessionId: retrySessionId,
-    job: runningJob ? serializeJob({ ...runningJob, ...branchMetadata }) : null,
-    image: null,
-    images: []
-  }, 202);
 });
 
 api.get("/image-jobs/:id", async (c) => {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Archive, Database, Github, KeyRound, Leaf, Monitor, Moon, Palette, Pencil, Settings, Smile, Sun, Sunset, Trash2, UserRound, X } from "lucide-react";
+import { Archive, Database, Github, KeyRound, Leaf, Monitor, Moon, Palette, Pencil, ScrollText, Settings, Smile, Sun, Sunset, Trash2, UserRound, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api } from "../../api";
 import {
@@ -113,6 +113,11 @@ export function AppSettingsDialog({
     queryFn: api.changelog,
     enabled: open && activeSection === "about"
   });
+  const branding = useQuery({
+    queryKey: ["branding"],
+    queryFn: api.branding,
+    enabled: open
+  });
   const promptColorSchemes = useQuery({
     queryKey: ["prompt-color-schemes"],
     queryFn: () => api.promptColorSchemes(),
@@ -155,6 +160,7 @@ export function AppSettingsDialog({
   const visibleColorSchemeCategoryCount = new Set(visibleColorSchemes.map((scheme) => scheme.category?.trim() || t("promptColorScheme.customCategory"))).size;
   const visibleColorSchemeCount = visibleColorSchemes.length;
   const activeAppearanceIndex = Math.max(0, appearanceOptions.findIndex((option) => option.value === appearanceMode));
+  const showGithubEntry = branding.data?.showGithubEntry ?? true;
 
   return (
     <div
@@ -170,7 +176,7 @@ export function AppSettingsDialog({
           </button>
           <nav className="settings-nav">
             {settingsSections.map((item) => {
-              const Icon = item.icon;
+              const Icon = item.id === "about" && !showGithubEntry ? ScrollText : item.icon;
               return (
                 <button
                   key={item.id}
@@ -431,10 +437,12 @@ export function AppSettingsDialog({
                     <strong>{t("settings.about.currentVersion")}</strong>
                     <span>{latestEntry?.version ?? "-"}</span>
                   </div>
-                  <a className="secondary-btn" href={PROJECT_REPOSITORY_URL} target="_blank" rel="noreferrer">
-                    <Github size={15} />
-                    GitHub
-                  </a>
+                  {showGithubEntry ? (
+                    <a className="secondary-btn" href={PROJECT_REPOSITORY_URL} target="_blank" rel="noreferrer">
+                      <Github size={15} />
+                      GitHub
+                    </a>
+                  ) : null}
                 </div>
               </div>
               <div className="settings-changelog">

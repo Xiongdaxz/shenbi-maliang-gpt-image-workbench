@@ -57,7 +57,7 @@ import {
   now,
   safeJson
 } from "./utils";
-import { initAppDb, initConfigDb, seedCases, seedPromptTemplates, seedProvider } from "./schema";
+import { initAppDb, initConfigDb, seedCases, seedPromptReferenceLinks, seedPromptTemplates, seedProvider } from "./schema";
 import { pullCpaImageAccounts, refreshImageAccountUsages } from "./providerRuntime";
 import {
   futureDate,
@@ -67,11 +67,11 @@ import {
 } from "./auth";
 import { registerAssetRoutes } from "./assetRoutes";
 import { registerBackupRoutes, startBackupScheduler } from "./backupRoutes";
-import { registerBrandingRoutes } from "./branding";
+import { invalidatePublicBrandingCache, registerBrandingRoutes } from "./branding";
 import { registerCaseRoutes } from "./caseRoutes";
 import { registerChangelogRoutes } from "./changelogRoutes";
 import { registerFileRoutes } from "./fileRoutes";
-import { registerImageRoutes } from "./imageRoutes";
+import { registerImageRoutes, startInterruptedImageJobRecovery } from "./imageRoutes";
 import { registerPromptOptimizerRoutes } from "./promptOptimizerRoutes";
 import { registerPromptColorSchemeRoutes } from "./promptColorSchemeRoutes";
 import { registerPromptReferenceLinkRoutes } from "./promptReferenceLinkRoutes";
@@ -90,6 +90,7 @@ import { deleteUserAccount } from "./userDeletion";
 
 initAppDb();
 initConfigDb();
+seedPromptReferenceLinks();
 seedCases();
 seedPromptTemplates();
 seedProvider();
@@ -384,6 +385,7 @@ api.put("/config/global-switches/:type", async (c) => {
   const enabled = Boolean((body as Record<string, unknown>).enabled);
   assertGlobalSwitchCanEnable(type, enabled);
   const setting = saveGlobalSwitch(type, enabled);
+  if (setting.type === "github_entry") invalidatePublicBrandingCache();
   audit("global_switch.save", { type: setting.type, enabled: setting.enabled });
   return c.json({ switch: setting, switches: globalSwitches() });
 });
@@ -3228,6 +3230,7 @@ const server = Bun.serve({
 });
 (globalThis as typeof globalThis & { __gptImageServer?: typeof server }).__gptImageServer = server;
 
+startInterruptedImageJobRecovery();
 startStarterCopyScheduler();
 scheduleCpaSync();
 startBackupScheduler();

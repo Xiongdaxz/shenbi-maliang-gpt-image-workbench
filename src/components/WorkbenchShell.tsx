@@ -986,8 +986,16 @@ export function WorkbenchShell({ user }: { user: User }) {
     updateSessionImageJobFromEvent
   ]);
 
+  const refreshImageJobsAfterReconnect = useCallback(() => {
+    clearSessionGenerationStatuses();
+    refreshSessionsNonCancel();
+    queryClient.invalidateQueries({ queryKey: ["session-image-jobs"] });
+    queryClient.invalidateQueries({ queryKey: ["messages"] });
+    queryClient.invalidateQueries({ queryKey: ["images"] });
+  }, [clearSessionGenerationStatuses, queryClient, refreshSessionsNonCancel]);
+
   useImageJobEvents({
-    onConnected: refreshSessionsNonCancel,
+    onConnected: refreshImageJobsAfterReconnect,
     onJob: handleImageJobEvent
   });
 

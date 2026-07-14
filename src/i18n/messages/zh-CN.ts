@@ -1463,7 +1463,7 @@ const messages: Messages = {
   "imagePreview.viewReference": "查看引用素材 {name}",
   "imagePreview.closeReference": "关闭引用预览",
   "imagePreview.downloadReference": "下载引用素材",
-  "imagePreview.copySuccess": "文案已复制",
+  "imagePreview.copySuccess": "提示词已复制",
   "imagePreview.copyFailed": "复制失败",
   "imagePreview.close": "关闭预览",
   "imageEditor.title": "图片编辑",

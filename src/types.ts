@@ -90,6 +90,7 @@ export type PublicBranding = {
   siteName: string;
   logoUrl: string;
   faviconUrl: string;
+  showGithubEntry: boolean;
   loginAssets: LoginAssets;
 };
 
@@ -188,6 +189,7 @@ export type GlobalSwitchType =
   | "sms_service"
   | "proxy_service"
   | "cpa_sync"
+  | "github_entry"
   | "debug_image_edit_mask";
 
 export type GlobalSwitchSetting = {

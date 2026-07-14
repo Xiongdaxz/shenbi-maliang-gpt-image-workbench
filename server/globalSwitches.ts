@@ -11,6 +11,7 @@ export const GLOBAL_SWITCH_TYPES = [
   "sms_service",
   "proxy_service",
   "cpa_sync",
+  "github_entry",
   "debug_image_edit_mask"
 ] as const;
 
@@ -32,6 +33,7 @@ export const DEFAULT_GLOBAL_SWITCH_ENABLED: Record<GlobalSwitchType, boolean> = 
   sms_service: false,
   proxy_service: false,
   cpa_sync: false,
+  github_entry: true,
   debug_image_edit_mask: false
 };
 

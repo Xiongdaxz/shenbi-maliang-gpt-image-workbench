@@ -75,6 +75,7 @@ import type { ConfigAssetReviewItem, ConfigCaseReviewItem } from "../../api/conf
 import { ConfirmDialog, CustomSelect, PromptDialog, useToast } from "../../ui";
 import {
   ConfigHeader,
+  GlobalSwitchRow,
   REQUEST_LOG_PAGE_SIZE,
   SwitchControl,
   channelLabels,
@@ -772,6 +773,13 @@ export function BrandingSettingsPanel() {
   return (
     <section className="config-card branding-settings-card">
       <ConfigHeader title="品牌设置" desc="配置全站统一的站点名称、Logo、登录页标题图和登录背景；系统默认资源会保留为可选项。" />
+      <GlobalSwitchRow
+        type="github_entry"
+        title="GitHub 入口"
+        desc="控制用户设置“关于”中的 GitHub 仓库入口；关闭后改用更新日志图标。"
+        defaultEnabled
+        invalidateQueryKeys={["branding"]}
+      />
       {query.isLoading ? <div className="settings-empty">品牌配置加载中...</div> : null}
       <div className="branding-top-grid">
         <div className="branding-preview-panel">

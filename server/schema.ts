@@ -742,6 +742,7 @@ export function initAppDb() {
       response_json text,
       auto_retry_count integer not null default 0,
       manual_retry_count integer not null default 0,
+      recovery_count integer not null default 0,
       max_auto_retries integer not null default 0,
       succeeded_on_retry integer not null default 0,
       created_at text not null,
@@ -753,6 +754,7 @@ export function initAppDb() {
   for (const [column, definition] of [
     ["auto_retry_count", "integer not null default 0"],
     ["manual_retry_count", "integer not null default 0"],
+    ["recovery_count", "integer not null default 0"],
     ["max_auto_retries", "integer not null default 0"],
     ["succeeded_on_retry", "integer not null default 0"]
   ] as const) {
@@ -1122,6 +1124,13 @@ export function initAppDb() {
     }
   }
   appDb.run("create index if not exists prompt_reference_links_updated_idx on prompt_reference_links(updated_at desc)");
+
+  appDb.run(`
+    create table if not exists prompt_reference_link_state (
+      id text primary key,
+      defaults_initialized_at text not null
+    )
+  `);
 
   appDb.run(`
     create table if not exists prompt_templates (
@@ -2220,6 +2229,57 @@ export function initConfigDb() {
   configDb.run("create index if not exists model_request_logs_user_idx on model_request_logs(user_id, created_at desc)");
   initGlobalSwitchSettings();
   migrateReadableProviderIds();
+}
+
+const DEFAULT_PROMPT_REFERENCE_LINKS = [
+  {
+    id: "promptlink_default_jimeng",
+    title: "即梦AI",
+    url: "https://jimeng.jianying.com/ai-tool/home"
+  },
+  {
+    id: "promptlink_default_midjourney",
+    title: "Midjourney Explore",
+    url: "https://www.midjourney.com/explore"
+  }
+] as const;
+
+export function seedPromptReferenceLinks() {
+  const initializeDefaults = appDb.transaction(() => {
+    const state = getOne<{ defaults_initialized_at: string }>(
+      appDb,
+      "select defaults_initialized_at from prompt_reference_link_state where id = ? limit 1",
+      "default"
+    );
+    if (state) return;
+
+    const timestamp = now();
+    const rowCount = getOne<{ total: number }>(appDb, "select count(*) as total from prompt_reference_links")?.total ?? 0;
+    if (rowCount === 0) {
+      for (const link of DEFAULT_PROMPT_REFERENCE_LINKS) {
+        run(
+          appDb,
+          `insert into prompt_reference_links (
+            id, title, url, thumbnail_url, metadata_title, metadata_image_url,
+            metadata_icon_url, metadata_fetched_at, created_at, updated_at
+          ) values (?, ?, ?, '', '', '', '', '', ?, ?)`,
+          link.id,
+          link.title,
+          link.url,
+          timestamp,
+          timestamp
+        );
+      }
+    }
+    run(
+      appDb,
+      "insert into prompt_reference_link_state (id, defaults_initialized_at) values (?, ?)",
+      "default",
+      timestamp
+    );
+  });
+
+  initializeDefaults();
 }
 
 export function seedCases() {

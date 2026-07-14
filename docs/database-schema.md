@@ -170,6 +170,7 @@
 | `response_json` | 响应摘要，图片 base64 会替换为占位文本 |
 | `auto_retry_count` | 任务实际发生的自动重试次数；第一次成功为 `0` |
 | `manual_retry_count` | 用户在失败卡片上手动点击重试的次数 |
+| `recovery_count` | 服务重启后自动接管任务的次数；用于阻止连续重启造成重复调用 |
 | `max_auto_retries` | 创建或最近一次执行任务时使用的后台自动重试次数快照 |
 | `succeeded_on_retry` | 最终是否由自动重试或手动重试后成功，`0` 否、`1` 是 |
 | `created_at` / `updated_at` | 创建和更新时间 |
@@ -388,6 +389,17 @@
 | `metadata_fetched_at` | 元数据抓取时间 |
 | `created_at` / `updated_at` | 创建和更新时间 |
 
+首次启动且表内没有链接时，系统会写入“即梦AI”和“Midjourney Explore”。初始化状态会单独保存；用户删除默认链接后不会再次补回。
+
+### prompt_reference_link_state
+
+灵感链接默认项的一次性初始化状态。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 固定为 `default` |
+| `defaults_initialized_at` | 默认链接已完成初始化或已确认无需初始化的时间；存在该记录后不再自动补回默认链接 |
+
 ### prompt_color_schemes
 
 对话页“色系选择”库。系统默认色系和用户自建色系都按用户保存为独立行，设置页个性化中维护；对话页可多选色系，选择时只把结构化色彩要求注入当前提示词，不主动触发 AI 优化。
@@ -541,6 +553,7 @@
 | `sms_service` | 关闭 | 短信服务；迁移 `sms_settings.enabled` |
 | `proxy_service` | 关闭 | 全局代理；迁移 `proxy_settings.enabled` |
 | `cpa_sync` | 关闭 | CPA 账号同步；迁移 `cpa_accounts.enabled` |
+| `github_entry` | 开启 | 用户设置“关于”中的 GitHub 仓库入口；关闭后隐藏入口并改用更新日志图标 |
 | `debug_image_edit_mask` | 关闭 | 图片编辑 mask 调试；迁移 `debug_settings.image_edit_mask` |
 
 ### smtp_settings

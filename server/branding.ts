@@ -8,6 +8,7 @@ import { LOGIN_ASSET_EXTENSIONS } from "./constants";
 import { audit } from "./auditLog";
 import { requireConfig } from "./auth";
 import { configDb, getAll, getOne, run } from "./db";
+import { globalSwitchEnabled } from "./globalSwitches";
 import {
   deleteImageDerivativesForSources,
   getOrCreateImageDerivative,
@@ -63,6 +64,7 @@ type PublicBrandingPayload = {
   siteName: string;
   logoUrl: string;
   faviconUrl: string;
+  showGithubEntry: boolean;
   loginAssets: {
     backgrounds: {
       light: string[];
@@ -251,7 +253,7 @@ async function ensureBuiltinBrandingAssetsReady(force = false) {
   await builtinBrandingAssetsPromise;
 }
 
-function invalidatePublicBrandingCache() {
+export function invalidatePublicBrandingCache() {
   publicBrandingCache = null;
 }
 
@@ -441,6 +443,7 @@ export async function publicBranding() {
     siteName: config.settings.siteName,
     logoUrl: logo ? assetUrl(logo, "thumb") : brandingFileUrl(DEFAULT_LOGO_ASSET_ID, "thumb"),
     faviconUrl: favicon ? assetUrl(favicon, "thumb") : brandingFileUrl(DEFAULT_FAVICON_ASSET_ID, "thumb"),
+    showGithubEntry: globalSwitchEnabled("github_entry"),
     loginAssets: {
       backgrounds: {
         light: loginBackgroundUrls(byId, config.settings.loginBackgroundLightAssetIds, "login_background_light"),
