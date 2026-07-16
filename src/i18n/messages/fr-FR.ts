@@ -7,6 +7,11 @@ const messages: Messages = {
   ...enUSMessages,
   ...frontstageOverrides["fr-FR"],
   ...frontstageCoreOverrides["fr-FR"],
+  "sidebar.help": "Centre d’aide",
+  "asset.uploadMode.shared.noReview.label": "Partagé uniquement",
+  "asset.uploadMode.shared.noReview.description": "Enregistrer uniquement dans la bibliothèque partagée afin que tout le monde puisse le voir et l’utiliser.",
+  "asset.uploadMode.private_shared.noReview.label": "Mes ressources + partagé",
+  "asset.uploadMode.private_shared.noReview.description": "Enregistrer dans mes ressources et le partager en même temps avec tout le monde.",
   "common.add": "Ajouter",
   "common.all": "Tout",
   "common.cancel": "Annuler",
@@ -84,6 +89,23 @@ const messages: Messages = {
   "config.nav.modelLogs": "Journaux de modèle",
   "config.nav.requests": "Journaux de requêtes",
   "config.nav.audit": "Audit",
+  "settings.general.imagePreview.group": "Aperçu des images",
+  "settings.general.imagePreview.wheel.title": "Action de la molette dans l’aperçu",
+  "settings.general.imagePreview.wheel.desc": "Choisissez l’action de la molette dans l’aperçu d’une image en grand.",
+  "settings.general.imagePreview.wheel.zoom": "Zoomer sur l’image",
+  "settings.general.imagePreview.wheel.zoomDesc": "Utilisez la molette pour agrandir ou réduire l’image.",
+  "settings.general.imagePreview.wheel.pan": "Faire défiler l’image",
+  "settings.general.imagePreview.wheel.panDesc": "Utilisez la molette pour déplacer l’image ; maintenez Ctrl/⌘ pour zoomer temporairement.",
+  "settings.general.imagePreview.open.title": "À l’ouverture de l’aperçu",
+  "settings.general.imagePreview.open.desc": "Choisissez le mode d’affichage lors de l’ouverture ou de la réinitialisation d’un aperçu.",
+  "settings.general.imagePreview.open.contain": "Ajuster à la fenêtre",
+  "settings.general.imagePreview.open.containDesc": "Affiche toute l’image ajustée à la zone d’aperçu.",
+  "settings.general.imagePreview.open.actual": "Taille réelle",
+  "settings.general.imagePreview.open.actualDesc": "Affiche l’image à sa taille d’origine en pixels ; les images hautes commencent en haut.",
+  "toast.imagePreviewWheelZoom": "La molette de l’aperçu contrôle maintenant le zoom",
+  "toast.imagePreviewWheelPan": "La molette de l’aperçu fait maintenant défiler l’image",
+  "toast.imagePreviewOpenContain": "Les aperçus d’images s’ouvriront ajustés à la fenêtre",
+  "toast.imagePreviewOpenActual": "Les aperçus d’images s’ouvriront à leur taille réelle",
   "settings.general.autoUpload.title": "Import automatique dans les ressources",
   "settings.personalization.editSuggestions.title": "Suggestions d’édition",
   "settings.personalization.promptStyles.title": "Styles d’optimisation AI",
@@ -174,5 +196,4 @@ const messages: Messages = {
 };
 
 Object.assign(messages, frontstageCoreOverrides["fr-FR"]);
-
 export default messages;

@@ -7,6 +7,11 @@ const messages: Messages = {
   ...enUSMessages,
   ...frontstageOverrides["fa-IR"],
   ...frontstageCoreOverrides["fa-IR"],
+  "sidebar.help": "مرکز راهنما",
+  "asset.uploadMode.shared.noReview.label": "فقط مشترک",
+  "asset.uploadMode.shared.noReview.description": "فقط در کتابخانه مشترک ذخیره شود تا همه بتوانند آن را ببینند و استفاده کنند.",
+  "asset.uploadMode.private_shared.noReview.label": "مال من + مشترک",
+  "asset.uploadMode.private_shared.noReview.description": "هم‌زمان در دارایی‌های من ذخیره و با همه به اشتراک گذاشته شود.",
   "common.add": "افزودن",
   "common.all": "همه",
   "common.cancel": "لغو",
@@ -104,6 +109,23 @@ const messages: Messages = {
   "config.nav.modelLogs": "گزارش مدل ها",
   "config.nav.requests": "گزارش درخواست ها",
   "config.nav.audit": "حسابرسی",
+  "settings.general.imagePreview.group": "پیش‌نمایش تصویر",
+  "settings.general.imagePreview.wheel.title": "عملکرد چرخ در پیش‌نمایش",
+  "settings.general.imagePreview.wheel.desc": "مشخص کنید چرخ ماوس در پیش‌نمایش کامل تصویر چه کاری انجام دهد.",
+  "settings.general.imagePreview.wheel.zoom": "بزرگ‌نمایی یا کوچک‌نمایی تصویر",
+  "settings.general.imagePreview.wheel.zoomDesc": "با چرخ ماوس، تصویر را مستقیماً بزرگ یا کوچک کنید.",
+  "settings.general.imagePreview.wheel.pan": "پیمایش تصویر",
+  "settings.general.imagePreview.wheel.panDesc": "با چرخ ماوس تصویر را جابه‌جا کنید؛ برای بزرگ‌نمایی موقت Ctrl/⌘ را نگه دارید.",
+  "settings.general.imagePreview.open.title": "هنگام باز کردن پیش‌نمایش",
+  "settings.general.imagePreview.open.desc": "نحوه نمایش تصاویر هنگام باز کردن یا بازنشانی پیش‌نمایش را انتخاب کنید.",
+  "settings.general.imagePreview.open.contain": "متناسب با پنجره",
+  "settings.general.imagePreview.open.containDesc": "کل تصویر را متناسب با ناحیه پیش‌نمایش نشان می‌دهد.",
+  "settings.general.imagePreview.open.actual": "اندازه واقعی",
+  "settings.general.imagePreview.open.actualDesc": "تصویر را با اندازه پیکسلی اصلی نشان می‌دهد؛ تصاویر بلند از بالا نمایش داده می‌شوند.",
+  "toast.imagePreviewWheelZoom": "چرخ پیش‌نمایش برای بزرگ‌نمایی تصویر تنظیم شد",
+  "toast.imagePreviewWheelPan": "چرخ پیش‌نمایش برای پیمایش تصویر تنظیم شد",
+  "toast.imagePreviewOpenContain": "پیش‌نمایش تصاویر متناسب با پنجره باز می‌شود",
+  "toast.imagePreviewOpenActual": "پیش‌نمایش تصاویر با اندازه واقعی باز می‌شود",
   "settings.general.autoUpload.title": "بارگذاری خودکار در منابع",
   "settings.general.autoUpload.desc": "در صورت فعال بودن، تصاویر چسبانده شده در کتابخانه منابع ذخیره می شوند. در صورت غیرفعال بودن، فقط در ورودی فعلی استفاده می شوند.",
   "settings.personalization.editSuggestions.title": "پیشنهادهای ویرایش",
@@ -1417,5 +1439,4 @@ const messages: Messages = {
 };
 
 Object.assign(messages, frontstageCoreOverrides["fa-IR"]);
-
 export default messages;

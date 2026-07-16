@@ -3,12 +3,16 @@ import type { LanguagePreference } from "./i18n";
 import type { PromptOptimizeStyleGroup, PromptTemplateOptimizeStyle } from "./lib/promptOptimizeStyles";
 
 export type EditSuggestionTone = "default" | "practical" | "creative" | "detail";
+export type ImagePreviewWheelMode = "zoom" | "pan";
+export type ImagePreviewOpenMode = "contain" | "actual";
 
 export type UserPreferences = {
   language: LanguagePreference;
   editSuggestionsEnabled: boolean;
   editSuggestionTone: EditSuggestionTone;
   autoUploadPastedAssets: boolean;
+  imagePreviewWheelMode: ImagePreviewWheelMode;
+  imagePreviewOpenMode: ImagePreviewOpenMode;
   promptOptimizeStyleGroups: PromptOptimizeStyleGroup[];
   promptOptimizeCustomInstruction: string;
 };
@@ -986,11 +990,12 @@ export type ImageEditSuggestion = {
 export type ImageJob = {
   id: string;
   type: "generation" | "edit";
-  status: "running" | "succeeded" | "failed";
+  status: "running" | "succeeded" | "failed" | "cancelled";
   prompt: string;
   providerId: string;
   error: string | null;
   resultImageId: string | null;
+  clientRequestId?: string;
   branchId?: string;
   parentBranchId?: string;
   branchForkMessageId?: string;
@@ -1035,6 +1040,13 @@ export type CaseCategory = {
     coverImageId?: string;
     referenceImages?: ImageReferenceItem[];
   }>;
+};
+
+export type InspirationContributor = {
+  userId: string;
+  username: string;
+  avatarUrl: string;
+  contributionCount: number;
 };
 
 export type CaseMaterialItem = {

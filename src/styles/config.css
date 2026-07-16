@@ -3196,6 +3196,226 @@ td.compact-actions a:last-child {
   width: min(1040px, 100%);
 }
 
+.changelog-sync-modal {
+  width: min(960px, 100%);
+  max-height: min(92vh, 860px);
+  max-height: min(92dvh, 860px);
+}
+
+.changelog-sync-form {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.changelog-sync-hint {
+  margin: 0;
+  color: #4b5563;
+  line-height: 1.5;
+}
+
+.changelog-sync-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.changelog-sync-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.changelog-sync-summary span {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 4px 9px;
+  color: #4b5563;
+  background: #f9fafb;
+  font-size: 13px;
+}
+
+.changelog-sync-list {
+  min-height: 0;
+  flex: 1 1 auto;
+  display: grid;
+  gap: 8px;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  padding: 2px 8px 2px 2px;
+  overscroll-behavior: contain;
+  scrollbar-color: #94a3b8 #f1f5f9;
+  scrollbar-gutter: stable;
+  scrollbar-width: auto;
+}
+
+.changelog-sync-list::-webkit-scrollbar {
+  width: 11px;
+}
+
+.changelog-sync-list::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: #f1f5f9;
+}
+
+.changelog-sync-list::-webkit-scrollbar-thumb {
+  min-height: 44px;
+  border: 2px solid #f1f5f9;
+  border-radius: 999px;
+  background: #94a3b8;
+}
+
+.changelog-sync-list::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+.changelog-sync-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: start;
+  gap: 11px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.changelog-sync-item:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.changelog-sync-item > input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.changelog-sync-checkbox,
+.changelog-sync-current-marker {
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.changelog-sync-checkbox {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  color: #fff;
+}
+
+.changelog-sync-item:not(.is-current):hover .changelog-sync-checkbox {
+  border-color: var(--control-focus-border);
+}
+
+.changelog-sync-item.is-selected {
+  border-color: var(--control-selected-border);
+  background: var(--control-selected-bg);
+  box-shadow: inset 0 0 0 1px var(--control-selected-border);
+}
+
+.changelog-sync-item.is-selected .changelog-sync-checkbox {
+  border-color: var(--control-selected-border);
+  background: var(--control-selected-border);
+}
+
+.changelog-sync-item:focus-within .changelog-sync-checkbox {
+  box-shadow: 0 0 0 3px var(--control-focus-ring);
+}
+
+.changelog-sync-current-marker {
+  border: 1px solid #bbf7d0;
+  background: #ecfdf5;
+  color: #15803d;
+}
+
+.changelog-sync-item.is-current {
+  cursor: default;
+}
+
+.changelog-sync-item-body {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.changelog-sync-item-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.changelog-sync-item-meta strong {
+  color: #111827;
+  font-size: 15px;
+}
+
+.changelog-sync-item-meta time {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.changelog-sync-action {
+  border-radius: 999px;
+  padding: 2px 8px;
+  color: #374151;
+  background: #f3f4f6;
+  font-size: 12px;
+}
+
+.changelog-sync-item.action-create .changelog-sync-action {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.changelog-sync-item.action-update .changelog-sync-action {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.changelog-sync-content {
+  color: #4b5563;
+  font-size: 13px;
+}
+
+.changelog-sync-content > *:first-child {
+  margin-top: 0;
+}
+
+.changelog-sync-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.changelog-sync-actions {
+  justify-content: flex-end;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 12px;
+}
+
 .changelog-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 180px;

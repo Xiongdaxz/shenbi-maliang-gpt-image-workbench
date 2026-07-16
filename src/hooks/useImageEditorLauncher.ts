@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ImageEditorOpenRequest } from "../store/workbench";
 import { newestWorkImages, uniqueWorkImages, workImageFromMessage } from "../lib/workImages";
 import type { AssetItem, Message, WorkImage } from "../types";
@@ -26,13 +26,19 @@ export function useImageEditorLauncher({
   setSidebarCollapsed
 }: UseImageEditorLauncherOptions) {
   const [imageEditor, setImageEditor] = useState<ImageEditorState | null>(null);
+  const handledEditorRequestRef = useRef<ImageEditorOpenRequest | null>(null);
   const editorImages = useMemo(
     () => uniqueWorkImages(messageList.filter((message) => message.role === "assistant").map(workImageFromMessage).filter(Boolean) as WorkImage[]),
     [messageList]
   );
 
   useEffect(() => {
-    if (!editorImageRequest) return;
+    if (!editorImageRequest) {
+      handledEditorRequestRef.current = null;
+      return;
+    }
+    if (handledEditorRequestRef.current === editorImageRequest) return;
+    handledEditorRequestRef.current = editorImageRequest;
     const requestImage = editorImageRequest.image;
     const requestImages =
       editorImageRequest.images && editorImageRequest.images.length > 0
@@ -41,13 +47,15 @@ export function useImageEditorLauncher({
           ? editorImages
           : [requestImage, ...editorImages];
     setSidebarCollapsed(true);
-    setSelectedAssets([]);
+    if (!editorImageRequest.preserveSelectedAssets) setSelectedAssets([]);
     setMaterialPickerOpen(false);
     setImageEditor({
       images: requestImages,
-      activeImageId: requestImage.id
+      activeImageId: requestImage.id,
+      initialPrompt: editorImageRequest.initialPrompt,
+      discardDraftOnClose: editorImageRequest.discardDraftOnClose
     });
-    setEditorImageRequest(null);
+    if (!editorImageRequest.persistAcrossSessionChange) setEditorImageRequest(null);
   }, [editorImageRequest, editorImages, setEditorImageRequest, setMaterialPickerOpen, setSelectedAssets, setSidebarCollapsed]);
 
   const openImageEditor = (image: WorkImage) => {
@@ -63,8 +71,10 @@ export function useImageEditorLauncher({
   const closeImageEditor = useCallback((options: CloseImageEditorOptions = {}) => {
     const { restoreSidebar = true } = options;
     setImageEditor(null);
+    handledEditorRequestRef.current = null;
+    setEditorImageRequest(null);
     if (restoreSidebar) setSidebarCollapsed(false);
-  }, [setSidebarCollapsed]);
+  }, [setEditorImageRequest, setSidebarCollapsed]);
 
   return { closeImageEditor, imageEditor, openImageEditor };
 }

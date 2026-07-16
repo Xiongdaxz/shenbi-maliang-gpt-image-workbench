@@ -7,6 +7,11 @@ const messages: Messages = {
   ...enUSMessages,
   ...frontstageOverrides["ru-RU"],
   ...frontstageCoreOverrides["ru-RU"],
+  "sidebar.help": "Центр помощи",
+  "asset.uploadMode.shared.noReview.label": "Только общие",
+  "asset.uploadMode.shared.noReview.description": "Сохранить только в общей библиотеке, чтобы материал могли просматривать и использовать все.",
+  "asset.uploadMode.private_shared.noReview.label": "Мои + общие",
+  "asset.uploadMode.private_shared.noReview.description": "Сохранить в моих материалах и одновременно поделиться со всеми.",
   "common.add": "Добавить",
   "common.all": "Все",
   "common.cancel": "Отмена",
@@ -88,6 +93,23 @@ const messages: Messages = {
   "config.nav.modelLogs": "Логи моделей",
   "config.nav.requests": "Логи запросов",
   "config.nav.audit": "Аудит",
+  "settings.general.imagePreview.group": "Предпросмотр изображений",
+  "settings.general.imagePreview.wheel.title": "Действие колеса в предпросмотре",
+  "settings.general.imagePreview.wheel.desc": "Выберите действие колеса мыши в полноразмерном предпросмотре.",
+  "settings.general.imagePreview.wheel.zoom": "Масштабировать изображение",
+  "settings.general.imagePreview.wheel.zoomDesc": "Увеличивайте или уменьшайте изображение колесом мыши.",
+  "settings.general.imagePreview.wheel.pan": "Прокручивать изображение",
+  "settings.general.imagePreview.wheel.panDesc": "Перемещайте изображение колесом; удерживайте Ctrl/⌘ для временного масштабирования.",
+  "settings.general.imagePreview.open.title": "При открытии предпросмотра",
+  "settings.general.imagePreview.open.desc": "Выберите способ отображения изображений при открытии или сбросе предпросмотра.",
+  "settings.general.imagePreview.open.contain": "Вписать в окно",
+  "settings.general.imagePreview.open.containDesc": "Показывает изображение целиком в области предпросмотра.",
+  "settings.general.imagePreview.open.actual": "Исходный размер",
+  "settings.general.imagePreview.open.actualDesc": "Показывает изображение в исходном размере в пикселях; высокие изображения начинаются сверху.",
+  "toast.imagePreviewWheelZoom": "Колесо в предпросмотре теперь масштабирует изображение",
+  "toast.imagePreviewWheelPan": "Колесо в предпросмотре теперь прокручивает изображение",
+  "toast.imagePreviewOpenContain": "Предпросмотр изображений будет открываться с вписыванием в окно",
+  "toast.imagePreviewOpenActual": "Предпросмотр изображений будет открываться в исходном размере",
   "settings.general.autoUpload.title": "Автозагрузка в материалы",
   "settings.general.autoUpload.desc": "Если включено, вставленные изображения сохраняются в библиотеку материалов. Если выключено, они используются только в текущем вводе.",
   "settings.personalization.editSuggestions.title": "Советы по правке",
@@ -193,5 +215,4 @@ const messages: Messages = {
 };
 
 Object.assign(messages, frontstageCoreOverrides["ru-RU"]);
-
 export default messages;

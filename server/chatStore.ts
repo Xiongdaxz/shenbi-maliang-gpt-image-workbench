@@ -135,18 +135,34 @@ export function serializeSession(row: {
   };
 }
 
-export async function ensureChatSession(userId: string, sessionId: string | null | undefined, prompt: string) {
+export async function ensureChatSession(
+  userId: string,
+  sessionId: string | null | undefined,
+  prompt: string,
+  clientRequestId = ""
+) {
   const existing = ownedSession(userId, sessionId);
   if (existing) return existing.id;
+  const normalizedClientRequestId = clientRequestId.trim();
+  if (normalizedClientRequestId) {
+    const requestSession = getOne<{ id: string }>(
+      appDb,
+      "select id from sessions where user_id = ? and client_request_id = ? and deleted_at is null limit 1",
+      userId,
+      normalizedClientRequestId
+    );
+    if (requestSession) return requestSession.id;
+  }
   const id = makeId("chat");
   const timestamp = now();
   const title = immediateChatTitleFromPrompt(prompt);
   const titleStatus: ChatTitleStatus = prompt.trim() ? "pending" : "ready";
   run(
     appDb,
-    "insert into sessions (id, user_id, title, title_status, created_at, updated_at) values (?, ?, ?, ?, ?, ?)",
+    "insert into sessions (id, user_id, client_request_id, title, title_status, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?)",
     id,
     userId,
+    normalizedClientRequestId || null,
     title,
     titleStatus,
     timestamp,
@@ -402,6 +418,93 @@ function deleteUserSessionImages(userId: string) {
   );
 }
 
+async function deleteMessageSourceReferencesMatching(userId: string, messageFilterSql: string, params: string[]) {
+  const referenceFilterSql = `select id from message_source_references where user_id = ? and message_id in (${messageFilterSql})`;
+  const referenceParams = [userId, ...params];
+  const referenceIds = getAll<{ id: string }>(appDb, referenceFilterSql, ...referenceParams).map((row) => row.id);
+  if (referenceIds.length === 0) return;
+  const derivativeSources = [{ sourceType: "message-source-reference" as const, sourceIds: referenceIds }];
+  const pathsToDelete = uniquePaths([
+    ...getAll<{ path: string }>(
+      appDb,
+      `select path from message_source_references where id in (${referenceFilterSql})`,
+      ...referenceParams
+    ),
+    ...imageDerivativePathsForSources(derivativeSources)
+  ]);
+  const deleteRecords = appDb.transaction(() => {
+    deleteImageDerivativesForSources(derivativeSources);
+    run(appDb, `delete from message_source_references where id in (${referenceFilterSql})`, ...referenceParams);
+  });
+  deleteRecords();
+  await deleteStoredFilesIfUnreferenced(pathsToDelete);
+}
+
+async function deleteMessageSourceReferencesForJob(userId: string, jobId: string) {
+  const referenceRows = getAll<{ id: string; path: string }>(
+    appDb,
+    "select id, path from message_source_references where user_id = ? and job_id = ?",
+    userId,
+    jobId
+  );
+  if (referenceRows.length === 0) return;
+  const referenceIds = referenceRows.map((row) => row.id);
+  const placeholders = referenceIds.map(() => "?").join(", ");
+  const derivativeSources = [{ sourceType: "message-source-reference" as const, sourceIds: referenceIds }];
+  const pathsToDelete = uniquePaths([
+    ...referenceRows,
+    ...imageDerivativePathsForSources(derivativeSources)
+  ]);
+  const deleteRecords = appDb.transaction(() => {
+    deleteImageDerivativesForSources(derivativeSources);
+    run(appDb, `delete from message_source_references where id in (${placeholders})`, ...referenceIds);
+  });
+  deleteRecords();
+  await deleteStoredFilesIfUnreferenced(pathsToDelete);
+}
+
+export async function deleteImageJobArtifacts(userId: string, jobId: string, clientRequestId = "") {
+  const normalizedJobId = jobId.trim();
+  if (normalizedJobId) {
+    await deleteImagesMatching(userId, "select id from images where user_id = ? and job_id = ?", [userId, normalizedJobId]);
+  }
+  const matchedMessages = getAll<{ id: string; metadata: string | null }>(
+    appDb,
+    "select id, metadata from messages where user_id = ? and metadata is not null",
+    userId
+  )
+    .map((row) => ({ row, metadata: safeJson<Record<string, unknown>>(row.metadata, {}) }))
+    .filter(({ metadata }) => {
+      return Boolean(normalizedJobId && String(metadata.jobId ?? "").trim() === normalizedJobId)
+        || Boolean(clientRequestId && String(metadata.clientRequestId ?? "").trim() === clientRequestId);
+    });
+  const messageIds = matchedMessages.map(({ row }) => row.id);
+  const storedJob = normalizedJobId
+    ? getOne<{ request_json: string | null }>(
+        appDb,
+        "select request_json from image_jobs where id = ? and user_id = ?",
+        normalizedJobId,
+        userId
+      )
+    : null;
+  const requestJson = safeJson<Record<string, unknown>>(storedJob?.request_json, {});
+  const artifactPaths = uniquePaths([
+    ...matchedMessages.map(({ metadata }) => ({ path: String(metadata.maskPath ?? "").trim() })),
+    { path: String(requestJson.maskPath ?? "").trim() }
+  ]);
+  if (normalizedJobId) await deleteMessageSourceReferencesForJob(userId, normalizedJobId);
+  if (messageIds.length > 0) {
+    const placeholders = messageIds.map(() => "?").join(", ");
+    await deleteMessageSourceReferencesMatching(
+      userId,
+      `select id from messages where user_id = ? and id in (${placeholders})`,
+      [userId, ...messageIds]
+    );
+    run(appDb, `delete from messages where user_id = ? and id in (${placeholders})`, userId, ...messageIds);
+  }
+  if (artifactPaths.length > 0) await deleteStoredFilesIfUnreferenced(artifactPaths);
+}
+
 export async function deleteImageRecords(userId: string, imageId: string) {
   const image = getOne<{ id: string }>(appDb, "select id from images where id = ? and user_id = ?", imageId, userId);
   if (!image) return false;
@@ -427,14 +530,107 @@ export async function deleteSessionRecords(userId: string, sessionId: string) {
   const session = getOne<{ id: string }>(appDb, "select id from sessions where id = ? and user_id = ? and deleted_at is null", sessionId, userId);
   if (!session) return false;
   await deleteSessionImages(userId, sessionId);
+  await deleteMessageSourceReferencesMatching(
+    userId,
+    "select id from messages where user_id = ? and session_id = ?",
+    [userId, sessionId]
+  );
   run(appDb, "delete from image_jobs where user_id = ? and session_id = ?", userId, sessionId);
   run(appDb, "delete from messages where user_id = ? and session_id = ?", userId, sessionId);
   const result = run(appDb, "delete from sessions where user_id = ? and id = ? and deleted_at is null", userId, sessionId);
   return Number(result.changes ?? 0) > 0;
 }
 
+export function deleteRequestEmptySessionRecord(userId: string, sessionId: string, clientRequestId: string) {
+  const normalizedClientRequestId = clientRequestId.trim();
+  if (!normalizedClientRequestId) return false;
+  const result = run(
+    appDb,
+    `delete from sessions
+     where id = ? and user_id = ? and client_request_id = ? and deleted_at is null
+       and not exists (select 1 from messages where messages.session_id = sessions.id and messages.user_id = ?)
+       and not exists (select 1 from image_jobs where image_jobs.session_id = sessions.id and image_jobs.user_id = ?)`,
+    sessionId,
+    userId,
+    normalizedClientRequestId,
+    userId,
+    userId
+  );
+  return Number(result.changes ?? 0) > 0;
+}
+
+export function deleteCancelledEmptySessionRecord(userId: string, sessionId: string, clientRequestId: string) {
+  const normalizedClientRequestId = clientRequestId.trim();
+  if (!normalizedClientRequestId) return false;
+
+  const deleteRecord = appDb.transaction(() => {
+    const session = getOne<{ id: string; client_request_id: string | null }>(
+      appDb,
+      `select id, client_request_id from sessions
+       where id = ? and user_id = ? and deleted_at is null`,
+      sessionId,
+      userId
+    );
+    if (session?.client_request_id !== normalizedClientRequestId) return false;
+
+    const hasMessages = getOne<{ found: number }>(
+      appDb,
+      "select 1 as found from messages where session_id = ? and user_id = ? limit 1",
+      sessionId,
+      userId
+    );
+    if (hasMessages) return false;
+
+    const cancelledJob = getOne<{ id: string }>(
+      appDb,
+      "select id from image_jobs where session_id = ? and user_id = ? and status = ? limit 1",
+      sessionId,
+      userId,
+      "cancelled"
+    );
+    if (!cancelledJob) return false;
+
+    const nonCancelledJob = getOne<{ id: string }>(
+      appDb,
+      "select id from image_jobs where session_id = ? and user_id = ? and status <> ? limit 1",
+      sessionId,
+      userId,
+      "cancelled"
+    );
+    if (nonCancelledJob) return false;
+
+    run(
+      appDb,
+      "delete from image_jobs where session_id = ? and user_id = ? and status = ?",
+      sessionId,
+      userId,
+      "cancelled"
+    );
+    const result = run(
+      appDb,
+      `delete from sessions
+       where id = ? and user_id = ? and client_request_id = ? and deleted_at is null
+         and not exists (select 1 from messages where messages.session_id = sessions.id and messages.user_id = ?)
+         and not exists (select 1 from image_jobs where image_jobs.session_id = sessions.id and image_jobs.user_id = ?)`,
+      sessionId,
+      userId,
+      normalizedClientRequestId,
+      userId,
+      userId
+    );
+    return Number(result.changes ?? 0) > 0;
+  });
+
+  return deleteRecord();
+}
+
 export async function deleteAllSessionRecords(userId: string) {
   await deleteUserSessionImages(userId);
+  await deleteMessageSourceReferencesMatching(
+    userId,
+    "select id from messages where user_id = ? and session_id in (select id from sessions where user_id = ?)",
+    [userId, userId]
+  );
   run(appDb, "delete from image_jobs where user_id = ? and session_id in (select id from sessions where user_id = ?)", userId, userId);
   run(appDb, "delete from messages where user_id = ? and session_id in (select id from sessions where user_id = ?)", userId, userId);
   const result = run(appDb, "delete from sessions where user_id = ?", userId);
@@ -661,6 +857,7 @@ export function serializeJob(row: {
   provider_id: string;
   error: string | null;
   result_image_id: string | null;
+  client_request_id?: string | null;
   branchId?: string;
   parentBranchId?: string;
   branchForkMessageId?: string;
@@ -676,6 +873,7 @@ export function serializeJob(row: {
     providerId: row.provider_id,
     error: row.error,
     resultImageId: row.result_image_id,
+    clientRequestId: row.client_request_id ?? "",
     ...(row.branchId ? { branchId: row.branchId } : {}),
     ...(row.parentBranchId ? { parentBranchId: row.parentBranchId } : {}),
     ...(row.branchForkMessageId ? { branchForkMessageId: row.branchForkMessageId } : {}),

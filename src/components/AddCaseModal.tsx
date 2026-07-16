@@ -172,7 +172,7 @@ export function AddCaseModal({
 
   const modal = (
     <div className="modal-backdrop">
-      <section className="case-modal">
+      <section className="case-modal add-case-modal">
         <header>
           <h3>{t("pages.cases.addToInspiration")}</h3>
           <button onClick={onClose} aria-label={t("common.close")}>
@@ -246,7 +246,7 @@ export function AddCaseModal({
                 placeholder={caseSuggestionPending ? t("pages.cases.generatingTitle") : t("pages.cases.titlePlaceholder")}
               />
             </label>
-            <label>
+            <label className="case-modal-prompt-field">
               {autoGenerateFields ? t("pages.cases.promptContent") : t("pages.cases.prompt")}
               <textarea
                 value={prompt}

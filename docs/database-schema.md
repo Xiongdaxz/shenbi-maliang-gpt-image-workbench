@@ -53,6 +53,8 @@
 | --- | --- |
 | `user_id` | 用户 ID，主键 |
 | `language` | 用户界面语言偏好：`auto` 自动检测，或 `zh-CN`、`zh-TW`、`en-US`、`ja-JP`、`ko-KR`、`es-ES`、`fr-FR`、`de-DE`、`pt-BR`、`ru-RU`、`fa-IR` |
+| `image_preview_wheel_mode` | 完整图片预览的滚轮行为：`zoom` 缩放图片、`pan` 平移查看超出窗口的区域 |
+| `image_preview_open_mode` | 完整图片预览的默认打开方式：`contain` 适应窗口、`actual` 按 100% 原始尺寸显示 |
 | `edit_suggestions_enabled` | 对话页图片续改建议开关，`0` 关闭、`1` 开启 |
 | `edit_suggestion_tone` | 图片续改建议倾向：`default` 默认均衡、`practical` 实用优化、`creative` 创意扩展、`detail` 细节修复 |
 | `auto_upload_pasted_assets` | 输入框粘贴图片是否自动保存到素材库，`0` 关闭、`1` 开启；关闭后仅作为本次消息引用素材保存 |
@@ -126,12 +128,15 @@
 | --- | --- |
 | `id` | 会话 ID |
 | `user_id` | 用户 ID |
+| `client_request_id` | 创建新会话时的客户端请求标识；同一用户内非空值唯一，用于避免重复创建和关联快速取消请求 |
 | `title` | 会话标题 |
 | `title_status` | 标题状态：`pending` 后台生成中，`ready` 已生成或已使用截取兜底，`manual` 用户手动修改 |
 | `pinned_at` | 置顶时间；为空表示未置顶 |
 | `archived_at` | 归档时间 |
 | `deleted_at` | 删除时间 |
 | `created_at` / `updated_at` | 创建和更新时间 |
+
+相关索引：`sessions_user_client_request_unique_idx` 保证同一用户内非空客户端请求标识唯一；其余会话索引支撑归档、可见状态、置顶和更新时间排序。
 
 ### messages
 
@@ -160,10 +165,11 @@
 | `user_id` | 用户 ID |
 | `session_id` | 会话 ID |
 | `type` | 任务类型：`generation` 生成、`edit` 编辑 |
-| `status` | 任务状态：`running` 运行中、`succeeded` 成功、`failed` 失败 |
+| `status` | 任务状态：`running` 运行中、`succeeded` 成功、`failed` 失败、`cancelled` 已取消 |
 | `prompt` | 用户提示词 |
 | `source_image_ids` | 来源图片、素材、灵感引用 JSON |
 | `provider_id` | 用户选择或实际使用的渠道 ID |
+| `client_request_id` | 客户端请求标识；用于把生成请求、任务与取消意图关联起来 |
 | `error` | 失败信息 |
 | `result_image_id` | 首张结果图片 ID |
 | `request_json` | 请求摘要，图片 data URL 会脱敏 |
@@ -175,7 +181,19 @@
 | `succeeded_on_retry` | 最终是否由自动重试或手动重试后成功，`0` 否、`1` 是 |
 | `created_at` / `updated_at` | 创建和更新时间 |
 
-相关索引：`image_jobs_session_user_status_time_idx` 支撑对话页和侧边栏按会话、用户、状态轮询任务。
+相关索引：`image_jobs_session_user_status_time_idx` 支撑对话页和侧边栏按会话、用户、状态轮询任务；`image_jobs_user_client_request_idx` 支撑按用户和客户端请求标识查找待取消任务。
+
+### image_job_cancel_requests
+
+生成或编辑任务的取消意图。当前端在任务记录创建前发起取消时，该记录会阻止同一客户端请求继续创建任务；过期记录由服务按 24 小时窗口清理，删除账户时会在同一数据库事务中同步删除。
+
+| 字段 | 说明 |
+| --- | --- |
+| `user_id` | 用户 ID，与 `client_request_id` 组成主键 |
+| `client_request_id` | 客户端请求标识 |
+| `created_at` | 取消意图创建时间 |
+
+相关索引：`image_job_cancel_requests_created_idx` 支撑按创建时间清理过期取消意图。
 
 ### images
 

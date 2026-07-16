@@ -210,8 +210,8 @@
 .sidebar-collapsed .sidebar .nav-item[data-sidebar-tip]:focus-visible::after,
 .sidebar-collapsed .sidebar .user-footer-profile[data-sidebar-tip]:hover::after,
 .sidebar-collapsed .sidebar .user-footer-profile[data-sidebar-tip]:focus-visible::after,
-.sidebar-collapsed .sidebar .user-footer-logout[data-sidebar-tip]:hover::after,
-.sidebar-collapsed .sidebar .user-footer-logout[data-sidebar-tip]:focus-visible::after {
+.sidebar-collapsed .sidebar .user-footer-settings[data-sidebar-tip]:hover::after,
+.sidebar-collapsed .sidebar .user-footer-settings[data-sidebar-tip]:focus-visible::after {
   opacity: 1;
   transform: translate(0, -50%);
 }
@@ -308,10 +308,21 @@
 }
 
 .main-nav {
+  position: relative;
   display: grid;
   gap: 4px;
   font-size: 14px;
   line-height: 20px;
+}
+
+.main-nav .nav-item {
+  position: relative;
+  z-index: 1;
+}
+
+.main-nav .nav-item.active,
+.main-nav .nav-item[aria-current="page"] {
+  background: transparent;
 }
 
 .main-nav-actions {
@@ -357,6 +368,8 @@
 }
 
 .sidebar-scroll {
+  position: relative;
+  isolation: isolate;
   min-height: 0;
   flex: 0 0 auto;
   display: grid;
@@ -365,6 +378,36 @@
   gap: 4px;
   overflow: visible;
   padding: 4px var(--sidebar-pad-x) 8px;
+}
+
+.sidebar-selection-indicator {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  left: 0;
+  display: block;
+  border-radius: 8px;
+  background: var(--button-default-hover-bg);
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform;
+  transition: opacity 150ms ease;
+}
+
+.sidebar-selection-indicator.is-visible {
+  opacity: 1;
+}
+
+.sidebar-scroll > .main-nav,
+.sidebar-scroll > .collapsed-recent-wrap,
+.sidebar-scroll > .session-group {
+  position: relative;
+  z-index: 1;
+}
+
+.sidebar-scroll.is-selection-animating .main-nav .nav-item:hover,
+.sidebar-scroll.is-selection-animating .recent-row:hover {
+  background: transparent;
 }
 
 .nav-item,
@@ -570,6 +613,7 @@
 }
 
 .recent-list {
+  position: relative;
   display: grid;
   align-content: start;
   gap: 2px;
@@ -578,6 +622,7 @@
 
 .recent-row {
   position: relative;
+  z-index: 1;
   min-width: 0;
   min-height: 38px;
   display: block;
@@ -590,6 +635,11 @@
 .recent-row.active,
 .recent-row.menu-open {
   background: var(--button-default-hover-bg);
+}
+
+.recent-list .recent-row.active,
+.recent-list .recent-row.active.menu-open {
+  background: transparent;
 }
 
 .recent-item {
@@ -990,7 +1040,7 @@
   outline-offset: 2px;
 }
 
-.user-footer-logout {
+.user-footer-settings {
   background: transparent;
 }
 
@@ -1170,6 +1220,12 @@
   background: #f7f7f5;
 }
 
+.user-info-action-divider {
+  height: 1px;
+  margin: 4px 6px 2px;
+  background: var(--app-border-soft);
+}
+
 .user-info-logout {
   color: #c2353a;
 }
@@ -1215,6 +1271,10 @@
 @media (prefers-reduced-motion: reduce) {
   .page-route-transition {
     animation: none;
+  }
+
+  .sidebar-selection-indicator {
+    transition: none;
   }
 }
 

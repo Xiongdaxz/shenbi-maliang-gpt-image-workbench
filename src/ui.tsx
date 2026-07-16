@@ -156,11 +156,13 @@ export function CustomSelect({
 type ConfirmDialogProps = {
   open: boolean;
   title: string;
-  description: string;
+  description: ReactNode;
   confirmText?: string;
   cancelText?: string;
   confirmationText?: string;
   confirmationLabel?: string;
+  confirmationDelaySeconds?: number;
+  confirmationDelayLabel?: (seconds: number) => string;
   destructive?: boolean;
   backdropClassName?: string;
   className?: string;
@@ -176,6 +178,8 @@ export function ConfirmDialog({
   cancelText,
   confirmationText,
   confirmationLabel,
+  confirmationDelaySeconds = 0,
+  confirmationDelayLabel,
   destructive,
   backdropClassName,
   className,
@@ -183,24 +187,78 @@ export function ConfirmDialog({
   onCancel
 }: ConfirmDialogProps) {
   const [confirmationValue, setConfirmationValue] = useState("");
+  const [confirmationDeadline, setConfirmationDeadline] = useState<number | null>(null);
+  const [confirmationRemainingMs, setConfirmationRemainingMs] = useState(0);
+  const onConfirmRef = useRef(onConfirm);
   const { t } = useI18n();
   useEffect(() => {
-    if (open) setConfirmationValue("");
+    onConfirmRef.current = onConfirm;
+  }, [onConfirm]);
+  useEffect(() => {
+    if (open) {
+      setConfirmationValue("");
+      setConfirmationDeadline(null);
+      setConfirmationRemainingMs(0);
+    }
   }, [open, confirmationText, title]);
+  useEffect(() => {
+    if (!open || confirmationDeadline === null) return;
+    let completed = false;
+    const updateCountdown = () => {
+      const remainingMs = Math.max(0, confirmationDeadline - Date.now());
+      setConfirmationRemainingMs(remainingMs);
+    };
+    const finishCountdown = () => {
+      if (completed) return;
+      completed = true;
+      setConfirmationRemainingMs(0);
+      setConfirmationDeadline(null);
+      onConfirmRef.current();
+    };
+    const timer = window.setInterval(updateCountdown, 1000);
+    const completionTimer = window.setTimeout(finishCountdown, Math.max(0, confirmationDeadline - Date.now()));
+    updateCountdown();
+    return () => {
+      window.clearInterval(timer);
+      window.clearTimeout(completionTimer);
+    };
+  }, [confirmationDeadline, open]);
   if (!open) return null;
   const requiresConfirmation = Boolean(confirmationText);
   const confirmationMatched = !requiresConfirmation || confirmationValue.trim() === confirmationText;
+  const confirmationDelayMs = Math.max(0, confirmationDelaySeconds) * 1000;
+  const confirmationPending = confirmationDeadline !== null;
+  const confirmationRemainingSeconds = Math.max(1, Math.ceil(confirmationRemainingMs / 1000));
+  const confirmationDelayDisplay = confirmationDelayLabel?.(confirmationRemainingSeconds) ?? `${confirmationRemainingSeconds}s`;
+  const handleCancel = () => {
+    setConfirmationDeadline(null);
+    setConfirmationRemainingMs(0);
+    onCancel();
+  };
+  const handleCountdownCancel = () => {
+    setConfirmationDeadline(null);
+    setConfirmationRemainingMs(0);
+  };
+  const handleConfirm = () => {
+    if (!confirmationMatched || confirmationPending) return;
+    if (confirmationDelayMs <= 0) {
+      onConfirm();
+      return;
+    }
+    setConfirmationRemainingMs(confirmationDelayMs);
+    setConfirmationDeadline(Date.now() + confirmationDelayMs);
+  };
   return (
     <ModalPortal>
       <div className={["modal-backdrop", backdropClassName].filter(Boolean).join(" ")}>
         <section className={["case-modal compact-modal action-modal", className].filter(Boolean).join(" ")}>
           <header>
             <h3>{title}</h3>
-            <button onClick={onCancel} aria-label={t("common.close")}>
+            <button onClick={handleCancel} aria-label={t("common.close")}>
               <X size={18} />
             </button>
           </header>
-          <p>{description}</p>
+          {typeof description === "string" ? <p>{description}</p> : <div className="action-modal-description">{description}</div>}
           {requiresConfirmation ? (
             <label className="confirm-phrase-field">
               {confirmationLabel ?? `${t("common.confirm")} ${confirmationText}`}
@@ -208,17 +266,45 @@ export function ConfirmDialog({
                 value={confirmationValue}
                 onChange={(event) => setConfirmationValue(event.target.value)}
                 placeholder={confirmationText}
+                disabled={confirmationPending}
                 autoFocus
               />
             </label>
           ) : null}
-          <div className="row-actions">
-            <button className="secondary-btn" onClick={onCancel}>
-              {cancelText ?? t("common.cancel")}
-            </button>
-            <button className={destructive ? "danger-btn" : "primary-btn"} onClick={onConfirm} disabled={!confirmationMatched}>
-              {confirmText ?? t("common.confirm")}
-            </button>
+          <div className={["row-actions", confirmationPending ? "confirm-countdown-actions" : ""].filter(Boolean).join(" ")}>
+            {confirmationPending ? (
+              <button
+                className="confirm-countdown-progress"
+                type="button"
+                onClick={handleCountdownCancel}
+                autoFocus
+              >
+                <span
+                  className="confirm-countdown-progress-fill"
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={confirmationDelayMs}
+                  aria-valuenow={confirmationDelayMs - confirmationRemainingMs}
+                  style={{ animationDuration: `${confirmationDelayMs}ms` }}
+                >
+                  <span className="confirm-countdown-progress-fill-label" aria-hidden="true">
+                    {confirmationDelayDisplay}
+                  </span>
+                </span>
+                <span className="confirm-countdown-progress-label" aria-live="polite">
+                  {confirmationDelayDisplay}
+                </span>
+              </button>
+            ) : (
+              <>
+                <button className="secondary-btn" onClick={handleCancel}>
+                  {cancelText ?? t("common.cancel")}
+                </button>
+                <button className={destructive ? "danger-btn" : "primary-btn"} onClick={handleConfirm} disabled={!confirmationMatched}>
+                  {confirmText ?? t("common.confirm")}
+                </button>
+              </>
+            )}
           </div>
         </section>
       </div>

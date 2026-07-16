@@ -1,5 +1,6 @@
 import type {
   CSSProperties,
+  MouseEventHandler,
   PointerEventHandler,
   ReactEventHandler,
   ReactNode,
@@ -34,10 +35,12 @@ type ImagePreviewStageProps = {
   item: ImagePreviewItem;
   navigatorMetrics: PreviewNavigatorMetrics | null;
   previewDragging: boolean;
+  previewUsesHandCursor: boolean;
   previewRotation: number;
   showNavigator: boolean;
   stageRef: RefObject<HTMLDivElement | null>;
   onImageLoad: ReactEventHandler<HTMLImageElement>;
+  onClick: MouseEventHandler<HTMLDivElement>;
   onNavigatorPointerCancel: PointerEventHandler<HTMLDivElement>;
   onNavigatorPointerDown: PointerEventHandler<HTMLDivElement>;
   onNavigatorPointerMove: PointerEventHandler<HTMLDivElement>;
@@ -62,10 +65,12 @@ export function ImagePreviewStage({
   item,
   navigatorMetrics,
   previewDragging,
+  previewUsesHandCursor,
   previewRotation,
   showNavigator,
   stageRef,
   onImageLoad,
+  onClick,
   onNavigatorPointerCancel,
   onNavigatorPointerDown,
   onNavigatorPointerMove,
@@ -81,8 +86,9 @@ export function ImagePreviewStage({
   const { t } = useI18n();
   return (
     <div
-      className={cx("case-preview-stage", showNavigator && "has-navigator", canPan && "is-pannable", previewDragging && "is-dragging")}
+      className={cx("case-preview-stage", showNavigator && "has-navigator", canPan && "is-pannable", previewUsesHandCursor && "is-zoomed", previewDragging && "is-dragging")}
       ref={stageRef}
+      onClick={onClick}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

@@ -53,12 +53,31 @@
 }
 
 .settings-nav {
+  position: relative;
   display: grid;
   align-content: start;
   gap: 4px;
 }
 
+.settings-nav::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 40px;
+  border-radius: 8px;
+  background: var(--button-default-hover-bg);
+  transform: translate3d(0, var(--settings-nav-active-offset, 0px), 0);
+  transition: transform 260ms cubic-bezier(0.22, 0.8, 0.24, 1);
+  pointer-events: none;
+}
+
 .settings-nav-item {
+  position: relative;
+  z-index: 1;
+  height: 40px;
   min-height: 40px;
   display: flex;
   align-items: center;
@@ -70,11 +89,15 @@
   padding: 9px 10px;
   font-size: 14px;
   text-align: left;
+  transition: color 180ms ease;
 }
 
-.settings-nav-item:hover,
-.settings-nav-item.active {
+.settings-nav-item:hover {
   background: var(--button-default-hover-bg);
+}
+
+.settings-nav-item.active {
+  background: transparent;
 }
 
 .settings-content {
@@ -82,6 +105,42 @@
   overflow: auto;
   scrollbar-gutter: stable;
   padding: 18px 15px 34px 30px;
+}
+
+.settings-content-view {
+  min-height: 100%;
+}
+
+.settings-content-view.is-entering-forward {
+  animation: settingsContentEnterForward 220ms cubic-bezier(0.22, 0.8, 0.24, 1) both;
+}
+
+.settings-content-view.is-entering-backward {
+  animation: settingsContentEnterBackward 220ms cubic-bezier(0.22, 0.8, 0.24, 1) both;
+}
+
+@keyframes settingsContentEnterForward {
+  from {
+    opacity: 0;
+    transform: translate3d(14px, 0, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes settingsContentEnterBackward {
+  from {
+    opacity: 0;
+    transform: translate3d(-14px, 0, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
 }
 
 .settings-content-head {
@@ -102,6 +161,15 @@
 .settings-list {
   display: grid;
   margin-top: 12px;
+}
+
+.settings-group-title {
+  margin: 16px 0 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 18px;
+  letter-spacing: 0.04em;
 }
 
 .settings-row {
@@ -381,19 +449,31 @@
 }
 
 .settings-language-menu button,
-.settings-edit-suggestion-menu button {
+.settings-edit-suggestion-menu button,
+.settings-image-preview-menu button {
   min-height: 46px;
 }
 
 .settings-language-menu .custom-select-option-main,
-.settings-edit-suggestion-menu .custom-select-option-main {
+.settings-edit-suggestion-menu .custom-select-option-main,
+.settings-image-preview-menu .custom-select-option-main {
   min-width: 0;
   align-items: flex-start;
 }
 
 .settings-language-menu .custom-select-option-text,
-.settings-edit-suggestion-menu .custom-select-option-text {
+.settings-edit-suggestion-menu .custom-select-option-text,
+.settings-image-preview-menu .custom-select-option-text {
   min-width: 0;
+}
+
+.settings-image-preview-menu {
+  overflow-x: hidden;
+}
+
+.settings-image-preview-menu button {
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .settings-language-menu small {
@@ -563,6 +643,16 @@
   color: var(--app-muted);
   font-size: 12px;
   white-space: nowrap;
+}
+
+.settings-changelog-load-sentinel {
+  height: 1px;
+}
+
+.settings-changelog-load-state {
+  color: var(--app-muted);
+  font-size: 13px;
+  text-align: center;
 }
 
 .danger-outline-btn {
@@ -949,8 +1039,14 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .appearance-mode-control::before {
+  .appearance-mode-control::before,
+  .settings-nav::before {
     transition: none;
+  }
+
+  .settings-content-view.is-entering-forward,
+  .settings-content-view.is-entering-backward {
+    animation: none;
   }
 }
 
@@ -971,6 +1067,14 @@
     grid-auto-flow: column;
     grid-auto-columns: max-content;
     overflow-x: auto;
+  }
+
+  .settings-nav::before {
+    display: none;
+  }
+
+  .settings-nav-item.active {
+    background: var(--button-default-hover-bg);
   }
 
   .settings-row,

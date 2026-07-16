@@ -72,12 +72,7 @@
 }
 
 .case-preview-stage.is-pannable {
-  cursor: grab;
   touch-action: none;
-}
-
-.case-preview-stage.is-dragging {
-  cursor: grabbing;
 }
 
 .case-preview-modal.fullscreen .case-preview-stage {
@@ -92,11 +87,16 @@
   max-height: none;
   object-fit: contain;
   background: #fff;
+  cursor: zoom-in;
   transform-origin: center;
   transition: transform 160ms ease;
-  pointer-events: none;
+  pointer-events: auto;
   user-select: none;
   will-change: transform;
+}
+
+.case-preview-stage.is-zoomed .case-preview-image {
+  cursor: grab;
 }
 
 .case-preview-image.is-pixel-snapped {
@@ -106,6 +106,7 @@
 
 .case-preview-stage.is-dragging .case-preview-image {
   transition: none;
+  cursor: grabbing;
 }
 
 .case-preview-modal.fullscreen .case-preview-image {

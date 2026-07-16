@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ImageIcon, X } from "lucide-react";
 import { useI18n } from "../i18n";
-import { ASSET_UPLOAD_MODE_OPTIONS, type AssetUploadMode } from "../lib/assets";
+import { ASSET_UPLOAD_MODE_OPTIONS, assetUploadModeI18nKey, type AssetUploadMode } from "../lib/assets";
 import { cx } from "../lib/cx";
 import { formatImageFileSize } from "../lib/format";
 import { ModalPortal } from "../ui";
@@ -11,6 +11,7 @@ import { CaseCategoryMultiSelect } from "./CaseCategoryMultiSelect";
 export function AssetUploadModal({
   categories,
   initialCategoryIds,
+  assetReviewEnabled,
   pending,
   error,
   onClose,
@@ -18,6 +19,7 @@ export function AssetUploadModal({
 }: {
   categories: CaseCategory[];
   initialCategoryIds: string[];
+  assetReviewEnabled: boolean;
   pending: boolean;
   error: Error | null;
   onClose: () => void;
@@ -46,8 +48,8 @@ export function AssetUploadModal({
   };
   const uploadModeOptions = ASSET_UPLOAD_MODE_OPTIONS.map((option) => ({
     ...option,
-    label: t(`asset.uploadMode.${option.value}.label`),
-    description: t(`asset.uploadMode.${option.value}.description`)
+    label: t(assetUploadModeI18nKey(option.value, "label", assetReviewEnabled)),
+    description: t(assetUploadModeI18nKey(option.value, "description", assetReviewEnabled))
   }));
 
   return (

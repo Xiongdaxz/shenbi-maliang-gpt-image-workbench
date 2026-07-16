@@ -109,6 +109,8 @@ jobs:
           Copy-Item -Path "dist" -Destination $packageRoot -Recurse -Force
           Copy-Item -Path "scripts" -Destination $packageRoot -Recurse -Force
           Copy-Item -Path "package.json", "bun.lock", "README.md", "README.en.md", "LICENSE" -Destination $packageRoot -Force
+          New-Item -ItemType Directory -Force -Path "$packageRoot/docs" | Out-Null
+          Copy-Item -Path "docs/changelog.md" -Destination "$packageRoot/docs/changelog.md" -Force
 
           $runtimeModules = @("sharp", "detect-libc", "semver")
           foreach ($module in $runtimeModules) {

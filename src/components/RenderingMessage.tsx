@@ -1,5 +1,5 @@
 import { RefreshCw } from "lucide-react";
-import { memo, type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import { RENDERING_MOTION_PAUSE_EVENT, getRenderingMotionPauseUntil } from "../lib/renderingMotion";
@@ -29,7 +29,11 @@ const EDIT_LOADING_TITLE_KEYS = [
 ];
 
 const RENDERING_DOT_COUNT = 15;
-const RENDERING_PAINT_INTERVAL_MS = 66;
+const RENDERING_FRAME_INTERVAL_MS = 1000 / 30;
+const RENDERING_CANVAS_MAX_DPR = 1.5;
+const RENDERING_DOT_LAYER_INSET = 0.03;
+const RENDERING_DOT_LAYER_SCALE = 1.14;
+const RENDERING_DOT_FILL_SCALE = 0.82;
 const RENDERING_DOT_IDLE_SCALE = 0.86;
 const RENDERING_DOT_CENTER = (RENDERING_DOT_COUNT - 1) / 2;
 const RENDERING_DOTS = Array.from({ length: RENDERING_DOT_COUNT * RENDERING_DOT_COUNT }, (_, index) => {
@@ -68,9 +72,13 @@ type RenderingFocusState = {
   b: RenderingFocusSpot;
 };
 
-type RenderingDotStyle = CSSProperties & {
-  "--dot-fill": string;
+type RenderingDotVisual = {
+  opacity: number;
+  scale: number;
+  tone: number;
 };
+
+type RenderingRgb = [number, number, number];
 
 const randomBetween = (min: number, max: number) => min + Math.random() * (max - min);
 const randomInteger = (min: number, max: number) => Math.round(randomBetween(min, max));
@@ -170,7 +178,7 @@ const getFocusWave = (dot: (typeof RENDERING_DOTS)[number], focus: RenderingFocu
   };
 };
 
-const getDotStyle = (dot: (typeof RENDERING_DOTS)[number], focusState: RenderingFocusState): RenderingDotStyle => {
+const getDotVisual = (dot: (typeof RENDERING_DOTS)[number], focusState: RenderingFocusState): RenderingDotVisual => {
   const waveA = getFocusWave(dot, focusState.a);
   const waveB = getFocusWave(dot, focusState.b);
   const focusCircle = Math.min(1, waveA.mask + waveB.mask);
@@ -185,21 +193,52 @@ const getDotStyle = (dot: (typeof RENDERING_DOTS)[number], focusState: Rendering
   const opacity = Math.min(0.96, activeOpacity * Math.pow(focusCircle, 1.22));
   const tone = Math.round(188 - Math.min(1, focusEnergy * 0.48 + motionEnergy * 0.42 + circularRim * 0.1) * 38);
   return {
-    width: dot.size,
-    height: dot.size,
     opacity,
-    transform: `scale(${scale})`,
-    "--dot-fill": `rgb(var(--rendering-dot-rgb, ${tone}, ${tone}, ${tone}))`
+    scale,
+    tone
   };
 };
 
-const applyDotStyle = (element: HTMLSpanElement | null, style: RenderingDotStyle) => {
-  if (!element) return;
-  element.style.width = `${style.width}px`;
-  element.style.height = `${style.height}px`;
-  element.style.opacity = String(style.opacity);
-  element.style.transform = String(style.transform ?? "");
-  element.style.setProperty("--dot-fill", style["--dot-fill"]);
+const readRenderingThemeRgb = (element: HTMLElement): RenderingRgb | null => {
+  const channels = getComputedStyle(element)
+    .getPropertyValue("--rendering-dot-rgb")
+    .split(",")
+    .map((value) => Number(value.trim()));
+  if (channels.length !== 3 || channels.some((value) => !Number.isFinite(value))) return null;
+  return channels.map((value) => Math.max(0, Math.min(255, value))) as RenderingRgb;
+};
+
+const drawRenderingDots = (
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  focusState: RenderingFocusState,
+  themeRgb: RenderingRgb | null
+) => {
+  context.clearRect(0, 0, width, height);
+  const innerWidth = width * (1 - RENDERING_DOT_LAYER_INSET * 2);
+  const innerHeight = height * (1 - RENDERING_DOT_LAYER_INSET * 2);
+  const cellWidth = innerWidth / RENDERING_DOT_COUNT;
+  const cellHeight = innerHeight / RENDERING_DOT_COUNT;
+  const centerX = width / 2;
+  const centerY = height / 2;
+
+  for (const dot of RENDERING_DOTS) {
+    const row = Math.floor(dot.id / RENDERING_DOT_COUNT);
+    const col = dot.id % RENDERING_DOT_COUNT;
+    const gridX = width * RENDERING_DOT_LAYER_INSET + (col + 0.5) * cellWidth;
+    const gridY = height * RENDERING_DOT_LAYER_INSET + (row + 0.5) * cellHeight;
+    const x = centerX + (gridX - centerX) * RENDERING_DOT_LAYER_SCALE;
+    const y = centerY + (gridY - centerY) * RENDERING_DOT_LAYER_SCALE;
+    const visual = getDotVisual(dot, focusState);
+    const radius = (dot.size * visual.scale * RENDERING_DOT_LAYER_SCALE * RENDERING_DOT_FILL_SCALE) / 2;
+    const rgb = themeRgb ?? [visual.tone, visual.tone, visual.tone];
+
+    context.beginPath();
+    context.arc(x, y, radius, 0, Math.PI * 2);
+    context.fillStyle = `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${visual.opacity})`;
+    context.fill();
+  }
 };
 
 export const RenderingMessage = memo(function RenderingMessage({ mode }: { mode: RenderingMode }) {
@@ -208,34 +247,22 @@ export const RenderingMessage = memo(function RenderingMessage({ mode }: { mode:
     () => (mode === "edit" ? EDIT_LOADING_TITLE_KEYS : GENERATION_LOADING_TITLE_KEYS).map((key) => t(key)),
     [mode, t]
   );
-  const initialFocusState = useMemo(createInitialFocusState, [mode]);
   const [renderSeed] = useState(() => Math.floor(Math.random() * 100000));
   const [titleIndex, setTitleIndex] = useState(0);
   const [titleSettled, setTitleSettled] = useState(true);
-  const dotStyles = useMemo(() => RENDERING_DOTS.map((dot) => getDotStyle(dot, initialFocusState)), [initialFocusState]);
-  const dotRefs = useRef<Array<HTMLSpanElement | null>>([]);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const motionPauseUntilRef = useRef(getRenderingMotionPauseUntil());
   const focusMotionRef = useRef<{
     current: RenderingFocusState;
     target: RenderingFocusState;
     lastFrameAt: number;
-    lastPaintAt: number;
     retargetAt: {
       a: number;
       b: number;
     };
   } | null>(null);
   const variant = renderSeed % 3;
-
-  useEffect(() => {
-    const handleMotionPause = (event: Event) => {
-      const detail = (event as CustomEvent<{ until?: number }>).detail;
-      const until = typeof detail?.until === "number" ? detail.until : performance.now() + 800;
-      motionPauseUntilRef.current = Math.max(motionPauseUntilRef.current, until);
-    };
-    window.addEventListener(RENDERING_MOTION_PAUSE_EVENT, handleMotionPause);
-    return () => window.removeEventListener(RENDERING_MOTION_PAUSE_EVENT, handleMotionPause);
-  }, []);
 
   useEffect(() => {
     setTitleIndex(0);
@@ -264,8 +291,22 @@ export const RenderingMessage = memo(function RenderingMessage({ mode }: { mode:
   }, [mode, titles.length]);
 
   useEffect(() => {
+    const card = cardRef.current;
+    const canvas = canvasRef.current;
+    if (!card || !canvas) return undefined;
+    const context = canvas.getContext("2d", { alpha: true });
+    if (!context) return undefined;
+
     let animationFrame = 0;
+    let resumeTimer = 0;
     let mounted = true;
+    let isIntersecting = true;
+    let canvasWidth = 0;
+    let canvasHeight = 0;
+    let canvasDpr = 0;
+    let themeRgb = readRenderingThemeRgb(card);
+    const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let prefersReducedMotion = reducedMotionQuery.matches;
     const now = performance.now();
     const initial = createInitialFocusState();
     focusMotionRef.current = {
@@ -275,7 +316,6 @@ export const RenderingMessage = memo(function RenderingMessage({ mode }: { mode:
         b: createRandomFocusSpot(initial.a, 42)
       },
       lastFrameAt: now,
-      lastPaintAt: 0,
       retargetAt: {
         a: now + randomInteger(3800, 6200),
         b: now + randomInteger(3800, 6200)
@@ -283,10 +323,58 @@ export const RenderingMessage = memo(function RenderingMessage({ mode }: { mode:
     };
 
     const paint = (state: RenderingFocusState) => {
-      for (const dot of RENDERING_DOTS) {
-        applyDotStyle(dotRefs.current[dot.id] ?? null, getDotStyle(dot, state));
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      const dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), RENDERING_CANVAS_MAX_DPR);
+      const nextWidth = Math.max(1, Math.round(rect.width * dpr));
+      const nextHeight = Math.max(1, Math.round(rect.height * dpr));
+      if (nextWidth !== canvasWidth || nextHeight !== canvasHeight || dpr !== canvasDpr) {
+        canvasWidth = nextWidth;
+        canvasHeight = nextHeight;
+        canvasDpr = dpr;
+        canvas.width = nextWidth;
+        canvas.height = nextHeight;
+      }
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawRenderingDots(context, rect.width, rect.height, state, themeRgb);
+    };
+
+    const stopLoop = () => {
+      if (animationFrame) {
+        window.cancelAnimationFrame(animationFrame);
+        animationFrame = 0;
       }
     };
+
+    const scheduleLoop = () => {
+      if (!animationFrame) animationFrame = window.requestAnimationFrame(tick);
+    };
+
+    const scheduleResume = (until: number) => {
+      window.clearTimeout(resumeTimer);
+      resumeTimer = window.setTimeout(wake, Math.max(16, until - performance.now() + 16));
+    };
+
+    function wake() {
+      if (!mounted) return;
+      stopLoop();
+      window.clearTimeout(resumeTimer);
+      const motion = focusMotionRef.current;
+      if (!motion) return;
+      prefersReducedMotion = reducedMotionQuery.matches;
+      if (prefersReducedMotion) {
+        paint(motion.current);
+        return;
+      }
+      if (!isIntersecting || document.visibilityState === "hidden") return;
+      const currentTime = performance.now();
+      if (currentTime < motionPauseUntilRef.current) {
+        scheduleResume(motionPauseUntilRef.current);
+        return;
+      }
+      motion.lastFrameAt = currentTime;
+      scheduleLoop();
+    }
 
     const updateSpot = (
       current: RenderingFocusSpot,
@@ -324,15 +412,26 @@ export const RenderingMessage = memo(function RenderingMessage({ mode }: { mode:
       };
     };
 
-    const tick = (now: number) => {
+    function tick(now: number) {
+      animationFrame = 0;
       const motion = focusMotionRef.current;
       if (!mounted || !motion) return;
-      if (now < motionPauseUntilRef.current) {
-        motion.lastFrameAt = now;
-        animationFrame = window.requestAnimationFrame(tick);
+      prefersReducedMotion = reducedMotionQuery.matches;
+      if (prefersReducedMotion || !isIntersecting || document.visibilityState === "hidden") {
+        wake();
         return;
       }
-      const deltaMs = Math.min(80, Math.max(16, now - motion.lastFrameAt));
+      if (now < motionPauseUntilRef.current) {
+        motion.lastFrameAt = now;
+        scheduleResume(motionPauseUntilRef.current);
+        return;
+      }
+      const elapsed = now - motion.lastFrameAt;
+      if (elapsed < RENDERING_FRAME_INTERVAL_MS) {
+        scheduleLoop();
+        return;
+      }
+      const deltaMs = Math.min(80, Math.max(16, elapsed));
       motion.lastFrameAt = now;
       if (now >= motion.retargetAt.a) {
         motion.target.a = createRandomFocusSpot(motion.current.b, 38);
@@ -362,18 +461,61 @@ export const RenderingMessage = memo(function RenderingMessage({ mode }: { mode:
       if (bReachedTarget) {
         motion.retargetAt.b = now + randomInteger(3800, 6200);
       }
-      if (now - motion.lastPaintAt > RENDERING_PAINT_INTERVAL_MS) {
-        motion.lastPaintAt = now;
-        paint(motion.current);
-      }
-      animationFrame = window.requestAnimationFrame(tick);
+      paint(motion.current);
+      scheduleLoop();
+    }
+
+    const handleMotionPause = (event: Event) => {
+      const detail = (event as CustomEvent<{ until?: number }>).detail;
+      const until = typeof detail?.until === "number" ? detail.until : performance.now() + 800;
+      motionPauseUntilRef.current = Math.max(motionPauseUntilRef.current, until);
+      wake();
+    };
+    const handleVisibilityChange = () => wake();
+    const handleReducedMotionChange = (event: MediaQueryListEvent) => {
+      prefersReducedMotion = event.matches;
+      wake();
+    };
+    const refreshTheme = () => {
+      themeRgb = readRenderingThemeRgb(card);
+      const motion = focusMotionRef.current;
+      if (motion) paint(motion.current);
     };
 
+    const intersectionObserver = new IntersectionObserver((entries) => {
+      isIntersecting = entries.some((entry) => entry.isIntersecting);
+      wake();
+    });
+    intersectionObserver.observe(card);
+
+    const resizeObserver = new ResizeObserver(() => {
+      const motion = focusMotionRef.current;
+      if (motion && isIntersecting) paint(motion.current);
+    });
+    resizeObserver.observe(card);
+
+    const appearanceObserver = new MutationObserver(refreshTheme);
+    appearanceObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-appearance"]
+    });
+
+    window.addEventListener(RENDERING_MOTION_PAUSE_EVENT, handleMotionPause);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    reducedMotionQuery.addEventListener("change", handleReducedMotionChange);
+
     paint(initial);
-    animationFrame = window.requestAnimationFrame(tick);
+    wake();
     return () => {
       mounted = false;
-      window.cancelAnimationFrame(animationFrame);
+      stopLoop();
+      window.clearTimeout(resumeTimer);
+      intersectionObserver.disconnect();
+      resizeObserver.disconnect();
+      appearanceObserver.disconnect();
+      window.removeEventListener(RENDERING_MOTION_PAUSE_EVENT, handleMotionPause);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      reducedMotionQuery.removeEventListener("change", handleReducedMotionChange);
     };
   }, [mode]);
 
@@ -382,19 +524,9 @@ export const RenderingMessage = memo(function RenderingMessage({ mode }: { mode:
       <span key={`${mode}-${titleIndex}`} className={cx("rendering-title", titleSettled && "settled")}>
         {titles[titleIndex] ?? titles[0]}
       </span>
-      <div className={`rendering-card rendering-card-variant-${variant}`}>
+      <div ref={cardRef} className={`rendering-card rendering-card-variant-${variant}`}>
         <div className="rendering-dot-field" aria-hidden="true">
-          <div className="rendering-dot-layer rendering-dot-layer-focus">
-            {RENDERING_DOTS.map((dot, index) => (
-              <span
-                key={dot.id}
-                ref={(element) => {
-                  dotRefs.current[index] = element;
-                }}
-                style={dotStyles[index]}
-              />
-            ))}
-          </div>
+          <canvas ref={canvasRef} className="rendering-dot-canvas" />
         </div>
       </div>
     </article>

@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, FocusEvent, FormEvent, MouseEvent, ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, FocusEvent, FormEvent, MouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { InfiniteData } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
-import { Camera, ChevronRight, FolderOpen, Images, Lightbulb, LogOut, Menu, MessageCircle, MessageCirclePlus, PanelLeft, Pin, PinOff, RotateCcw, Search, Settings, ShieldCheck, Sparkles, X } from "lucide-react";
+import { Camera, ChevronRight, CircleHelp, FolderOpen, Images, Lightbulb, LogOut, Menu, MessageCircle, MessageCirclePlus, PanelLeft, Pin, PinOff, RotateCcw, Search, Settings, ShieldCheck, Sparkles, X } from "lucide-react";
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { languagePreferenceLabel, useI18n, type LocaleCode, type Translate } from "../i18n";
@@ -27,6 +27,8 @@ import { ArchivedChatsDialog } from "./settings/ArchivedChatsDialog";
 import { AppSettingsDialog } from "./settings/AppSettingsDialog";
 import { SessionActionsMenu } from "./sidebar/SessionActionsMenu";
 
+const HelpCenterPage = lazy(() => import("../pages/HelpCenterPage").then((module) => ({ default: module.HelpCenterPage })));
+
 type DeleteSessionTarget = {
   id: string;
   title: string;
@@ -41,6 +43,7 @@ const USER_CARD_CLOSE_ANIMATION_MS = 240;
 const SIDEBAR_TITLE_CHAR_DELAY_MS = 34;
 const SIDEBAR_CONTENT_FADE_MS = 110;
 const SIDEBAR_WIDTH_ANIMATION_MS = 200;
+const SIDEBAR_MAIN_NAV_PATHS = ["/cases", "/assets", "/images", "/prompt-templates"];
 const SESSION_GROUP_COLLAPSE_STORAGE_KEY = "gpt-image.sidebar.session-groups.collapsed";
 const IMAGE_EDIT_SUGGESTIONS_STALE_MS = 5 * 60 * 1000;
 type SidebarMotionState = "expanded" | "collapsing" | "collapsed" | "expanding";
@@ -57,6 +60,57 @@ type ActiveSessionPages = InfiniteData<SessionPage, number>;
 
 function PageRouteTransition({ children }: { children: ReactNode }) {
   return <div className="page-route-transition">{children}</div>;
+}
+
+function moveSidebarSelectionIndicator(
+  container: HTMLElement,
+  indicator: HTMLSpanElement,
+  target: HTMLElement,
+  animate: boolean
+) {
+  const containerRect = container.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  if (targetRect.width <= 0 || targetRect.height <= 0) {
+    indicator.classList.remove("is-visible");
+    return;
+  }
+
+  const targetTransform = `translate3d(${targetRect.left - containerRect.left}px, ${targetRect.top - containerRect.top}px, 0)`;
+  const currentTransform = window.getComputedStyle(indicator).transform;
+  const currentRect = indicator.getBoundingClientRect();
+  const distance = Math.hypot(targetRect.left - currentRect.left, targetRect.top - currentRect.top);
+  const animationToken = String((Number(indicator.dataset.animationToken) || 0) + 1);
+  indicator.dataset.animationToken = animationToken;
+  indicator.dataset.selectionKey = target.dataset.sidebarSelectionKey ?? "";
+  indicator.getAnimations().forEach((animation) => animation.cancel());
+  indicator.style.width = `${targetRect.width}px`;
+  indicator.style.height = `${targetRect.height}px`;
+  indicator.style.transform = targetTransform;
+
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const shouldAnimate = animate && indicator.classList.contains("is-visible") && !reduceMotion && distance > 1;
+  indicator.classList.add("is-visible");
+  if (!shouldAnimate) {
+    container.classList.remove("is-selection-animating");
+    return;
+  }
+
+  container.classList.add("is-selection-animating");
+  const animation = indicator.animate(
+    [
+      { transform: currentTransform === "none" ? targetTransform : currentTransform },
+      { transform: targetTransform }
+    ],
+    {
+      duration: Math.min(360, 240 + distance * 0.18),
+      easing: "cubic-bezier(0.22, 0.8, 0.24, 1)"
+    }
+  );
+  const finish = () => {
+    if (indicator.dataset.animationToken === animationToken) container.classList.remove("is-selection-animating");
+  };
+  animation.onfinish = finish;
+  animation.oncancel = finish;
 }
 
 function readSessionGroupCollapseState(): SessionGroupCollapseState {
@@ -115,6 +169,12 @@ function userPreferencesToast(preferences: Partial<UserPreferences>, t: Translat
   }
   if (typeof preferences.autoUploadPastedAssets === "boolean") {
     return preferences.autoUploadPastedAssets ? t("toast.autoUploadOn") : t("toast.autoUploadOff");
+  }
+  if (preferences.imagePreviewWheelMode) {
+    return preferences.imagePreviewWheelMode === "pan" ? t("toast.imagePreviewWheelPan") : t("toast.imagePreviewWheelZoom");
+  }
+  if (preferences.imagePreviewOpenMode) {
+    return preferences.imagePreviewOpenMode === "actual" ? t("toast.imagePreviewOpenActual") : t("toast.imagePreviewOpenContain");
   }
   if (preferences.editSuggestionTone) {
     const labelKeys: Record<UserPreferences["editSuggestionTone"], string> = {
@@ -284,6 +344,8 @@ export function WorkbenchShell({ user }: { user: User }) {
   const [hoveredSessionId, setHoveredSessionId] = useState<string | null>(null);
   const userFooterRef = useRef<HTMLDivElement | null>(null);
   const sidebarMainScrollRef = useRef<HTMLDivElement | null>(null);
+  const sidebarScrollContentRef = useRef<HTMLDivElement | null>(null);
+  const sidebarSelectionIndicatorRef = useRef<HTMLSpanElement | null>(null);
   const collapsedRecentRef = useRef<HTMLDivElement | null>(null);
   const collapsedRecentCardRef = useRef<HTMLDivElement | null>(null);
   const userCardCloseTimerRef = useRef<number | null>(null);
@@ -321,6 +383,20 @@ export function WorkbenchShell({ user }: { user: User }) {
     }
     navigate("/", { replace: false });
   }, [location.pathname, navigate, resetNewChatComposer, setMobileMenuOpen]);
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("settings") !== "help") return;
+    params.delete("settings");
+    setMobileMenuOpen(false);
+    setSettingsOpen(true);
+    navigate(
+      {
+        pathname: location.pathname,
+        search: params.size > 0 ? `?${params.toString()}` : ""
+      },
+      { replace: true }
+    );
+  }, [location.pathname, location.search, navigate, setMobileMenuOpen]);
   const scrollSidebarHistoryToTop = useCallback(() => {
     sidebarMainScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
@@ -880,6 +956,7 @@ export function WorkbenchShell({ user }: { user: User }) {
   const hasPendingSessionTitle = activeSessions.some((session) => session.titleStatus === "pending");
   const hasActiveSessionCache = Boolean(sessions.data?.pages.length);
   const showInitialSessionSkeleton = sessions.isLoading && !hasActiveSessionCache;
+  const sidebarSessionLayoutKey = activeSessions.map((session) => `${session.id}:${session.pinnedAt ?? ""}`).join("|");
   const sessionListSentinelRef = useInfinitePageLoader({
     fetchNextPage: () => sessions.fetchNextPage(),
     hasNextPage: Boolean(sessions.hasNextPage),
@@ -920,6 +997,29 @@ export function WorkbenchShell({ user }: { user: User }) {
   const pauseRenderingBeforeRouteNavigation = useCallback(() => {
     pauseRenderingMotion();
   }, []);
+
+  const animateSidebarSelection = useCallback((target: HTMLElement, selectionKey: string) => {
+    const container = sidebarScrollContentRef.current;
+    const indicator = sidebarSelectionIndicatorRef.current;
+    if (!container || !indicator) return;
+    target.dataset.sidebarSelectionKey = selectionKey;
+    moveSidebarSelectionIndicator(container, indicator, target, true);
+  }, []);
+
+  const handleSidebarMainNavPointerDown = useCallback((event: ReactPointerEvent<HTMLAnchorElement>, index: number) => {
+    if (event.button === 0 && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+      animateSidebarSelection(event.currentTarget, `nav:${SIDEBAR_MAIN_NAV_PATHS[index] ?? index}`);
+    }
+    pauseRenderingBeforeRouteNavigation();
+  }, [animateSidebarSelection, pauseRenderingBeforeRouteNavigation]);
+
+  const handleSidebarSessionPointerDown = useCallback((event: ReactPointerEvent<HTMLAnchorElement>, session: ChatSession) => {
+    if (event.button === 0 && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+      const targetRow = event.currentTarget.closest<HTMLElement>(".recent-row");
+      if (targetRow) animateSidebarSelection(targetRow, `session:${session.id}`);
+    }
+    pauseRenderingBeforeChatNavigation(session.id);
+  }, [animateSidebarSelection, pauseRenderingBeforeChatNavigation]);
 
   const updateSessionImageJobFromEvent = useCallback((payload: ImageJobEventPayload) => {
     let updated = false;
@@ -1030,6 +1130,33 @@ export function WorkbenchShell({ user }: { user: User }) {
 
   const pendingPinSessionId = pinChat.isPending ? pinChat.variables?.sessionId ?? null : null;
   const globalSessionActionPending = renameChat.isPending || archiveChat.isPending || deleteChat.isPending;
+
+  useLayoutEffect(() => {
+    const container = sidebarScrollContentRef.current;
+    const indicator = sidebarSelectionIndicatorRef.current;
+    if (!container || !indicator) return;
+    const hideIndicator = () => {
+      indicator.dataset.animationToken = String((Number(indicator.dataset.animationToken) || 0) + 1);
+      indicator.getAnimations().forEach((animation) => animation.cancel());
+      indicator.classList.remove("is-visible");
+      container.classList.remove("is-selection-animating");
+    };
+    if (sidebarMotionState === "collapsing" || sidebarMotionState === "expanding") {
+      hideIndicator();
+      return;
+    }
+    const target = container.querySelector<HTMLElement>(
+      '.main-nav .nav-item[aria-current="page"], .recent-row.active'
+    );
+    if (!target || target.closest(".session-group.collapsed")) {
+      hideIndicator();
+      return;
+    }
+    const selectionKey = target.dataset.sidebarSelectionKey ?? "";
+    if (indicator.dataset.selectionKey === selectionKey && indicator.getAnimations().length > 0) return;
+    moveSidebarSelectionIndicator(container, indicator, target, false);
+  }, [location.pathname, sessionGroupsCollapsed.pinned, sessionGroupsCollapsed.recent, sidebarCollapsed, sidebarMotionState, sidebarSessionLayoutKey]);
+
   const renderSessionRows = (sessionRows: ChatSession[]) =>
     sessionRows.map((session) => {
       const rawGenerationState =
@@ -1054,12 +1181,13 @@ export function WorkbenchShell({ user }: { user: User }) {
             isCurrentSession && "active",
             openSessionMenuId === session.id && "menu-open"
           )}
+          data-sidebar-selection-key={`session:${session.id}`}
         >
           <NavLink
             to={`/chat/${session.id}`}
             title={sessionTitleLabel}
             className={({ isActive }) => cx("recent-item", isActive && "active")}
-            onPointerDown={() => pauseRenderingBeforeChatNavigation(session.id)}
+            onPointerDown={(event) => handleSidebarSessionPointerDown(event, session)}
             onClick={() => {
               pauseRenderingBeforeChatNavigation(session.id);
               setMobileMenuOpen(false);
@@ -1224,14 +1352,19 @@ export function WorkbenchShell({ user }: { user: User }) {
               ) : null}
             </nav>
           </div>
-          <div className="sidebar-scroll">
-            <nav className="main-nav" onClick={() => setMobileMenuOpen(false)}>
+          <div className="sidebar-scroll" ref={sidebarScrollContentRef}>
+            <span className="sidebar-selection-indicator" ref={sidebarSelectionIndicatorRef} aria-hidden="true" />
+            <nav
+              className="main-nav"
+              onClick={() => setMobileMenuOpen(false)}
+            >
               <NavLink
                 to="/cases"
                 className={({ isActive }) => cx("nav-item", isActive && "active")}
                 aria-label={t("sidebar.inspiration")}
                 data-sidebar-tip={t("sidebar.inspiration")}
-                onPointerDown={pauseRenderingBeforeRouteNavigation}
+                data-sidebar-selection-key="nav:/cases"
+                onPointerDown={(event) => handleSidebarMainNavPointerDown(event, 0)}
                 onClick={pauseRenderingBeforeRouteNavigation}
               >
                 <Lightbulb size={18} />
@@ -1242,7 +1375,8 @@ export function WorkbenchShell({ user }: { user: User }) {
                 className={({ isActive }) => cx("nav-item", isActive && "active")}
                 aria-label={t("sidebar.assets")}
                 data-sidebar-tip={t("sidebar.assets")}
-                onPointerDown={pauseRenderingBeforeRouteNavigation}
+                data-sidebar-selection-key="nav:/assets"
+                onPointerDown={(event) => handleSidebarMainNavPointerDown(event, 1)}
                 onClick={pauseRenderingBeforeRouteNavigation}
               >
                 <FolderOpen size={18} />
@@ -1253,7 +1387,8 @@ export function WorkbenchShell({ user }: { user: User }) {
                 className={({ isActive }) => cx("nav-item", isActive && "active")}
                 aria-label={t("sidebar.images")}
                 data-sidebar-tip={t("sidebar.images")}
-                onPointerDown={pauseRenderingBeforeRouteNavigation}
+                data-sidebar-selection-key="nav:/images"
+                onPointerDown={(event) => handleSidebarMainNavPointerDown(event, 2)}
                 onClick={pauseRenderingBeforeRouteNavigation}
               >
                 <Images size={18} />
@@ -1264,7 +1399,8 @@ export function WorkbenchShell({ user }: { user: User }) {
                 className={({ isActive }) => cx("nav-item", isActive && "active")}
                 aria-label={t("sidebar.promptCreation")}
                 data-sidebar-tip={t("sidebar.promptCreation")}
-                onPointerDown={pauseRenderingBeforeRouteNavigation}
+                data-sidebar-selection-key="nav:/prompt-templates"
+                onPointerDown={(event) => handleSidebarMainNavPointerDown(event, 3)}
                 onClick={pauseRenderingBeforeRouteNavigation}
               >
                 <Sparkles size={18} />
@@ -1299,7 +1435,11 @@ export function WorkbenchShell({ user }: { user: User }) {
                 </button>
                 <div className="session-group-body" aria-hidden={sessionGroupsCollapsed.pinned}>
                   <div className="session-group-body-inner">
-                    <div className="recent-list">{renderSessionRows(pinnedSessions)}</div>
+                    <div
+                      className="recent-list"
+                    >
+                      {renderSessionRows(pinnedSessions)}
+                    </div>
                   </div>
                 </div>
               </section>
@@ -1316,9 +1456,11 @@ export function WorkbenchShell({ user }: { user: User }) {
                   <ChevronRight size={14} />
                 </span>
               </button>
-              <div className="session-group-body" aria-hidden={sessionGroupsCollapsed.recent}>
-                <div className="session-group-body-inner">
-                  <div className="recent-list">
+                <div className="session-group-body" aria-hidden={sessionGroupsCollapsed.recent}>
+                  <div className="session-group-body-inner">
+                    <div
+                      className="recent-list"
+                    >
                     {showInitialSessionSkeleton
                       ? Array.from({ length: 8 }).map((_, index) => <div className="recent-skeleton-row" key={`session-skeleton-${index}`} />)
                       : null}
@@ -1350,14 +1492,13 @@ export function WorkbenchShell({ user }: { user: User }) {
               </span>
             </button>
             <button
-              className="icon-btn user-footer-logout"
+              className="icon-btn user-footer-settings"
               type="button"
-              onClick={requestLogout}
-              disabled={logout.isPending}
-              aria-label={t("sidebar.logout")}
-              data-sidebar-tip={t("sidebar.logout")}
+              onClick={openSettingsDialog}
+              aria-label={t("sidebar.settings")}
+              data-sidebar-tip={t("sidebar.settings")}
             >
-              <LogOut size={18} />
+              <Settings size={18} />
             </button>
           </div>
           {userCardVisible ? (
@@ -1383,6 +1524,20 @@ export function WorkbenchShell({ user }: { user: User }) {
                   <span>{configAccess.isPending ? t("sidebar.entering") : t("sidebar.admin")}</span>
                 </button>
               ) : null}
+              <button
+                className="user-info-action"
+                type="button"
+                onClick={() => {
+                  closeUserCard();
+                  setMobileMenuOpen(false);
+                  pauseRenderingMotion();
+                  navigate("/help");
+                }}
+              >
+                <CircleHelp size={16} />
+                <span>{t("sidebar.help")}</span>
+              </button>
+              <div className="user-info-action-divider" aria-hidden="true" />
               <button
                 className="user-info-action user-info-logout"
                 type="button"
@@ -1541,7 +1696,10 @@ export function WorkbenchShell({ user }: { user: User }) {
         cancelText={t("common.cancel")}
         confirmationText={deleteAccountConfirmationText}
         confirmationLabel={t("dialog.deleteAccount.confirmationLabel", { confirmation: deleteAccountConfirmationText })}
+        confirmationDelaySeconds={5}
+        confirmationDelayLabel={(seconds) => t("dialog.deleteChat.countdown", { seconds })}
         destructive
+        className="delete-chat-confirm-dialog"
         backdropClassName="modal-backdrop-top"
         onConfirm={confirmDeleteAccount}
         onCancel={() => {
@@ -1552,11 +1710,24 @@ export function WorkbenchShell({ user }: { user: User }) {
       <ConfirmDialog
         open={Boolean(deleteSessionTarget)}
         title={t("dialog.deleteChat.title")}
-        description={t("dialog.deleteChat.description", { title: deleteSessionTarget?.title ?? "" })}
+        description={
+          <div className="delete-chat-summary">
+            <p>{t("dialog.deleteChat.impactIntro")}</p>
+            <ol className="delete-chat-impact-list">
+              <li>{t("dialog.deleteChat.impactChat")}</li>
+              <li>{t("dialog.deleteChat.impactImages")}</li>
+              <li>{t("dialog.deleteChat.impactDerived")}</li>
+            </ol>
+          </div>
+        }
         confirmText={t("common.delete")}
         cancelText={t("common.cancel")}
         confirmationText={t("common.confirm")}
+        confirmationLabel={t("dialog.deleteChat.confirmationLabel", { confirmation: t("common.confirm") })}
+        confirmationDelaySeconds={5}
+        confirmationDelayLabel={(seconds) => t("dialog.deleteChat.countdown", { seconds })}
         destructive
+        className="delete-chat-confirm-dialog"
         backdropClassName={deleteSessionTarget?.source === "archived" ? "modal-backdrop-top" : undefined}
         onConfirm={() => {
           if (!deleteSessionTarget || deleteChat.isPending) return;
@@ -1583,11 +1754,24 @@ export function WorkbenchShell({ user }: { user: User }) {
       <ConfirmDialog
         open={deleteAllConfirmOpen}
         title={t("dialog.deleteAllChats.title")}
-        description={t("dialog.deleteAllChats.description")}
+        description={
+          <div className="delete-chat-summary">
+            <p>{t("dialog.deleteChat.impactIntro")}</p>
+            <ol className="delete-chat-impact-list">
+              <li>{t("dialog.deleteAllChats.impactChat")}</li>
+              <li>{t("dialog.deleteAllChats.impactImages")}</li>
+              <li>{t("dialog.deleteAllChats.impactDerived")}</li>
+            </ol>
+          </div>
+        }
         confirmText={t("settings.data.deleteAllAction")}
         cancelText={t("common.cancel")}
         confirmationText={t("common.confirm")}
+        confirmationLabel={t("dialog.deleteChat.confirmationLabel", { confirmation: t("common.confirm") })}
+        confirmationDelaySeconds={5}
+        confirmationDelayLabel={(seconds) => t("dialog.deleteChat.countdown", { seconds })}
         destructive
+        className="delete-chat-confirm-dialog"
         backdropClassName="modal-backdrop-top"
         onConfirm={() => {
           if (deleteAllChats.isPending) return;
@@ -1600,12 +1784,50 @@ export function WorkbenchShell({ user }: { user: User }) {
         <Routes>
           <Route path="/" element={<ChatPage user={user} />} />
           <Route path="/chat/:sessionId" element={<ChatPage user={user} />} />
-          <Route path="/cases" element={<PageRouteTransition key="cases"><CasesPage /></PageRouteTransition>} />
+          <Route
+            path="/cases"
+            element={(
+              <PageRouteTransition key="cases">
+                <CasesPage
+                  imagePreviewWheelMode={user.preferences?.imagePreviewWheelMode ?? "zoom"}
+                  imagePreviewOpenMode={user.preferences?.imagePreviewOpenMode ?? "contain"}
+                />
+              </PageRouteTransition>
+            )}
+          />
           <Route path="/cases/barrage" element={<PageRouteTransition key="cases-barrage"><InspirationBarragePage /></PageRouteTransition>} />
           <Route path="/prompt-templates" element={<PageRouteTransition key="prompt-templates"><PromptTemplatesPage /></PageRouteTransition>} />
           <Route path="/prompt-templates/:templateId/edit" element={<PageRouteTransition key="prompt-template-editor"><PromptTemplateEditorPage /></PageRouteTransition>} />
-          <Route path="/assets" element={<PageRouteTransition key="assets"><AssetsPage /></PageRouteTransition>} />
-          <Route path="/images" element={<PageRouteTransition key="images"><ImagesPage /></PageRouteTransition>} />
+          <Route
+            path="/assets"
+            element={(
+              <PageRouteTransition key="assets">
+                <AssetsPage
+                  imagePreviewWheelMode={user.preferences?.imagePreviewWheelMode ?? "zoom"}
+                  imagePreviewOpenMode={user.preferences?.imagePreviewOpenMode ?? "contain"}
+                />
+              </PageRouteTransition>
+            )}
+          />
+          <Route
+            path="/images"
+            element={(
+              <PageRouteTransition key="images">
+                <ImagesPage
+                  imagePreviewWheelMode={user.preferences?.imagePreviewWheelMode ?? "zoom"}
+                  imagePreviewOpenMode={user.preferences?.imagePreviewOpenMode ?? "contain"}
+                />
+              </PageRouteTransition>
+            )}
+          />
+          <Route
+            path="/help"
+            element={(
+              <Suspense fallback={<div className="settings-empty">{t("common.loading")}</div>}>
+                <PageRouteTransition key="help"><HelpCenterPage /></PageRouteTransition>
+              </Suspense>
+            )}
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

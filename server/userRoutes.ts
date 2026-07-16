@@ -10,6 +10,7 @@ import { enabledProvidersForCurrentMode } from "./providerRuntime";
 import { imageOriginPromptsByImageIds, imageReferencesByImageIds, publicUser, toProvider } from "./serializers";
 import { imageGenerationSettings } from "./settingsStore";
 import { streamImageJobEvents } from "./imageJobEvents";
+import { cleanupExpiredImageJobCancelIntents, imageJobCancelRequested } from "./imageJobCancellation";
 import { saveUserPreferences } from "./userPreferences";
 import { deleteStoredFilesIfUnreferenced, secureUserAvatarPath, writeEncryptedFile } from "./secureFiles";
 import type { UserRow } from "./types";
@@ -751,6 +752,28 @@ api.post("/sessions", async (c) => {
   if (!user) return c.json({ error: "未登录" }, 401);
   const body = await c.req.json().catch(() => ({}));
   const prompt = String(body.prompt ?? "").trim();
+  const clientRequestId = String(body.clientRequestId ?? "").trim().slice(0, 160);
+  cleanupExpiredImageJobCancelIntents();
+  if (imageJobCancelRequested(user.id, clientRequestId)) {
+    return c.json({ cancelled: true, clientRequestId }, 409);
+  }
+  if (clientRequestId) {
+    const existing = getOne<{
+      id: string;
+      title: string;
+      title_status: string | null;
+      pinned_at: string | null;
+      archived_at: string | null;
+      created_at: string;
+      updated_at: string;
+    }>(
+      appDb,
+      "select id, title, title_status, pinned_at, archived_at, created_at, updated_at from sessions where user_id = ? and client_request_id = ? and deleted_at is null limit 1",
+      user.id,
+      clientRequestId
+    );
+    if (existing) return c.json({ session: serializeSession(existing) });
+  }
   const fallbackTitle = String(body.title ?? "新的图像对话").trim() || "新的图像对话";
   const title = prompt ? immediateChatTitleFromPrompt(prompt, fallbackTitle) : fallbackTitle;
   const titleStatus = prompt ? "pending" : "ready";
@@ -758,9 +781,10 @@ api.post("/sessions", async (c) => {
   const timestamp = now();
   run(
     appDb,
-    "insert into sessions (id, user_id, title, title_status, created_at, updated_at) values (?, ?, ?, ?, ?, ?)",
+    "insert into sessions (id, user_id, client_request_id, title, title_status, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?)",
     id,
     user.id,
+    clientRequestId || null,
     title,
     titleStatus,
     timestamp,
@@ -900,11 +924,12 @@ api.get("/sessions/:id/image-jobs", async (c) => {
     provider_id: string;
     error: string | null;
     result_image_id: string | null;
+    client_request_id: string | null;
     created_at: string;
     updated_at: string;
   }>(
     appDb,
-    `select id, type, status, prompt, provider_id, error, result_image_id, created_at, updated_at
+    `select id, type, status, prompt, provider_id, error, result_image_id, client_request_id, created_at, updated_at
      from image_jobs
      where session_id = ? and user_id = ? ${status === "all" ? "" : "and status = ?"}
      order by created_at asc`,

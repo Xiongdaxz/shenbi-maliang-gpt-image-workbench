@@ -70,7 +70,7 @@ import type {
   StarterDailyCopy,
   Team
 } from "../../types";
-import type { ConfigAssetReviewItem, ConfigCaseReviewItem } from "../../api/config";
+import type { ConfigAssetReviewItem, ConfigCaseReviewItem, ConfigChangelogSyncItem } from "../../api/config";
 import { ConfirmDialog, CustomSelect, PromptDialog, useToast } from "../../ui";
 import {
   ConfigHeader,
@@ -795,6 +795,9 @@ export function ChangelogPanel() {
   );
   const [dialog, setDialog] = useState<{ mode: "create" | "edit"; entry?: ChangelogEntry } | null>(null);
   const [removeTarget, setRemoveTarget] = useState<ChangelogEntry | null>(null);
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+  const [syncItems, setSyncItems] = useState<ConfigChangelogSyncItem[]>([]);
+  const [selectedSyncVersions, setSelectedSyncVersions] = useState<string[]>([]);
   const save = useMutation({
     mutationFn: ({
       mode,
@@ -824,17 +827,53 @@ export function ChangelogPanel() {
       queryClient.invalidateQueries({ queryKey: ["changelog"] });
     }
   });
+  const previewSync = useMutation({
+    mutationFn: configApi.previewChangelogSync,
+    onSuccess: (result) => {
+      setSyncItems(result.entries);
+      setSelectedSyncVersions(result.entries.filter((item) => item.action !== "unchanged").map((item) => item.version));
+    }
+  });
+  const syncMarkdown = useMutation({
+    mutationFn: configApi.syncChangelog,
+    onSuccess: (result) => {
+      setSyncDialogOpen(false);
+      showToast(`已同步 ${result.selected} 条记录，新增 ${result.inserted} 条，更新 ${result.updated} 条`);
+      queryClient.invalidateQueries({ queryKey: ["config-changelog"] });
+      queryClient.invalidateQueries({ queryKey: ["changelog"] });
+    }
+  });
 
   function closeDialog() {
     save.reset();
     setDialog(null);
   }
 
+  function openSyncDialog() {
+    previewSync.reset();
+    syncMarkdown.reset();
+    setSyncItems([]);
+    setSelectedSyncVersions([]);
+    setSyncDialogOpen(true);
+    previewSync.mutate();
+  }
+
+  function closeSyncDialog() {
+    if (syncMarkdown.isPending) return;
+    setSyncDialogOpen(false);
+    previewSync.reset();
+    syncMarkdown.reset();
+  }
+
   return (
     <section className="config-card">
-      <ConfigHeader title="更新日志" desc="真实记录存入配置数据库；静态 Markdown 文档由管理员自行维护，不参与系统读取。" />
+      <ConfigHeader title="更新日志" desc="更新记录默认来自数据库；需要时可从 docs/changelog.md 预览并手动选择同步。" />
       <div className="config-file-actions changelog-file-actions">
-        <span>在这里维护用户可见的版本记录。</span>
+        <span>编辑 docs/changelog.md 后，点击“从 Markdown 同步”并勾选要写入的版本。</span>
+        <button className="secondary-btn" onClick={openSyncDialog} disabled={previewSync.isPending}>
+          <RefreshCw size={16} />
+          {previewSync.isPending ? "读取中" : "从 Markdown 同步"}
+        </button>
         <button className="primary-btn" onClick={() => setDialog({ mode: "create" })}>
           <Plus size={16} />
           新增日志
@@ -879,6 +918,30 @@ export function ChangelogPanel() {
           }
         />
       ) : null}
+      {syncDialogOpen ? (
+        <ChangelogSyncDialog
+          items={syncItems}
+          selectedVersions={selectedSyncVersions}
+          loading={previewSync.isPending}
+          syncing={syncMarkdown.isPending}
+          error={previewSync.error ?? syncMarkdown.error}
+          onClose={closeSyncDialog}
+          onToggle={(version) => {
+            setSelectedSyncVersions((current) =>
+              current.includes(version) ? current.filter((item) => item !== version) : [...current, version]
+            );
+          }}
+          onToggleAll={() => {
+            const selectableVersions = syncItems
+              .filter((item) => item.action !== "unchanged")
+              .map((item) => item.version);
+            const allSelected = selectableVersions.length > 0
+              && selectableVersions.every((version) => selectedSyncVersions.includes(version));
+            setSelectedSyncVersions(allSelected ? [] : selectableVersions);
+          }}
+          onSubmit={() => syncMarkdown.mutate(selectedSyncVersions)}
+        />
+      ) : null}
       <ConfirmDialog
         open={Boolean(removeTarget)}
         title="删除更新日志"
@@ -891,6 +954,119 @@ export function ChangelogPanel() {
         }}
       />
     </section>
+  );
+}
+
+function ChangelogSyncDialog({
+  items,
+  selectedVersions,
+  loading,
+  syncing,
+  error,
+  onClose,
+  onToggle,
+  onToggleAll,
+  onSubmit
+}: {
+  items: ConfigChangelogSyncItem[];
+  selectedVersions: string[];
+  loading: boolean;
+  syncing: boolean;
+  error: Error | null;
+  onClose: () => void;
+  onToggle: (version: string) => void;
+  onToggleAll: () => void;
+  onSubmit: () => void;
+}) {
+  const selected = new Set(selectedVersions);
+  const changedCount = items.filter((item) => item.action !== "unchanged").length;
+  const allSelected = changedCount > 0
+    && items.filter((item) => item.action !== "unchanged").every((item) => selected.has(item.version));
+
+  return (
+    <div className="modal-backdrop">
+      <section className="case-modal changelog-sync-modal">
+        <header>
+          <h3>从 Markdown 同步更新日志</h3>
+          <button onClick={onClose} disabled={syncing}>关闭</button>
+        </header>
+        <div className="changelog-sync-form">
+          <p className="changelog-sync-hint">
+            以下内容读取自 docs/changelog.md，只会同步勾选的版本。“内容一致”表示 Markdown 与数据库中的日期和正文相同，无需同步。
+          </p>
+          {loading ? <div className="settings-empty">正在读取 Markdown 日志...</div> : null}
+          {!loading && items.length > 0 ? (
+            <>
+              <div className="changelog-sync-toolbar">
+                <div className="changelog-sync-summary">
+                  <span>共 {items.length} 条</span>
+                  <span>待新增 {items.filter((item) => item.action === "create").length}</span>
+                  <span>待更新 {items.filter((item) => item.action === "update").length}</span>
+                  <span>内容一致 {items.filter((item) => item.action === "unchanged").length}</span>
+                  <span>已选 {selectedVersions.length}</span>
+                </div>
+                <div className="row-actions">
+                  <button className="secondary-btn" type="button" onClick={onToggleAll} disabled={syncing || changedCount === 0}>
+                    {allSelected ? "取消全选" : changedCount > 0 ? "全选待同步" : "暂无可同步项"}
+                  </button>
+                </div>
+              </div>
+              <div className="changelog-sync-list">
+                {items.map((item) => (
+                  <label
+                    className={cx(
+                      "changelog-sync-item",
+                      `action-${item.action}`,
+                      selected.has(item.version) && "is-selected",
+                      item.action === "unchanged" && "is-current"
+                    )}
+                    key={item.version}
+                    aria-disabled={item.action === "unchanged"}
+                  >
+                    {item.action === "unchanged" ? (
+                      <span className="changelog-sync-current-marker" aria-label="内容一致" title="内容一致，无需同步">
+                        <Check size={14} strokeWidth={2.6} />
+                      </span>
+                    ) : (
+                      <>
+                        <input
+                          type="checkbox"
+                          checked={selected.has(item.version)}
+                          onChange={() => onToggle(item.version)}
+                          disabled={syncing}
+                        />
+                        <span className="changelog-sync-checkbox" aria-hidden="true">
+                          {selected.has(item.version) ? <Check size={14} strokeWidth={2.8} /> : null}
+                        </span>
+                      </>
+                    )}
+                    <span className="changelog-sync-item-body">
+                      <span className="changelog-sync-item-meta">
+                        <strong>{item.version}</strong>
+                        <time>{item.date}</time>
+                        <span className="changelog-sync-action">
+                          {item.action === "create" ? "待新增" : item.action === "update" ? "待更新" : "内容一致"}
+                        </span>
+                      </span>
+                      <MarkdownView markdown={item.content} className="changelog-sync-content" />
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </>
+          ) : null}
+          {!loading && items.length === 0 && !error ? <div className="settings-empty">Markdown 中没有可同步的版本记录。</div> : null}
+          <div className="row-actions changelog-sync-actions">
+            <button className="secondary-btn" type="button" onClick={onClose} disabled={syncing}>取消</button>
+            <button className="primary-btn" type="button" onClick={onSubmit} disabled={syncing || loading || selectedVersions.length === 0}>
+              <RefreshCw size={16} />
+              {syncing ? "同步中" : `同步已选 ${selectedVersions.length} 条`}
+            </button>
+          </div>
+          {error ? <div className="form-error">{error.message}</div> : null}
+        </div>
+      </section>
+    </div>
   );
 }
 

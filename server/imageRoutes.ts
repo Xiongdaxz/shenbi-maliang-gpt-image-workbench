@@ -15,6 +15,15 @@ import { appDb, getAll, getOne, run } from "./db";
 import { fileToDataUrl, saveProviderImageResults, snapshotImageReferences, type ImageReferenceSnapshotInput } from "./imageFiles";
 import { emitImageJobEvent, type ImageJobEventStatus } from "./imageJobEvents";
 import {
+  abortImageJobExecution,
+  beginImageJobExecution,
+  cleanupExpiredImageJobCancelIntents,
+  clearImageJobCancelIntent,
+  finishImageJobExecution,
+  imageJobCancelRequested,
+  rememberImageJobCancelIntent
+} from "./imageJobCancellation";
+import {
   ensureImageEditSuggestionsForImageWithTone,
   prepareImageEditSuggestionsForPrompt,
   savePreparedImageEditSuggestionsForImages,
@@ -30,9 +39,10 @@ import {
   type MessageSourceReferenceInput
 } from "./messageSourceReferences";
 import { pageInfo, paginationFromQuery } from "./pagination";
-import { callProviderChain, providerChainById } from "./providerRuntime";
+import { callProviderChain, providerChainById, providerRequestWasCancelled } from "./providerRuntime";
 import { providerResponseSnapshot } from "./responseSnapshots";
 import { reviewConversationPrompt } from "./safetyReview";
+import { deleteStoredFilesIfUnreferenced } from "./secureFiles";
 import {
   imageOriginPromptsByImageIds,
   imagePromptHistoriesByImageIds,
@@ -58,6 +68,9 @@ import { markProviderRequestPostProcessFailure } from "./auditLog";
 import {
   deleteImageRecords,
   deleteImageRecordsBatch,
+  deleteImageJobArtifacts,
+  deleteCancelledEmptySessionRecord,
+  deleteRequestEmptySessionRecord,
   ensureChatSession,
   expireStaleImageJobs,
   imageDeleteImpact,
@@ -453,6 +466,10 @@ function errorMessage(error: unknown, fallback: string) {
   return text || fallback;
 }
 
+function requestClientRequestId(body: Record<string, unknown>) {
+  return String(body.clientRequestId ?? "").trim().slice(0, 160);
+}
+
 async function saveProviderImagesWithRetry({
   providers,
   mode,
@@ -461,7 +478,8 @@ async function saveProviderImagesWithRetry({
   sessionId,
   jobId,
   retryCount: retryCountInput,
-  onResponseJson
+  onResponseJson,
+  signal
 }: {
   providers: RuntimeProviderRow[];
   mode: "generation" | "edit";
@@ -471,11 +489,13 @@ async function saveProviderImagesWithRetry({
   jobId?: string;
   retryCount?: number;
   onResponseJson?: (responseJson: unknown) => void;
+  signal?: AbortSignal;
 }) {
   let firstError: unknown = null;
   const retryCount = retryCountInput ?? resolveImageResultRetryCount(imageGenerationSettings().resultRetryCount);
   const maxAttempts = retryCount + 1;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    if (signal?.aborted) throw new Error("图片任务已取消");
     try {
       const { provider, responseJson, result: savedImages } = await callProviderChain<Awaited<ReturnType<typeof saveProviderImageResults>>>(
         providers,
@@ -486,7 +506,8 @@ async function saveProviderImagesWithRetry({
           jobId,
           attemptNo: attempt,
           maxAttempts,
-          isRetry: attempt > 1
+          isRetry: attempt > 1,
+          signal
         },
         async ({ provider, responseJson }) => {
           onResponseJson?.(responseJson);
@@ -508,8 +529,13 @@ async function saveProviderImagesWithRetry({
       if (!savedImages) {
         throw new Error(`${imageOperationLabel(mode)}失败：渠道没有返回可保存的图片`);
       }
+      if (signal?.aborted) {
+        await deleteStoredFilesIfUnreferenced(savedImages.map((image) => image.file.path));
+        throw new Error("图片任务已取消");
+      }
       return { provider, responseJson, savedImages, attemptNo: attempt, retryCount, maxAttempts };
     } catch (error) {
+      if (providerRequestWasCancelled(error, signal)) throw error;
       if (attempt < maxAttempts) {
         firstError = error;
         const retryLabel = retryCount === 1 ? "一次" : `第 ${attempt}/${retryCount} 次`;
@@ -865,6 +891,22 @@ function assertImageJobExecutionIsActive(jobId: string, manualRetryCount: number
   }
 }
 
+async function assertImageJobExecutionIsActiveAfterSave(
+  jobId: string,
+  manualRetryCount: number,
+  recoveryCount: number,
+  savedImages: Awaited<ReturnType<typeof saveProviderImageResults>>
+) {
+  try {
+    assertImageJobExecutionIsActive(jobId, manualRetryCount, recoveryCount);
+  } catch (error) {
+    await deleteStoredFilesIfUnreferenced(savedImages.map((image) => image.file.path)).catch((cleanupError) => {
+      console.warn("清理已取消图片任务的临时文件失败", cleanupError);
+    });
+    throw error;
+  }
+}
+
 function storedImageJobImages(job: StoredImageJobRow) {
   return getAll<ImageRow>(
     appDb,
@@ -938,7 +980,8 @@ async function finalizeStoredImageJobFromExisting({
   maxAutoRetries,
   previousAutoRetryCount,
   nextManualRetryCount,
-  expectedRecoveryCount
+  expectedRecoveryCount,
+  signal
 }: {
   job: StoredImageJobRow;
   requestPayload: Record<string, unknown>;
@@ -950,6 +993,7 @@ async function finalizeStoredImageJobFromExisting({
   previousAutoRetryCount: number;
   nextManualRetryCount: number;
   expectedRecoveryCount: number;
+  signal?: AbortSignal;
 }) {
   if (job.type === "edit") {
     try {
@@ -1020,7 +1064,8 @@ async function runStoredImageJob({
   maxAutoRetries,
   previousAutoRetryCount,
   nextManualRetryCount,
-  expectedRecoveryCount
+  expectedRecoveryCount,
+  signal
 }: {
   job: StoredImageJobRow;
   providers: RuntimeProviderRow[];
@@ -1033,6 +1078,7 @@ async function runStoredImageJob({
   previousAutoRetryCount: number;
   nextManualRetryCount: number;
   expectedRecoveryCount: number;
+  signal?: AbortSignal;
 }) {
   try {
     const existingImages = storedImageJobImages(job);
@@ -1086,9 +1132,15 @@ async function runStoredImageJob({
         userId: job.user_id,
         sessionId: retrySessionId,
         jobId: job.id,
-        retryCount: maxAutoRetries
+        retryCount: maxAutoRetries,
+        signal
       });
-      assertImageJobExecutionIsActive(job.id, nextManualRetryCount, expectedRecoveryCount);
+      await assertImageJobExecutionIsActiveAfterSave(
+        job.id,
+        nextManualRetryCount,
+        expectedRecoveryCount,
+        savedImages
+      );
       const autoRetryCount = previousAutoRetryCount + Math.max(0, attemptNo - 1);
       const savedImageIds: string[] = [];
       for (const saved of savedImages) {
@@ -1248,9 +1300,15 @@ async function runStoredImageJob({
       userId: job.user_id,
       sessionId: retrySessionId,
       jobId: job.id,
-      retryCount: maxAutoRetries
+      retryCount: maxAutoRetries,
+      signal
     });
-    assertImageJobExecutionIsActive(job.id, nextManualRetryCount, expectedRecoveryCount);
+    await assertImageJobExecutionIsActiveAfterSave(
+      job.id,
+      nextManualRetryCount,
+      expectedRecoveryCount,
+      savedImages
+    );
     const autoRetryCount = previousAutoRetryCount + Math.max(0, attemptNo - 1);
     const savedImageIds: string[] = [];
     for (const saved of savedImages) {
@@ -1345,7 +1403,7 @@ async function runStoredImageJob({
       emitJobStatus(job.user_id, retrySessionId, job.id, "succeeded", "edit", { resultImageId });
     }
   } catch (error) {
-    if (error instanceof ImageJobExecutionSupersededError) return;
+    if (error instanceof ImageJobExecutionSupersededError || providerRequestWasCancelled(error, signal)) return;
     const message = errorMessage(error, job.type === "edit" ? "编辑失败" : "生成失败");
     const failedAutoRetryCount = previousAutoRetryCount + autoRetryCountFromError(error, 0);
     const failed = run(
@@ -1414,6 +1472,7 @@ function startStoredImageJob(job: StoredImageJobRow, trigger: StoredImageJobTrig
 
   emitJobStatus(job.user_id, retrySessionId, job.id, "running", job.type);
   const runningJob = getOne<StoredImageJobRow>(appDb, "select * from image_jobs where id = ?", job.id);
+  const executionController = beginImageJobExecution(job.id);
   void runStoredImageJob({
     job,
     providers,
@@ -1425,7 +1484,8 @@ function startStoredImageJob(job: StoredImageJobRow, trigger: StoredImageJobTrig
     maxAutoRetries,
     previousAutoRetryCount,
     nextManualRetryCount,
-    expectedRecoveryCount
+    expectedRecoveryCount,
+    signal: executionController.signal
   }).catch((error) => {
     const message = errorMessage(error, "图片任务后台执行失败");
     console.warn("图片任务后台执行失败", error);
@@ -1433,6 +1493,8 @@ function startStoredImageJob(job: StoredImageJobRow, trigger: StoredImageJobTrig
     if (latestJob && imageJobExecutionIsActive(job.id, nextManualRetryCount, expectedRecoveryCount)) {
       markInterruptedImageJobFailed(latestJob, message);
     }
+  }).finally(() => {
+    finishImageJobExecution(job.id, executionController);
   });
   return { retrySessionId, runningJob, branchMetadata };
 }
@@ -1823,6 +1885,8 @@ api.post("/images/generate", async (c) => {
   const user = await requireUser(c);
   if (!user) return c.json({ error: "未登录" }, 401);
   const body = await c.req.json().catch(() => ({}));
+  const clientRequestId = requestClientRequestId(body);
+  cleanupExpiredImageJobCancelIntents();
   const prompt = String(body.prompt ?? "").trim();
   const caseItemId = String(body.caseItemId ?? "").trim();
   const revisionRootId = String(body.revisionRootId ?? "").trim();
@@ -1838,6 +1902,9 @@ api.post("/images/generate", async (c) => {
     scene: "image_generation",
     prompt
   });
+  if (imageJobCancelRequested(user.id, clientRequestId)) {
+    return c.json({ cancelled: true, clientRequestId }, 409);
+  }
   if (safetyReview.blocked) {
     return c.json({ error: safetyReview.message || "当前提示词可能存在安全风险，请调整后再试。" }, 400);
   }
@@ -1855,7 +1922,11 @@ api.post("/images/generate", async (c) => {
   const imageCount = requestImageCount(body.n ?? body.imageCount);
   const imageOptions = normalizedImageRequestOptions(body);
   if (imageOptions.error) return c.json({ error: imageOptions.error }, 400);
-  const sessionId = await ensureChatSession(user.id, String(body.sessionId ?? "") || null, prompt);
+  const sessionId = await ensureChatSession(user.id, String(body.sessionId ?? "") || null, prompt, clientRequestId);
+  if (imageJobCancelRequested(user.id, clientRequestId)) {
+    deleteRequestEmptySessionRecord(user.id, sessionId, clientRequestId);
+    return c.json({ cancelled: true, clientRequestId, sessionId }, 409);
+  }
   const webConversationContext = branchForkMessageId
     ? providerConversationContextFromMessage(user.id, sessionId, branchForkMessageId, "branch") ?? { placement: "branch" }
     : latestProviderConversationContextForBranch(user.id, sessionId, branchId);
@@ -1874,6 +1945,7 @@ api.post("/images/generate", async (c) => {
   insertMessage(user.id, sessionId, "user", prompt, null, {
     mode: "generation",
     jobId,
+    clientRequestId,
     size,
     quality,
     n: imageCount,
@@ -1886,8 +1958,8 @@ api.post("/images/generate", async (c) => {
     appDb,
     `insert into image_jobs (
       id, user_id, session_id, type, status, prompt, source_image_ids,
-      provider_id, request_json, max_auto_retries, created_at, updated_at
-    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      provider_id, request_json, client_request_id, max_auto_retries, created_at, updated_at
+    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     jobId,
     user.id,
     sessionId,
@@ -1897,6 +1969,7 @@ api.post("/images/generate", async (c) => {
     "[]",
     selectedProviderId,
     JSON.stringify(requestPayload),
+    clientRequestId || null,
     maxAutoRetries,
     timestamp,
     timestamp
@@ -1910,6 +1983,7 @@ api.post("/images/generate", async (c) => {
     requestType: "generation"
   });
 
+  const executionController = beginImageJobExecution(jobId);
   const runGenerationJob = async () => {
     const savedImageIds: string[] = [];
     try {
@@ -1927,9 +2001,10 @@ api.post("/images/generate", async (c) => {
         userId: user.id,
         sessionId,
         jobId,
-        retryCount: maxAutoRetries
+        retryCount: maxAutoRetries,
+        signal: executionController.signal
       });
-      assertImageJobExecutionIsActive(jobId, 0, 0);
+      await assertImageJobExecutionIsActiveAfterSave(jobId, 0, 0, savedImages);
       const autoRetryCount = Math.max(0, attemptNo - 1);
       const generatedByRetry = autoRetryCount > 0 ? 1 : 0;
       for (const saved of savedImages) {
@@ -2009,7 +2084,7 @@ api.post("/images/generate", async (c) => {
       }
       return savedImageIds;
     } catch (error) {
-      if (error instanceof ImageJobExecutionSupersededError) return [];
+      if (error instanceof ImageJobExecutionSupersededError || providerRequestWasCancelled(error, executionController.signal)) return [];
       const message = error instanceof Error ? error.message : "生成失败";
       const failedAutoRetryCount = autoRetryCountFromError(error, maxAutoRetries);
       const failed = run(
@@ -2045,6 +2120,9 @@ api.post("/images/generate", async (c) => {
   }>(appDb, "select * from image_jobs where id = ?", jobId);
   void runGenerationJob().catch((error) => {
     console.warn("图片生成后台任务失败", error);
+  }).finally(() => {
+    finishImageJobExecution(jobId, executionController);
+    clearImageJobCancelIntent(user.id, clientRequestId);
   });
   return c.json({ sessionId, job: job ? serializeJob(job) : null, image: null, images: [] }, 202);
 });
@@ -2053,6 +2131,8 @@ api.post("/images/edit", async (c) => {
   const user = await requireUser(c);
   if (!user) return c.json({ error: "未登录" }, 401);
   const body = await c.req.json().catch(() => ({}));
+  const clientRequestId = requestClientRequestId(body);
+  cleanupExpiredImageJobCancelIntents();
   const prompt = String(body.prompt ?? "").trim();
   const caseItemId = String(body.caseItemId ?? "").trim();
   const sourceImageIds = normalizeIdList(body.sourceImageIds);
@@ -2090,6 +2170,9 @@ api.post("/images/edit", async (c) => {
     scene: "image_edit",
     prompt
   });
+  if (imageJobCancelRequested(user.id, clientRequestId)) {
+    return c.json({ cancelled: true, clientRequestId }, 409);
+  }
   if (safetyReview.blocked) {
     return c.json({ error: safetyReview.message || "当前提示词可能存在安全风险，请调整后再试。" }, 400);
   }
@@ -2152,8 +2235,20 @@ api.post("/images/edit", async (c) => {
     ...(await Promise.all(validSourceReferences.map((item) => fileToDataUrl(item.path, item.mime_type)))),
     ...sourceInlineImages.map((item) => item.dataUrl)
   ];
+  if (imageJobCancelRequested(user.id, clientRequestId)) {
+    return c.json({ cancelled: true, clientRequestId }, 409);
+  }
   const primarySourceImage = validSourceImages[0] ?? null;
-  const sessionId = await ensureChatSession(user.id, String(body.sessionId ?? primarySourceImage?.session_id ?? "") || null, prompt);
+  const sessionId = await ensureChatSession(
+    user.id,
+    String(body.sessionId ?? primarySourceImage?.session_id ?? "") || null,
+    prompt,
+    clientRequestId
+  );
+  if (imageJobCancelRequested(user.id, clientRequestId)) {
+    deleteRequestEmptySessionRecord(user.id, sessionId, clientRequestId);
+    return c.json({ cancelled: true, clientRequestId, sessionId }, 409);
+  }
   if (!maskDataUrl && editedMessageId) {
     maskDataUrl = await messageMaskSnapshotDataUrl(user.id, sessionId, editedMessageId);
   }
@@ -2213,6 +2308,13 @@ api.post("/images/edit", async (c) => {
       })
     : null;
 
+  if (imageJobCancelRequested(user.id, clientRequestId)) {
+    await deleteImageJobArtifacts(user.id, jobId, clientRequestId);
+    if (maskSnapshot?.path) await deleteStoredFilesIfUnreferenced([maskSnapshot.path]);
+    deleteRequestEmptySessionRecord(user.id, sessionId, clientRequestId);
+    return c.json({ cancelled: true, clientRequestId, sessionId }, 409);
+  }
+
   const userMessageId = insertMessage(
     user.id,
     sessionId,
@@ -2222,6 +2324,7 @@ api.post("/images/edit", async (c) => {
     {
       mode: "edit",
       jobId,
+      clientRequestId,
       sourceImageIds,
       sourceAssetIds,
       sourceCaseItemIds,
@@ -2252,11 +2355,17 @@ api.post("/images/edit", async (c) => {
       ...messageSourceInputsFromInlineImages(sourceInlineImages)
     ]
   });
+  if (imageJobCancelRequested(user.id, clientRequestId)) {
+    await deleteImageJobArtifacts(user.id, jobId, clientRequestId);
+    deleteRequestEmptySessionRecord(user.id, sessionId, clientRequestId);
+    return c.json({ cancelled: true, clientRequestId, sessionId }, 409);
+  }
   const messageSourceReferences = [...existingSourceReferences, ...snapshotReferences];
   if (messageSourceReferences.length > 0) {
     const metadata = {
       mode: "edit",
       jobId,
+      clientRequestId,
       sourceImageIds,
       sourceAssetIds,
       sourceCaseItemIds,
@@ -2281,8 +2390,8 @@ api.post("/images/edit", async (c) => {
     appDb,
     `insert into image_jobs (
       id, user_id, session_id, type, status, prompt, source_image_ids,
-      provider_id, request_json, max_auto_retries, created_at, updated_at
-    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      provider_id, request_json, client_request_id, max_auto_retries, created_at, updated_at
+    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     jobId,
     user.id,
     sessionId,
@@ -2303,6 +2412,7 @@ api.post("/images/edit", async (c) => {
       ...(maskSnapshot ? { maskPath: maskSnapshot.path } : {}),
       ...(debugArtifacts ? { debug: { maskPath: debugArtifacts.maskPath, metadataPath: debugArtifacts.metadataPath } } : {})
     }),
+    clientRequestId || null,
     maxAutoRetries,
     timestamp,
     timestamp
@@ -2328,6 +2438,7 @@ api.post("/images/edit", async (c) => {
     updated_at: string;
   }>(appDb, "select * from image_jobs where id = ?", jobId);
 
+  const executionController = beginImageJobExecution(jobId);
   const runEditJob = async () => {
   let responseJson: unknown = null;
   try {
@@ -2346,14 +2457,15 @@ api.post("/images/edit", async (c) => {
       sessionId,
       jobId,
       retryCount: maxAutoRetries,
+      signal: executionController.signal,
       onResponseJson: (value) => {
         responseJson = value;
       }
     });
     responseJson = result.responseJson;
-    assertImageJobExecutionIsActive(jobId, 0, 0);
     const actualProvider = result.provider;
     const savedImages = result.savedImages;
+    await assertImageJobExecutionIsActiveAfterSave(jobId, 0, 0, savedImages);
     const autoRetryCount = Math.max(0, result.attemptNo - 1);
     const generatedByRetry = autoRetryCount > 0 ? 1 : 0;
     for (const [index, saved] of savedImages.entries()) {
@@ -2433,7 +2545,7 @@ api.post("/images/edit", async (c) => {
     }
     return;
   } catch (error) {
-    if (error instanceof ImageJobExecutionSupersededError) return;
+    if (error instanceof ImageJobExecutionSupersededError || providerRequestWasCancelled(error, executionController.signal)) return;
     const message = error instanceof Error ? error.message : "编辑失败";
     const responseJsonText = responseJson === null ? null : providerResponseSnapshot(responseJson);
     const failedAutoRetryCount = autoRetryCountFromError(error, maxAutoRetries);
@@ -2460,8 +2572,94 @@ api.post("/images/edit", async (c) => {
 
   void runEditJob().catch((error) => {
     console.warn("图片编辑后台任务失败", error);
+  }).finally(() => {
+    finishImageJobExecution(jobId, executionController);
+    clearImageJobCancelIntent(user.id, clientRequestId);
   });
   return c.json({ sessionId, job: runningJob ? serializeJob(runningJob) : null, image: null, images: [] }, 202);
+});
+
+api.post("/image-jobs/cancel", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return c.json({ error: "未登录" }, 401);
+  const body = await c.req.json().catch(() => ({}));
+  const clientRequestId = requestClientRequestId(body);
+  const requestedJobId = String(body.jobId ?? "").trim();
+  if (!clientRequestId) return c.json({ error: "缺少请求标识" }, 400);
+  cleanupExpiredImageJobCancelIntents();
+  rememberImageJobCancelIntent(user.id, clientRequestId);
+
+  const requestedJob = requestedJobId
+    ? getOne<StoredImageJobRow & { client_request_id: string | null }>(
+        appDb,
+        "select * from image_jobs where id = ? and user_id = ? limit 1",
+        requestedJobId,
+        user.id
+      )
+    : null;
+  if (requestedJob?.client_request_id && requestedJob.client_request_id !== clientRequestId) {
+    clearImageJobCancelIntent(user.id, clientRequestId);
+    return c.json({ error: "任务与请求标识不匹配，请刷新后重试" }, 409);
+  }
+  const job = requestedJob ?? getOne<StoredImageJobRow & { client_request_id: string | null }>(
+    appDb,
+    "select * from image_jobs where user_id = ? and client_request_id = ? order by created_at desc limit 1",
+    user.id,
+    clientRequestId
+  );
+  if (!job) {
+    const pendingSession = getOne<{ id: string }>(
+      appDb,
+      "select id from sessions where user_id = ? and client_request_id = ? and deleted_at is null order by created_at desc limit 1",
+      user.id,
+      clientRequestId
+    );
+    await deleteImageJobArtifacts(user.id, "", clientRequestId);
+    const sessionDeleted = pendingSession
+      ? deleteRequestEmptySessionRecord(user.id, pendingSession.id, clientRequestId)
+      : false;
+    return c.json({
+      cancelled: true,
+      clientRequestId,
+      jobId: requestedJobId || null,
+      sessionId: pendingSession?.id ?? null,
+      sessionDeleted,
+      status: "cancelled"
+    });
+  }
+  if (job.status === "succeeded" || job.status === "failed") {
+    clearImageJobCancelIntent(user.id, clientRequestId);
+    return c.json({ error: "任务已结束，无法取消", job: serializeJob(job) }, 409);
+  }
+  if (job.status === "cancelled") {
+    await deleteImageJobArtifacts(user.id, job.id, clientRequestId);
+    const sessionDeleted = job.session_id
+      ? deleteCancelledEmptySessionRecord(user.id, job.session_id, clientRequestId)
+      : false;
+    clearImageJobCancelIntent(user.id, clientRequestId);
+    return c.json({ cancelled: true, clientRequestId, jobId: job.id, sessionId: job.session_id, sessionDeleted, status: "cancelled" });
+  }
+
+  const cancelled = run(
+    appDb,
+    "update image_jobs set status = ?, error = null, result_image_id = null, updated_at = ? where id = ? and user_id = ? and status = ?",
+    "cancelled",
+    now(),
+    job.id,
+    user.id,
+    "running"
+  );
+  if (Number(cancelled.changes ?? 0) === 0) {
+    return c.json({ error: "任务状态已变化，请刷新后重试" }, 409);
+  }
+  abortImageJobExecution(job.id);
+  await deleteImageJobArtifacts(user.id, job.id, clientRequestId);
+  const sessionDeleted = job.session_id
+    ? deleteCancelledEmptySessionRecord(user.id, job.session_id, clientRequestId)
+    : false;
+  clearImageJobCancelIntent(user.id, clientRequestId);
+  emitJobStatus(user.id, job.session_id, job.id, "cancelled", job.type);
+  return c.json({ cancelled: true, clientRequestId, jobId: job.id, sessionId: job.session_id, sessionDeleted, status: "cancelled" });
 });
 
 api.post("/image-jobs/:id/retry", async (c) => {

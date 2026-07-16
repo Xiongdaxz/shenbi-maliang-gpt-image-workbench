@@ -7,6 +7,11 @@ const messages: Messages = {
   ...enUSMessages,
   ...frontstageOverrides["pt-BR"],
   ...frontstageCoreOverrides["pt-BR"],
+  "sidebar.help": "Central de ajuda",
+  "asset.uploadMode.shared.noReview.label": "Somente compartilhado",
+  "asset.uploadMode.shared.noReview.description": "Salvar apenas na biblioteca compartilhada para que todos possam visualizar e usar.",
+  "asset.uploadMode.private_shared.noReview.label": "Meus recursos + compartilhado",
+  "asset.uploadMode.private_shared.noReview.description": "Salvar nos meus recursos e compartilhar ao mesmo tempo com todos.",
   "common.add": "Adicionar",
   "common.all": "Todos",
   "common.cancel": "Cancelar",
@@ -84,6 +89,23 @@ const messages: Messages = {
   "config.nav.modelLogs": "Logs de modelo",
   "config.nav.requests": "Logs de requisições",
   "config.nav.audit": "Auditoria",
+  "settings.general.imagePreview.group": "Pré-visualização de imagens",
+  "settings.general.imagePreview.wheel.title": "Ação da roda na pré-visualização",
+  "settings.general.imagePreview.wheel.desc": "Escolha o que a roda do mouse faz na pré-visualização da imagem em tamanho grande.",
+  "settings.general.imagePreview.wheel.zoom": "Ampliar ou reduzir a imagem",
+  "settings.general.imagePreview.wheel.zoomDesc": "Use a roda para ampliar ou reduzir a imagem.",
+  "settings.general.imagePreview.wheel.pan": "Rolar pela imagem",
+  "settings.general.imagePreview.wheel.panDesc": "Use a roda para mover a imagem; segure Ctrl/⌘ para aplicar zoom temporariamente.",
+  "settings.general.imagePreview.open.title": "Ao abrir a pré-visualização",
+  "settings.general.imagePreview.open.desc": "Escolha como as imagens são exibidas ao abrir ou redefinir uma pré-visualização.",
+  "settings.general.imagePreview.open.contain": "Ajustar à janela",
+  "settings.general.imagePreview.open.containDesc": "Exibe toda a imagem ajustada à área de pré-visualização.",
+  "settings.general.imagePreview.open.actual": "Tamanho original",
+  "settings.general.imagePreview.open.actualDesc": "Exibe a imagem no tamanho de pixels original; imagens altas começam no topo.",
+  "toast.imagePreviewWheelZoom": "A roda da pré-visualização agora amplia ou reduz a imagem",
+  "toast.imagePreviewWheelPan": "A roda da pré-visualização agora rola pela imagem",
+  "toast.imagePreviewOpenContain": "As pré-visualizações serão abertas ajustadas à janela",
+  "toast.imagePreviewOpenActual": "As pré-visualizações serão abertas no tamanho original",
   "settings.general.autoUpload.title": "Enviar automaticamente para recursos",
   "settings.personalization.editSuggestions.title": "Sugestões de edição",
   "settings.personalization.promptStyles.title": "Estilos de otimização AI",
@@ -174,5 +196,4 @@ const messages: Messages = {
 };
 
 Object.assign(messages, frontstageCoreOverrides["pt-BR"]);
-
 export default messages;

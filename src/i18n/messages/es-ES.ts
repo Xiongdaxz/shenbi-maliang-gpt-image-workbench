@@ -7,6 +7,11 @@ const messages: Messages = {
   ...enUSMessages,
   ...frontstageOverrides["es-ES"],
   ...frontstageCoreOverrides["es-ES"],
+  "sidebar.help": "Centro de ayuda",
+  "asset.uploadMode.shared.noReview.label": "Solo compartido",
+  "asset.uploadMode.shared.noReview.description": "Guardar solo en la biblioteca compartida para que todos puedan verlo y usarlo.",
+  "asset.uploadMode.private_shared.noReview.label": "Míos + compartidos",
+  "asset.uploadMode.private_shared.noReview.description": "Guardar en mis recursos y compartirlo al mismo tiempo con todos.",
   "common.add": "Añadir",
   "common.all": "Todo",
   "common.cancel": "Cancelar",
@@ -84,6 +89,23 @@ const messages: Messages = {
   "config.nav.modelLogs": "Registros de modelo",
   "config.nav.requests": "Registros de solicitudes",
   "config.nav.audit": "Auditoría",
+  "settings.general.imagePreview.group": "Vista previa de imágenes",
+  "settings.general.imagePreview.wheel.title": "Acción de la rueda en la vista previa",
+  "settings.general.imagePreview.wheel.desc": "Elige qué hace la rueda del ratón en la vista previa de imagen completa.",
+  "settings.general.imagePreview.wheel.zoom": "Ampliar o reducir la imagen",
+  "settings.general.imagePreview.wheel.zoomDesc": "Usa la rueda para ampliar o reducir la imagen.",
+  "settings.general.imagePreview.wheel.pan": "Desplazarse por la imagen",
+  "settings.general.imagePreview.wheel.panDesc": "Usa la rueda para mover la imagen; mantén Ctrl/⌘ para cambiar temporalmente el zoom.",
+  "settings.general.imagePreview.open.title": "Al abrir la vista previa",
+  "settings.general.imagePreview.open.desc": "Elige cómo se muestran las imágenes al abrir o restablecer una vista previa.",
+  "settings.general.imagePreview.open.contain": "Ajustar a la ventana",
+  "settings.general.imagePreview.open.containDesc": "Muestra toda la imagen ajustada al área de vista previa.",
+  "settings.general.imagePreview.open.actual": "Tamaño original",
+  "settings.general.imagePreview.open.actualDesc": "Muestra la imagen a su tamaño de píxel original; las imágenes altas empiezan en la parte superior.",
+  "toast.imagePreviewWheelZoom": "La rueda de la vista previa ahora amplía o reduce la imagen",
+  "toast.imagePreviewWheelPan": "La rueda de la vista previa ahora desplaza la imagen",
+  "toast.imagePreviewOpenContain": "Las vistas previas se abrirán ajustadas a la ventana",
+  "toast.imagePreviewOpenActual": "Las vistas previas se abrirán en su tamaño original",
   "settings.general.autoUpload.title": "Subida automática a recursos",
   "settings.personalization.editSuggestions.title": "Sugerencias de edición",
   "settings.personalization.promptStyles.title": "Estilos de optimización AI",
@@ -174,5 +196,4 @@ const messages: Messages = {
 };
 
 Object.assign(messages, frontstageCoreOverrides["es-ES"]);
-
 export default messages;

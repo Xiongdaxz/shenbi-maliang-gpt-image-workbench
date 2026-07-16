@@ -10,10 +10,19 @@ const ASSET_SPACE_LABEL: Record<AssetItem["space"], string> = {
 export type AssetUploadMode = "private" | "shared" | "private_shared";
 
 export const ASSET_UPLOAD_MODE_OPTIONS: Array<{ value: AssetUploadMode; label: string; description: string }> = [
-  { value: "shared", label: "申请共享", description: "提交后台审核，通过后其他人可以查看和使用。" },
+  { value: "shared", label: "共享", description: "仅保存到共享素材中，所有人可以查看和使用。" },
   { value: "private", label: "我的", description: "仅自己可见和使用，适合个人素材。" },
-  { value: "private_shared", label: "保存并申请共享", description: "先保存在我的素材中，同时提交后台审核。" }
+  { value: "private_shared", label: "我的+共享", description: "同时保存在我的素材中，并共享给所有人使用。" }
 ];
+
+export function assetUploadModeI18nKey(
+  mode: AssetUploadMode,
+  field: "label" | "description",
+  reviewEnabled: boolean
+) {
+  const noReviewVariant = !reviewEnabled && mode !== "private" ? ".noReview" : "";
+  return `asset.uploadMode.${mode}${noReviewVariant}.${field}`;
+}
 
 export function splitFileDisplayName(name: string) {
   const normalized = name.trim();
@@ -23,8 +32,8 @@ export function splitFileDisplayName(name: string) {
 }
 
 export function assetSpaceLabel(asset: AssetItem) {
-  if (asset.space === "private" && asset.shareStatus === "pending") return "待审核";
-  if (asset.space === "private" && asset.shareStatus === "rejected") return "未通过";
+  if (asset.shareStatus === "pending") return "待审核";
+  if (asset.shareStatus === "rejected") return "未通过";
   if (asset.space === "private" && asset.shared) return asset.canEdit ? "我的并共享" : "共享";
   return ASSET_SPACE_LABEL[asset.space];
 }

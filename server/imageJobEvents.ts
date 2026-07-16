@@ -1,4 +1,4 @@
-export type ImageJobEventStatus = "running" | "succeeded" | "failed";
+export type ImageJobEventStatus = "running" | "succeeded" | "failed" | "cancelled";
 
 export type ImageJobEventPayload = {
   jobId: string;

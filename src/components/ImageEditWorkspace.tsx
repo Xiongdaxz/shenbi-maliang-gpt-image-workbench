@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type WheelEvent as ReactWheelEvent
 } from "react";
@@ -30,19 +31,23 @@ import {
   type Stroke
 } from "../lib/selectionMask";
 import { useWorkbench } from "../store/workbench";
-import type { AssetItem, WorkImage } from "../types";
+import type { AssetItem, ImagePreviewWheelMode, WorkImage } from "../types";
 
 export type ImageEditorState = {
   images: WorkImage[];
   activeImageId: string;
+  initialPrompt?: string;
+  discardDraftOnClose?: boolean;
 };
 
 type ImageEditWorkspaceProps = {
   images: WorkImage[];
   activeImageId: string;
+  initialPrompt?: string;
   sizeOptions: SizeOption[];
   selectedSize: string;
   isSubmitting: boolean;
+  wheelMode?: ImagePreviewWheelMode;
   assets?: { assets: AssetItem[] };
   materialPickerOpen: boolean;
   onClose: () => void;
@@ -55,9 +60,15 @@ type ImageEditWorkspaceProps = {
 const EDITOR_PREVIEW_MIN_SCALE = 0.1;
 const EDITOR_PREVIEW_MAX_SCALE = 3;
 const EDITOR_PREVIEW_SCALE_STEP = 0.1;
+const EDITOR_PREVIEW_WHEEL_LINE_PX = 16;
 
 function clampNumber(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function previewWheelDelta(delta: number, deltaMode: number, pageSize: number) {
+  const unit = deltaMode === 1 ? EDITOR_PREVIEW_WHEEL_LINE_PX : deltaMode === 2 ? Math.max(1, pageSize) : 1;
+  return delta * unit;
 }
 
 function buildPreviewPanAxisBounds(contentSize: number, stageSize: number, visibleSize: number) {
@@ -87,9 +98,11 @@ function buildPreviewStartPan(contentSize: number, stageSize: number, visibleSiz
 export function ImageEditWorkspace({
   images,
   activeImageId,
+  initialPrompt,
   sizeOptions,
   selectedSize,
   isSubmitting,
+  wheelMode = "zoom",
   assets,
   materialPickerOpen,
   onClose,
@@ -101,7 +114,7 @@ export function ImageEditWorkspace({
   const { t } = useI18n();
   const [activeId, setActiveId] = useState(activeImageId);
   const [selectionMode, setSelectionMode] = useState(false);
-  const [prompt, setPrompt] = useState("");
+  const [prompt, setPrompt] = useState(initialPrompt ?? "");
   const [brushSize, setBrushSize] = useState(80);
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
@@ -132,7 +145,7 @@ export function ImageEditWorkspace({
   const thumbListRef = useRef<HTMLDivElement | null>(null);
   const activeThumbRef = useRef<HTMLButtonElement | null>(null);
   const thumbWheelThrottleRef = useRef<number | null>(null);
-  const previewDragRef = useRef<{ pointerId: number; startX: number; startY: number; startPan: { x: number; y: number } } | null>(null);
+  const previewDragRef = useRef<{ pointerId: number; startX: number; startY: number; startPan: { x: number; y: number }; moved: boolean } | null>(null);
   const previewNavigatorDragRef = useRef<number | null>(null);
   const pointerActiveRef = useRef(false);
   const strokesRef = useRef<Stroke[]>([]);
@@ -203,6 +216,7 @@ export function ImageEditWorkspace({
     ((visibleStageSize.width > 0 && previewDisplaySize.width > visibleStageSize.width + 1) ||
       (visibleStageSize.height > 0 && previewDisplaySize.height > visibleStageSize.height + 1))
   );
+  const previewUsesHandCursor = !selectionMode && (previewOriginalSizeMode || Math.abs(previewZoom - 1) > 0.001);
   const previewZoomLabel = `${Math.round(previewZoom * previewBaseScale * 100)}%`;
   const previewOriginalSizeLabel =
     naturalSize.width > 0 && naturalSize.height > 0 ? `${naturalSize.width}x${naturalSize.height}` : "";
@@ -455,6 +469,16 @@ export function ImageEditWorkspace({
   }, [activeImage?.id, editorComposerPreviews.length, editorError, materialPickerOpen]);
 
   useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const preventBrowserZoom = (event: WheelEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.cancelable) event.preventDefault();
+    };
+    stage.addEventListener("wheel", preventBrowserZoom, { passive: false });
+    return () => stage.removeEventListener("wheel", preventBrowserZoom);
+  }, [activeImage?.id]);
+
+  useEffect(() => {
     setPreviewPan((value) => {
       const next = clampPreviewPan(value);
       return next.x === value.x && next.y === value.y ? value : next;
@@ -660,9 +684,31 @@ export function ImageEditWorkspace({
     if (selectionMode || isSubmitting) return;
     event.preventDefault();
     event.stopPropagation();
-    const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
-    if (Math.abs(delta) < 1) return;
-    adjustPreviewZoom(delta < 0 ? EDITOR_PREVIEW_SCALE_STEP : -EDITOR_PREVIEW_SCALE_STEP);
+    if (wheelMode === "zoom" || event.ctrlKey || event.metaKey) {
+      const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+      if (Math.abs(delta) < 1) return;
+      adjustPreviewZoom(delta < 0 ? EDITOR_PREVIEW_SCALE_STEP : -EDITOR_PREVIEW_SCALE_STEP);
+      return;
+    }
+    if (!canPreviewPan) return;
+
+    let deltaX = previewWheelDelta(event.deltaX, event.deltaMode, stageSize.width);
+    let deltaY = previewWheelDelta(event.deltaY, event.deltaMode, visibleStageSize.height || stageSize.height);
+    const canPanX = previewPanBounds.x.max - previewPanBounds.x.min > 1;
+    const canPanY = previewPanBounds.y.max - previewPanBounds.y.min > 1;
+
+    if (event.shiftKey && Math.abs(deltaY) > Math.abs(deltaX)) {
+      deltaX = deltaY;
+      deltaY = 0;
+    }
+    if (!canPanX) deltaX = 0;
+    if (!canPanY) deltaY = 0;
+    if (!deltaX && !deltaY) return;
+
+    setPreviewPan((current) => {
+      const next = clampPreviewPan({ x: current.x - deltaX, y: current.y - deltaY });
+      return next.x === current.x && next.y === current.y ? current : next;
+    });
   };
   const handlePreviewPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
     if (selectionMode || isSubmitting || !canPreviewPan || event.button !== 0) return;
@@ -674,30 +720,47 @@ export function ImageEditWorkspace({
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      startPan: previewPan
+      startPan: previewPan,
+      moved: false
     };
     event.currentTarget.setPointerCapture(event.pointerId);
-    setPreviewDragging(true);
   };
   const handlePreviewPointerMove = (event: ReactPointerEvent<HTMLElement>) => {
     const drag = previewDragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     event.preventDefault();
     event.stopPropagation();
+    const deltaX = event.clientX - drag.startX;
+    const deltaY = event.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(deltaX, deltaY) < 4) return;
+    if (!drag.moved) {
+      drag.moved = true;
+      setPreviewDragging(true);
+    }
     setPreviewPan(
       clampPreviewPan({
-        x: drag.startPan.x + event.clientX - drag.startX,
-        y: drag.startPan.y + event.clientY - drag.startY
+        x: drag.startPan.x + deltaX,
+        y: drag.startPan.y + deltaY
       })
     );
   };
-  const finishPreviewDrag = (event: ReactPointerEvent<HTMLElement>) => {
-    if (previewDragRef.current?.pointerId !== event.pointerId) return;
+  const releasePreviewDrag = (event: ReactPointerEvent<HTMLElement>, activateOriginalSize: boolean) => {
+    const drag = previewDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
     previewDragRef.current = null;
     setPreviewDragging(false);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+    if (activateOriginalSize && !drag.moved) showPreviewOriginalSize();
+  };
+  const finishPreviewDrag = (event: ReactPointerEvent<HTMLElement>) => releasePreviewDrag(event, true);
+  const cancelPreviewDrag = (event: ReactPointerEvent<HTMLElement>) => releasePreviewDrag(event, false);
+  const handlePreviewClick = (event: ReactMouseEvent<HTMLElement>) => {
+    if (selectionMode || isSubmitting || canPreviewPan) return;
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (target?.closest("button, input, textarea, select, [contenteditable='true']")) return;
+    showPreviewOriginalSize();
   };
   const handlePreviewNavigatorPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (selectionMode || isSubmitting || !previewNavigatorMetrics || !canPreviewPan || event.button !== 0) return;
@@ -939,12 +1002,14 @@ export function ImageEditWorkspace({
             "image-editor-stage",
             previewNavigatorMetrics && "has-preview-navigator",
             canPreviewPan && "is-pannable",
+            previewUsesHandCursor && "is-preview-zoomed",
             previewDragging && "is-dragging"
           )}
           onPointerDown={handlePreviewPointerDown}
           onPointerMove={handlePreviewPointerMove}
           onPointerUp={finishPreviewDrag}
-          onPointerCancel={finishPreviewDrag}
+          onPointerCancel={cancelPreviewDrag}
+          onClick={handlePreviewClick}
           onWheel={handlePreviewWheel}
         >
           <div ref={viewportRef} className="image-editor-viewport">

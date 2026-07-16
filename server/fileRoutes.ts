@@ -400,17 +400,27 @@ export function registerFileRoutes(api: Hono) {
   api.get("/files/user-avatar/:userId", async (c) => {
     const user = await requireUser(c);
     if (!user) return c.json({ error: "未登录" }, 401);
-    if (c.req.param("userId") !== user.id) return c.json({ error: "头像不存在" }, 404);
+    const targetUserId = c.req.param("userId");
     const row = getOne<Pick<UserRow, "avatar_path" | "avatar_mime_type">>(
       appDb,
-      "select avatar_path, avatar_mime_type from users where id = ?",
+      `select avatar_path, avatar_mime_type
+       from users
+       where id = ? and disabled = 0
+         and (
+           id = ?
+           or exists (
+             select 1 from case_items
+             where case_items.user_id = users.id and ${approvedCaseSql("case_items")}
+           )
+         )`,
+      targetUserId,
       user.id
     );
     if (!row?.avatar_path) return c.json({ error: "头像不存在" }, 404);
     try {
       return imageResponse(await readStoredFile(row.avatar_path), row.avatar_mime_type || "image/png");
     } catch (error) {
-      console.warn("用户头像读取失败", user.id, error);
+      console.warn("用户头像读取失败", targetUserId, error);
       return c.json({ error: "头像文件不存在" }, 404);
     }
   });

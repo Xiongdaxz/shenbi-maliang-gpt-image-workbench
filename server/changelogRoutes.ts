@@ -1,6 +1,7 @@
 import type { Hono } from "hono";
 import { audit } from "./auditLog";
 import { requireConfig, requireUser } from "./auth";
+import { previewChangelogSync, syncSelectedChangelogFromMarkdown } from "./changelogSync";
 import { configDb, getAll, getOne, run } from "./db";
 import type { ChangelogEntryRow } from "./types";
 import { makeId, now } from "./utils";
@@ -13,6 +14,9 @@ export type ChangelogEntry = {
   createdAt: string;
   updatedAt: string;
 };
+
+const DEFAULT_CHANGELOG_PAGE_SIZE = 5;
+const MAX_CHANGELOG_PAGE_SIZE = 50;
 
 function todayDate() {
   return new Intl.DateTimeFormat("en-CA", {
@@ -38,8 +42,39 @@ function readChangelogEntries() {
   return getAll<ChangelogEntryRow>(
     configDb,
     `select * from changelog_entries
-     order by release_date desc, created_at desc`
+     order by release_date desc, created_at desc, id desc`
   ).map(toChangelogEntry);
+}
+
+function changelogPage(limit: number, offset: number) {
+  const total = getOne<{ total: number }>(configDb, "select count(*) as total from changelog_entries")?.total ?? 0;
+  const entries = getAll<ChangelogEntryRow>(
+    configDb,
+    `select * from changelog_entries
+     order by release_date desc, created_at desc, id desc
+     limit ? offset ?`,
+    limit,
+    offset
+  ).map(toChangelogEntry);
+  return {
+    entries,
+    pageInfo: {
+      limit,
+      offset,
+      total,
+      hasMore: offset + entries.length < total
+    }
+  };
+}
+
+function changelogPagination(limitValue: string | undefined, offsetValue: string | undefined) {
+  const requestedLimit = Number(limitValue);
+  const requestedOffset = Number(offsetValue);
+  const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+    ? Math.min(Math.max(1, Math.floor(requestedLimit)), MAX_CHANGELOG_PAGE_SIZE)
+    : DEFAULT_CHANGELOG_PAGE_SIZE;
+  const offset = Number.isFinite(requestedOffset) && requestedOffset > 0 ? Math.floor(requestedOffset) : 0;
+  return { limit, offset };
 }
 
 function normalizeVersion(value: unknown) {
@@ -74,13 +109,42 @@ export function registerChangelogRoutes(api: Hono) {
   api.get("/changelog", async (c) => {
     const user = await requireUser(c);
     if (!user) return c.json({ error: "未登录" }, 401);
-    return c.json({ entries: readChangelogEntries() });
+    const { limit, offset } = changelogPagination(c.req.query("limit"), c.req.query("offset"));
+    return c.json(changelogPage(limit, offset));
   });
 
   api.get("/config/changelog", async (c) => {
     const blocked = requireConfig(c);
     if (blocked) return blocked;
     return c.json({ entries: readChangelogEntries() });
+  });
+
+  api.get("/config/changelog/sync-preview", async (c) => {
+    const blocked = requireConfig(c);
+    if (blocked) return blocked;
+    const preview = await previewChangelogSync();
+    if (!preview.sourceFound) return c.json({ error: "未找到 docs/changelog.md" }, 404);
+    return c.json({ entries: preview.entries });
+  });
+
+  api.post("/config/changelog/sync", async (c) => {
+    const blocked = requireConfig(c);
+    if (blocked) return blocked;
+    const body = await c.req.json().catch(() => ({}));
+    const rawVersions: unknown[] = body && typeof body === "object" && Array.isArray(body.versions) ? body.versions : [];
+    const versions: string[] = Array.from(
+      new Set(rawVersions.map((version: unknown) => normalizeVersion(version)).filter((version: string) => Boolean(version)))
+    );
+    if (versions.length === 0) return c.json({ error: "请至少选择一条更新记录" }, 400);
+
+    const result = await syncSelectedChangelogFromMarkdown(versions);
+    if (!result.sourceFound) return c.json({ error: "未找到 docs/changelog.md" }, 404);
+    audit("changelog.sync", {
+      selected: result.selected,
+      inserted: result.inserted,
+      updated: result.updated
+    });
+    return c.json(result);
   });
 
   api.post("/config/changelog", async (c) => {

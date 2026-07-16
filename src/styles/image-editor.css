@@ -471,7 +471,6 @@
 }
 
 .image-editor-stage.is-pannable {
-  cursor: grab;
   touch-action: none;
 }
 
@@ -500,6 +499,7 @@
   transform-origin: center;
   transition: none;
   will-change: auto;
+  cursor: zoom-in;
 }
 
 .image-editor-canvas-wrap.is-original-size {
@@ -512,8 +512,13 @@
   will-change: transform;
 }
 
+.image-editor-stage.is-preview-zoomed .image-editor-canvas-wrap {
+  cursor: grab;
+}
+
 .image-editor-stage.is-dragging .image-editor-canvas-wrap {
   transition: none;
+  cursor: grabbing;
 }
 
 .image-editor-image {

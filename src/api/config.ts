@@ -69,6 +69,21 @@ type ChangelogPayload = {
   content: string;
 };
 
+export type ConfigChangelogSyncItem = {
+  version: string;
+  date: string;
+  content: string;
+  action: "create" | "update" | "unchanged";
+};
+
+export type ConfigChangelogSyncResult = {
+  sourceFound: boolean;
+  parsed: number;
+  selected: number;
+  inserted: number;
+  updated: number;
+};
+
 type ConfigAssetReviewStatus = "pending" | "approved" | "rejected" | "all";
 type ConfigCaseReviewStatus = "pending" | "approved" | "rejected" | "all";
 
@@ -314,6 +329,13 @@ export const configApi = {
   },
   changelog: () =>
     request<{ entries: ChangelogEntry[] }>("/api/config/changelog"),
+  previewChangelogSync: () =>
+    request<{ entries: ConfigChangelogSyncItem[] }>("/api/config/changelog/sync-preview"),
+  syncChangelog: (versions: string[]) =>
+    request<ConfigChangelogSyncResult>("/api/config/changelog/sync", {
+      method: "POST",
+      body: JSON.stringify({ versions })
+    }),
   createChangelogEntry: (payload: ChangelogPayload) =>
     request<{ entries: ChangelogEntry[] }>("/api/config/changelog", {
       method: "POST",

@@ -42,6 +42,20 @@ html[data-appearance="light"] .user-footer-panel.is-open {
   background: #ededed;
 }
 
+html[data-appearance="light"] .sidebar .sidebar-scroll .main-nav .nav-item.active,
+html[data-appearance="light"] .sidebar .sidebar-scroll .main-nav .nav-item[aria-current="page"],
+html[data-appearance="light"] .sidebar .sidebar-scroll .recent-row.active,
+html[data-appearance="light"] .sidebar .sidebar-scroll .recent-row.active .recent-item,
+html[data-appearance="light"] .sidebar .sidebar-scroll .recent-item.active,
+html[data-appearance="light"] .sidebar .sidebar-scroll .recent-item[aria-current="page"] {
+  background: transparent;
+}
+
+html[data-appearance="light"] .sidebar .sidebar-scroll.is-selection-animating .main-nav .nav-item:hover,
+html[data-appearance="light"] .sidebar .sidebar-scroll.is-selection-animating .recent-row:hover {
+  background: transparent;
+}
+
 html[data-appearance="light"] .session-pin-trigger:hover,
 html[data-appearance="light"] .session-pin-trigger.is-pinned:hover,
 html[data-appearance="light"] .session-menu-trigger:hover,
@@ -423,6 +437,15 @@ html[data-appearance="dark"] .editor-send-btn:hover:not(:disabled) {
 
 html[data-appearance="dark"] .editor-send-btn:disabled {
   color: rgba(255, 255, 255, 0.72);
+}
+
+html[data-appearance="dark"] .composer-actions .send-btn.is-cancel {
+  color: #050505;
+  background: #fff;
+}
+
+html[data-appearance="dark"] .composer-actions .send-btn.is-cancel:hover:not(:disabled) {
+  background: #e5e7eb;
 }
 
 html[data-appearance="dark"] .editor-size-menu {

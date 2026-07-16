@@ -3,7 +3,7 @@ import { useEffect } from "react";
 export type ImageJobEventPayload = {
   jobId: string;
   sessionId: string;
-  status: "running" | "succeeded" | "failed";
+  status: "running" | "succeeded" | "failed" | "cancelled";
   type?: "generation" | "edit" | string;
   resultImageId?: string | null;
   error?: string | null;
@@ -45,7 +45,7 @@ function isImageJobEventPayload(value: unknown): value is ImageJobEventPayload {
   return (
     typeof record.jobId === "string"
     && typeof record.sessionId === "string"
-    && (record.status === "running" || record.status === "succeeded" || record.status === "failed")
+    && (record.status === "running" || record.status === "succeeded" || record.status === "failed" || record.status === "cancelled")
     && typeof record.updatedAt === "string"
   );
 }

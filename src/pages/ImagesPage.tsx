@@ -27,7 +27,7 @@ import { newestWorkImages } from "../lib/workImages";
 import { useInfinitePageLoader } from "../hooks/useInfinitePageLoader";
 import { useScrollJump } from "../hooks/useScrollJump";
 import { useWorkbench } from "../store/workbench";
-import type { ImageBatchResult, ImageDeleteImpact, WorkImage } from "../types";
+import type { ImageBatchResult, ImageDeleteImpact, ImagePreviewOpenMode, ImagePreviewWheelMode, WorkImage } from "../types";
 import { ConfirmDialog, useToast } from "../ui";
 
 type ImagesViewMode = "grid" | "timeline";
@@ -162,7 +162,13 @@ function useWindowVirtualRange<T extends HTMLElement>(
   return { containerRef, range };
 }
 
-export function ImagesPage() {
+export function ImagesPage({
+  imagePreviewWheelMode,
+  imagePreviewOpenMode
+}: {
+  imagePreviewWheelMode: ImagePreviewWheelMode;
+  imagePreviewOpenMode: ImagePreviewOpenMode;
+}) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -254,6 +260,7 @@ export function ImagesPage() {
     isFetchingNextPage: images.isFetchingNextPage
   });
   const assetCategoryList = assetCategories.data?.categories ?? [];
+  const assetReviewEnabled = assetCategories.data?.reviewEnabled ?? true;
   const allImagesNewestFirst = useMemo(() => newestWorkImages(imageItems), [imageItems]);
 
   useEffect(() => {
@@ -956,7 +963,8 @@ export function ImagesPage() {
           items={openImagePreviewItems}
           index={0}
           ariaLabel={t("globalSearch.imagePreview")}
-          initialZoomMode="contain"
+          initialZoomMode={imagePreviewOpenMode}
+          wheelMode={imagePreviewWheelMode}
           onIndexChange={() => undefined}
           onClose={clearOpenImage}
         />
@@ -965,6 +973,7 @@ export function ImagesPage() {
         <AddAssetFromImageModal
           image={assetTarget}
           categories={assetCategoryList}
+          assetReviewEnabled={assetReviewEnabled}
           pending={addAsset.isPending}
           error={addAsset.error instanceof Error ? addAsset.error : null}
           onClose={() => setAssetTarget(null)}
@@ -974,6 +983,7 @@ export function ImagesPage() {
       {batchAssetOpen ? (
         <ImageBatchAssetDialog
           images={selectedImages}
+          assetReviewEnabled={assetReviewEnabled}
           pending={addImageBatchAssets.isPending}
           error={addImageBatchAssets.error instanceof Error ? addImageBatchAssets.error : null}
           onClose={() => {

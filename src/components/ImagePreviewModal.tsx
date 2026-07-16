@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent, ReactNode, WheelEvent as ReactWheelEvent } from "react";
+import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode, WheelEvent as ReactWheelEvent } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import {
@@ -10,7 +10,7 @@ import {
 import { useI18n } from "../i18n";
 import { copyTextToClipboard } from "../lib/clipboard";
 import { formatImageFileSize } from "../lib/format";
-import type { CaseGroupImage, ImageReferenceItem } from "../types";
+import type { CaseGroupImage, ImagePreviewOpenMode, ImagePreviewWheelMode, ImageReferenceItem } from "../types";
 import { useToast } from "../ui";
 
 export type ImagePreviewItem = {
@@ -41,7 +41,8 @@ type ImagePreviewModalProps<TItem extends ImagePreviewItem> = {
   items: TItem[];
   index: number;
   ariaLabel: string;
-  initialZoomMode?: "actual" | "contain";
+  initialZoomMode?: ImagePreviewOpenMode;
+  wheelMode?: ImagePreviewWheelMode;
   onIndexChange: (index: number) => void;
   onClose: () => void;
   renderActions?: (item: TItem) => ReactNode;
@@ -50,9 +51,15 @@ type ImagePreviewModalProps<TItem extends ImagePreviewItem> = {
 const PREVIEW_MIN_ZOOM = 0.1;
 const PREVIEW_MAX_ZOOM = 3;
 const PREVIEW_CONTAIN_INSET = 12;
+const PREVIEW_WHEEL_LINE_PX = 16;
 
 function clampNumber(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function previewWheelDelta(delta: number, deltaMode: number, pageSize: number) {
+  const unit = deltaMode === 1 ? PREVIEW_WHEEL_LINE_PX : deltaMode === 2 ? Math.max(1, pageSize) : 1;
+  return delta * unit;
 }
 
 function buildPreviewPanAxisBounds(contentSize: number, stageSize: number, visibleSize: number) {
@@ -83,7 +90,8 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
   items,
   index,
   ariaLabel,
-  initialZoomMode = "actual",
+  initialZoomMode = "contain",
+  wheelMode = "zoom",
   onIndexChange,
   onClose,
   renderActions
@@ -99,12 +107,14 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
   const [previewToolbarHeight, setPreviewToolbarHeight] = useState(0);
   const [previewPan, setPreviewPan] = useState({ x: 0, y: 0 });
   const [previewDragging, setPreviewDragging] = useState(false);
-  const [previewImageSource, setPreviewImageSource] = useState<"preview" | "original">("preview");
+  const defaultPreviewImageSource = initialZoomMode === "actual" ? "original" : "preview";
+  const [previewImageSource, setPreviewImageSource] = useState<"preview" | "original">(defaultPreviewImageSource);
   const [previewLoadedSrc, setPreviewLoadedSrc] = useState("");
   const [referencePreview, setReferencePreview] = useState<ImageReferenceItem | null>(null);
+  const previewModalRef = useRef<HTMLElement | null>(null);
   const previewStageRef = useRef<HTMLDivElement | null>(null);
   const previewToolbarRef = useRef<HTMLDivElement | null>(null);
-  const previewDragRef = useRef<{ pointerId: number; startX: number; startY: number; startPan: { x: number; y: number } } | null>(null);
+  const previewDragRef = useRef<{ pointerId: number; startX: number; startY: number; startPan: { x: number; y: number }; moved: boolean } | null>(null);
   const previewNavigatorDragRef = useRef<number | null>(null);
   const previewUserAdjustedRef = useRef(false);
   const pendingOriginalPanRef = useRef(false);
@@ -207,6 +217,7 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
       previewVisibleStageSize &&
       (previewDisplaySize.width > previewVisibleStageSize.width + 1 || previewDisplaySize.height > previewVisibleStageSize.height + 1)
   );
+  const previewUsesHandCursor = previewImageSource === "original" || Math.abs(previewZoom - previewDefaultZoom) > 0.001;
   const showPreviewNavigator = Boolean(previewImageSize && previewStageSize && previewDisplaySize && canPreviewPan);
   const previewImagePosition =
     previewImageSize && previewDisplaySize && previewStageSize
@@ -299,6 +310,9 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
 
   const resetPreviewTransform = (applyStartPan = true) => {
     previewUserAdjustedRef.current = false;
+    pendingOriginalPanRef.current = initialZoomMode === "actual";
+    setPreviewImageSource(defaultPreviewImageSource);
+    setPreviewLoadedSrc("");
     setPreviewZoom(previewDefaultZoom);
     setPreviewRotation(0);
     setPreviewPan(applyStartPan ? previewDefaultPan : { x: 0, y: 0 });
@@ -332,8 +346,32 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
   const handlePreviewWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    const direction = event.deltaY < 0 ? 1 : -1;
-    adjustPreviewZoom(direction * 0.1);
+    if (wheelMode === "zoom" || event.ctrlKey || event.metaKey) {
+      const zoomDelta = event.deltaY || event.deltaX;
+      if (!zoomDelta) return;
+      adjustPreviewZoom((zoomDelta < 0 ? 1 : -1) * 0.1);
+      return;
+    }
+    if (!canPreviewPan || !previewStageSize) return;
+
+    let deltaX = previewWheelDelta(event.deltaX, event.deltaMode, previewStageSize.width);
+    let deltaY = previewWheelDelta(event.deltaY, event.deltaMode, previewVisibleStageSize?.height ?? previewStageSize.height);
+    const canPanX = previewPanBounds.x.max - previewPanBounds.x.min > 1;
+    const canPanY = previewPanBounds.y.max - previewPanBounds.y.min > 1;
+
+    if (event.shiftKey && Math.abs(deltaY) > Math.abs(deltaX)) {
+      deltaX = deltaY;
+      deltaY = 0;
+    }
+    if (!canPanX) deltaX = 0;
+    if (!canPanY) deltaY = 0;
+    if (!deltaX && !deltaY) return;
+
+    previewUserAdjustedRef.current = true;
+    setPreviewPan((current) => {
+      const next = clampPreviewPan({ x: current.x - deltaX, y: current.y - deltaY });
+      return next.x === current.x && next.y === current.y ? current : next;
+    });
   };
 
   const updatePreviewPanFromNavigator = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -356,37 +394,53 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
     if (!canPreviewPan || event.button !== 0) return;
     if ((event.target as HTMLElement).closest("button")) return;
     event.preventDefault();
-    previewUserAdjustedRef.current = true;
     previewDragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      startPan: previewPan
+      startPan: previewPan,
+      moved: false
     };
     event.currentTarget.setPointerCapture(event.pointerId);
-    setPreviewDragging(true);
   };
 
   const handlePreviewPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const drag = previewDragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     event.preventDefault();
+    const deltaX = event.clientX - drag.startX;
+    const deltaY = event.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(deltaX, deltaY) < 4) return;
+    if (!drag.moved) {
+      drag.moved = true;
+      previewUserAdjustedRef.current = true;
+      setPreviewDragging(true);
+    }
     setPreviewPan(
       clampPreviewPan({
-        x: drag.startPan.x + event.clientX - drag.startX,
-        y: drag.startPan.y + event.clientY - drag.startY
+        x: drag.startPan.x + deltaX,
+        y: drag.startPan.y + deltaY
       })
     );
   };
 
-  const finishPreviewDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (previewDragRef.current?.pointerId === event.pointerId) {
-      previewDragRef.current = null;
-      setPreviewDragging(false);
-      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-        event.currentTarget.releasePointerCapture(event.pointerId);
-      }
+  const releasePreviewDrag = (event: ReactPointerEvent<HTMLDivElement>, activateOriginalSize: boolean) => {
+    const drag = previewDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    previewDragRef.current = null;
+    setPreviewDragging(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
     }
+    if (activateOriginalSize && !drag.moved && !previewUsesHandCursor) showPreviewOriginalSize();
+  };
+  const finishPreviewDrag = (event: ReactPointerEvent<HTMLDivElement>) => releasePreviewDrag(event, true);
+  const cancelPreviewDrag = (event: ReactPointerEvent<HTMLDivElement>) => releasePreviewDrag(event, false);
+  const handlePreviewClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (canPreviewPan || previewUsesHandCursor) return;
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (target?.closest("button")) return;
+    showPreviewOriginalSize();
   };
 
   const handlePreviewNavigatorPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -422,9 +476,6 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
     setPreviewImageSize(null);
     setPreviewStageSize(null);
     setPreviewToolbarHeight(0);
-    setPreviewImageSource("preview");
-    setPreviewLoadedSrc("");
-    pendingOriginalPanRef.current = false;
     onClose();
   };
 
@@ -439,11 +490,11 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
     setPreviewRotation(0);
     setPreviewPan({ x: 0, y: 0 });
     setPreviewDragging(false);
-    setPreviewImageSource("preview");
+    setPreviewImageSource(defaultPreviewImageSource);
     setPreviewLoadedSrc("");
     previewDragRef.current = null;
     previewNavigatorDragRef.current = null;
-    pendingOriginalPanRef.current = false;
+    pendingOriginalPanRef.current = initialZoomMode === "actual";
     setPreviewImageSize(
       previewDisplayItem?.imageWidth && previewDisplayItem.imageHeight
         ? { width: previewDisplayItem.imageWidth, height: previewDisplayItem.imageHeight }
@@ -451,7 +502,7 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
     );
     setPreviewStageSize(null);
     setReferencePreview(null);
-  }, [activeGroupImage?.id, previewDisplayItem?.id, previewDisplayItem?.imageWidth, previewDisplayItem?.imageHeight]);
+  }, [activeGroupImage?.id, defaultPreviewImageSource, initialZoomMode, previewDisplayItem?.id, previewDisplayItem?.imageWidth, previewDisplayItem?.imageHeight]);
 
   useEffect(() => {
     setPreviewPan((value) => {
@@ -470,6 +521,7 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
     previewDefaultPan.y,
     previewDefaultZoom,
     previewImageSize,
+    previewImageSource,
     previewDisplayItem?.id,
     previewStageSize
   ]);
@@ -554,11 +606,26 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
     };
   }, [activeGroupImageId, previewDisplayItem?.id]);
 
+  useEffect(() => {
+    const modal = previewModalRef.current;
+    if (!modal) return;
+    const preventBrowserZoom = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      if (event.cancelable) event.preventDefault();
+      if (previewStageRef.current?.contains(event.target as Node)) return;
+      const zoomDelta = event.deltaY || event.deltaX;
+      if (!zoomDelta) return;
+      adjustPreviewZoom((zoomDelta < 0 ? 1 : -1) * 0.1);
+    };
+    modal.addEventListener("wheel", preventBrowserZoom, { passive: false });
+    return () => modal.removeEventListener("wheel", preventBrowserZoom);
+  }, [previewDisplayItem?.id, previewImageSource]);
+
   if (!previewDisplayItem) return null;
 
   const modal = (
     <div className="case-preview-backdrop">
-      <section className={previewDragging ? "case-preview-modal is-preview-dragging" : "case-preview-modal"} aria-label={ariaLabel}>
+      <section ref={previewModalRef} className={previewDragging ? "case-preview-modal is-preview-dragging" : "case-preview-modal"} aria-label={ariaLabel}>
         <button className="case-preview-close" type="button" onClick={closePreview} aria-label={t("imagePreview.close")}>
           <X size={18} />
         </button>
@@ -573,9 +640,11 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
           item={previewDisplayItem}
           navigatorMetrics={previewNavigatorMetrics}
           previewDragging={previewDragging}
+          previewUsesHandCursor={previewUsesHandCursor}
           previewRotation={previewRotation}
           showNavigator={showPreviewNavigator}
           stageRef={previewStageRef}
+          onClick={handlePreviewClick}
           onImageLoad={(event) => {
             setPreviewLoadedSrc(event.currentTarget.getAttribute("src") ?? event.currentTarget.currentSrc);
             setPreviewImageSize({
@@ -588,7 +657,7 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
           onNavigatorPointerMove={handlePreviewNavigatorPointerMove}
           onNavigatorPointerUp={finishPreviewNavigatorDrag}
           onNext={() => onIndexChange((index + 1) % items.length)}
-          onPointerCancel={finishPreviewDrag}
+          onPointerCancel={cancelPreviewDrag}
           onPointerDown={handlePreviewPointerDown}
           onPointerMove={handlePreviewPointerMove}
           onPointerUp={finishPreviewDrag}

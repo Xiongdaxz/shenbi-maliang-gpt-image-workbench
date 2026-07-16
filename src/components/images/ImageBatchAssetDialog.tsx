@@ -1,19 +1,21 @@
 import { useState } from "react";
 import { Check, Tags, X } from "lucide-react";
 import { useI18n } from "../../i18n";
-import { ASSET_UPLOAD_MODE_OPTIONS, type AssetUploadMode } from "../../lib/assets";
+import { ASSET_UPLOAD_MODE_OPTIONS, assetUploadModeI18nKey, type AssetUploadMode } from "../../lib/assets";
 import { cx } from "../../lib/cx";
 import type { WorkImage } from "../../types";
 import { ModalPortal } from "../../ui";
 
 export function ImageBatchAssetDialog({
   images,
+  assetReviewEnabled,
   pending,
   error,
   onClose,
   onSubmit
 }: {
   images: WorkImage[];
+  assetReviewEnabled: boolean;
   pending: boolean;
   error: Error | null;
   onClose: () => void;
@@ -23,8 +25,8 @@ export function ImageBatchAssetDialog({
   const [spaceMode, setSpaceMode] = useState<AssetUploadMode>("private");
   const uploadModeOptions = ASSET_UPLOAD_MODE_OPTIONS.map((option) => ({
     ...option,
-    label: t(`asset.uploadMode.${option.value}.label`),
-    description: t(`asset.uploadMode.${option.value}.description`)
+    label: t(assetUploadModeI18nKey(option.value, "label", assetReviewEnabled)),
+    description: t(assetUploadModeI18nKey(option.value, "description", assetReviewEnabled))
   }));
 
   return (

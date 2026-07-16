@@ -23,6 +23,11 @@
   animation: modalIn 140ms ease-out both;
 }
 
+.case-modal.add-case-modal,
+.case-modal.edit-case-modal {
+  height: min(556px, 92vh);
+}
+
 .case-modal header {
   display: flex;
   align-items: center;
@@ -43,6 +48,13 @@
   display: grid;
   grid-template-columns: minmax(280px, 0.92fr) minmax(320px, 1fr);
   gap: 16px;
+}
+
+.add-case-modal .case-modal-layout,
+.add-case-modal .case-modal-preview-pane,
+.edit-case-modal .case-modal-layout,
+.edit-case-modal .case-modal-preview-pane {
+  height: 100%;
 }
 
 .case-modal-preview-pane,
@@ -75,6 +87,9 @@
 .case-modal-preview-frame > img {
   width: 100%;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: block;
   max-height: 100%;
   object-fit: contain;
 }
@@ -148,6 +163,34 @@
   padding-right: 2px;
 }
 
+.add-case-modal .case-modal-preview-frame,
+.edit-case-modal .case-modal-preview-frame {
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+}
+
+.add-case-modal .case-modal-form-pane,
+.edit-case-modal .case-modal-form-pane {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.add-case-modal .case-modal-prompt-field,
+.edit-case-modal .case-modal-prompt-field {
+  min-height: 132px;
+  flex: 1 1 auto;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.add-case-modal .case-modal-prompt-field textarea,
+.edit-case-modal .case-modal-prompt-field textarea {
+  height: 100%;
+  min-height: 0;
+  resize: none;
+}
+
 .case-cover-picker {
   display: flex;
   gap: 8px;
@@ -208,6 +251,12 @@
 
 .case-modal .row-actions {
   justify-content: flex-end;
+}
+
+.add-case-modal .case-modal-form-pane > .row-actions,
+.edit-case-modal .case-modal-form-pane > .row-actions {
+  flex: 0 0 auto;
+  margin-top: auto;
 }
 
 .case-reference-toggle {
@@ -290,6 +339,11 @@
     overflow: auto;
   }
 
+  .case-modal.add-case-modal,
+  .case-modal.edit-case-modal {
+    height: auto;
+  }
+
   .case-modal-layout {
     grid-template-columns: 1fr;
   }
@@ -297,6 +351,31 @@
   .case-modal-preview-frame {
     min-height: 260px;
     max-height: 42vh;
+  }
+
+  .add-case-modal .case-modal-preview-pane,
+  .edit-case-modal .case-modal-preview-pane {
+    height: auto;
+  }
+
+  .add-case-modal .case-modal-preview-frame,
+  .edit-case-modal .case-modal-preview-frame {
+    height: min(360px, 42vh);
+    min-height: 260px;
+    max-height: 42vh;
+  }
+
+  .add-case-modal .case-modal-prompt-field,
+  .edit-case-modal .case-modal-prompt-field {
+    min-height: 0;
+    flex: 0 0 auto;
+  }
+
+  .add-case-modal .case-modal-prompt-field textarea,
+  .edit-case-modal .case-modal-prompt-field textarea {
+    height: auto;
+    min-height: 104px;
+    resize: vertical;
   }
 
   .case-modal-form-pane {
@@ -457,6 +536,147 @@
   line-height: 1.65;
 }
 
+.action-modal-description {
+  min-width: 0;
+}
+
+.case-modal.compact-modal.delete-chat-confirm-dialog {
+  width: min(420px, 100%);
+  gap: 14px;
+}
+
+.delete-chat-summary {
+  display: grid;
+  gap: 10px;
+}
+
+.delete-chat-impact-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: delete-chat-impact;
+  display: grid;
+  gap: 7px;
+}
+
+.delete-chat-impact-list li {
+  counter-increment: delete-chat-impact;
+  min-height: 36px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--app-border-soft, #e5e7eb);
+  border-radius: 9px;
+  padding: 6px 10px;
+  background: var(--app-surface-soft, #f7f8fa);
+  color: var(--app-text, #111827);
+  font-size: 13px;
+}
+
+.delete-chat-impact-list li::before {
+  content: counter(delete-chat-impact);
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--app-selected-bg, #eef2f7);
+  color: var(--app-text, #374151);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.confirm-countdown-actions {
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.case-modal.action-modal.delete-chat-confirm-dialog > .row-actions {
+  min-height: 36px;
+  align-items: center;
+}
+
+.case-modal.action-modal.delete-chat-confirm-dialog > .row-actions > .danger-btn,
+.case-modal.action-modal.delete-chat-confirm-dialog > .row-actions > .confirm-countdown-progress {
+  box-sizing: border-box;
+  height: 36px;
+  min-height: 36px;
+  max-height: 36px;
+}
+
+.case-modal.action-modal.delete-chat-confirm-dialog .confirm-countdown-progress {
+  position: relative;
+  flex: 0 0 210px;
+  min-width: 210px;
+  min-height: 36px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  background-color: #f3f4f6 !important;
+  color: #374151 !important;
+  padding: 0;
+  cursor: pointer;
+}
+
+.case-modal.action-modal.delete-chat-confirm-dialog .confirm-countdown-progress:hover,
+.case-modal.action-modal.delete-chat-confirm-dialog .confirm-countdown-progress:focus-visible {
+  border-color: #d1d5db;
+  background-color: #f3f4f6 !important;
+}
+
+.confirm-countdown-progress-fill {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  background: #ef3f46;
+  clip-path: inset(0 100% 0 0);
+  animation-name: confirmCountdownFill;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+  will-change: clip-path;
+}
+
+.confirm-countdown-progress-fill-label {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 210px;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 0 14px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgba(91, 18, 24, 0.28);
+  white-space: nowrap;
+}
+
+.confirm-countdown-progress-label {
+  position: relative;
+  z-index: 1;
+  padding: 0 14px;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+@keyframes confirmCountdownFill {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
 .confirm-phrase-field {
   gap: 8px;
   color: #374151;
@@ -573,10 +793,9 @@
     transparent 74%
   );
   opacity: 0.58;
-  filter: blur(0.2px);
-  mix-blend-mode: screen;
   transform: translateX(-120%);
   animation: renderSweep 4.7s infinite cubic-bezier(0.38, 0, 0.18, 1);
+  will-change: transform;
   pointer-events: none;
 }
 
@@ -698,50 +917,15 @@
   pointer-events: none;
 }
 
-.rendering-dot-layer {
-  position: absolute;
-  inset: 3%;
-  display: grid;
-  grid-template-columns: repeat(15, 1fr);
-  grid-template-rows: repeat(15, 1fr);
-  place-items: center;
-  transform-origin: center;
-}
-
-.rendering-dot-layer span {
-  position: relative;
-  display: block;
-  overflow: hidden;
-  aspect-ratio: 1 / 1;
-  border-radius: 999px;
-  clip-path: circle(50% at 50% 50%);
-  background: transparent;
-  transform-origin: center;
-  transition:
-    opacity 840ms cubic-bezier(0.24, 0.78, 0.16, 1),
-    transform 840ms cubic-bezier(0.24, 0.78, 0.16, 1);
-  will-change: opacity, transform;
-}
-
-[data-rendering-motion-paused="true"] .rendering-dot-layer span {
-  transition: none;
-  will-change: auto;
-}
-
-.rendering-dot-layer span::before {
-  content: "";
+.rendering-dot-canvas {
   position: absolute;
   inset: 0;
-  border-radius: inherit;
-  background: var(--dot-fill, #747472);
-  transform: scale(0.82);
-  transform-origin: center;
-}
-
-.rendering-dot-layer-focus {
+  width: 100%;
+  height: 100%;
+  display: block;
   z-index: 2;
-  opacity: 1;
-  transform: scale(1.14);
+  contain: strict;
+  pointer-events: none;
 }
 
 @keyframes renderingTitleIn {
@@ -766,6 +950,23 @@
   44%,
   100% {
     transform: translateX(120%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rendering-card::after,
+  .rendering-title {
+    animation: none;
+  }
+
+  .rendering-card::after {
+    opacity: 0.18;
+    transform: translateX(0);
+  }
+
+  .rendering-title {
+    opacity: 1;
+    transform: none;
   }
 }
 

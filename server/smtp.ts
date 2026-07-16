@@ -24,7 +24,7 @@ type SmtpSettingsRow = {
 };
 
 const MAIL_BACKGROUND_CID = "verification-mail-background";
-const MAIL_BACKGROUND_FILE = "mail_background.png";
+const MAIL_BACKGROUND_FILE = "mail_background.jpg";
 const MAIL_LOGO_CID = "verification-mail-logo";
 const MAIL_LOGO_FILE = "mail_logo.png";
 
@@ -301,7 +301,7 @@ async function sendVerificationMail(settings: SmtpSettings, email: string, code:
       filename: MAIL_BACKGROUND_FILE,
       path: backgroundPath,
       cid: MAIL_BACKGROUND_CID,
-      contentType: "image/png",
+      contentType: "image/jpeg",
       contentDisposition: "inline"
     });
   }

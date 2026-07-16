@@ -39,9 +39,9 @@ import { GUIDE_KEYS, useGuideSeen } from "../hooks/useGuideSeen";
 import { useImageProviderSelection } from "../hooks/useImageProviderSelection";
 import { useImageEditorLauncher } from "../hooks/useImageEditorLauncher";
 import { useRunningImageJobRefresh } from "../hooks/useRunningImageJobRefresh";
-import { COMPOSER_NEW_DRAFT_SCOPE_KEY, useWorkbench, type ComposerSessionDraft } from "../store/workbench";
+import { COMPOSER_NEW_DRAFT_SCOPE_KEY, useWorkbench, type ComposerSessionDraft, type ImageEditorOpenRequest } from "../store/workbench";
 import type { AssetItem, CaseCategory, CaseMaterialItem, ChatSession, ImageEditSuggestion, ImageJob, Message, User, WorkImage } from "../types";
-import { useToast } from "../ui";
+import { ConfirmDialog, useToast } from "../ui";
 
 type SessionPage = Awaited<ReturnType<typeof api.sessions>>;
 type ActiveSessionPages = InfiniteData<SessionPage, number>;
@@ -56,6 +56,37 @@ const PROMPT_INPUT_OPTIMIZE_STYLE_STORAGE_KEY = "gpt-image.prompt-input-optimize
 const MESSAGE_REVEAL_STAGGER_MS = 46;
 const MESSAGE_REVEAL_MAX_DELAY_MS = 414;
 const EMPTY_PROMPT_COLOR_SCHEMES: [] = [];
+
+type SubmittedDraftSnapshot = {
+  prompt: string;
+  caseUsage: ComposerSessionDraft["draftCaseUsage"];
+  editImage: WorkImage | null;
+  editorReturn: ImageEditorOpenRequest | null;
+  selectedCaseMaterials: CaseMaterialItem[];
+  selectedAssets: AssetItem[];
+  imageCount: number;
+  size: string;
+  quality: string;
+  promptInputOptimizeStyle: ComposerSessionDraft["promptInputOptimizeStyle"];
+  promptColorSchemeIds: string[];
+  promptColorSchemeInjection: string;
+  promptTemplate: ComposerSessionDraft["promptTemplate"];
+  activeBranchId: string;
+};
+
+type ActiveSubmitCancellation = {
+  clientRequestId: string;
+  pendingScope: string;
+  sessionId: string | null;
+  jobId: string | null;
+  snapshot: SubmittedDraftSnapshot;
+};
+
+type RestoreConflictState = {
+  snapshot: SubmittedDraftSnapshot;
+  targetScopeKey: string;
+  navigateToNewChat: boolean;
+};
 const FALLBACK_IMAGE_EDIT_SUGGESTIONS_BY_LOCALE: Record<LocaleCode, Array<Omit<ImageEditSuggestion, "id">>> = {
   "zh-CN": [
     {
@@ -460,6 +491,8 @@ export function ChatPage({ user }: { user: User }) {
     clearNewChatPromptOptimizeRequest,
     pendingChatSubmit,
     setPendingChatSubmit,
+    pendingEditorCancellationReturn,
+    setPendingEditorCancellationReturn,
     setPendingChatSubmitScope,
     clearPendingChatSubmitForScopes
   } = useWorkbench();
@@ -474,12 +507,17 @@ export function ChatPage({ user }: { user: User }) {
   const [chatIntroOpen, setChatIntroOpen] = useState(false);
   const [activeBranchId, setActiveBranchId] = useState<string | null>(null);
   const [starterPromptOptimizeRequest, setStarterPromptOptimizeRequest] = useState<{ id: number; prompt: string } | null>(null);
+  const [activeSubmitCancellation, setActiveSubmitCancellation] = useState<ActiveSubmitCancellation | null>(null);
+  const [cancelPending, setCancelPending] = useState(false);
+  const [restoreConflict, setRestoreConflict] = useState<RestoreConflictState | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const promptOptimizeCustomInstructionSaveTimerRef = useRef<number | null>(null);
   const pendingSubmitScopeRef = useRef<string | null>(pendingSubmitScope);
   const starterPromptOptimizeRequestIdRef = useRef(0);
   const submitSessionByRequestRef = useRef(new Map<string, string>());
   const retryInFlightJobIdsRef = useRef(new Set<string>());
+  const submitAbortControllersRef = useRef(new Map<string, AbortController>());
+  const cancelledSubmitIdsRef = useRef(new Set<string>());
   const { showToast } = useToast();
   const { resolvedLanguage, t } = useI18n();
   const appIntroGuide = useGuideSeen(GUIDE_KEYS.appIntro);
@@ -538,6 +576,7 @@ export function ChatPage({ user }: { user: User }) {
 
   const providerOptions = providers.data?.providers ?? [];
   const assetCategoryList = assetCategories.data?.categories ?? [];
+  const assetReviewEnabled = assetCategories.data?.reviewEnabled ?? true;
   const { currentProvider, providerId, quality, qualityOptions, setQuality, setSize, size, sizeOptions } = useImageProviderSelection(providerOptions);
   const composerScopeKey = sessionId ? `session:${sessionId}` : COMPOSER_NEW_DRAFT_SCOPE_KEY;
   const composerInstanceKey = sessionId ? composerScopeKey : `${COMPOSER_NEW_DRAFT_SCOPE_KEY}:${newChatResetKey}`;
@@ -644,6 +683,28 @@ export function ChatPage({ user }: { user: User }) {
     });
   }, [queryClient]);
 
+  const removeSessionSummary = useCallback((sessionId: string) => {
+    queryClient.setQueryData<{ sessions: ChatSession[] }>(["sessions"], (current) => (
+      current ? { sessions: current.sessions.filter((item) => item.id !== sessionId) } : current
+    ));
+    queryClient.setQueryData<ActiveSessionPages>(["sessions", "active"], (current) => {
+      if (!current) return current;
+      const wasPresent = current.pages.some((page) => page.sessions.some((item) => item.id === sessionId));
+      if (!wasPresent) return current;
+      return {
+        ...current,
+        pages: current.pages.map((page) => ({
+          ...page,
+          sessions: page.sessions.filter((item) => item.id !== sessionId),
+          pageInfo: { ...page.pageInfo, total: Math.max(0, page.pageInfo.total - 1) }
+        }))
+      };
+    });
+    queryClient.removeQueries({ queryKey: ["messages", sessionId] });
+    queryClient.removeQueries({ queryKey: ["session-image-jobs", sessionId] });
+    clearSessionGenerationStatus(sessionId);
+  }, [clearSessionGenerationStatus, queryClient]);
+
   const setPendingScope = (scope: string | null) => {
     pendingSubmitScopeRef.current = scope;
     if (scope) {
@@ -687,31 +748,48 @@ export function ChatPage({ user }: { user: User }) {
       submitSessionByRequestRef.current.set(request.clientRequestId, request.sessionId);
       markSessionGenerationRunning(request.sessionId);
       if (pendingSubmitScopeRef.current === request.pendingScope) setPendingScope(request.sessionId);
-      return request.sessionId;
+      return { sessionId: request.sessionId, created: false };
     }
-    const result = await api.createSession({ prompt: request.prompt });
+    const result = await api.createSession({ prompt: request.prompt, clientRequestId: request.clientRequestId });
     submitSessionByRequestRef.current.set(request.clientRequestId, result.session.id);
     replaceSubmittingScope(request.pendingScope, result.session.id);
     if (pendingSubmitScopeRef.current === request.pendingScope) setPendingScope(result.session.id);
     upsertSessionSummary(result.session);
     markSessionGenerationRunning(result.session.id);
+    setActiveSubmitCancellation((current) => (
+      current?.clientRequestId === request.clientRequestId
+        ? { ...current, sessionId: result.session.id }
+        : current
+    ));
     scheduleSessionTitleRefresh();
     navigateToSessionIfNeeded(result.session.id);
-    return result.session.id;
+    return { sessionId: result.session.id, created: true };
   };
 
   const submit = useMutation({
     mutationFn: async (request: SubmitRequest) => {
       setError("");
-      const activeSessionId = await ensureSubmitSession(request);
+      let activeSession: { sessionId: string; created: boolean };
+      try {
+        activeSession = await ensureSubmitSession(request);
+      } catch (error) {
+        submitAbortControllersRef.current.delete(request.clientRequestId);
+        throw error;
+      }
+      const activeSessionId = activeSession.sessionId;
+      const controller = new AbortController();
+      submitAbortControllersRef.current.set(request.clientRequestId, controller);
       const branchFields = {
         ...(request.branchId ? { branchId: request.branchId } : {}),
         ...(request.parentBranchId ? { parentBranchId: request.parentBranchId } : {}),
         ...(request.branchForkMessageId ? { branchForkMessageId: request.branchForkMessageId } : {}),
         ...(request.branchRootMessageId ? { branchRootMessageId: request.branchRootMessageId } : {})
       };
-      if (request.mode === "edit") {
-        return api.edit({
+      try {
+        if (cancelledSubmitIdsRef.current.has(request.clientRequestId)) throw new Error("图片任务已取消");
+        if (request.mode === "edit") {
+          return await api.edit({
+          clientRequestId: request.clientRequestId,
           sessionId: activeSessionId,
           providerId: request.providerId,
           prompt: request.prompt,
@@ -731,9 +809,10 @@ export function ChatPage({ user }: { user: User }) {
           ...(request.revisionRootId ? { revisionRootId: request.revisionRootId } : {}),
           ...(request.editedMessageId ? { editedMessageId: request.editedMessageId } : {}),
           ...branchFields
-        });
-      }
-      return api.generate({
+          }, { signal: controller.signal });
+        }
+        return await api.generate({
+        clientRequestId: request.clientRequestId,
         sessionId: activeSessionId,
         providerId: request.providerId,
         prompt: request.prompt,
@@ -745,13 +824,23 @@ export function ChatPage({ user }: { user: User }) {
         ...(request.revisionRootId ? { revisionRootId: request.revisionRootId } : {}),
         ...(request.editedMessageId ? { editedMessageId: request.editedMessageId } : {}),
         ...branchFields
-      });
+        }, { signal: controller.signal });
+      } catch (error) {
+        throw error;
+      } finally {
+        submitAbortControllersRef.current.delete(request.clientRequestId);
+      }
     },
     onSuccess: (result, request) => {
       const completedSessionId = submitSessionByRequestRef.current.get(request.clientRequestId) ?? result.sessionId;
       const returnedJob = result.job ?? null;
       const jobStillRunning = returnedJob?.status === "running";
       submitSessionByRequestRef.current.delete(request.clientRequestId);
+      setActiveSubmitCancellation((current) => (
+        current?.clientRequestId === request.clientRequestId
+          ? { ...current, sessionId: completedSessionId, jobId: returnedJob?.id ?? current.jobId }
+          : current
+      ));
       if (request.pendingScope === NEW_SESSION_PENDING_SCOPE) appIntroGuide.markSeen();
       removeSubmittingScopes([request.pendingScope, completedSessionId]);
       if (returnedJob) {
@@ -780,6 +869,7 @@ export function ChatPage({ user }: { user: User }) {
     onError: (err, request) => {
       const failedSessionId = submitSessionByRequestRef.current.get(request.clientRequestId);
       submitSessionByRequestRef.current.delete(request.clientRequestId);
+      submitAbortControllersRef.current.delete(request.clientRequestId);
       removeSubmittingScopes([request.pendingScope, failedSessionId ?? ""]);
       clearPendingForScopes([request.pendingScope, failedSessionId ?? ""]);
       if (failedSessionId) clearSessionGenerationStatus(failedSessionId);
@@ -790,14 +880,93 @@ export function ChatPage({ user }: { user: User }) {
         queryClient.invalidateQueries({ queryKey: ["session-image-jobs", failedSessionId] });
         if ((sessionId ?? NEW_SESSION_PENDING_SCOPE) === request.pendingScope) navigateToSessionIfNeeded(failedSessionId);
       }
+      if (cancelledSubmitIdsRef.current.has(request.clientRequestId)) return;
+      setActiveSubmitCancellation((current) => current?.clientRequestId === request.clientRequestId ? null : current);
       const currentRouteScope = sessionId ?? NEW_SESSION_PENDING_SCOPE;
       const message = submitErrorMessage(err, t("common.requestFailed"));
       showToast(message, "error");
       if (currentRouteScope === request.pendingScope || currentRouteScope === failedSessionId) {
         setError(message);
       }
+    },
+    onSettled: (_result, _error, request) => {
+      cancelledSubmitIdsRef.current.delete(request.clientRequestId);
     }
   });
+  const captureSubmittedDraft = (overrides: Partial<SubmittedDraftSnapshot> = {}): SubmittedDraftSnapshot => ({
+    prompt: draftPrompt,
+    caseUsage: draftCaseUsage,
+    editImage,
+    editorReturn: null,
+    selectedCaseMaterials: [...selectedCaseMaterials],
+    selectedAssets: [...selectedAssets],
+    imageCount,
+    size,
+    quality,
+    promptInputOptimizeStyle: currentPromptInputOptimizeStyle,
+    promptColorSchemeIds: [...currentPromptColorSchemeIds],
+    promptColorSchemeInjection: currentPromptColorSchemeInjection,
+    promptTemplate: currentPromptTemplateDraft,
+    activeBranchId: activeBranchId ?? MAIN_CHAT_BRANCH_ID,
+    ...overrides
+  });
+  const restoreSubmittedDraft = (snapshot: SubmittedDraftSnapshot, targetScopeKey = composerScopeKey) => {
+    const restoringEditor = Boolean(snapshot.editorReturn);
+    setDraftPrompt(restoringEditor ? "" : snapshot.prompt, restoringEditor ? null : snapshot.caseUsage);
+    setEditImage(restoringEditor ? null : snapshot.editImage);
+    setSelectedCaseMaterials(snapshot.selectedCaseMaterials);
+    setSelectedAssets(snapshot.selectedAssets);
+    setImageCount(snapshot.imageCount);
+    setSize(snapshot.size);
+    setQuality(snapshot.quality);
+    setActiveBranchId(snapshot.activeBranchId === MAIN_CHAT_BRANCH_ID ? null : snapshot.activeBranchId);
+    upsertComposerDraft(targetScopeKey, {
+      draftPrompt: restoringEditor ? "" : snapshot.prompt,
+      draftCaseUsage: restoringEditor ? null : snapshot.caseUsage,
+      selectedCaseMaterials: snapshot.selectedCaseMaterials,
+      selectedAssets: persistableAssets(snapshot.selectedAssets),
+      imageCount: snapshot.imageCount,
+      size: snapshot.size,
+      quality: snapshot.quality,
+      promptInputOptimizeStyle: snapshot.promptInputOptimizeStyle,
+      promptColorSchemeIds: snapshot.promptColorSchemeIds,
+      promptColorSchemeId: snapshot.promptColorSchemeIds[0] ?? "",
+      promptColorSchemeInjection: snapshot.promptColorSchemeInjection,
+      promptTemplate: snapshot.promptTemplate
+    });
+    if (snapshot.editorReturn) {
+      setEditorImageRequest(snapshot.editorReturn);
+      setPendingEditorCancellationReturn(null);
+    } else {
+      window.setTimeout(() => textareaRef.current?.focus(), 0);
+    }
+  };
+  const persistCurrentDraftToScope = (targetScopeKey: string) => {
+    upsertComposerDraft(targetScopeKey, {
+      draftPrompt,
+      draftCaseUsage,
+      selectedCaseMaterials,
+      selectedAssets: persistableAssets(selectedAssets),
+      imageCount,
+      size,
+      quality,
+      promptInputOptimizeStyle: currentPromptInputOptimizeStyle,
+      promptColorSchemeIds: currentPromptColorSchemeIds,
+      promptColorSchemeId: currentPromptColorSchemeIds[0] ?? "",
+      promptColorSchemeInjection: currentPromptColorSchemeInjection,
+      promptTemplate: currentPromptTemplateDraft
+    });
+  };
+  const startTrackedSubmit = (request: SubmitRequest, snapshot: SubmittedDraftSnapshot) => {
+    setActiveSubmitCancellation({
+      clientRequestId: request.clientRequestId,
+      pendingScope: request.pendingScope,
+      sessionId: request.sessionId ?? null,
+      jobId: null,
+      snapshot
+    });
+    submit.mutate(request);
+  };
   const retryImageJob = useMutation({
     mutationFn: (jobId: string) => api.retryImageJob(jobId),
     onMutate: (jobId) => {
@@ -897,6 +1066,163 @@ export function ChatPage({ user }: { user: User }) {
   const failedJobIds = useMemo(() => new Set(imageJobs.filter((job) => job.status === "failed").map((job) => job.id)), [imageJobs]);
   const retryingJobId = retryImageJob.isPending ? retryImageJob.variables ?? "" : "";
   const currentScopeBusy = currentScopeSubmitting || runningImageJobs.length > 0;
+  const currentRunningJob = runningImageJobs.find((job) => (job.branchId?.trim() || MAIN_CHAT_BRANCH_ID) === (activeBranchId ?? MAIN_CHAT_BRANCH_ID))
+    ?? runningImageJobs[0]
+    ?? null;
+  const pendingEditorReturn = currentRunningJob?.clientRequestId
+    && pendingEditorCancellationReturn?.clientRequestId === currentRunningJob.clientRequestId
+      ? pendingEditorCancellationReturn
+      : null;
+  const activeSubmitBelongsToCurrentScope = Boolean(
+    activeSubmitCancellation
+    && (
+      (sessionId && activeSubmitCancellation.sessionId === sessionId)
+      || (!sessionId && (
+        activeSubmitCancellation.pendingScope === routeSubmitScope
+        || activeSubmitCancellation.sessionId === currentSubmitScope
+      ))
+    )
+  );
+  const activeSubmitRunningJob = activeSubmitCancellation
+    ? runningImageJobs.find((job) => (
+        job.id === activeSubmitCancellation.jobId
+        || Boolean(job.clientRequestId && job.clientRequestId === activeSubmitCancellation.clientRequestId)
+      )) ?? null
+    : null;
+  const currentCancelTarget: ActiveSubmitCancellation | null = activeSubmitCancellation && activeSubmitBelongsToCurrentScope
+    ? {
+        ...activeSubmitCancellation,
+        sessionId: activeSubmitCancellation.sessionId ?? sessionId ?? null,
+        jobId: activeSubmitCancellation.jobId ?? activeSubmitRunningJob?.id ?? null
+      }
+    : currentRunningJob
+      ? {
+          clientRequestId: currentRunningJob.clientRequestId || `cancel-${currentRunningJob.id}`,
+          pendingScope: sessionId ?? currentSubmitScope,
+          sessionId: sessionId ?? null,
+          jobId: currentRunningJob.id,
+          snapshot: captureSubmittedDraft({
+            prompt: currentRunningJob.prompt,
+            caseUsage: null,
+            editImage: pendingEditorReturn?.request.image ?? null,
+            editorReturn: pendingEditorReturn?.request ?? null,
+            selectedCaseMaterials: pendingEditorReturn?.selectedCaseMaterials ?? selectedCaseMaterials,
+            selectedAssets: pendingEditorReturn?.selectedAssets ?? selectedAssets,
+            imageCount: pendingEditorReturn?.imageCount ?? imageCount,
+            size: pendingEditorReturn?.size ?? size,
+            quality: pendingEditorReturn?.quality ?? quality,
+            promptInputOptimizeStyle: pendingEditorReturn?.promptInputOptimizeStyle ?? currentPromptInputOptimizeStyle,
+            promptColorSchemeIds: pendingEditorReturn?.promptColorSchemeIds ?? currentPromptColorSchemeIds,
+            promptColorSchemeInjection: pendingEditorReturn?.promptColorSchemeInjection ?? currentPromptColorSchemeInjection,
+            promptTemplate: pendingEditorReturn?.promptTemplate ?? currentPromptTemplateDraft,
+            activeBranchId: pendingEditorReturn?.activeBranchId
+              ?? currentRunningJob.branchId?.trim()
+              ?? MAIN_CHAT_BRANCH_ID
+          })
+        }
+      : null;
+  useEffect(() => {
+    if (!pendingEditorCancellationReturn) return;
+    const matchingJob = imageJobs.find((job) => job.clientRequestId === pendingEditorCancellationReturn.clientRequestId);
+    if (!matchingJob || matchingJob.status === "running") return;
+    setPendingEditorCancellationReturn(null);
+  }, [imageJobs, pendingEditorCancellationReturn, setPendingEditorCancellationReturn]);
+  const hasDraftCreatedWhileRunning = (snapshot: SubmittedDraftSnapshot) => Boolean(
+    draftPrompt.trim()
+    || editImage
+    || selectedCaseMaterials.length > 0
+    || selectedAssets.length > 0
+    || size
+    || imageCount !== snapshot.imageCount
+    || quality !== snapshot.quality
+    || currentPromptInputOptimizeStyle !== "standard"
+    || currentPromptColorSchemeIds.length > 0
+    || currentPromptColorSchemeInjection.trim()
+  );
+  const cancelCurrentSubmit = async () => {
+    const target = currentCancelTarget;
+    if (!target || cancelPending) return;
+    cancelledSubmitIdsRef.current.add(target.clientRequestId);
+    setCancelPending(true);
+    setError("");
+    try {
+      const cancelRequest = api.cancelImageJob({
+        clientRequestId: target.clientRequestId,
+        ...(target.jobId ? { jobId: target.jobId } : {})
+      });
+      // Start the cancellation request before freeing the generation connection.
+      // Awaiting it first can leave the request queued behind the long-running
+      // generation fetch, while aborting first reintroduces the pre-job race.
+      submitAbortControllersRef.current.get(target.clientRequestId)?.abort();
+      const result = await cancelRequest;
+      const affectedSessionId = result.sessionId ?? target.sessionId;
+      const requestSessionWillBeDeleted = result.sessionDeleted || target.pendingScope === NEW_SESSION_PENDING_SCOPE;
+      const navigateToNewChat = Boolean(
+        requestSessionWillBeDeleted
+        && affectedSessionId
+        && window.location.pathname === `/chat/${affectedSessionId}`
+      );
+      const restoreTargetScopeKey = navigateToNewChat ? COMPOSER_NEW_DRAFT_SCOPE_KEY : composerScopeKey;
+      removeSubmittingScopes([target.pendingScope, affectedSessionId ?? ""]);
+      clearPendingForScopes([target.pendingScope, affectedSessionId ?? ""]);
+      if (affectedSessionId) {
+        if (requestSessionWillBeDeleted) removeSessionSummary(affectedSessionId);
+        clearSessionGenerationStatus(affectedSessionId);
+        queryClient.setQueryData<{ messages: Message[] }>(["messages", affectedSessionId], (current) => current ? {
+          ...current,
+          messages: current.messages.filter((message) => {
+            const messageJobId = String(message.metadata?.jobId ?? "").trim();
+            const messageClientRequestId = String(message.metadata?.clientRequestId ?? "").trim();
+            return messageJobId !== (result.jobId ?? target.jobId)
+              && messageClientRequestId !== target.clientRequestId;
+          })
+        } : current);
+        queryClient.setQueryData<{ jobs: ImageJob[] }>(["session-image-jobs", affectedSessionId], (current) => current ? {
+          ...current,
+          jobs: current.jobs.map((job) => job.id === (result.jobId ?? target.jobId) ? { ...job, status: "cancelled", error: null } : job)
+        } : current);
+        queryClient.invalidateQueries({ queryKey: ["messages", affectedSessionId] });
+        queryClient.invalidateQueries({ queryKey: ["session-image-jobs", affectedSessionId] });
+      }
+      refreshSessionsNonCancel();
+      queryClient.invalidateQueries({ queryKey: ["images"] });
+      queryClient.invalidateQueries({ queryKey: ["cases"] });
+      setActiveSubmitCancellation((current) => (
+        current?.clientRequestId === target.clientRequestId ? null : current
+      ));
+      if (hasDraftCreatedWhileRunning(target.snapshot)) {
+        setRestoreConflict({
+          snapshot: target.snapshot,
+          targetScopeKey: restoreTargetScopeKey,
+          navigateToNewChat
+        });
+      } else {
+        restoreSubmittedDraft(target.snapshot, restoreTargetScopeKey);
+        if (navigateToNewChat) navigate("/", { replace: true });
+      }
+      if (
+        !submitAbortControllersRef.current.has(target.clientRequestId)
+        && !submitSessionByRequestRef.current.has(target.clientRequestId)
+      ) {
+        cancelledSubmitIdsRef.current.delete(target.clientRequestId);
+      }
+      showToast(t("toast.imageJobCancelled"), "success");
+    } catch (error) {
+      cancelledSubmitIdsRef.current.delete(target.clientRequestId);
+      const message = submitErrorMessage(error, t("toast.imageJobCancelFailed"));
+      showToast(message, "error");
+      if (target.sessionId) {
+        queryClient.invalidateQueries({ queryKey: ["messages", target.sessionId] });
+        queryClient.invalidateQueries({ queryKey: ["session-image-jobs", target.sessionId] });
+      }
+    } finally {
+      setCancelPending(false);
+    }
+  };
+  useEffect(() => {
+    if (!activeSubmitCancellation || !activeSubmitBelongsToCurrentScope || currentScopeBusy || cancelPending) return;
+    setActiveSubmitCancellation(null);
+  }, [activeSubmitBelongsToCurrentScope, activeSubmitCancellation, cancelPending, currentScopeBusy]);
   const triggerRetryImageJob = (jobId: string) => {
     const normalizedJobId = jobId.trim();
     if (!normalizedJobId) return;
@@ -1028,6 +1354,7 @@ export function ChatPage({ user }: { user: User }) {
     const clientRequestId = createSubmitRequestId();
     const pendingScope = currentSubmitScope;
     const branchFields = activeChatBranchId !== MAIN_CHAT_BRANCH_ID ? { branchId: activeChatBranchId } : {};
+    const submittedSnapshot = captureSubmittedDraft({ prompt, activeBranchId: activeChatBranchId });
     addSubmittingScope(pendingScope);
     setPendingScope(pendingScope);
     setPendingChatSubmit({
@@ -1063,7 +1390,7 @@ export function ChatPage({ user }: { user: User }) {
     setSize("");
     resetPromptInputOptimizeStyle();
     resetPromptColorScheme();
-    submit.mutate({
+    startTrackedSubmit({
       clientRequestId,
       pendingScope,
       mode,
@@ -1083,7 +1410,7 @@ export function ChatPage({ user }: { user: User }) {
       ...(referenceAsset ? { referenceAssetId: referenceAsset.id } : {}),
       ...(useHiddenContinuityImage ? { hideReference: true } : {}),
       ...branchFields
-    });
+    }, submittedSnapshot);
   };
 
   const serverMessages = messages.data?.messages ?? [];
@@ -1131,6 +1458,22 @@ export function ChatPage({ user }: { user: User }) {
     setSelectedAssets,
     setSidebarCollapsed
   });
+  const handleCloseImageEditor = () => {
+    const discardEditorDraft = Boolean(imageEditor?.discardDraftOnClose);
+    closeImageEditor();
+    if (!discardEditorDraft) return;
+    setDraftPrompt("", null);
+    setEditImage(null);
+    setSelectedCaseMaterials([]);
+    setSelectedAssets([]);
+    setMaterialPickerOpen(false);
+    upsertComposerDraft(composerScopeKey, {
+      draftPrompt: "",
+      draftCaseUsage: null,
+      selectedCaseMaterials: [],
+      selectedAssets: []
+    });
+  };
   const latestEditSuggestionImage = useMemo(() => {
     if (currentScopeBusy || imageEditor) return null;
     const latestAssistantImage = [...visibleBranchMessages]
@@ -1199,8 +1542,10 @@ export function ChatPage({ user }: { user: User }) {
     setActiveBranchId(null);
     setStarterPromptOptimizeRequest(null);
     setError("");
-    if (sessionChanged && imageEditor) closeImageEditor({ restoreSidebar: false });
-  }, [closeImageEditor, imageEditor, sessionId]);
+    if (sessionChanged && imageEditor && !editorImageRequest?.persistAcrossSessionChange) {
+      closeImageEditor({ restoreSidebar: false });
+    }
+  }, [closeImageEditor, editorImageRequest?.persistAcrossSessionChange, imageEditor, sessionId]);
   useEffect(() => {
     const storedDraft = useWorkbench.getState().composerDrafts[composerScopeKey];
     const draftSelectedAssets = persistableAssets(selectedAssets);
@@ -1240,7 +1585,7 @@ export function ChatPage({ user }: { user: User }) {
     setError("");
     if (!sessionId) {
       setPendingScope(null);
-      if (imageEditor) closeImageEditor();
+      if (imageEditor && !editorImageRequest?.persistAcrossSessionChange) closeImageEditor();
     }
 
     const restoreTimer = window.setTimeout(() => {
@@ -1252,6 +1597,7 @@ export function ChatPage({ user }: { user: User }) {
   }, [composerInstanceKey]);
 
   useEffect(() => {
+    if (imageEditor || editorImageRequest?.discardDraftOnClose) return;
     if (restoringComposerDraftScopeRef.current === composerScopeKey) return;
     upsertComposerDraft(composerScopeKey, {
       draftPrompt,
@@ -1273,6 +1619,8 @@ export function ChatPage({ user }: { user: User }) {
     currentPromptInputOptimizeStyle,
     draftCaseUsage,
     draftPrompt,
+    editorImageRequest?.discardDraftOnClose,
+    imageEditor,
     imageCount,
     quality,
     selectedAssets,
@@ -1309,6 +1657,35 @@ export function ChatPage({ user }: { user: User }) {
     const clientRequestId = createSubmitRequestId();
     const pendingScope = currentSubmitScope;
     const branchFields = activeChatBranchId !== MAIN_CHAT_BRANCH_ID ? { branchId: activeChatBranchId } : {};
+    const editorReturn: ImageEditorOpenRequest | null = imageEditor ? {
+      image,
+      images: imageEditor.images,
+      initialPrompt: trimmedPrompt,
+      preserveSelectedAssets: true,
+      persistAcrossSessionChange: true,
+      discardDraftOnClose: true
+    } : null;
+    const submittedSnapshot = captureSubmittedDraft({
+      prompt: trimmedPrompt,
+      editImage: image,
+      editorReturn,
+      size: effectiveSize,
+      activeBranchId: activeChatBranchId
+    });
+    setPendingEditorCancellationReturn(editorReturn ? {
+      clientRequestId,
+      request: editorReturn,
+      selectedCaseMaterials: submittedSnapshot.selectedCaseMaterials,
+      selectedAssets: submittedSnapshot.selectedAssets,
+      imageCount: submittedSnapshot.imageCount,
+      size: submittedSnapshot.size,
+      quality: submittedSnapshot.quality,
+      promptInputOptimizeStyle: submittedSnapshot.promptInputOptimizeStyle,
+      promptColorSchemeIds: submittedSnapshot.promptColorSchemeIds,
+      promptColorSchemeInjection: submittedSnapshot.promptColorSchemeInjection,
+      promptTemplate: submittedSnapshot.promptTemplate,
+      activeBranchId: submittedSnapshot.activeBranchId
+    } : null);
     addSubmittingScope(pendingScope);
     setPendingScope(pendingScope);
     setPendingChatSubmit({
@@ -1362,7 +1739,7 @@ export function ChatPage({ user }: { user: User }) {
     setSize("");
     resetPromptInputOptimizeStyle();
     resetPromptColorScheme();
-    submit.mutate({
+    startTrackedSubmit({
       clientRequestId,
       pendingScope,
       mode: "edit",
@@ -1378,7 +1755,7 @@ export function ChatPage({ user }: { user: User }) {
       sourceCaseItemIds,
       ...(maskDataUrl ? { maskDataUrl } : {}),
       ...branchFields
-    });
+    }, submittedSnapshot);
   };
   const sendAspectRatioEdit = (image: WorkImage, option: SizeOption) => {
     sendEditRequest(image, `将宽高比设为 ${option.ratio}`, undefined, option.value);
@@ -1482,6 +1859,10 @@ export function ChatPage({ user }: { user: User }) {
       branchForkMessageId: payload.branchForkMessageId || payload.rootId,
       branchRootMessageId: payload.rootId
     };
+    const submittedSnapshot = captureSubmittedDraft({
+      prompt: trimmedPrompt,
+      activeBranchId: branchId
+    });
     addSubmittingScope(pendingScope);
     setActiveBranchId(branchId);
     setPendingScope(pendingScope);
@@ -1512,7 +1893,7 @@ export function ChatPage({ user }: { user: User }) {
       }
     });
     setSize("");
-    submit.mutate({
+    startTrackedSubmit({
       clientRequestId,
       pendingScope,
       mode,
@@ -1532,7 +1913,7 @@ export function ChatPage({ user }: { user: User }) {
       revisionRootId: payload.rootId,
       editedMessageId: payload.userMessage.id,
       ...branchFields
-    });
+    }, submittedSnapshot);
   };
   const composerPreviews = [
     ...(editImage
@@ -1722,16 +2103,18 @@ export function ChatPage({ user }: { user: User }) {
         <ImageEditWorkspace
           images={imageEditor.images}
           activeImageId={imageEditor.activeImageId}
+          initialPrompt={imageEditor.initialPrompt}
           sizeOptions={sizeOptions}
           selectedSize=""
           isSubmitting={currentViewSubmitting}
+          wheelMode={user.preferences?.imagePreviewWheelMode ?? "zoom"}
           assets={assets.data}
           materialPickerOpen={materialPickerOpen}
           onOpenCasePicker={() => {
             setMaterialPickerOpen(false);
             setCasePickerOpen(true);
           }}
-          onClose={closeImageEditor}
+          onClose={handleCloseImageEditor}
           onPickSize={sendAspectRatioEdit}
           onToggleMaterialPicker={() => setMaterialPickerOpen(!materialPickerOpen)}
           onSubmitEdit={({ image, prompt, maskDataUrl, sourceAssetIds, sourceCaseItemIds }) =>
@@ -1756,6 +2139,7 @@ export function ChatPage({ user }: { user: User }) {
         <AddAssetFromImageModal
           image={assetTarget.item}
           categories={assetCategoryList}
+          assetReviewEnabled={assetReviewEnabled}
           pending={addAsset.isPending}
           error={addAsset.error instanceof Error ? addAsset.error : null}
           onClose={() => setAssetTarget(null)}
@@ -1772,7 +2156,8 @@ export function ChatPage({ user }: { user: User }) {
         key={composerInstanceKey}
         autoOptimizePromptRequest={sessionId ? null : starterPromptOptimizeRequest}
         assets={assets.data}
-        busy={currentScopeBusy}
+        busy={currentScopeBusy || cancelPending}
+        cancelPending={cancelPending}
         composerInstanceKey={composerInstanceKey}
         draftPrompt={draftPrompt}
         draftCaseUsage={draftCaseUsage}
@@ -1799,6 +2184,7 @@ export function ChatPage({ user }: { user: User }) {
         textareaRef={textareaRef}
         onApplyEditSuggestion={applyEditSuggestion}
         onAutoOptimizePromptRequestHandled={handleStarterPromptOptimizeRequestHandled}
+        onCancel={currentCancelTarget ? cancelCurrentSubmit : undefined}
         onDraftPromptChange={setDraftPrompt}
         onImageCountChange={setImageCount}
         onPaste={handleComposerPaste}
@@ -1817,6 +2203,29 @@ export function ChatPage({ user }: { user: User }) {
         onPromptOptimizeCustomInstructionChange={schedulePromptOptimizeCustomInstructionSave}
         onPromptTemplateDraftChange={handlePromptTemplateDraftChange}
         onToggleMaterialPicker={() => setMaterialPickerOpen(!materialPickerOpen)}
+      />
+      <ConfirmDialog
+        open={Boolean(restoreConflict)}
+        title={t("dialog.cancelGeneration.restoreTitle")}
+        description={t("dialog.cancelGeneration.restoreDescription")}
+        confirmText={t("dialog.cancelGeneration.restoreCancelled")}
+        cancelText={t("dialog.cancelGeneration.keepCurrent")}
+        backdropClassName="modal-backdrop-top"
+        onConfirm={() => {
+          if (restoreConflict) {
+            restoreSubmittedDraft(restoreConflict.snapshot, restoreConflict.targetScopeKey);
+            if (restoreConflict.navigateToNewChat) navigate("/", { replace: true });
+          }
+          setRestoreConflict(null);
+        }}
+        onCancel={() => {
+          setPendingEditorCancellationReturn(null);
+          if (restoreConflict?.navigateToNewChat) {
+            persistCurrentDraftToScope(restoreConflict.targetScopeKey);
+            navigate("/", { replace: true });
+          }
+          setRestoreConflict(null);
+        }}
       />
       <FeatureIntroModal
         open={showStarter && (!appIntroGuide.seen || chatIntroOpen)}

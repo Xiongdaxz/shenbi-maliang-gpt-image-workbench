@@ -58,15 +58,36 @@ export async function proxyFetch(input: RequestInfo | URL, init: RequestInit) {
   return fetchWithConfiguredRetry(input, init, Boolean(settings.enabled && settings.url));
 }
 
-export async function withProviderRequestTimeout<T>(operation: (signal: AbortSignal) => Promise<T>) {
+function mergeAbortSignals(signals: AbortSignal[]) {
+  if (signals.length === 1) return { signal: signals[0], cleanup: () => undefined };
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), IMAGE_JOB_RUNNING_TIMEOUT_MS);
+  const abort = () => controller.abort();
+  for (const signal of signals) {
+    if (signal.aborted) {
+      abort();
+      break;
+    }
+    signal.addEventListener("abort", abort, { once: true });
+  }
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      for (const signal of signals) signal.removeEventListener("abort", abort);
+    }
+  };
+}
+
+export async function withProviderRequestTimeout<T>(operation: (signal: AbortSignal) => Promise<T>, externalSignal?: AbortSignal) {
+  const timeoutController = new AbortController();
+  const { signal, cleanup } = mergeAbortSignals([timeoutController.signal, ...(externalSignal ? [externalSignal] : [])]);
+  const timeoutId = setTimeout(() => timeoutController.abort(), IMAGE_JOB_RUNNING_TIMEOUT_MS);
   try {
-    return await operation(controller.signal);
+    return await operation(signal);
   } catch (error) {
-    if (controller.signal.aborted) throw new Error(PROVIDER_REQUEST_TIMEOUT_ERROR);
+    if (timeoutController.signal.aborted) throw new Error(PROVIDER_REQUEST_TIMEOUT_ERROR);
     throw error;
   } finally {
     clearTimeout(timeoutId);
+    cleanup();
   }
 }

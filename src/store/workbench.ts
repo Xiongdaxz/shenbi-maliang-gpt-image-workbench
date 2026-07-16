@@ -11,6 +11,25 @@ export const COMPOSER_NEW_DRAFT_SCOPE_KEY = "new";
 export type ImageEditorOpenRequest = {
   image: WorkImage;
   images?: WorkImage[];
+  initialPrompt?: string;
+  preserveSelectedAssets?: boolean;
+  persistAcrossSessionChange?: boolean;
+  discardDraftOnClose?: boolean;
+};
+
+export type PendingEditorCancellationReturn = {
+  clientRequestId: string;
+  request: ImageEditorOpenRequest;
+  selectedCaseMaterials: CaseMaterialItem[];
+  selectedAssets: AssetItem[];
+  imageCount: number;
+  size: string;
+  quality: string;
+  promptInputOptimizeStyle: PromptTemplateOptimizeStyle;
+  promptColorSchemeIds: string[];
+  promptColorSchemeInjection: string;
+  promptTemplate: ComposerPromptTemplateDraft | null;
+  activeBranchId: string;
 };
 
 export type DraftCaseUsage = {
@@ -81,6 +100,7 @@ type WorkbenchState = {
   sessionGenerationStates: Record<string, SessionGenerationState>;
   newChatPromptOptimizeRequest: NewChatPromptOptimizeRequest | null;
   pendingChatSubmit: PendingChatSubmit | null;
+  pendingEditorCancellationReturn: PendingEditorCancellationReturn | null;
   setDraftPrompt: (value: string, caseUsage?: DraftCaseUsage | null) => void;
   setEditImage: (image: WorkImage | null) => void;
   setEditorImageRequest: (request: ImageEditorOpenRequest | null) => void;
@@ -94,6 +114,7 @@ type WorkbenchState = {
   startNewChatPromptOptimize: (prompt: string) => void;
   clearNewChatPromptOptimizeRequest: (id: number) => void;
   setPendingChatSubmit: (pendingChatSubmit: PendingChatSubmit | null) => void;
+  setPendingEditorCancellationReturn: (pendingEditorCancellationReturn: PendingEditorCancellationReturn | null) => void;
   setPendingChatSubmitScope: (scope: string) => void;
   clearPendingChatSubmitForScopes: (scopes: string[]) => void;
   setMaterialPickerOpen: (value: boolean) => void;
@@ -253,6 +274,7 @@ export const useWorkbench = create<WorkbenchState>((set) => ({
   sessionGenerationStates: {},
   newChatPromptOptimizeRequest: null,
   pendingChatSubmit: null,
+  pendingEditorCancellationReturn: null,
   setDraftPrompt: (draftPrompt, caseUsage) =>
     set((state) => ({
       draftPrompt,
@@ -348,6 +370,7 @@ export const useWorkbench = create<WorkbenchState>((set) => ({
         : state
     )),
   setPendingChatSubmit: (pendingChatSubmit) => set({ pendingChatSubmit }),
+  setPendingEditorCancellationReturn: (pendingEditorCancellationReturn) => set({ pendingEditorCancellationReturn }),
   setPendingChatSubmitScope: (scope) =>
     set((state) => (
       state.pendingChatSubmit && state.pendingChatSubmit.scope !== scope

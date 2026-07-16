@@ -7,6 +7,11 @@ const messages: Messages = {
   ...enUSMessages,
   ...frontstageOverrides["de-DE"],
   ...frontstageCoreOverrides["de-DE"],
+  "sidebar.help": "Hilfe-Center",
+  "asset.uploadMode.shared.noReview.label": "Nur geteilt",
+  "asset.uploadMode.shared.noReview.description": "Nur in der gemeinsamen Materialbibliothek speichern, damit alle sie ansehen und verwenden können.",
+  "asset.uploadMode.private_shared.noReview.label": "Eigene + geteilt",
+  "asset.uploadMode.private_shared.noReview.description": "In den eigenen Materialien speichern und gleichzeitig für alle freigeben.",
   "common.add": "Hinzufügen",
   "common.all": "Alle",
   "common.cancel": "Abbrechen",
@@ -84,6 +89,23 @@ const messages: Messages = {
   "config.nav.modelLogs": "Modellprotokolle",
   "config.nav.requests": "Anfrageprotokolle",
   "config.nav.audit": "Audit",
+  "settings.general.imagePreview.group": "Bildvorschau",
+  "settings.general.imagePreview.wheel.title": "Mausradverhalten in der Vorschau",
+  "settings.general.imagePreview.wheel.desc": "Legt fest, was das Mausrad in der großen Bildvorschau bewirkt.",
+  "settings.general.imagePreview.wheel.zoom": "Bild vergrößern/verkleinern",
+  "settings.general.imagePreview.wheel.zoomDesc": "Das Bild mit dem Mausrad direkt vergrößern oder verkleinern.",
+  "settings.general.imagePreview.wheel.pan": "Durch Bild scrollen",
+  "settings.general.imagePreview.wheel.panDesc": "Das Bild mit dem Mausrad verschieben; für vorübergehenden Zoom Strg/⌘ gedrückt halten.",
+  "settings.general.imagePreview.open.title": "Beim Öffnen der Vorschau",
+  "settings.general.imagePreview.open.desc": "Legt fest, wie Bilder beim Öffnen oder Zurücksetzen einer Vorschau angezeigt werden.",
+  "settings.general.imagePreview.open.contain": "An Fenster anpassen",
+  "settings.general.imagePreview.open.containDesc": "Zeigt das gesamte Bild an den Vorschaubereich angepasst.",
+  "settings.general.imagePreview.open.actual": "Originalgröße",
+  "settings.general.imagePreview.open.actualDesc": "Zeigt das Bild in seiner ursprünglichen Pixelgröße; hohe Bilder beginnen oben.",
+  "toast.imagePreviewWheelZoom": "Das Mausrad in der Vorschau steuert jetzt den Zoom",
+  "toast.imagePreviewWheelPan": "Das Mausrad scrollt jetzt durch das Bild",
+  "toast.imagePreviewOpenContain": "Bildvorschauen werden an das Fenster angepasst geöffnet",
+  "toast.imagePreviewOpenActual": "Bildvorschauen werden in Originalgröße geöffnet",
   "settings.general.autoUpload.title": "Automatisch in Assets hochladen",
   "settings.personalization.editSuggestions.title": "Bearbeitungsvorschläge",
   "settings.personalization.promptStyles.title": "AI-Optimierungsstile",
@@ -174,5 +196,4 @@ const messages: Messages = {
 };
 
 Object.assign(messages, frontstageCoreOverrides["de-DE"]);
-
 export default messages;

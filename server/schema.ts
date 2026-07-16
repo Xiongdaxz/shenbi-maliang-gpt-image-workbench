@@ -543,6 +543,8 @@ export function initAppDb() {
     create table if not exists user_preferences (
       user_id text primary key,
       language text not null default 'auto',
+      image_preview_wheel_mode text not null default 'zoom',
+      image_preview_open_mode text not null default 'contain',
       edit_suggestions_enabled integer not null default 1,
       edit_suggestion_tone text not null default 'default',
       auto_upload_pasted_assets integer not null default 1,
@@ -557,6 +559,12 @@ export function initAppDb() {
   }
   if (!tableColumnExists(appDb, "user_preferences", "language")) {
     appDb.run("alter table user_preferences add column language text not null default 'auto'");
+  }
+  if (!tableColumnExists(appDb, "user_preferences", "image_preview_wheel_mode")) {
+    appDb.run("alter table user_preferences add column image_preview_wheel_mode text not null default 'zoom'");
+  }
+  if (!tableColumnExists(appDb, "user_preferences", "image_preview_open_mode")) {
+    appDb.run("alter table user_preferences add column image_preview_open_mode text not null default 'contain'");
   }
   if (!tableColumnExists(appDb, "user_preferences", "edit_suggestion_tone")) {
     appDb.run("alter table user_preferences add column edit_suggestion_tone text not null default 'default'");
@@ -577,6 +585,14 @@ export function initAppDb() {
   run(
     appDb,
     "update user_preferences set language = 'auto' where language not in ('auto', 'zh-CN', 'zh-TW', 'en-US', 'ja-JP', 'ko-KR', 'es-ES', 'fr-FR', 'de-DE', 'pt-BR', 'ru-RU', 'fa-IR')"
+  );
+  run(
+    appDb,
+    "update user_preferences set image_preview_wheel_mode = 'zoom' where image_preview_wheel_mode not in ('zoom', 'pan')"
+  );
+  run(
+    appDb,
+    "update user_preferences set image_preview_open_mode = 'contain' where image_preview_open_mode not in ('contain', 'actual')"
   );
 
   appDb.run(`
@@ -682,6 +698,7 @@ export function initAppDb() {
     create table if not exists sessions (
       id text primary key,
       user_id text not null,
+      client_request_id text,
       title text not null,
       title_status text not null default 'ready',
       pinned_at text,
@@ -704,7 +721,12 @@ export function initAppDb() {
   if (!tableColumnExists(appDb, "sessions", "deleted_at")) {
     appDb.run("alter table sessions add column deleted_at text");
   }
+  if (!tableColumnExists(appDb, "sessions", "client_request_id")) {
+    appDb.run("alter table sessions add column client_request_id text");
+  }
   appDb.run("create index if not exists sessions_user_archive_time_idx on sessions(user_id, archived_at, updated_at desc)");
+  appDb.run("drop index if exists sessions_user_client_request_idx");
+  appDb.run("create unique index if not exists sessions_user_client_request_unique_idx on sessions(user_id, client_request_id) where client_request_id is not null and client_request_id <> ''");
   appDb.run("create index if not exists sessions_user_visible_time_idx on sessions(user_id, deleted_at, archived_at, updated_at desc)");
   appDb.run("drop index if exists sessions_user_active_pin_time_idx");
   appDb.run("create index if not exists sessions_user_active_pin_asc_time_idx on sessions(user_id, deleted_at, archived_at, pinned_at asc, updated_at desc)");
@@ -752,6 +774,7 @@ export function initAppDb() {
   `);
   appDb.run("create index if not exists image_jobs_session_user_status_time_idx on image_jobs(session_id, user_id, status, created_at)");
   for (const [column, definition] of [
+    ["client_request_id", "text"],
     ["auto_retry_count", "integer not null default 0"],
     ["manual_retry_count", "integer not null default 0"],
     ["recovery_count", "integer not null default 0"],
@@ -762,6 +785,18 @@ export function initAppDb() {
       appDb.run(`alter table image_jobs add column ${column} ${definition}`);
     }
   }
+  appDb.run("create index if not exists image_jobs_user_client_request_idx on image_jobs(user_id, client_request_id)");
+
+  appDb.run(`
+    create table if not exists image_job_cancel_requests (
+      user_id text not null,
+      client_request_id text not null,
+      created_at text not null,
+      primary key (user_id, client_request_id),
+      foreign key (user_id) references users(id)
+    )
+  `);
+  appDb.run("create index if not exists image_job_cancel_requests_created_idx on image_job_cancel_requests(created_at)");
 
   appDb.run(`
     create table if not exists images (

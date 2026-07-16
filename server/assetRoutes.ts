@@ -134,6 +134,10 @@ function assetShareStateFromUploadMode(uploadMode: ReturnType<typeof normalizeAs
   };
 }
 
+function assetSpaceFromUploadMode(uploadMode: ReturnType<typeof normalizeAssetUploadMode>): AssetSpace {
+  return uploadMode === "shared" ? "shared" : "private";
+}
+
 function replaceAssetCategories(assetId: string, categoryIds: string[]) {
   run(appDb, "delete from asset_categories where asset_id = ?", assetId);
   const timestamp = now();
@@ -180,9 +184,10 @@ function applyDuplicateUploadOptions({
     run(
       appDb,
       `update assets
-       set space = 'private', shared = ?, share_status = ?, share_requested_at = ?,
+       set space = ?, shared = ?, share_status = ?, share_requested_at = ?,
            share_reviewed_at = ?, share_reviewed_by = ?, share_reject_reason = ''
        where id = ? and user_id = ?`,
+      assetSpaceFromUploadMode(uploadMode),
       shareState.shared,
       shareState.shareStatus,
       shareState.shareRequestedAt,
@@ -265,9 +270,10 @@ async function createAssetFromSource({
         run(
           appDb,
           `update assets
-           set space = 'private', shared = ?, share_status = ?, share_requested_at = ?,
+           set space = ?, shared = ?, share_status = ?, share_requested_at = ?,
                share_reviewed_at = ?, share_reviewed_by = ?, share_reject_reason = ''
            where id = ? and user_id = ?`,
+          assetSpaceFromUploadMode(uploadMode),
           shareState.shared,
           shareState.shareStatus,
           shareState.shareRequestedAt,
@@ -299,7 +305,7 @@ async function createAssetFromSource({
     ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     userId,
-    "private",
+    assetSpaceFromUploadMode(uploadMode),
     shareState.shared,
     shareState.shareStatus,
     shareState.shareRequestedAt,
@@ -460,7 +466,10 @@ api.get("/assets/categories", async (c) => {
     appDb,
     "select id, name, slug from case_categories where type = 'asset' order by sort_order asc"
   );
-  return c.json({ categories: categories.map((category) => ({ ...category, items: [] })) });
+  return c.json({
+    categories: categories.map((category) => ({ ...category, items: [] })),
+    reviewEnabled: globalSwitchEnabled("asset_review")
+  });
 });
 
 api.post("/assets/categories", async (c) => {
@@ -515,7 +524,7 @@ api.post("/assets/upload", async (c) => {
   const form = await c.req.formData();
   const file = form.get("file");
   const uploadMode = normalizeAssetUploadMode(form.get("spaceMode"), form.get("space"));
-  const space: AssetSpace = "private";
+  const space = assetSpaceFromUploadMode(uploadMode);
   const rawCategoryValues = form.getAll("categoryIds");
   const hasCategoryIds = rawCategoryValues.length > 0 || form.has("categoryIds");
   const categoryIds = normalizeIdList(rawCategoryValues.length > 0 ? rawCategoryValues : form.get("categoryIds"));
@@ -764,7 +773,7 @@ api.patch("/assets/:assetId", async (c) => {
       run(
         appDb,
         `update assets
-         set space = 'private', shared = ?, share_status = ?,
+         set space = 'shared', shared = ?, share_status = ?,
              share_requested_at = ?, share_reviewed_at = ?, share_reviewed_by = ?, share_reject_reason = ''
          where id = ? and user_id = ?`,
         shareState.shared,
@@ -776,7 +785,15 @@ api.patch("/assets/:assetId", async (c) => {
         user.id
       );
     } else {
-      run(appDb, "update assets set space = 'private' where id = ? and user_id = ?", assetId, user.id);
+      run(
+        appDb,
+        `update assets
+         set space = 'private', shared = 0, share_status = 'none', share_requested_at = null,
+             share_reviewed_at = null, share_reviewed_by = '', share_reject_reason = ''
+         where id = ? and user_id = ?`,
+        assetId,
+        user.id
+      );
     }
   }
 

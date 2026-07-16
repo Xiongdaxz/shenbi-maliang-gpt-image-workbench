@@ -14,6 +14,7 @@ import type {
   ImageEditSuggestion,
   ImageGenerationMode,
   ImageJob,
+  InspirationContributor,
   LoginAssets,
   Message,
   PromptReferenceLink,
@@ -78,6 +79,7 @@ export type ImageCounts = {
 };
 
 export type GenerateImagePayload = {
+  clientRequestId: string;
   sessionId?: string;
   providerId?: string;
   prompt: string;
@@ -615,7 +617,10 @@ export const api = {
     }),
   providers: () => request<{ providers: ProviderConfig[]; imageMode: ImageGenerationMode }>("/api/providers"),
   starterCopiesToday: (language?: string) => request<StarterDailyCopy>(`/api/starter-copies/today${queryString({ language })}`),
-  changelog: () => request<{ entries: ChangelogEntry[] }>("/api/changelog"),
+  changelog: (params?: Pick<PageQuery, "limit" | "offset">) =>
+    request<PagedResponse<{ entries: ChangelogEntry[] }>>(
+      `/api/changelog${queryString({ limit: params?.limit, offset: params?.offset })}`
+    ),
   sessions: (params?: SessionQuery, init?: RequestInit) =>
     request<PagedResponse<{ sessions: ChatSession[] }>>(
       `/api/sessions${queryString({
@@ -626,8 +631,9 @@ export const api = {
       })}`,
       init
     ),
-  createSession: (payload?: { prompt?: string; title?: string }) =>
+  createSession: (payload?: { prompt?: string; title?: string; clientRequestId?: string }, init?: RequestInit) =>
     request<{ session: ChatSession }>("/api/sessions", {
+      ...init,
       method: "POST",
       body: JSON.stringify(payload ?? {})
     }),
@@ -671,6 +677,11 @@ export const api = {
       `/api/image-jobs/${jobId}/retry`,
       { method: "POST" }
     ),
+  cancelImageJob: (payload: { clientRequestId: string; jobId?: string | null }) =>
+    request<{ cancelled: true; clientRequestId: string; jobId: string | null; sessionId: string | null; sessionDeleted: boolean; status: "cancelled" }>(
+      "/api/image-jobs/cancel",
+      { method: "POST", body: JSON.stringify(payload) }
+    ),
   globalSearch: (params: { q: string; scope?: GlobalSearchScope; limit?: number; offset?: number }, init?: RequestInit) =>
     request<GlobalSearchResponse>(
       `/api/search${queryString({
@@ -707,6 +718,7 @@ export const api = {
         favoriteOnly: params?.favoriteOnly
       })}`
     ),
+  caseContributors: () => request<{ contributors: InspirationContributor[] }>("/api/cases/contributors"),
   caseDetail: (caseId: string, init?: RequestInit) =>
     request<{ caseItem: CaseCategory["items"][number] }>(`/api/cases/${encodeURIComponent(caseId)}`, init),
   createCaseCategory: (name: string) =>
@@ -832,7 +844,7 @@ export const api = {
     request<{ ok: boolean }>(`/api/prompt-template-results/${encodeURIComponent(id)}`, {
       method: "DELETE"
     }),
-  assetCategories: () => request<{ categories: CaseCategory[] }>("/api/assets/categories"),
+  assetCategories: () => request<{ categories: CaseCategory[]; reviewEnabled: boolean }>("/api/assets/categories"),
   createAssetCategory: (name: string) =>
     request<{ category: CaseCategory }>("/api/assets/categories", {
       method: "POST",
@@ -865,13 +877,15 @@ export const api = {
     request<{ imageId: string; suggestions: ImageEditSuggestion[]; generated: boolean }>(
       `/api/images/${encodeURIComponent(imageId)}/edit-suggestions${queryString({ language })}`
     ),
-  generate: (payload: GenerateImagePayload) =>
+  generate: (payload: GenerateImagePayload, init?: RequestInit) =>
     request<{ sessionId: string; job: ImageJob | null; image: WorkImage | null; images?: WorkImage[]; error?: string }>("/api/images/generate", {
+      ...init,
       method: "POST",
       body: JSON.stringify(payload)
     }),
-  edit: (payload: EditImagePayload) =>
+  edit: (payload: EditImagePayload, init?: RequestInit) =>
     request<{ sessionId: string; job: ImageJob | null; image: WorkImage | null; images?: WorkImage[]; error?: string }>("/api/images/edit", {
+      ...init,
       method: "POST",
       body: JSON.stringify(payload)
     }),

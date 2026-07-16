@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEventHandler, type CSSProperties, type RefObject } from "react";
-import { ArrowUp, BrushCleaning, ImageIcon, Lightbulb, Plus, RotateCw, Sparkles, Undo2, WandSparkles, X } from "lucide-react";
+import { ArrowUp, BrushCleaning, ImageIcon, Lightbulb, LoaderCircle, Plus, RotateCw, Sparkles, Square, Undo2, WandSparkles, X } from "lucide-react";
 import { ImageLightbox, type ImageLightboxState } from "../ImageLightbox";
 import { MaterialPickerDrawer } from "../MaterialPicker";
 import { ImageCountStepper, QualityPicker, SizePicker } from "../ImageOptionPickers";
@@ -46,6 +46,7 @@ type ChatComposerProps = {
   autoOptimizePromptRequest?: { id: number; prompt: string } | null;
   assets?: { assets: AssetItem[] };
   busy: boolean;
+  cancelPending?: boolean;
   composerInstanceKey: string;
   draftPrompt: string;
   error: string;
@@ -70,6 +71,7 @@ type ChatComposerProps = {
   sizeOptions: SizeOption[];
   textareaRef: RefObject<HTMLTextAreaElement | null>;
   onDraftPromptChange: (value: string) => void;
+  onCancel?: () => void;
   onApplyEditSuggestion?: (suggestion: ImageEditSuggestion) => void;
   onAutoOptimizePromptRequestHandled?: (id: number) => void;
   onImageCountChange: (value: number) => void;
@@ -133,6 +135,7 @@ export function ChatComposer({
   autoOptimizePromptRequest,
   assets,
   busy,
+  cancelPending = false,
   composerInstanceKey,
   draftPrompt,
   error,
@@ -157,6 +160,7 @@ export function ChatComposer({
   sizeOptions,
   textareaRef,
   onDraftPromptChange,
+  onCancel,
   onApplyEditSuggestion,
   onAutoOptimizePromptRequestHandled,
   onImageCountChange,
@@ -980,9 +984,27 @@ export function ChatComposer({
             ) : null}
           </span>
           <span className="composer-action-spacer" />
-          <button className="send-btn" disabled={busy || promptOptimizationLoading || !draftPrompt.trim()} aria-label={t("composer.send")}>
-            <ArrowUp size={22} />
-          </button>
+          {busy && onCancel ? (
+            <button
+              className="send-btn is-cancel"
+              type="button"
+              disabled={cancelPending}
+              onClick={onCancel}
+              aria-label={cancelPending ? t("composer.cancelling") : t("composer.cancelGeneration")}
+              data-tooltip={t("composer.cancelGeneration")}
+            >
+              {cancelPending ? <LoaderCircle size={19} className="spin" /> : <Square size={14} fill="currentColor" />}
+            </button>
+          ) : (
+            <button
+              className="send-btn"
+              disabled={promptOptimizationLoading || !draftPrompt.trim()}
+              aria-label={t("composer.send")}
+              data-tooltip={t("composer.send")}
+            >
+              <ArrowUp size={22} />
+            </button>
+          )}
         </div>
       </form>
       <MaterialPickerDrawer

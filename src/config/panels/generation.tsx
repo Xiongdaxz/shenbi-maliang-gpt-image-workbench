@@ -329,16 +329,27 @@ function AccountUsageBar({ label, value, resetAt }: { label: string; value: numb
 }
 
 function AccountUsageCell({ account }: { account: ImageAccount }) {
-  const dynamicWindows = Array.isArray(account.codexUsageWindows)
+  const rawDynamicWindows = Array.isArray(account.codexUsageWindows)
     ? account.codexUsageWindows.filter((window) => {
         return window && typeof window === "object" && typeof window.label === "string" && window.label.trim();
       })
     : [];
+  // Previous releases wrote the primary response window twice: once as a hard-coded
+  // 5-hour limit and again as the weekly limit. Hide only that exact stale duplicate;
+  // a real, separately reset 5-hour window would still be displayed.
+  const dynamicWindows = rawDynamicWindows.filter((window) => {
+    if (window.label.replace(/\s+/g, "") !== "5小时限额") return true;
+    return !rawDynamicWindows.some(
+      (candidate) =>
+        candidate.label.replace(/\s+/g, "") === "周限额" &&
+        candidate.usedPercent === window.usedPercent &&
+        candidate.resetAt === window.resetAt
+    );
+  });
   const usageWindows =
     dynamicWindows.length > 0
       ? dynamicWindows
       : [
-          { label: "5 小时限额", usedPercent: account.codex5hUsedPercent, resetAt: account.codex5hResetAt },
           { label: "周限额", usedPercent: account.codexWeekUsedPercent, resetAt: account.codexWeekResetAt }
         ].filter((item) => item.usedPercent !== null || item.resetAt);
   const hasUsage = usageWindows.length > 0;

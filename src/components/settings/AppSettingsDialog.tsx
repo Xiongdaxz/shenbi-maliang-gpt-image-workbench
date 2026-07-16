@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Archive, Database, Github, KeyRound, Leaf, Monitor, Moon, Palette, Pencil, ScrollText, Settings, Smile, Sun, Sunset, Trash2, UserRound, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api } from "../../api";
@@ -11,17 +11,20 @@ import {
 } from "../../i18n";
 import { cx } from "../../lib/cx";
 import { useAppearanceMode } from "../../hooks/useAppearanceMode";
+import { useInfinitePageLoader } from "../../hooks/useInfinitePageLoader";
 import type { AppearanceMode } from "../../lib/appearance";
 import { sanitizePromptOptimizeStyleGroups } from "../../lib/promptOptimizeStyles";
-import type { EditSuggestionTone, User, UserPreferences } from "../../types";
+import type { EditSuggestionTone, ImagePreviewOpenMode, ImagePreviewWheelMode, User, UserPreferences } from "../../types";
 import { CustomSelect, useToast } from "../../ui";
 import { MarkdownView } from "../MarkdownView";
 import { PromptColorSchemeSettingsDialog } from "../PromptColorSchemeSettingsDialog";
 import { PromptOptimizeStyleSettingsDialog } from "../PromptOptimizeStyleSettingsDialog";
 
 type SettingsSectionId = "general" | "personalization" | "account" | "data" | "about";
+type SettingsSectionDirection = "forward" | "backward";
 
 const PROJECT_REPOSITORY_URL = "https://github.com/Xiongdaxz/shenbi-maliang-gpt-image-workbench";
+const CHANGELOG_PAGE_SIZE = 5;
 
 const settingsSections: Array<{ id: SettingsSectionId; labelKey: string; icon: LucideIcon }> = [
   { id: "general", labelKey: "settings.nav.general", icon: Settings },
@@ -52,6 +55,16 @@ const editSuggestionToneOptions: Array<{ value: EditSuggestionTone; labelKey: st
   { value: "practical", labelKey: "settings.personalization.tone.practical", descriptionKey: "settings.personalization.tone.practicalDesc" },
   { value: "creative", labelKey: "settings.personalization.tone.creative", descriptionKey: "settings.personalization.tone.creativeDesc" },
   { value: "detail", labelKey: "settings.personalization.tone.detail", descriptionKey: "settings.personalization.tone.detailDesc" }
+];
+
+const imagePreviewWheelOptions: Array<{ value: ImagePreviewWheelMode; labelKey: string; descriptionKey: string }> = [
+  { value: "zoom", labelKey: "settings.general.imagePreview.wheel.zoom", descriptionKey: "settings.general.imagePreview.wheel.zoomDesc" },
+  { value: "pan", labelKey: "settings.general.imagePreview.wheel.pan", descriptionKey: "settings.general.imagePreview.wheel.panDesc" }
+];
+
+const imagePreviewOpenOptions: Array<{ value: ImagePreviewOpenMode; labelKey: string; descriptionKey: string }> = [
+  { value: "contain", labelKey: "settings.general.imagePreview.open.contain", descriptionKey: "settings.general.imagePreview.open.containDesc" },
+  { value: "actual", labelKey: "settings.general.imagePreview.open.actual", descriptionKey: "settings.general.imagePreview.open.actualDesc" }
 ];
 
 type AppSettingsDialogProps = {
@@ -94,8 +107,11 @@ export function AppSettingsDialog({
   onDeleteAllChats
 }: AppSettingsDialogProps) {
   const [activeSection, setActiveSection] = useState<SettingsSectionId>("general");
+  const [sectionDirection, setSectionDirection] = useState<SettingsSectionDirection>("forward");
+  const [contentTransitioning, setContentTransitioning] = useState(false);
   const [promptStyleSettingsOpen, setPromptStyleSettingsOpen] = useState(false);
   const [promptColorSchemeSettingsOpen, setPromptColorSchemeSettingsOpen] = useState(false);
+  const settingsContentRef = useRef<HTMLDivElement | null>(null);
   const { mode: appearanceMode, setMode: setAppearanceMode } = useAppearanceMode();
   const { showToast } = useToast();
   const { language, resolvedLanguage, setLanguage, t } = useI18n();
@@ -108,9 +124,29 @@ export function AppSettingsDialog({
     })),
     [t]
   );
-  const changelog = useQuery({
-    queryKey: ["changelog"],
-    queryFn: api.changelog,
+  const previewWheelOptions = useMemo(
+    () => imagePreviewWheelOptions.map((option) => ({
+      value: option.value,
+      label: t(option.labelKey),
+      description: t(option.descriptionKey)
+    })),
+    [t]
+  );
+  const previewOpenOptions = useMemo(
+    () => imagePreviewOpenOptions.map((option) => ({
+      value: option.value,
+      label: t(option.labelKey),
+      description: t(option.descriptionKey)
+    })),
+    [t]
+  );
+  const changelog = useInfiniteQuery({
+    queryKey: ["changelog", "paged"],
+    queryFn: ({ pageParam }) => api.changelog({ limit: CHANGELOG_PAGE_SIZE, offset: Number(pageParam) }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => (
+      lastPage.pageInfo.hasMore ? lastPage.pageInfo.offset + lastPage.pageInfo.limit : undefined
+    ),
     enabled: open && activeSection === "about"
   });
   const branding = useQuery({
@@ -131,6 +167,8 @@ export function AppSettingsDialog({
     editSuggestionsEnabled: user.preferences?.editSuggestionsEnabled ?? true,
     editSuggestionTone: user.preferences?.editSuggestionTone ?? "default" as const,
     autoUploadPastedAssets: user.preferences?.autoUploadPastedAssets ?? true,
+    imagePreviewWheelMode: user.preferences?.imagePreviewWheelMode ?? "zoom" as const,
+    imagePreviewOpenMode: user.preferences?.imagePreviewOpenMode ?? "contain" as const,
     language: normalizeLanguagePreference(user.preferences?.language ?? language),
     promptOptimizeStyleGroups
   }), [
@@ -139,16 +177,39 @@ export function AppSettingsDialog({
     user.preferences?.autoUploadPastedAssets,
     user.preferences?.editSuggestionTone,
     user.preferences?.editSuggestionsEnabled,
+    user.preferences?.imagePreviewOpenMode,
+    user.preferences?.imagePreviewWheelMode,
     user.preferences?.language
   ]);
 
   useEffect(() => {
-    if (!open) setActiveSection("general");
+    if (!open) {
+      setActiveSection("general");
+      setContentTransitioning(false);
+    }
   }, [open]);
+
+  const entries = useMemo(() => changelog.data?.pages.flatMap((page) => page.entries) ?? [], [changelog.data?.pages]);
+  const changelogLoadMoreRef = useInfinitePageLoader({
+    fetchNextPage: () => changelog.fetchNextPage(),
+    hasNextPage: Boolean(changelog.hasNextPage),
+    isFetchingNextPage: changelog.isFetchingNextPage,
+    rootRef: settingsContentRef,
+    rootMargin: "160px"
+  });
+  const activeSectionIndex = Math.max(0, settingsSections.findIndex((item) => item.id === activeSection));
+  const settingsNavStyle = { "--settings-nav-active-offset": `${activeSectionIndex * 44}px` } as CSSProperties;
+  const selectSection = (nextSection: SettingsSectionId) => {
+    if (nextSection === activeSection) return;
+    const nextIndex = settingsSections.findIndex((item) => item.id === nextSection);
+    setSectionDirection(nextIndex > activeSectionIndex ? "forward" : "backward");
+    setContentTransitioning(true);
+    if (settingsContentRef.current) settingsContentRef.current.scrollTop = 0;
+    setActiveSection(nextSection);
+  };
 
   if (!open) return null;
 
-  const entries = changelog.data?.entries ?? [];
   const latestEntry = entries[0];
   const avatarSource = user.username?.trim() || user.account?.trim() || "U";
   const avatarText = avatarSource.slice(0, 1).toUpperCase();
@@ -174,7 +235,7 @@ export function AppSettingsDialog({
           <button className="settings-close-btn" type="button" onClick={onClose} aria-label={t("settings.close")}>
             <X size={20} />
           </button>
-          <nav className="settings-nav">
+          <nav className="settings-nav" style={settingsNavStyle}>
             {settingsSections.map((item) => {
               const Icon = item.id === "about" && !showGithubEntry ? ScrollText : item.icon;
               return (
@@ -182,7 +243,7 @@ export function AppSettingsDialog({
                   key={item.id}
                   className={cx("settings-nav-item", item.id === activeSection && "active")}
                   type="button"
-                  onClick={() => setActiveSection(item.id)}
+                  onClick={() => selectSection(item.id)}
                 >
                   <Icon size={18} />
                   <span>{t(item.labelKey)}</span>
@@ -191,11 +252,18 @@ export function AppSettingsDialog({
             })}
           </nav>
         </aside>
-        <div className="settings-content">
-          <header className="settings-content-head">
-            <h2>{t(settingsSectionTitleKeys[activeSection])}</h2>
-          </header>
-          {activeSection === "general" ? (
+        <div className="settings-content" ref={settingsContentRef}>
+          <div
+            key={activeSection}
+            className={cx("settings-content-view", contentTransitioning && `is-entering-${sectionDirection}`)}
+            onAnimationEnd={(event) => {
+              if (event.target === event.currentTarget) setContentTransitioning(false);
+            }}
+          >
+            <header className="settings-content-head">
+              <h2>{t(settingsSectionTitleKeys[activeSection])}</h2>
+            </header>
+            {activeSection === "general" ? (
             <div className="settings-list">
               <div className="settings-row settings-appearance-row">
                 <div>
@@ -267,6 +335,45 @@ export function AppSettingsDialog({
                     <span className="settings-switch-thumb" />
                   </span>
                 </button>
+              </div>
+              <h3 className="settings-group-title">{t("settings.general.imagePreview.group")}</h3>
+              <div className="settings-row settings-language-row">
+                <div>
+                  <strong>{t("settings.general.imagePreview.wheel.title")}</strong>
+                  <span>{t("settings.general.imagePreview.wheel.desc")}</span>
+                </div>
+                <CustomSelect
+                  value={preferences.imagePreviewWheelMode}
+                  options={previewWheelOptions}
+                  onChange={(value) => {
+                    const nextMode = imagePreviewWheelOptions.find((option) => option.value === value)?.value;
+                    if (!nextMode || nextMode === preferences.imagePreviewWheelMode) return;
+                    onPreferencesChange({ imagePreviewWheelMode: nextMode });
+                  }}
+                  className="settings-image-preview-select"
+                  menuClassName="settings-image-preview-menu"
+                  menuWidth={340}
+                  disabled={preferencesSaving}
+                />
+              </div>
+              <div className="settings-row settings-language-row">
+                <div>
+                  <strong>{t("settings.general.imagePreview.open.title")}</strong>
+                  <span>{t("settings.general.imagePreview.open.desc")}</span>
+                </div>
+                <CustomSelect
+                  value={preferences.imagePreviewOpenMode}
+                  options={previewOpenOptions}
+                  onChange={(value) => {
+                    const nextMode = imagePreviewOpenOptions.find((option) => option.value === value)?.value;
+                    if (!nextMode || nextMode === preferences.imagePreviewOpenMode) return;
+                    onPreferencesChange({ imagePreviewOpenMode: nextMode });
+                  }}
+                  className="settings-image-preview-select"
+                  menuClassName="settings-image-preview-menu"
+                  menuWidth={340}
+                  disabled={preferencesSaving}
+                />
               </div>
             </div>
           ) : activeSection === "personalization" ? (
@@ -451,7 +558,7 @@ export function AppSettingsDialog({
                 {changelog.error ? <div className="form-error">{changelog.error.message}</div> : null}
                 {!changelog.isLoading && entries.length === 0 ? <div className="settings-empty">{t("settings.about.changelogEmpty")}</div> : null}
                 {entries.map((entry) => (
-                  <article className="settings-changelog-entry" key={entry.version}>
+                  <article className="settings-changelog-entry" key={entry.id}>
                     <header>
                       <strong>{entry.version}</strong>
                       <time>{entry.date || "-"}</time>
@@ -459,9 +566,12 @@ export function AppSettingsDialog({
                     <MarkdownView markdown={entry.content} />
                   </article>
                 ))}
+                {changelog.hasNextPage ? <div className="settings-changelog-load-sentinel" ref={changelogLoadMoreRef} aria-hidden="true" /> : null}
+                {changelog.isFetchingNextPage ? <div className="settings-changelog-load-state">{t("settings.about.changelogLoading")}</div> : null}
               </div>
             </div>
-          )}
+            )}
+          </div>
         </div>
       </section>
       <PromptOptimizeStyleSettingsDialog

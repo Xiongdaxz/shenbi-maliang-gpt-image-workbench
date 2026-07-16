@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Balloon, Check, Heart, Images as ImagesIcon, Lightbulb, Link2, Pencil, Plus, RefreshCw, Search, Send, Trash2, X } from "lucide-react";
+import { Balloon, Check, Heart, Images as ImagesIcon, Lightbulb, Link2, Pencil, Plus, RefreshCw, Search, Send, Trash2, Trophy, X } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { AddAssetFromImageModal } from "../components/AddAssetFromImageModal";
@@ -9,6 +9,7 @@ import { CaseCategoryMultiSelect } from "../components/CaseCategoryMultiSelect";
 import { CaseMaterialActionsMenu } from "../components/CaseMaterialActionsMenu";
 import { AssetTagScroller, FilterModeToggle, FilterTabLabel, FilterTabsScroller, useLibraryFilterDisplayMode } from "../components/HorizontalScrollers";
 import { ImageDownloadMenu } from "../components/ImageDownloadMenu";
+import { InspirationLeaderboardDialog } from "../components/InspirationLeaderboardDialog";
 import { ImagePreviewModal } from "../components/ImagePreviewModal";
 import { LibraryEmptyState } from "../components/LibraryEmptyState";
 import { PageHeader } from "../components/PageHeader";
@@ -25,7 +26,7 @@ import { useInfinitePageLoader } from "../hooks/useInfinitePageLoader";
 import { useScrollJump } from "../hooks/useScrollJump";
 import { useWorkbench } from "../store/workbench";
 import { type AssetUploadMode } from "../lib/assets";
-import type { CaseCategory, CaseGroupImage } from "../types";
+import type { CaseCategory, CaseGroupImage, ImagePreviewOpenMode, ImagePreviewWheelMode } from "../types";
 import { ConfirmDialog, ModalPortal, PromptDialog, useToast } from "../ui";
 
 function filterGalleryCaseItems(items: GalleryCaseItem[], options: { mineOnly: boolean; favoriteOnly: boolean; keyword: string }) {
@@ -128,7 +129,7 @@ function EditCaseModal({
   return (
     <ModalPortal>
       <div className="modal-backdrop">
-        <section className="case-modal">
+        <section className="case-modal edit-case-modal">
           <header>
             <h3>{t("pages.cases.edit")}</h3>
             <button onClick={onClose} aria-label={t("common.close")}>
@@ -171,7 +172,7 @@ function EditCaseModal({
                 {t("pages.cases.titleField")}
                 <input value={title} onChange={(event) => setTitle(event.target.value)} />
               </label>
-              <label>
+              <label className="case-modal-prompt-field">
                 {t("pages.cases.descriptionField")}
                 <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={4} />
               </label>
@@ -192,7 +193,13 @@ function EditCaseModal({
   );
 }
 
-export function CasesPage() {
+export function CasesPage({
+  imagePreviewWheelMode,
+  imagePreviewOpenMode
+}: {
+  imagePreviewWheelMode: ImagePreviewWheelMode;
+  imagePreviewOpenMode: ImagePreviewOpenMode;
+}) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
@@ -216,6 +223,7 @@ export function CasesPage() {
   const [assetCaseTarget, setAssetCaseTarget] = useState<GalleryCaseItem | null>(null);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [promptReferenceOpen, setPromptReferenceOpen] = useState(false);
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [filterDisplayMode, setFilterDisplayMode] = useLibraryFilterDisplayMode();
   const clearOpenCase = useCallback(() => {
     const nextParams = new URLSearchParams(searchParams);
@@ -523,13 +531,32 @@ export function CasesPage() {
         actions={
           <div className="case-page-header-actions">
             <FilterModeToggle value={filterDisplayMode} onChange={setFilterDisplayMode} />
-            <button className="secondary-btn prompt-reference-entry" type="button" onClick={() => navigate("/cases/barrage")}>
+            <button
+              className="secondary-btn prompt-reference-entry inspiration-entry-btn"
+              type="button"
+              onClick={() => navigate("/cases/barrage")}
+              aria-label={t("pages.cases.barrage")}
+            >
               <Balloon size={16} />
-              {t("pages.cases.barrage")}
+              <span className="inspiration-entry-label" aria-hidden="true">{t("pages.cases.barrage")}</span>
             </button>
-            <button className="secondary-btn prompt-reference-entry" type="button" onClick={() => setPromptReferenceOpen(true)}>
+            <button
+              className="secondary-btn prompt-reference-entry inspiration-entry-btn"
+              type="button"
+              onClick={() => setPromptReferenceOpen(true)}
+              aria-label={t("pages.cases.links")}
+            >
               <Link2 size={16} />
-              {t("pages.cases.links")}
+              <span className="inspiration-entry-label" aria-hidden="true">{t("pages.cases.links")}</span>
+            </button>
+            <button
+              className="secondary-btn prompt-reference-entry inspiration-entry-btn"
+              type="button"
+              onClick={() => setLeaderboardOpen(true)}
+              aria-label={t("pages.cases.leaderboard")}
+            >
+              <Trophy size={16} />
+              <span className="inspiration-entry-label" aria-hidden="true">{t("pages.cases.leaderboard")}</span>
             </button>
           </div>
         }
@@ -698,7 +725,8 @@ export function CasesPage() {
           items={casePreviewItems}
           index={previewIndex}
           ariaLabel={t("pages.cases.preview")}
-          initialZoomMode="contain"
+          initialZoomMode={imagePreviewOpenMode}
+          wheelMode={imagePreviewWheelMode}
           onIndexChange={setPreviewIndex}
           onClose={() => {
             setPreviewIndex(null);
@@ -783,6 +811,7 @@ export function CasesPage() {
         onCancel={() => setTagDialogOpen(false)}
       />
       <PromptReferenceLinksDialog open={promptReferenceOpen} onClose={() => setPromptReferenceOpen(false)} />
+      <InspirationLeaderboardDialog open={leaderboardOpen} onClose={() => setLeaderboardOpen(false)} />
       {editTarget ? (
         <EditCaseModal
           item={editTarget}
@@ -797,6 +826,7 @@ export function CasesPage() {
         <AddAssetFromImageModal
           image={caseMaterialFromCaseItem(assetCaseTarget)}
           categories={assetCategories.data?.categories ?? []}
+          assetReviewEnabled={assetCategories.data?.reviewEnabled ?? true}
           pending={addAssetFromCase.isPending}
           error={addAssetFromCase.error instanceof Error ? addAssetFromCase.error : null}
           onClose={() => setAssetCaseTarget(null)}

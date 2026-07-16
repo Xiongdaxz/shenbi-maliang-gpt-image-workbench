@@ -22,7 +22,7 @@ import { IMAGE_PAGE_SIZE } from "../lib/pagination";
 import { useInfinitePageLoader } from "../hooks/useInfinitePageLoader";
 import { useScrollJump } from "../hooks/useScrollJump";
 import { useWorkbench } from "../store/workbench";
-import type { AssetItem } from "../types";
+import type { AssetItem, ImagePreviewOpenMode, ImagePreviewWheelMode } from "../types";
 import { ConfirmDialog, PromptDialog, useToast } from "../ui";
 
 function assetMatchesSpace(asset: AssetItem, spaceFilter: "all" | AssetItem["space"]) {
@@ -39,7 +39,13 @@ function assetMatchesKeyword(asset: AssetItem, normalizedKeyword: string) {
   return haystack.includes(normalizedKeyword);
 }
 
-export function AssetsPage() {
+export function AssetsPage({
+  imagePreviewWheelMode,
+  imagePreviewOpenMode
+}: {
+  imagePreviewWheelMode: ImagePreviewWheelMode;
+  imagePreviewOpenMode: ImagePreviewOpenMode;
+}) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -92,6 +98,7 @@ export function AssetsPage() {
     isFetchingNextPage: assets.isFetchingNextPage
   });
   const categories = assetCategories.data?.categories ?? [];
+  const assetReviewEnabled = assetCategories.data?.reviewEnabled ?? true;
   const createCategory = useMutation({
     mutationFn: (name: string) => api.createAssetCategory(name),
     onSuccess: ({ category }) => {
@@ -216,8 +223,8 @@ export function AssetsPage() {
     };
   }, [assetItems, assets.data?.pages, keyword, selectedCategoryIds]);
   const assetSpaceLabelText = (asset: AssetItem) => {
-    if (asset.space === "private" && asset.shareStatus === "pending") return t("status.pendingReview");
-    if (asset.space === "private" && asset.shareStatus === "rejected") return t("status.rejected");
+    if (asset.shareStatus === "pending") return t("status.pendingReview");
+    if (asset.shareStatus === "rejected") return t("status.rejected");
     if (asset.space === "private" && asset.shared) return asset.canEdit ? t("status.privateAndShared") : t("common.shared");
     return asset.space === "shared" ? t("common.shared") : t("common.mine");
   };
@@ -454,7 +461,8 @@ export function AssetsPage() {
           items={assetPreviewItems}
           index={previewIndex}
           ariaLabel={t("pages.assets.preview")}
-          initialZoomMode="contain"
+          initialZoomMode={imagePreviewOpenMode}
+          wheelMode={imagePreviewWheelMode}
           onIndexChange={setPreviewIndex}
           onClose={() => {
             setPreviewIndex(null);
@@ -508,6 +516,7 @@ export function AssetsPage() {
         <AssetUploadModal
           categories={categories}
           initialCategoryIds={selectedCategoryIds}
+          assetReviewEnabled={assetReviewEnabled}
           pending={upload.isPending}
           error={upload.error instanceof Error ? upload.error : null}
           onClose={() => setUploadOpen(false)}

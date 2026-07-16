@@ -7,6 +7,11 @@ const messages: Messages = {
   ...enUSMessages,
   ...frontstageOverrides["ko-KR"],
   ...frontstageCoreOverrides["ko-KR"],
+  "sidebar.help": "도움말 센터",
+  "asset.uploadMode.shared.noReview.label": "공유만",
+  "asset.uploadMode.shared.noReview.description": "공유 자료실에만 저장하여 모든 사용자가 보고 사용할 수 있게 합니다.",
+  "asset.uploadMode.private_shared.noReview.label": "내 자료 + 공유",
+  "asset.uploadMode.private_shared.noReview.description": "내 자료에 저장하는 동시에 모든 사용자와 공유합니다.",
   "common.add": "추가",
   "common.all": "전체",
   "common.cancel": "취소",
@@ -84,6 +89,23 @@ const messages: Messages = {
   "config.nav.modelLogs": "모델 로그",
   "config.nav.requests": "요청 로그",
   "config.nav.audit": "감사",
+  "settings.general.imagePreview.group": "이미지 미리보기",
+  "settings.general.imagePreview.wheel.title": "미리보기 휠 동작",
+  "settings.general.imagePreview.wheel.desc": "전체 이미지 미리보기에서 마우스 휠의 동작을 선택합니다",
+  "settings.general.imagePreview.wheel.zoom": "이미지 확대/축소",
+  "settings.general.imagePreview.wheel.zoomDesc": "휠로 이미지를 직접 확대하거나 축소합니다",
+  "settings.general.imagePreview.wheel.pan": "스크롤하여 보기",
+  "settings.general.imagePreview.wheel.panDesc": "휠로 이미지를 이동하며, Ctrl/⌘를 누르면 일시적으로 확대/축소합니다",
+  "settings.general.imagePreview.open.title": "미리보기 열 때",
+  "settings.general.imagePreview.open.desc": "미리보기를 열거나 초기화할 때 이미지 표시 방식을 선택합니다",
+  "settings.general.imagePreview.open.contain": "창에 맞추기",
+  "settings.general.imagePreview.open.containDesc": "전체 이미지를 미리보기 영역에 맞춰 표시합니다",
+  "settings.general.imagePreview.open.actual": "원본 크기",
+  "settings.general.imagePreview.open.actualDesc": "원본 픽셀 크기로 표시하며, 세로로 긴 이미지는 위쪽부터 표시합니다",
+  "toast.imagePreviewWheelZoom": "미리보기 휠 동작을 이미지 확대/축소로 변경했습니다",
+  "toast.imagePreviewWheelPan": "미리보기 휠 동작을 스크롤 보기로 변경했습니다",
+  "toast.imagePreviewOpenContain": "이미지 미리보기가 창에 맞춰 열립니다",
+  "toast.imagePreviewOpenActual": "이미지 미리보기가 원본 크기로 열립니다",
   "settings.general.autoUpload.title": "소재 라이브러리에 자동 업로드",
   "settings.personalization.editSuggestions.title": "수정 제안",
   "settings.personalization.promptStyles.title": "AI 최적화 스타일",
@@ -174,5 +196,4 @@ const messages: Messages = {
 };
 
 Object.assign(messages, frontstageCoreOverrides["ko-KR"]);
-
 export default messages;

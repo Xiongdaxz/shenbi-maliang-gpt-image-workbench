@@ -8,7 +8,7 @@ import { ensureImageSourceReferences } from "./imageReferenceBackfill";
 import { pageInfo, paginationFromQuery, pageSlice } from "./pagination";
 import { assetUrlFromAssetId, imageOriginPromptsByImageIds, imageReferencesByImageIds, imageUrlFromImageId } from "./serializers";
 import type { AssetRow, ImageRow } from "./types";
-import { makeId, normalizeIdList, normalizeReviewStatus, now, visibleAssetSql, visibleCaseSql, type ReviewStatus } from "./utils";
+import { approvedCaseSql, makeId, normalizeIdList, normalizeReviewStatus, now, visibleAssetSql, visibleCaseSql, type ReviewStatus } from "./utils";
 import { requireUser } from "./auth";
 import { imageBatchResult, parseImageBatchIds } from "./imageBatch";
 
@@ -646,6 +646,40 @@ api.get("/cases", async (c) => {
       name: category.name,
       slug: category.slug,
       items: publicItemsByCategory.get(category.id) ?? []
+    }))
+  });
+});
+
+api.get("/cases/contributors", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return c.json({ error: "未登录" }, 401);
+  const contributors = getAll<{
+    user_id: string;
+    username: string;
+    avatar_path: string;
+    updated_at: string;
+    contribution_count: number;
+    latest_contribution_at: string;
+  }>(
+    appDb,
+    `select users.id as user_id, users.username, users.avatar_path, users.updated_at,
+            count(distinct coalesce(nullif(case_items.group_id, ''), case_items.id)) as contribution_count,
+            max(coalesce(case_items.reviewed_at, case_items.created_at)) as latest_contribution_at
+     from case_items
+     join users on users.id = case_items.user_id
+     where ${approvedCaseSql("case_items")} and users.disabled = 0
+     group by users.id, users.username, users.avatar_path, users.updated_at
+     order by contribution_count desc, latest_contribution_at desc, lower(users.username) asc, users.id asc
+     limit 6`
+  );
+  return c.json({
+    contributors: contributors.map((contributor) => ({
+      userId: contributor.user_id,
+      username: contributor.username,
+      avatarUrl: contributor.avatar_path
+        ? `/api/files/user-avatar/${encodeURIComponent(contributor.user_id)}?v=${encodeURIComponent(contributor.updated_at || "")}`
+        : "",
+      contributionCount: contributor.contribution_count
     }))
   });
 });

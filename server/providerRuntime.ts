@@ -48,7 +48,23 @@ type ProviderRequestContext = {
   attemptNo?: number;
   maxAttempts?: number;
   isRetry?: boolean;
+  signal?: AbortSignal;
 };
+
+export class ProviderRequestCancelledError extends Error {
+  constructor() {
+    super("图片任务已取消");
+    this.name = "ProviderRequestCancelledError";
+  }
+}
+
+function assertProviderRequestActive(context: ProviderRequestContext) {
+  if (context.signal?.aborted) throw new ProviderRequestCancelledError();
+}
+
+export function providerRequestWasCancelled(error: unknown, signal?: AbortSignal) {
+  return signal?.aborted === true || error instanceof ProviderRequestCancelledError;
+}
 
 function providerRequestLogContext(context: ProviderRequestContext) {
   return {
@@ -405,6 +421,16 @@ function usageWindowSnapshot(window: Record<string, unknown> | null) {
   return { usedPercent, resetAt };
 }
 
+function usageWindowPeriod(window: Record<string, unknown> | null) {
+  if (!window) return "";
+  return (
+    usageWindowPeriodFromSeconds(window.limit_window_seconds) ||
+    usageWindowPeriodFromText(
+      firstStringFromObject(window, ["window", "window_type", "windowType", "bucket", "duration", "period", "limit_type", "limitType", "type"])
+    )
+  );
+}
+
 function usageWindowPeriodFromText(value: string) {
   const normalized = value.toLowerCase();
   if (normalized.includes("5 小时") || normalized.includes("5小时") || normalized.includes("5h") || normalized.includes("five")) {
@@ -456,8 +482,7 @@ function namedRateLimitWindows(source: unknown) {
       if (snapshot.usedPercent === null && !snapshot.resetAt) continue;
       const period =
         usageWindowPeriodFromText(key) ||
-        usageWindowPeriodFromSeconds(window.limit_window_seconds) ||
-        usageWindowPeriodFromText(firstStringFromObject(window, ["window", "window_type", "windowType", "bucket", "duration", "period", "limit_type", "limitType", "type"])) ||
+        usageWindowPeriod(window) ||
         "限额";
       result.push({
         label: `${formatUsageModelLabel(limitName)} ${period}`,
@@ -483,8 +508,7 @@ function usageWindowLabel(window: Record<string, unknown>, path: string[]) {
     "";
   const period =
     usageWindowPeriodFromText(direct) ||
-    usageWindowPeriodFromSeconds(window.limit_window_seconds) ||
-    usageWindowPeriodFromText(firstStringFromObject(window, ["window", "window_type", "windowType", "bucket", "duration", "period", "limit_type", "limitType", "type"])) ||
+    usageWindowPeriod(window) ||
     usageWindowPeriodFromText(path.join(" "));
   if (direct && (direct.includes("限额") || /gpt|codex|spark|week|weekly|5h|5 小时|5小时/i.test(direct))) {
     return direct.replace(/\s+/g, " ").trim();
@@ -565,11 +589,35 @@ function parseCodexUsagePayload(payload: unknown): CodexUsageSnapshot {
   const credits =
     firstObjectAtPath(usage, [["credits"], ["credit"], ["limits", "credits"]]) ??
     firstObjectAtPath(payload, [["credits"], ["credit"]]);
-  const fiveHour = usageWindowSnapshot(primaryWindow);
-  const week = usageWindowSnapshot(secondaryWindow);
+  const primary = usageWindowSnapshot(primaryWindow);
+  const secondary = usageWindowSnapshot(secondaryWindow);
+  const primaryPeriod = usageWindowPeriod(primaryWindow);
+  const secondaryPeriod = usageWindowPeriod(secondaryWindow);
+  // Older responses used primary=5h and secondary=week. Current Codex responses
+  // expose the sole weekly limit as primary_window, so infer the legacy fields
+  // from the explicit window duration instead of their position in the payload.
+  const emptyWindow = { usedPercent: null, resetAt: "" };
+  const fiveHour =
+    primaryPeriod === "5 小时限额"
+      ? primary
+      : secondaryPeriod === "5 小时限额"
+        ? secondary
+        : primaryPeriod || secondaryPeriod
+          ? emptyWindow
+          : primary;
+  const week =
+    primaryPeriod === "周限额"
+      ? primary
+      : secondaryPeriod === "周限额" || secondary.usedPercent !== null || secondary.resetAt
+        ? secondary
+        : emptyWindow;
   const windows = dedupeUsageWindows([
-    ...(fiveHour.usedPercent !== null || fiveHour.resetAt ? [{ label: "5 小时限额", ...fiveHour }] : []),
-    ...(week.usedPercent !== null || week.resetAt ? [{ label: "周限额", ...week }] : []),
+    ...(primary.usedPercent !== null || primary.resetAt
+      ? [{ label: usageWindowLabel(primaryWindow ?? {}, ["rate_limit", "primary_window"]) || primaryPeriod || "限额", ...primary }]
+      : []),
+    ...(secondary.usedPercent !== null || secondary.resetAt
+      ? [{ label: usageWindowLabel(secondaryWindow ?? {}, ["rate_limit", "secondary_window"]) || secondaryPeriod || "限额", ...secondary }]
+      : []),
     ...namedRateLimitWindows(recordValue(usage, "additional_rate_limits")),
     ...collectUsageWindows(usage)
   ]);
@@ -1254,7 +1302,7 @@ async function executeProviderJsonRequest(
         signal
       });
       return { response, text: await response.text() };
-    });
+    }, context.signal);
 
     statusCode = response.status;
     if (!response.ok) {
@@ -1355,7 +1403,7 @@ async function executeProviderFormRequest(
         signal
       });
       return { response, text: await response.text() };
-    });
+    }, context.signal);
 
     statusCode = response.status;
     if (!response.ok) {
@@ -1522,7 +1570,7 @@ async function executeImagesApiStreamRequest(
         data: imageResponses
           .flatMap((item) => (item as { data: unknown[] }).data)
       };
-    });
+    }, context.signal);
 
     logProviderRequest({
       provider,
@@ -1637,6 +1685,7 @@ async function callResponsesProviderWithCompatFallback(
   try {
     return await callResponsesProvider(provider, mode, payload, false, responsesModel, context);
   } catch (error) {
+    if (providerRequestWasCancelled(error, context.signal)) throw new ProviderRequestCancelledError();
     if (shouldFallbackResponsesModel(provider, responsesModel, error)) {
       return callResponsesProvider(provider, mode, payload, false, CPA_RESPONSES_MODEL_FALLBACK, context);
     }
@@ -1644,6 +1693,7 @@ async function callResponsesProviderWithCompatFallback(
     try {
       return await callResponsesProvider(provider, mode, payload, true, responsesModel, context);
     } catch (streamError) {
+      if (providerRequestWasCancelled(streamError, context.signal)) throw new ProviderRequestCancelledError();
       const first = error instanceof Error ? error.message : String(error);
       const second = streamError instanceof Error ? streamError.message : String(streamError);
       throw new Error(`综合接口非流式请求失败：${first}; 流式请求失败：${second}`);
@@ -1661,10 +1711,12 @@ async function callImagesApiProviderWithCpaFallback(
   try {
     return await callImagesApiProvider(provider, mode, payload, context);
   } catch (imagesError) {
+    if (providerRequestWasCancelled(imagesError, context.signal)) throw new ProviderRequestCancelledError();
     if (!shouldFallbackToResponses(provider, hasMask, imagesError)) throw imagesError;
     try {
       return await callResponsesProviderWithCompatFallback(provider, mode, payload, undefined, context);
     } catch (responsesError) {
+      if (providerRequestWasCancelled(responsesError, context.signal)) throw new ProviderRequestCancelledError();
       const first = imagesError instanceof Error ? imagesError.message : String(imagesError);
       const second = responsesError instanceof Error ? responsesError.message : String(responsesError);
       throw new Error(`图片接口直连失败：${first}; 综合接口回退失败：${second}`);
@@ -1696,6 +1748,7 @@ async function callImagesApiProviderWithSourceReferenceFallback(
   try {
     return await callImagesApiProvider(provider, mode, payload, context);
   } catch (error) {
+    if (providerRequestWasCancelled(error, context.signal)) throw new ProviderRequestCancelledError();
     if (!payload.sourceReference || !shouldFallbackSourceReferenceEdit(error)) throw error;
     const { sourceReference: _sourceReference, ...fallbackPayload } = payload;
     return callImagesApiProvider(provider, mode, fallbackPayload, context);
@@ -2007,7 +2060,7 @@ function parseStudioPowResources(html: string) {
   };
 }
 
-async function ensureChatGptWebSessionCookies(provider: RuntimeProviderRow, settings: ChatGptWebSettings) {
+async function ensureChatGptWebSessionCookies(provider: RuntimeProviderRow, settings: ChatGptWebSettings, context: ProviderRequestContext = {}) {
   if (settings.sessionBootstrapped) return;
   settings.sessionBootstrapped = true;
   const endpoint = `${chatGptWebOrigin(settings)}/`;
@@ -2018,7 +2071,7 @@ async function ensureChatGptWebSessionCookies(provider: RuntimeProviderRow, sett
         headers: studioBootstrapHeaders(settings),
         signal
       });
-    });
+    }, context.signal);
     const setCookies = responseSetCookieHeaders(response.headers);
     if (setCookies.length > 0) {
       settings.cookies = mergeCookieHeader(settings.cookies, setCookies);
@@ -2033,6 +2086,7 @@ async function ensureChatGptWebSessionCookies(provider: RuntimeProviderRow, sett
       console.warn(chatGptWebHttpErrorMessage(response.status, text, "ChatGPT 官网首页预热"));
     }
   } catch (error) {
+    if (providerRequestWasCancelled(error, context.signal)) throw new ProviderRequestCancelledError();
     console.warn(`ChatGPT 官网首页预热失败，将继续尝试会话接口：${error instanceof Error ? error.message : String(error)}`);
   }
 }
@@ -2079,7 +2133,7 @@ async function executeStudioJsonRequest(
         signal
       });
       return { response, text: await response.text() };
-    });
+    }, context.signal);
 
     statusCode = response.status;
     if (!response.ok) {
@@ -2317,16 +2371,19 @@ function solveStudioProofOfWork(seed: string, difficulty: string, settings: Chat
   return `gAAAAAB${answer}`;
 }
 
-async function studioSentinelTokens(settings: ChatGptWebSettings, provider: RuntimeProviderRow) {
-  await ensureChatGptWebSessionCookies(provider, settings);
+async function studioSentinelTokens(settings: ChatGptWebSettings, provider: RuntimeProviderRow, context: ProviderRequestContext = {}) {
+  await ensureChatGptWebSessionCookies(provider, settings, context);
   const endpoint = studioBackendUrl(settings, "/sentinel/chat-requirements");
   const targetPath = studioBackendTargetPath(settings, "/sentinel/chat-requirements");
-  const response = await providerFetch(provider, endpoint, {
-    method: "POST",
-    headers: studioLegacyHeaders(settings, "application/json", targetPath),
-    body: JSON.stringify({ p: generateStudioRequirementsToken(settings) })
-  });
-  const text = await response.text();
+  const { response, text } = await withProviderRequestTimeout(async (signal) => {
+    const response = await providerFetch(provider, endpoint, {
+      method: "POST",
+      headers: studioLegacyHeaders(settings, "application/json", targetPath),
+      body: JSON.stringify({ p: generateStudioRequirementsToken(settings) }),
+      signal
+    });
+    return { response, text: await response.text() };
+  }, context.signal);
   if (!response.ok) {
     throw new Error(chatGptWebHttpErrorMessage(response.status, text, "ChatGPT 官网 chat-requirements"));
   }
@@ -2534,10 +2591,11 @@ function studioImageDataUrl(mimeType: string, buffer: ArrayBuffer) {
   return `data:${mimeType || "image/png"};base64,${Buffer.from(buffer).toString("base64")}`;
 }
 
-async function fetchStudioImageDataUrl(url: string, settings: ChatGptWebSettings, provider: RuntimeProviderRow) {
+async function fetchStudioImageDataUrl(url: string, settings: ChatGptWebSettings, provider: RuntimeProviderRow, context: ProviderRequestContext = {}) {
   const response = await providerFetch(provider, url, {
     method: "GET",
-    headers: url.includes("chatgpt.com") ? studioLegacyHeaders(settings, "image/*") : { Accept: "image/*" }
+    headers: url.includes("chatgpt.com") ? studioLegacyHeaders(settings, "image/*") : { Accept: "image/*" },
+    signal: context.signal
   });
   if (!response.ok) throw new Error(`图片下载失败 ${response.status}`);
   return studioImageDataUrl(response.headers.get("content-type") || "image/png", await response.arrayBuffer());
@@ -2547,7 +2605,8 @@ async function fetchStudioAttachmentDataUrl(
   pointer: string,
   conversationId: string,
   settings: ChatGptWebSettings,
-  provider: RuntimeProviderRow
+  provider: RuntimeProviderRow,
+  context: ProviderRequestContext = {}
 ) {
   const fileId = extractStudioFileId(pointer);
   if (!fileId || !conversationId) return "";
@@ -2559,7 +2618,8 @@ async function fetchStudioAttachmentDataUrl(
     : `/files/${encodeURIComponent(fileId)}/download`;
   const response = await providerFetch(provider, endpoint, {
     method: "GET",
-    headers: studioLegacyHeaders(settings, "application/json,image/*", studioBackendTargetPath(settings, targetPath))
+    headers: studioLegacyHeaders(settings, "application/json,image/*", studioBackendTargetPath(settings, targetPath)),
+    signal: context.signal
   });
   if (!response.ok && !pointer.startsWith("sediment://")) {
     const fallbackEndpoint = studioBackendUrl(
@@ -2572,28 +2632,30 @@ async function fetchStudioAttachmentDataUrl(
         settings,
         "application/json,image/*",
         studioBackendTargetPath(settings, `/files/download/${encodeURIComponent(fileId)}`)
-      )
+      ),
+      signal: context.signal
     });
     if (!fallbackResponse.ok) throw new Error(`图片下载地址获取失败 ${fallbackResponse.status}`);
     const fallbackContentType = fallbackResponse.headers.get("content-type") || "";
     if (fallbackContentType.startsWith("image/")) return studioImageDataUrl(fallbackContentType, await fallbackResponse.arrayBuffer());
     const fallbackPayload = safeJson(await fallbackResponse.text(), {}) as { download_url?: string };
     if (!fallbackPayload.download_url) throw new Error(`图片下载地址为空：${fileId}`);
-    return fetchStudioImageDataUrl(fallbackPayload.download_url, settings, provider);
+    return fetchStudioImageDataUrl(fallbackPayload.download_url, settings, provider, context);
   }
   if (!response.ok) throw new Error(`图片下载地址获取失败 ${response.status}`);
   const contentType = response.headers.get("content-type") || "";
   if (contentType.startsWith("image/")) return studioImageDataUrl(contentType, await response.arrayBuffer());
   const payload = safeJson(await response.text(), {}) as { download_url?: string };
   if (!payload.download_url) throw new Error(`图片下载地址为空：${fileId}`);
-  return fetchStudioImageDataUrl(payload.download_url, settings, provider);
+  return fetchStudioImageDataUrl(payload.download_url, settings, provider, context);
 }
 
 async function extractStudioLegacyImages(
   message: unknown,
   conversationId: string,
   settings: ChatGptWebSettings,
-  provider: RuntimeProviderRow
+  provider: RuntimeProviderRow,
+  context: ProviderRequestContext = {}
 ) {
   if (!message || typeof message !== "object") return [];
   const record = message as Record<string, any>;
@@ -2608,7 +2670,7 @@ async function extractStudioLegacyImages(
     if (!part || typeof part !== "object") continue;
     const pointer = String(part.asset_pointer ?? "");
     if (part.content_type !== "image_asset_pointer" || !pointer) continue;
-    const dataUrl = await fetchStudioAttachmentDataUrl(pointer, conversationId, settings, provider);
+    const dataUrl = await fetchStudioAttachmentDataUrl(pointer, conversationId, settings, provider, context);
     if (dataUrl) {
       images.push({
         dataUrl,
@@ -2619,28 +2681,44 @@ async function extractStudioLegacyImages(
   return images;
 }
 
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function delay(ms: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new ProviderRequestCancelledError());
+      return;
+    }
+    const abort = () => {
+      clearTimeout(timer);
+      reject(new ProviderRequestCancelledError());
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", abort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", abort, { once: true });
+  });
 }
 
 async function pollStudioLegacyImages(
   conversationId: string,
   settings: ChatGptWebSettings,
-  provider: RuntimeProviderRow
+  provider: RuntimeProviderRow,
+  context: ProviderRequestContext = {}
 ) {
   for (let index = 0; index < 24; index += 1) {
-    await delay(2500);
+    await delay(2500, context.signal);
     const endpoint = studioBackendUrl(settings, `/conversation/${encodeURIComponent(conversationId)}`);
     const response = await providerFetch(provider, endpoint, {
       method: "GET",
-      headers: studioLegacyHeaders(settings, "application/json", studioBackendTargetPath(settings, `/conversation/${encodeURIComponent(conversationId)}`))
+      headers: studioLegacyHeaders(settings, "application/json", studioBackendTargetPath(settings, `/conversation/${encodeURIComponent(conversationId)}`)),
+      signal: context.signal
     });
     if (!response.ok) continue;
     const payload = safeJson(await response.text(), {}) as { mapping?: Record<string, { message?: unknown }> };
     const mapping = payload.mapping && typeof payload.mapping === "object" ? payload.mapping : {};
     const images: Array<{ dataUrl: string; revisedPrompt: string }> = [];
     for (const node of Object.values(mapping)) {
-      images.push(...(await extractStudioLegacyImages(node?.message, conversationId, settings, provider)));
+      images.push(...(await extractStudioLegacyImages(node?.message, conversationId, settings, provider, context)));
     }
     if (images.length > 0) return images;
   }
@@ -2651,7 +2729,8 @@ async function parseStudioLegacyResponse(
   text: string,
   settings: ChatGptWebSettings,
   provider: RuntimeProviderRow,
-  fallbackPrompt: string
+  fallbackPrompt: string,
+  context: ProviderRequestContext = {}
 ) {
   let conversationId = "";
   let asyncMode = false;
@@ -2663,12 +2742,12 @@ async function parseStudioLegacyResponse(
     }
     if (Number(frame.async_status) > 0) asyncMode = true;
     if (frame.message) {
-      images.push(...(await extractStudioLegacyImages(frame.message, conversationId, settings, provider)));
+      images.push(...(await extractStudioLegacyImages(frame.message, conversationId, settings, provider, context)));
     }
   }
 
   if (images.length === 0 && asyncMode && conversationId) {
-    images.push(...(await pollStudioLegacyImages(conversationId, settings, provider)));
+    images.push(...(await pollStudioLegacyImages(conversationId, settings, provider, context)));
   }
   if (images.length === 0) throw new Error("ChatGPT 官网会话链路未返回图片数据");
 
@@ -2692,7 +2771,7 @@ async function executeStudioLegacyConversation(
   const started = performance.now();
   let statusCode: number | null = null;
   try {
-    const sentinel = await studioSentinelTokens(settings, provider);
+    const sentinel = await studioSentinelTokens(settings, provider, context);
     const targetPath = new URL(endpoint).pathname.replace(/^\/backend-api(?=\/)/, "");
     const headers = studioLegacyHeaders(settings, "text/event-stream", studioBackendTargetPath(settings, targetPath));
     headers["openai-sentinel-chat-requirements-token"] = sentinel.chatToken;
@@ -2706,12 +2785,12 @@ async function executeStudioLegacyConversation(
         signal
       });
       return { response, text: await response.text() };
-    });
+    }, context.signal);
     statusCode = response.status;
     if (!response.ok) {
       throw new Error(chatGptWebHttpErrorMessage(response.status, text, chatGptWebRouteLabel(routeMode)));
     }
-    const parsed = await parseStudioLegacyResponse(text, settings, provider, prompt);
+    const parsed = await parseStudioLegacyResponse(text, settings, provider, prompt, context);
     logProviderRequest({
       provider,
       operation: "generation",
@@ -2748,7 +2827,7 @@ async function prepareChatGptWebConversation(
   body: Record<string, unknown>,
   context: ProviderRequestContext = {}
 ) {
-  const sentinel = await studioSentinelTokens(settings, provider);
+  const sentinel = await studioSentinelTokens(settings, provider, context);
   const headers = studioLegacyHeaders(settings, "application/json", studioBackendTargetPath(settings, "/f/conversation/prepare"));
   headers["openai-sentinel-chat-requirements-token"] = sentinel.chatToken;
   if (sentinel.proofToken) headers["openai-sentinel-proof-token"] = sentinel.proofToken;
@@ -2896,9 +2975,11 @@ async function callChatGptWebProvider(
 ) {
   const errors: string[] = [];
   for (const quota of chatGptWebQuotaOrder(provider)) {
+    assertProviderRequestActive(context);
     try {
       return await callChatGptWebQuotaProvider(provider, mode, payload, quota, context);
     } catch (error) {
+      if (providerRequestWasCancelled(error, context.signal)) throw new ProviderRequestCancelledError();
       errors.push(`${quota === "codex" ? "Codex 额度" : "官网额度"}失败：${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -2911,6 +2992,7 @@ export async function callProvider(
   payload: Record<string, unknown>,
   context: ProviderRequestContext = {}
 ) {
+  assertProviderRequestActive(context);
   const routeMode = normalizeRouteMode(provider.route_mode);
   const hasMask = typeof payload.mask === "string" && payload.mask.trim();
   const channel = normalizeProviderChannel(provider.channel || inferChannelFromType(provider.type));
@@ -2930,9 +3012,11 @@ export async function callProvider(
     try {
       return await callImagesApiProvider(provider, mode, payload, context);
     } catch (imagesError) {
+      if (providerRequestWasCancelled(imagesError, context.signal)) throw new ProviderRequestCancelledError();
       try {
         return await callResponsesProviderWithCompatFallback(provider, mode, payload, undefined, context);
       } catch (responsesError) {
+        if (providerRequestWasCancelled(responsesError, context.signal)) throw new ProviderRequestCancelledError();
         const first = imagesError instanceof Error ? imagesError.message : String(imagesError);
         const second = responsesError instanceof Error ? responsesError.message : String(responsesError);
         throw new Error(`图片接口直连失败：${first}; 综合接口回退失败：${second}`);
@@ -2980,11 +3064,13 @@ export async function callProviderChain<T = undefined>(
 ) {
   const errors: string[] = [];
   for (const provider of providers) {
+    assertProviderRequestActive(context);
     try {
       const responseJson = await callProvider(provider, mode, payloadForProvider(provider, payload), context);
       const result = onProviderResponse ? await onProviderResponse({ provider, responseJson }) : undefined;
       return { provider, responseJson, result };
     } catch (error) {
+      if (providerRequestWasCancelled(error, context.signal)) throw new ProviderRequestCancelledError();
       errors.push(`${provider.name}：${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -3004,6 +3090,7 @@ export async function callProviderGenerationWithProgress(
       const responseJson = await executeImagesApiStreamRequest(provider, endpoint, providerPayload, onImageResult, context);
       return { responseJson, streamed: true };
     } catch (error) {
+      if (providerRequestWasCancelled(error, context.signal)) throw new ProviderRequestCancelledError();
       const streamedImageCount = error instanceof Error ? (error as Error & { streamedImageCount?: number }).streamedImageCount ?? 0 : 0;
       if (streamedImageCount === 0) {
         const responseJson = await callImagesApiProvider(provider, "generation", providerPayload, context);
