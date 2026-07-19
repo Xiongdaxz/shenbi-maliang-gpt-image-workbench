@@ -327,7 +327,8 @@ function referencedLegacyFilePaths() {
     "select path from assets where path not like 'files/secure/%'",
     "select path from image_asset_references where path not like 'files/secure/%'",
     "select path from message_source_references where path not like 'files/secure/%'",
-    "select avatar_path as path from users where avatar_path <> '' and avatar_path not like 'files/secure/%'"
+    "select avatar_path as path from users where avatar_path <> '' and avatar_path not like 'files/secure/%'",
+    "select path from user_avatar_history where path <> '' and path not like 'files/secure/%'"
   ];
   for (const sql of appQueries) {
     for (const row of getAll<{ path: string }>(appDb, sql)) {

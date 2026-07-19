@@ -492,7 +492,7 @@ export function AssetsPage({
                   </button>
                 </>
               ) : null}
-              <ImageDownloadMenu source={{ type: "asset", id: item.id }} className="case-preview-tool" />
+              <ImageDownloadMenu source={{ type: "asset", id: item.id, downloadBaseName: item.name }} className="case-preview-tool" />
               {item.canEdit ? (
                 <button className="case-preview-tool danger" type="button" onClick={() => setDeleteTarget(item)} aria-label={t("pages.assets.deleteAsset")} title={t("pages.assets.deleteAsset")}>
                   <Trash2 size={16} />

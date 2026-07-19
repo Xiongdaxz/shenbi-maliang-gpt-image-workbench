@@ -282,6 +282,10 @@ html.chat-page-stable-scrollbar {
   scrollbar-gutter: stable;
 }
 
+html.chat-page-stable-scrollbar.shared-image-preview-open {
+  scrollbar-gutter: auto;
+}
+
 html.chat-page-stable-scrollbar body {
   background: var(--app-chat-scrollbar-gutter-bg);
 }

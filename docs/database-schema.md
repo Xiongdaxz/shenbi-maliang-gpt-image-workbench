@@ -45,6 +45,17 @@
 | `last_login_at` | 最近登录时间 |
 | `created_at` / `updated_at` | 创建和更新时间 |
 
+### user_avatar_history
+
+用户历史头像，保留最近 3 个已被替换的头像；头像文件与当前头像一样加密保存。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 历史头像 ID |
+| `user_id` | 所属用户 ID |
+| `path` / `mime_type` | 加密文件路径和 MIME 类型 |
+| `created_at` | 头像被替换、归档的时间 |
+
 ### user_preferences
 
 用户个性化偏好，按用户单行保存。
@@ -154,6 +165,33 @@
 | `created_at` | 创建时间 |
 
 相关索引：`messages_session_user_time_idx` 支撑会话消息按创建时间读取；`messages_session_user_role_idx` 支撑用户消息元数据读取。
+
+### session_share_links
+
+会话共享链接。创建分享时会先按同一会话的消息 ID 和顺序查找完全一致的已有快照，命中后复用最早创建的原链接；只有可见消息快照发生变化时才新增记录并保存当时的标题。同一会话可保留多条不同快照，公开地址使用随机 UUID `public_token`，删除记录即立即撤销。旧版 HMAC 长链接仍可通过记录 ID校验访问。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 分享记录 ID |
+| `public_token` | 对外分享 UUID，仅作为不可猜测的链接凭据使用 |
+| `user_id` | 分享创建者 ID |
+| `session_id` | 原会话 ID |
+| `title` | 创建分享时的会话标题快照 |
+| `created_at` | 分享时间 |
+
+相关索引：`session_share_links_public_token_idx` 保证公开 UUID 唯一；`session_share_links_user_time_idx` 支撑数据管理按用户、创建时间倒序分页；`session_share_links_session_idx` 支撑删除会话时显式撤销关联链接。
+
+### session_share_messages
+
+共享链接包含的消息集合。前端提交当前可见分支的已保存消息 ID，后端按数据库时间顺序复核后，以 `sort_order` 冻结这次分享的消息范围；后续新增消息不会进入旧链接。
+
+| 字段 | 说明 |
+| --- | --- |
+| `share_id` | 分享记录 ID，与 `message_id` 组成主键 |
+| `message_id` | 被分享的原消息 ID |
+| `sort_order` | 分享内消息顺序，同一分享内唯一 |
+
+匿名读取只通过带作用域的签名 token 访问本表已选消息，并为消息、分支和媒体重新生成分享内局部标识；不会复用私有文件权限或返回原始消息 `metadata`。
 
 ### image_jobs
 
@@ -513,6 +551,16 @@
 | `id` | 会话 Token |
 | `expires_at` | 过期时间 |
 | `created_at` | 创建时间 |
+
+### session_share_signing_settings
+
+旧版会话共享长 token 的持久化签名配置，启动时首次生成。新链接使用 `session_share_links.public_token` 中的 UUID；密钥继续用于兼容已经发出的 HMAC 长链接，且不会进入 API响应。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 配置 ID，固定为 `default` |
+| `signing_secret` | 32 字节随机密钥的 Base64URL 文本 |
+| `created_at` / `updated_at` | 创建和更新时间 |
 
 ### branding_assets
 

@@ -124,7 +124,7 @@ export const helpCenterPrimaryOverrides: Record<"zh-CN" | "en-US", Messages> = {
     "help.article.maskEdit.title": "如何局部涂抹修改",
     "help.article.maskEdit.summary": "只选择需要变化的区域，尽量保持其他部分稳定。",
     "help.article.maskEdit.keywords": "局部编辑 涂抹 蒙版 重绘 画笔",
-    "help.article.maskEdit.body": "## 操作步骤\n1. 从对话结果或“我的图片”打开图片编辑。\n2. 切换到选择工具，在需要修改的位置涂抹。\n3. 输入具体修改要求并提交，例如“把桌上的花换成白色百合”。\n\n## 使用建议\n- 选区边缘略微覆盖目标边界，衔接通常更自然。\n- 需要改动的区域较大时，可分两次完成。\n\n## 注意事项\n未涂抹选区时，不能提交局部编辑请求。",
+    "help.article.maskEdit.body": "## 操作步骤\n1. 从对话结果或“我的图片”打开图片编辑。\n2. 切换到选择工具，在需要修改的位置涂抹。\n3. 输入具体修改要求并提交，例如“把桌上的花换成白色百合”。\n\n## 使用建议\n- 选区边缘略微覆盖目标边界，衔接通常更自然。\n- 需要改动的区域较大时，可分两次完成。\n\n## 注意事项\n未涂抹选区时，模型也会根据描述判断修改范围；涂抹选区可让修改更精准。",
     "help.article.adjustGenerationOptions.title": "如何调整尺寸、比例和生成参数",
     "help.article.adjustGenerationOptions.summary": "在提交前选择更适合用途的尺寸与生成设置。",
     "help.article.adjustGenerationOptions.keywords": "尺寸 比例 质量 张数 参数 生成设置",
@@ -313,7 +313,7 @@ export const helpCenterPrimaryOverrides: Record<"zh-CN" | "en-US", Messages> = {
     "help.article.maskEdit.title": "How do I edit a selected area?",
     "help.article.maskEdit.summary": "Select only the area that may change and keep the rest of the image stable.",
     "help.article.maskEdit.keywords": "local edit mask paint inpaint brush",
-    "help.article.maskEdit.body": "## Steps\n1. Open image editing from a chat result or My Images.\n2. Choose the selection tool and paint over the area to change.\n3. Enter a specific edit request, such as “replace the flowers on the table with white lilies.”\n\n## Tips\n- Let the selection overlap the target edge slightly for a more natural join.\n- Split very large changes into two edits.\n\n## Notes\nA local edit cannot be submitted until an area is selected.",
+    "help.article.maskEdit.body": "## Steps\n1. Open image editing from a chat result or My Images.\n2. Choose the selection tool and paint over the area to change.\n3. Enter a specific edit request, such as “replace the flowers on the table with white lilies.”\n\n## Tips\n- Let the selection overlap the target edge slightly for a more natural join.\n- Split very large changes into two edits.\n\n## Notes\nEven without painting a selection, the model determines the area to edit from your description; painting a selection makes the edit more precise.",
     "help.article.adjustGenerationOptions.title": "How do I adjust size, ratio, and generation options?",
     "help.article.adjustGenerationOptions.summary": "Choose settings that better match the intended use before submitting.",
     "help.article.adjustGenerationOptions.keywords": "size ratio quality count generation options",
@@ -380,4 +380,3 @@ export const helpCenterPrimaryOverrides: Record<"zh-CN" | "en-US", Messages> = {
     "help.article.searchHistoryMissing.body": "## Check the search scope\n- Global Search looks across multiple content areas.\n- My Images, Assets, and Inspiration each have page-specific search.\n\n## Adjust the keyword\nTry a shorter prompt fragment, date, size, or title keyword.\n\n## Still missing\nCheck whether the content was archived, deleted, or saved in another area. Archived chats can be viewed and restored from Data in Settings."
   }
 };
-

@@ -715,6 +715,84 @@
   animation: toastIn 150ms ease;
 }
 
+.share-conversation-dialog {
+  width: min(620px, calc(100vw - 28px));
+  gap: 18px;
+}
+
+.share-conversation-dialog > header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.share-conversation-dialog > header p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--app-muted);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: nowrap;
+}
+
+.share-conversation-dialog > header .share-dialog-close {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--app-text);
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.share-conversation-dialog > header .share-dialog-close:hover,
+.share-conversation-dialog > header .share-dialog-close:focus-visible {
+  background: var(--button-default-hover-bg);
+}
+
+.share-dialog-result {
+  display: grid;
+  gap: 8px;
+}
+
+.share-dialog-url-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  padding: 7px 8px 7px 12px;
+}
+
+.share-dialog-url-row > svg {
+  color: var(--app-muted);
+}
+
+.share-dialog-url-value {
+  min-width: 0;
+  color: var(--app-text);
+  font-size: clamp(12px, 2.4vw, 14px);
+  line-height: 20px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  white-space: nowrap;
+  user-select: text;
+}
+
+.share-dialog-url-value::-webkit-scrollbar {
+  display: none;
+}
+
+.share-dialog-url-value:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--control-focus-ring);
+  outline-offset: 2px;
+}
+
 .toast-card svg {
   width: 18px;
   height: 18px;

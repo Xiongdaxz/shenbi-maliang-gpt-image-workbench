@@ -529,6 +529,13 @@ export async function deleteImageRecordsBatch(userId: string, imageIds: string[]
 export async function deleteSessionRecords(userId: string, sessionId: string) {
   const session = getOne<{ id: string }>(appDb, "select id from sessions where id = ? and user_id = ? and deleted_at is null", sessionId, userId);
   if (!session) return false;
+  run(
+    appDb,
+    "delete from session_share_messages where share_id in (select id from session_share_links where user_id = ? and session_id = ?)",
+    userId,
+    sessionId
+  );
+  run(appDb, "delete from session_share_links where user_id = ? and session_id = ?", userId, sessionId);
   await deleteSessionImages(userId, sessionId);
   await deleteMessageSourceReferencesMatching(
     userId,
@@ -625,6 +632,12 @@ export function deleteCancelledEmptySessionRecord(userId: string, sessionId: str
 }
 
 export async function deleteAllSessionRecords(userId: string) {
+  run(
+    appDb,
+    "delete from session_share_messages where share_id in (select id from session_share_links where user_id = ?)",
+    userId
+  );
+  run(appDb, "delete from session_share_links where user_id = ?", userId);
   await deleteUserSessionImages(userId);
   await deleteMessageSourceReferencesMatching(
     userId,

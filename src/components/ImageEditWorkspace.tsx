@@ -43,6 +43,7 @@ export type ImageEditorState = {
 type ImageEditWorkspaceProps = {
   images: WorkImage[];
   activeImageId: string;
+  downloadBaseName?: string;
   initialPrompt?: string;
   sizeOptions: SizeOption[];
   selectedSize: string;
@@ -98,6 +99,7 @@ function buildPreviewStartPan(contentSize: number, stageSize: number, visibleSiz
 export function ImageEditWorkspace({
   images,
   activeImageId,
+  downloadBaseName,
   initialPrompt,
   sizeOptions,
   selectedSize,
@@ -955,6 +957,7 @@ export function ImageEditWorkspace({
     >
       <ImageEditorTopbar
         activeImage={activeImage}
+        downloadBaseName={downloadBaseName}
         brushRangeStyle={brushRangeStyle}
         brushSize={brushSize}
         hasSelection={hasSelection}

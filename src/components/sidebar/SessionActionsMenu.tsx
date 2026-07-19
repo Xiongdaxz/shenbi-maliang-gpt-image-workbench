@@ -5,12 +5,18 @@ import { useI18n } from "../../i18n";
 import { cx } from "../../lib/cx";
 
 const SESSION_MENU_CLOSE_ANIMATION_MS = 240;
+const SESSION_MENU_GAP = 4;
+const SESSION_MENU_VIEWPORT_PADDING = 10;
+const SESSION_MENU_ESTIMATED_HEIGHT = 170;
+
+type SessionMenuPlacement = "top-end" | "bottom-end";
 
 type SessionActionsMenuProps = {
   open: boolean;
   title: string;
   pinned?: boolean;
   disabled?: boolean;
+  variant?: "sidebar" | "toolbar";
   onOpenChange: (open: boolean) => void;
   onRename: (title: string) => void;
   onPin: () => void;
@@ -18,14 +24,17 @@ type SessionActionsMenuProps = {
   onDelete: () => void;
 };
 
-export function SessionActionsMenu({ open, title, pinned, disabled, onOpenChange, onRename, onPin, onArchive, onDelete }: SessionActionsMenuProps) {
+export function SessionActionsMenu({ open, title, pinned, disabled, variant = "sidebar", onOpenChange, onRename, onPin, onArchive, onDelete }: SessionActionsMenuProps) {
   const { t } = useI18n();
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const renameSettledRef = useRef(false);
   const closeTimerRef = useRef<number | null>(null);
   const [closing, setClosing] = useState(false);
   const [menuStyle, setMenuStyle] = useState({ top: 0, left: 0 });
+  const [placement, setPlacement] = useState<SessionMenuPlacement>("bottom-end");
   const [renaming, setRenaming] = useState(false);
   const [draftTitle, setDraftTitle] = useState(title);
   const menuVisible = open || closing;
@@ -100,13 +109,32 @@ export function SessionActionsMenu({ open, title, pinned, disabled, onOpenChange
   useEffect(() => {
     if (!menuVisible) return;
     const updatePosition = () => {
-      const rect = rootRef.current?.getBoundingClientRect();
+      const rect = (variant === "toolbar" ? triggerRef.current : rootRef.current)?.getBoundingClientRect();
       if (!rect) return;
-      const viewportPadding = 10;
       const menuWidth = renaming ? 220 : 160;
+      const viewportWidth = document.documentElement.clientWidth;
+      const viewportHeight = document.documentElement.clientHeight;
+      const menuHeight = menuRef.current?.offsetHeight ?? SESSION_MENU_ESTIMATED_HEIGHT;
+      const spaceBelow = viewportHeight - rect.bottom - SESSION_MENU_VIEWPORT_PADDING;
+      const spaceAbove = rect.top - SESSION_MENU_VIEWPORT_PADDING;
+      const nextPlacement: SessionMenuPlacement =
+        spaceBelow < menuHeight + SESSION_MENU_GAP && spaceAbove > spaceBelow ? "top-end" : "bottom-end";
+      const rawTop =
+        nextPlacement === "top-end"
+          ? rect.top - menuHeight - SESSION_MENU_GAP
+          : rect.bottom + SESSION_MENU_GAP;
+      const maxTop = Math.max(SESSION_MENU_VIEWPORT_PADDING, viewportHeight - menuHeight - SESSION_MENU_VIEWPORT_PADDING);
+      const rawLeft = variant === "toolbar" ? rect.right - menuWidth : rect.left;
+      setPlacement(nextPlacement);
       setMenuStyle({
-        top: rect.bottom + 4,
-        left: Math.min(rect.left, window.innerWidth - menuWidth - viewportPadding)
+        top: Math.min(Math.max(rawTop, SESSION_MENU_VIEWPORT_PADDING), maxTop),
+        left:
+          variant === "toolbar"
+            ? Math.max(rawLeft, SESSION_MENU_VIEWPORT_PADDING)
+            : Math.min(
+                Math.max(rawLeft, SESSION_MENU_VIEWPORT_PADDING),
+                viewportWidth - menuWidth - SESSION_MENU_VIEWPORT_PADDING
+              )
       });
     };
     const handlePointerDown = (event: PointerEvent) => {
@@ -117,15 +145,17 @@ export function SessionActionsMenu({ open, title, pinned, disabled, onOpenChange
       closeMenu();
     };
     updatePosition();
+    const positionFrame = window.requestAnimationFrame(updatePosition);
     document.addEventListener("pointerdown", handlePointerDown);
     window.addEventListener("resize", updatePosition);
     window.addEventListener("scroll", updatePosition, true);
     return () => {
+      window.cancelAnimationFrame(positionFrame);
       document.removeEventListener("pointerdown", handlePointerDown);
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
-  }, [closeMenu, menuVisible, renaming]);
+  }, [closeMenu, menuVisible, renaming, variant]);
 
   useEffect(
     () => () => {
@@ -135,9 +165,10 @@ export function SessionActionsMenu({ open, title, pinned, disabled, onOpenChange
   );
 
   return (
-    <div className={cx("session-menu-wrap", open && "open")} ref={rootRef}>
+    <div className={cx("session-menu-wrap", variant === "toolbar" && "session-menu-wrap-toolbar", open && "open")} ref={rootRef}>
       <button
-        className="session-menu-trigger"
+        ref={triggerRef}
+        className={cx("session-menu-trigger", variant === "toolbar" && "session-menu-trigger-toolbar")}
         type="button"
         disabled={disabled}
         aria-label={t("sidebar.sessionMoreActions")}
@@ -160,11 +191,12 @@ export function SessionActionsMenu({ open, title, pinned, disabled, onOpenChange
       {menuVisible
         ? createPortal(
             <div
+              ref={menuRef}
               className={cx("session-action-card", renaming && "is-renaming", "ui-pop-motion")}
               role="menu"
               style={menuStyle}
               data-state={closing ? "closing" : "open"}
-              data-placement="bottom-end"
+              data-placement={placement}
               onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
             >

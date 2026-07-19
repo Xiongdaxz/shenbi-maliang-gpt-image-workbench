@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type {
   CSSProperties,
   MouseEventHandler,
@@ -95,7 +96,16 @@ export function ImagePreviewStage({
       onPointerCancel={onPointerCancel}
       onWheel={onWheel}
     >
-      <button className="case-preview-nav prev" type="button" onClick={onPrev} disabled={!canPrev} aria-label={t("imagePreview.previous")}>
+      <button
+        className="case-preview-nav prev"
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onPrev();
+        }}
+        disabled={!canPrev}
+        aria-label={t("imagePreview.previous")}
+      >
         <ChevronLeft size={24} />
       </button>
       <img
@@ -146,7 +156,16 @@ export function ImagePreviewStage({
           </div>
         </div>
       ) : null}
-      <button className="case-preview-nav next" type="button" onClick={onNext} disabled={!canNext} aria-label={t("imagePreview.next")}>
+      <button
+        className="case-preview-nav next"
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onNext();
+        }}
+        disabled={!canNext}
+        aria-label={t("imagePreview.next")}
+      >
         <ChevronRight size={24} />
       </button>
     </div>
@@ -175,6 +194,43 @@ type ImagePreviewToolbarProps = {
   onZoomOut: () => void;
   toolbarRef?: RefObject<HTMLDivElement | null>;
 };
+
+export function ImagePreviewItemThumbnails({
+  items,
+  index,
+  onItemSelect
+}: {
+  items: ImagePreviewItem[];
+  index: number;
+  onItemSelect: (index: number) => void;
+}) {
+  const { t } = useI18n();
+  const activeThumbnailRef = useRef<HTMLButtonElement | null>(null);
+  const activeItemId = items[index]?.id;
+
+  useEffect(() => {
+    activeThumbnailRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  }, [activeItemId, index]);
+
+  return (
+    <div className="case-preview-item-thumbs" aria-label={t("imageLightbox.thumbnails")}>
+      {items.map((thumbnailItem, itemIndex) => (
+        <button
+          key={`${thumbnailItem.id}-${itemIndex}`}
+          ref={itemIndex === index ? activeThumbnailRef : undefined}
+          type="button"
+          className={cx(itemIndex === index && "active")}
+          onClick={() => onItemSelect(itemIndex)}
+          aria-label={t("imageLightbox.viewNth", { index: itemIndex + 1 })}
+          aria-pressed={itemIndex === index}
+          title={thumbnailItem.title}
+        >
+          <img src={thumbnailItem.thumbnailUrl ?? thumbnailItem.previewUrl ?? thumbnailItem.imageUrl} alt="" loading="lazy" />
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function ImagePreviewToolbar({
   actions,
@@ -323,7 +379,7 @@ export function ReferenceLightbox({ reference, onClose }: ReferenceLightboxProps
         <X size={20} />
       </button>
       <ImageDownloadMenu
-        source={{ type: "image-reference", id: reference.id }}
+        source={{ type: "image-reference", id: reference.id, downloadBaseName: reference.name }}
         rootClassName="case-reference-lightbox-download"
         iconSize={18}
         ariaLabel={t("imagePreview.downloadReference")}

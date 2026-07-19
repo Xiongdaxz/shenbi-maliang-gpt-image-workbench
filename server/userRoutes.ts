@@ -12,8 +12,8 @@ import { imageGenerationSettings } from "./settingsStore";
 import { streamImageJobEvents } from "./imageJobEvents";
 import { cleanupExpiredImageJobCancelIntents, imageJobCancelRequested } from "./imageJobCancellation";
 import { saveUserPreferences } from "./userPreferences";
-import { deleteStoredFilesIfUnreferenced, secureUserAvatarPath, writeEncryptedFile } from "./secureFiles";
-import type { UserRow } from "./types";
+import { deleteStoredFilesIfUnreferenced, readStoredFile, secureUserAvatarHistoryPath, secureUserAvatarPath, writeEncryptedFile } from "./secureFiles";
+import type { UserAvatarHistoryRow, UserRow } from "./types";
 import { makeId, now, safeJson, utcNow } from "./utils";
 import { currentUser, futureDate, requireUser } from "./auth";
 import { pageInfo, paginationFromQuery } from "./pagination";
@@ -645,7 +645,69 @@ api.post("/auth/avatar", async (c) => {
   const user = await requireUser(c);
   if (!user) return c.json({ error: "未登录" }, 401);
   const form = await c.req.formData();
+  const historyId = String(form.get("historyId") ?? "").trim();
   const file = form.get("file");
+  const previousPath = user.avatar_path || "";
+  const avatarPath = secureUserAvatarPath(user.id);
+
+  if (historyId) {
+    const historyEntry = getOne<UserAvatarHistoryRow>(
+      appDb,
+      "select * from user_avatar_history where id = ? and user_id = ?",
+      historyId,
+      user.id
+    );
+    if (!historyEntry) return c.json({ error: "历史头像不存在" }, 404);
+    if (!previousPath) return c.json({ error: "当前头像不存在，无法切换历史头像" }, 400);
+    try {
+      const [selectedAvatar, currentAvatar] = await Promise.all([
+        readStoredFile(historyEntry.path),
+        readStoredFile(previousPath)
+      ]);
+      let currentAvatarReplaced = false;
+      let historyAvatarReplaced = false;
+      try {
+        const timestamp = now();
+        await writeEncryptedFile(avatarPath, selectedAvatar);
+        currentAvatarReplaced = true;
+        await writeEncryptedFile(historyEntry.path, currentAvatar);
+        historyAvatarReplaced = true;
+        const swapAvatar = appDb.transaction(() => {
+          run(
+            appDb,
+            "update users set avatar_path = ?, avatar_mime_type = ?, updated_at = ? where id = ?",
+            avatarPath,
+            historyEntry.mime_type || "image/png",
+            timestamp,
+            user.id
+          );
+          run(
+            appDb,
+            "update user_avatar_history set mime_type = ?, created_at = ? where id = ? and user_id = ?",
+            user.avatar_mime_type || "image/png",
+            timestamp,
+            historyEntry.id,
+            user.id
+          );
+        });
+        swapAvatar();
+      } catch (error) {
+        const restoreFiles: Promise<unknown>[] = [];
+        if (currentAvatarReplaced) restoreFiles.push(writeEncryptedFile(avatarPath, currentAvatar));
+        if (historyAvatarReplaced) restoreFiles.push(writeEncryptedFile(historyEntry.path, selectedAvatar));
+        await Promise.allSettled(restoreFiles);
+        if (previousPath !== avatarPath) await deleteStoredFilesIfUnreferenced([avatarPath]);
+        throw error;
+      }
+      if (previousPath !== avatarPath) void deleteStoredFilesIfUnreferenced([previousPath]);
+      const updated = getOne<UserRow>(appDb, "select * from users where id = ?", user.id);
+      return c.json({ user: updated ? publicUser(updated) : publicUser({ ...user, avatar_path: avatarPath, avatar_mime_type: historyEntry.mime_type }) });
+    } catch (error) {
+      console.warn("历史头像切换失败", user.id, error);
+      return c.json({ error: "历史头像切换失败，请稍后再试" }, 500);
+    }
+  }
+
   if (!(file instanceof File)) return c.json({ error: "请选择头像图片" }, 400);
   const mimeType = String(file.type || "").toLowerCase();
   if (!["image/png", "image/jpeg", "image/webp", "image/avif"].includes(mimeType)) {
@@ -653,13 +715,65 @@ api.post("/auth/avatar", async (c) => {
   }
   if (file.size > 5 * 1024 * 1024) return c.json({ error: "头像图片不能超过 5MB" }, 400);
 
-  const previousPath = user.avatar_path || "";
-  const avatarPath = secureUserAvatarPath(user.id);
+  if (previousPath) {
+    try {
+      const historyId = makeId("avatar_history");
+      const historyPath = secureUserAvatarHistoryPath(user.id, historyId);
+      const createdAt = now();
+      await writeEncryptedFile(historyPath, await readStoredFile(previousPath));
+      run(
+        appDb,
+        "insert into user_avatar_history (id, user_id, path, mime_type, created_at) values (?, ?, ?, ?, ?)",
+        historyId,
+        user.id,
+        historyPath,
+        user.avatar_mime_type || "image/png",
+        createdAt
+      );
+      const expired = getAll<Pick<UserAvatarHistoryRow, "id" | "path">>(
+        appDb,
+        `select id, path from user_avatar_history
+         where user_id = ?
+         order by created_at desc, id desc
+         limit -1 offset 3`,
+        user.id
+      );
+      if (expired.length > 0) {
+        const removeExpired = appDb.transaction(() => {
+          for (const entry of expired) run(appDb, "delete from user_avatar_history where id = ? and user_id = ?", entry.id, user.id);
+        });
+        removeExpired();
+        await deleteStoredFilesIfUnreferenced(expired.map((entry) => entry.path));
+      }
+    } catch (error) {
+      console.warn("历史头像保存失败", user.id, error);
+    }
+  }
   await writeEncryptedFile(avatarPath, Buffer.from(await file.arrayBuffer()));
   run(appDb, "update users set avatar_path = ?, avatar_mime_type = ?, updated_at = ? where id = ?", avatarPath, mimeType, now(), user.id);
   if (previousPath && previousPath !== avatarPath) void deleteStoredFilesIfUnreferenced([previousPath]);
   const updated = getOne<UserRow>(appDb, "select * from users where id = ?", user.id);
   return c.json({ user: updated ? publicUser(updated) : publicUser({ ...user, avatar_path: avatarPath, avatar_mime_type: mimeType }) });
+});
+
+api.get("/auth/avatar-history", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return c.json({ error: "未登录" }, 401);
+  const entries = getAll<Pick<UserAvatarHistoryRow, "id" | "created_at">>(
+    appDb,
+    `select id, created_at from user_avatar_history
+     where user_id = ?
+     order by created_at desc, id desc
+     limit 3`,
+    user.id
+  );
+  return c.json({
+    entries: entries.map((entry) => ({
+      id: entry.id,
+      createdAt: entry.created_at,
+      url: `/api/files/avatar-history/${encodeURIComponent(entry.id)}?v=${encodeURIComponent(entry.created_at)}`
+    }))
+  });
 });
 
 api.post("/auth/config-access", async (c) => {
@@ -813,6 +927,32 @@ api.delete("/sessions", async (c) => {
   if (!user) return c.json({ error: "未登录" }, 401);
   const deleted = await deleteAllSessionRecords(user.id);
   return c.json({ ok: true, deleted });
+});
+
+api.get("/sessions/:id", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return c.json({ error: "未登录" }, 401);
+  const session = getOne<{
+    id: string;
+    title: string;
+    title_status: string | null;
+    pinned_at: string | null;
+    archived_at: string | null;
+    running_job_count: number;
+    created_at: string;
+    updated_at: string;
+  }>(
+    appDb,
+    `select id, title, title_status, pinned_at, archived_at, created_at, updated_at,
+            (select count(*) from image_jobs where image_jobs.session_id = sessions.id and image_jobs.user_id = ? and image_jobs.status = 'running') as running_job_count
+     from sessions
+     where id = ? and user_id = ? and deleted_at is null`,
+    user.id,
+    c.req.param("id"),
+    user.id
+  );
+  if (!session) return c.json({ error: "对话不存在" }, 404);
+  return c.json({ session: serializeSession(session) });
 });
 
 api.patch("/sessions/:id/archive", async (c) => {

@@ -46,13 +46,27 @@ function readChangelogEntries() {
   ).map(toChangelogEntry);
 }
 
-function changelogPage(limit: number, offset: number) {
-  const total = getOne<{ total: number }>(configDb, "select count(*) as total from changelog_entries")?.total ?? 0;
+function normalizeChangelogKeyword(value: string | undefined) {
+  return String(value ?? "").trim().toLocaleLowerCase().slice(0, 120);
+}
+
+function changelogPage(limit: number, offset: number, keyword: string) {
+  const whereSql = keyword
+    ? "where lower(version) like ? or lower(release_date) like ? or lower(content) like ?"
+    : "";
+  const params = keyword ? [`%${keyword}%`, `%${keyword}%`, `%${keyword}%`] : [];
+  const total = getOne<{ total: number }>(
+    configDb,
+    `select count(*) as total from changelog_entries ${whereSql}`,
+    ...params
+  )?.total ?? 0;
   const entries = getAll<ChangelogEntryRow>(
     configDb,
     `select * from changelog_entries
+     ${whereSql}
      order by release_date desc, created_at desc, id desc
      limit ? offset ?`,
+    ...params,
     limit,
     offset
   ).map(toChangelogEntry);
@@ -110,7 +124,7 @@ export function registerChangelogRoutes(api: Hono) {
     const user = await requireUser(c);
     if (!user) return c.json({ error: "未登录" }, 401);
     const { limit, offset } = changelogPagination(c.req.query("limit"), c.req.query("offset"));
-    return c.json(changelogPage(limit, offset));
+    return c.json(changelogPage(limit, offset, normalizeChangelogKeyword(c.req.query("keyword"))));
   });
 
   api.get("/config/changelog", async (c) => {

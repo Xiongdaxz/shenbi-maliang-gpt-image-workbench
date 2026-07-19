@@ -169,6 +169,44 @@
     grid-template-rows: auto minmax(0, 1fr);
   }
 
+  .chat-page-top-actions {
+    top: 4px;
+    right: 10px;
+    gap: 8px;
+    max-width: calc(100vw - 20px);
+  }
+
+  .chat-page-top-actions .chat-branch-switch {
+    max-width: calc(100vw - 156px);
+  }
+
+  .shared-conversation-topbar {
+    min-height: 58px;
+    padding: 9px 10px 9px 58px;
+  }
+
+  .shared-message-area {
+    padding-top: 86px;
+  }
+
+  .shared-conversation-heading {
+    gap: 7px;
+  }
+
+  .shared-conversation-heading h1 {
+    max-width: 34vw;
+    font-size: 14px;
+  }
+
+  .shared-auth-actions {
+    gap: 5px;
+  }
+
+  .shared-auth-actions button {
+    min-height: 34px;
+    padding-inline: 10px;
+  }
+
   .app-shell:not(.sidebar-collapsed) .image-editor-shell {
     left: 0;
   }
@@ -432,6 +470,17 @@
     font-size: 12px;
   }
 
+  .case-preview-item-thumbs {
+    --preview-item-thumb-window-size: 46px;
+    --preview-item-thumb-image-size: 40px;
+    left: 8px;
+    bottom: calc(var(--case-preview-toolbar-height, 92px) + 8px);
+    width: max-content;
+    max-width: calc(100vw - 24px);
+    gap: 8px;
+    padding: 2px 0;
+  }
+
   .case-preview-toolbar {
     grid-template-columns: 1fr;
     min-height: 168px;
@@ -472,6 +521,10 @@
 
   .message-area {
     padding-top: 28px;
+  }
+
+  .shared-message-area {
+    padding-top: 86px;
   }
 
   .user-message {

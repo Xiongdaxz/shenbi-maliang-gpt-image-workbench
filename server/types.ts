@@ -18,6 +18,14 @@ export type UserRow = {
   updated_at: string;
 };
 
+export type UserAvatarHistoryRow = {
+  id: string;
+  user_id: string;
+  path: string;
+  mime_type: string;
+  created_at: string;
+};
+
 export type TeamRow = {
   id: string;
   name: string;

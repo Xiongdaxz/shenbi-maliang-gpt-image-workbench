@@ -3,16 +3,24 @@ import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Download } from "lucide-react";
 import { api } from "../api";
+import { request } from "../api/client";
 import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import type { ImageDownloadOption } from "../types";
 
 const POPOVER_CLOSE_ANIMATION_MS = 240;
+const DOWNLOAD_BASE_NAME_MAX_LENGTH = 40;
+const DOWNLOAD_VARIANT_SUFFIX: Record<ImageDownloadOption["variant"], string> = {
+  thumb: "缩略图",
+  preview: "预览图",
+  original: "原图"
+};
 
 export type ImageDownloadSource =
-  | { type: "image"; id: string; fallbackUrl?: string; fallbackName?: string }
-  | { type: "asset"; id: string; fallbackUrl?: string; fallbackName?: string }
-  | { type: "image-reference"; id: string; fallbackUrl?: string; fallbackName?: string };
+  | { type: "image"; id: string; fallbackUrl?: string; fallbackName?: string; downloadBaseName?: string }
+  | { type: "asset"; id: string; fallbackUrl?: string; fallbackName?: string; downloadBaseName?: string }
+  | { type: "image-reference"; id: string; fallbackUrl?: string; fallbackName?: string; downloadBaseName?: string }
+  | { type: "shared-image"; id: string; token: string; downloadBaseName?: string };
 
 type ImageDownloadMenuProps = {
   source: ImageDownloadSource | null | undefined;
@@ -71,13 +79,55 @@ function optionDescription(option: ImageDownloadOption, t: (key: string) => stri
 function fetchDownloadOptions(source: ImageDownloadSource) {
   if (source.type === "image") return api.imageDownloadOptions(source.id);
   if (source.type === "asset") return api.assetDownloadOptions(source.id);
+  if (source.type === "shared-image") {
+    return request<{ options: ImageDownloadOption[] }>(
+      `/api/shared-sessions/${encodeURIComponent(source.token)}/result-images/${encodeURIComponent(source.id)}/download-options`
+    );
+  }
   return api.imageReferenceDownloadOptions(source.id);
 }
 
-function startDownload(option: ImageDownloadOption) {
+function sanitizeDownloadBaseName(value: string | null | undefined) {
+  return String(value ?? "")
+    .trim()
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ")
+    .replace(/\.(png|jpe?g|webp|avif)$/i, "")
+    .replace(/\s+/g, " ")
+    .replace(/^\.+/, "")
+    .slice(0, DOWNLOAD_BASE_NAME_MAX_LENGTH)
+    .replace(/[\s.,，。;；:_-]+$/g, "")
+    .trim();
+}
+
+function optionDownloadBaseName(option: ImageDownloadOption) {
+  const suffix = DOWNLOAD_VARIANT_SUFFIX[option.variant];
+  const withoutExtension = option.downloadName.replace(/\.[a-z0-9]+$/i, "");
+  return withoutExtension.endsWith(`-${suffix}`) ? withoutExtension.slice(0, -suffix.length - 1) : withoutExtension;
+}
+
+function optionDownloadExtension(option: ImageDownloadOption) {
+  const filenameExtension = option.downloadName.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase();
+  if (filenameExtension) return filenameExtension;
+  const mimeType = option.mimeType.toLowerCase();
+  if (mimeType.includes("webp")) return "webp";
+  if (mimeType.includes("jpeg") || mimeType.includes("jpg")) return "jpg";
+  if (mimeType.includes("avif")) return "avif";
+  return "png";
+}
+
+function resolvedDownloadName(option: ImageDownloadOption, source: ImageDownloadSource) {
+  const baseName =
+    sanitizeDownloadBaseName(source.downloadBaseName) ||
+    sanitizeDownloadBaseName(source.type === "shared-image" ? undefined : source.fallbackName) ||
+    sanitizeDownloadBaseName(optionDownloadBaseName(option)) ||
+    "图片";
+  return `${baseName}-${DOWNLOAD_VARIANT_SUFFIX[option.variant]}.${optionDownloadExtension(option)}`;
+}
+
+function startDownload(option: ImageDownloadOption, source: ImageDownloadSource) {
   const anchor = document.createElement("a");
   anchor.href = option.url;
-  anchor.download = option.downloadName;
+  anchor.download = resolvedDownloadName(option, source);
   anchor.rel = "noopener";
   document.body.appendChild(anchor);
   anchor.click();
@@ -102,6 +152,8 @@ export function ImageDownloadMenu({
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const closeTimerRef = useRef<number | null>(null);
   const sourceId = source?.id ?? "";
+  const sourceToken = source?.type === "shared-image" ? source.token : "";
+  const sourceReady = Boolean(source && sourceId && (source.type !== "shared-image" || sourceToken));
   const popoverVisible = open || closing;
 
   const clearCloseTimer = () => {
@@ -136,9 +188,9 @@ export function ImageDownloadMenu({
   };
 
   const query = useQuery({
-    queryKey: ["image-download-options", source?.type, sourceId],
+    queryKey: ["image-download-options", source?.type, sourceId, sourceToken],
     queryFn: () => fetchDownloadOptions(source as ImageDownloadSource),
-    enabled: open && Boolean(source && sourceId),
+    enabled: open && sourceReady,
     staleTime: 5 * 60 * 1000
   });
   const options = query.data?.options ?? [];
@@ -190,11 +242,11 @@ export function ImageDownloadMenu({
   }, [closing, open]);
 
   useEffect(() => {
-    if (source && sourceId) return;
+    if (sourceReady) return;
     clearCloseTimer();
     setOpen(false);
     setClosing(false);
-  }, [source, sourceId]);
+  }, [sourceReady]);
 
   useEffect(
     () => () => {
@@ -235,7 +287,7 @@ export function ImageDownloadMenu({
                     className="image-download-option"
                     role="menuitem"
                     onClick={() => {
-                      startDownload(option);
+                      startDownload(option, source as ImageDownloadSource);
                       closePopover();
                     }}
                   >
@@ -270,7 +322,7 @@ export function ImageDownloadMenu({
           event.stopPropagation();
           togglePopover();
         }}
-        disabled={!source || !sourceId}
+        disabled={!sourceReady}
         aria-label={ariaLabel ?? t("download.image")}
         aria-expanded={open && !closing}
         title={title ?? t("download.image")}

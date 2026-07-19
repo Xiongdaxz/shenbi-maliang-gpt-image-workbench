@@ -757,21 +757,21 @@ export function ImagesPage({
                 }}
               >
                 <span className="image-timeline-marker" aria-hidden="true" />
-                <div className="image-timeline-date">
+                <button
+                  className="image-timeline-date"
+                  type="button"
+                  onClick={() => toggleTimelineGroup(row.group.key)}
+                  aria-expanded={!row.collapsed}
+                  aria-label={row.collapsed ? t("pages.images.expandTimelineNode", { date: row.group.dateLabel }) : t("pages.images.collapseTimelineNode", { date: row.group.dateLabel })}
+                  title={row.collapsed ? t("common.expand") : t("common.collapse")}
+                >
                   <strong>{row.group.dateLabel}</strong>
                   <span>{row.group.weekdayLabel}</span>
                   <small>{t("pages.images.count", { count: row.group.items.length })}</small>
-                  <button
-                    className="image-timeline-toggle"
-                    type="button"
-                    onClick={() => toggleTimelineGroup(row.group.key)}
-                    aria-expanded={!row.collapsed}
-                    aria-label={row.collapsed ? t("pages.images.expandTimelineNode", { date: row.group.dateLabel }) : t("pages.images.collapseTimelineNode", { date: row.group.dateLabel })}
-                    title={row.collapsed ? t("common.expand") : t("common.collapse")}
-                  >
+                  <span className="image-timeline-toggle" aria-hidden="true">
                     {row.collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
-                  </button>
-                </div>
+                  </span>
+                </button>
               </section>
             );
           }

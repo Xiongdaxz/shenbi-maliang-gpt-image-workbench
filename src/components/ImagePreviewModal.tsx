@@ -1,14 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode, WheelEvent as ReactWheelEvent } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode, WheelEvent as ReactWheelEvent } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import {
+  ImagePreviewItemThumbnails,
   ImagePreviewStage,
   ImagePreviewToolbar,
   ReferenceLightbox
 } from "./ImagePreviewControls";
 import { useI18n } from "../i18n";
 import { copyTextToClipboard } from "../lib/clipboard";
+import { cx } from "../lib/cx";
 import { formatImageFileSize } from "../lib/format";
 import type { CaseGroupImage, ImagePreviewOpenMode, ImagePreviewWheelMode, ImageReferenceItem } from "../types";
 import { useToast } from "../ui";
@@ -43,6 +45,8 @@ type ImagePreviewModalProps<TItem extends ImagePreviewItem> = {
   ariaLabel: string;
   initialZoomMode?: ImagePreviewOpenMode;
   wheelMode?: ImagePreviewWheelMode;
+  showItemThumbnails?: boolean;
+  suppressStableScrollbarGutter?: boolean;
   onIndexChange: (index: number) => void;
   onClose: () => void;
   renderActions?: (item: TItem) => ReactNode;
@@ -92,6 +96,8 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
   ariaLabel,
   initialZoomMode = "contain",
   wheelMode = "zoom",
+  showItemThumbnails = false,
+  suppressStableScrollbarGutter = false,
   onIndexChange,
   onClose,
   renderActions
@@ -552,6 +558,10 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
   useEffect(() => {
     if (!previewDisplayItem) return;
     const root = document.documentElement;
+    const stableScrollbarGutterWasSuppressed = root.classList.contains("shared-image-preview-open");
+    if (suppressStableScrollbarGutter) {
+      root.classList.add("shared-image-preview-open");
+    }
     const previousOverflow = document.body.style.overflow;
     const previousPaddingRight = document.body.style.paddingRight;
     const previousOverscrollBehavior = document.body.style.overscrollBehavior;
@@ -569,8 +579,11 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
       document.body.style.overflow = previousOverflow;
       document.body.style.paddingRight = previousPaddingRight;
       document.body.style.overscrollBehavior = previousOverscrollBehavior;
+      if (suppressStableScrollbarGutter && !stableScrollbarGutterWasSuppressed) {
+        root.classList.remove("shared-image-preview-open");
+      }
     };
-  }, [previewDisplayItem?.id]);
+  }, [previewDisplayItem?.id, suppressStableScrollbarGutter]);
 
   useLayoutEffect(() => {
     const stage = previewStageRef.current;
@@ -622,10 +635,16 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
   }, [previewDisplayItem?.id, previewImageSource]);
 
   if (!previewDisplayItem) return null;
+  const itemThumbnailsVisible = showItemThumbnails && items.length > 1;
 
   const modal = (
     <div className="case-preview-backdrop">
-      <section ref={previewModalRef} className={previewDragging ? "case-preview-modal is-preview-dragging" : "case-preview-modal"} aria-label={ariaLabel}>
+      <section
+        ref={previewModalRef}
+        className={cx("case-preview-modal", itemThumbnailsVisible && "has-item-thumbnails", previewDragging && "is-preview-dragging")}
+        style={{ "--case-preview-toolbar-height": `${previewToolbarHeight}px` } as CSSProperties}
+        aria-label={ariaLabel}
+      >
         <button className="case-preview-close" type="button" onClick={closePreview} aria-label={t("imagePreview.close")}>
           <X size={18} />
         </button>
@@ -664,6 +683,9 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
           onPrev={() => onIndexChange((index - 1 + items.length) % items.length)}
           onWheel={handlePreviewWheel}
         />
+        {itemThumbnailsVisible ? (
+          <ImagePreviewItemThumbnails items={items} index={index} onItemSelect={onIndexChange} />
+        ) : null}
         <ImagePreviewToolbar
           actions={actions}
           fileSizeLabel={previewFileSizeLabel}

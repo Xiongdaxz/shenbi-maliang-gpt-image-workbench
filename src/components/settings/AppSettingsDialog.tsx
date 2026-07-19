@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { Archive, Database, Github, KeyRound, Leaf, Monitor, Moon, Palette, Pencil, ScrollText, Settings, Smile, Sun, Sunset, Trash2, UserRound, X } from "lucide-react";
+import { Archive, Database, Github, KeyRound, Leaf, Link2, Monitor, Moon, Palette, Pencil, ScrollText, Search, Settings, Smile, Sun, Sunset, Trash2, UserRound, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api } from "../../api";
 import {
@@ -19,6 +19,7 @@ import { CustomSelect, useToast } from "../../ui";
 import { MarkdownView } from "../MarkdownView";
 import { PromptColorSchemeSettingsDialog } from "../PromptColorSchemeSettingsDialog";
 import { PromptOptimizeStyleSettingsDialog } from "../PromptOptimizeStyleSettingsDialog";
+import { SharedLinksDialog } from "./SharedLinksDialog";
 
 type SettingsSectionId = "general" | "personalization" | "account" | "data" | "about";
 type SettingsSectionDirection = "forward" | "backward";
@@ -111,10 +112,19 @@ export function AppSettingsDialog({
   const [contentTransitioning, setContentTransitioning] = useState(false);
   const [promptStyleSettingsOpen, setPromptStyleSettingsOpen] = useState(false);
   const [promptColorSchemeSettingsOpen, setPromptColorSchemeSettingsOpen] = useState(false);
+  const [sharedLinksOpen, setSharedLinksOpen] = useState(false);
+  const [changelogSearchInput, setChangelogSearchInput] = useState("");
+  const [changelogSearchKeyword, setChangelogSearchKeyword] = useState("");
+  const [latestChangelogVersion, setLatestChangelogVersion] = useState("");
   const settingsContentRef = useRef<HTMLDivElement | null>(null);
   const { mode: appearanceMode, setMode: setAppearanceMode } = useAppearanceMode();
   const { showToast } = useToast();
   const { language, resolvedLanguage, setLanguage, t } = useI18n();
+  const sharedLinkCount = useQuery({
+    queryKey: ["session-share-links", "count"],
+    queryFn: ({ signal }) => api.sessionShareLinks({ limit: 1, offset: 0 }, { signal }),
+    enabled: open
+  });
   const languageOptions = useMemo(() => languagePreferenceOptions(t, resolvedLanguage), [resolvedLanguage, t]);
   const toneOptions = useMemo(
     () => editSuggestionToneOptions.map((option) => ({
@@ -141,9 +151,16 @@ export function AppSettingsDialog({
     [t]
   );
   const changelog = useInfiniteQuery({
-    queryKey: ["changelog", "paged"],
-    queryFn: ({ pageParam }) => api.changelog({ limit: CHANGELOG_PAGE_SIZE, offset: Number(pageParam) }),
+    queryKey: ["changelog", "paged", changelogSearchKeyword],
+    queryFn: ({ pageParam }) => api.changelog({
+      limit: CHANGELOG_PAGE_SIZE,
+      offset: Number(pageParam),
+      keyword: changelogSearchKeyword
+    }),
     initialPageParam: 0,
+    // Keep the pages the user has already viewed when switching settings sections.
+    // Changelog edits explicitly invalidate this key, which still triggers a refresh.
+    staleTime: Infinity,
     getNextPageParam: (lastPage) => (
       lastPage.pageInfo.hasMore ? lastPage.pageInfo.offset + lastPage.pageInfo.limit : undefined
     ),
@@ -186,13 +203,32 @@ export function AppSettingsDialog({
     if (!open) {
       setActiveSection("general");
       setContentTransitioning(false);
+      setSharedLinksOpen(false);
+      setChangelogSearchInput("");
+      setChangelogSearchKeyword("");
     }
   }, [open]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setChangelogSearchKeyword(changelogSearchInput.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [changelogSearchInput]);
+
+  useEffect(() => {
+    if (settingsContentRef.current) settingsContentRef.current.scrollTop = 0;
+  }, [changelogSearchKeyword]);
+
   const entries = useMemo(() => changelog.data?.pages.flatMap((page) => page.entries) ?? [], [changelog.data?.pages]);
+  const changelogSearchPending = changelogSearchInput.trim() !== changelogSearchKeyword;
+  const changelogLoading = changelog.isLoading || changelogSearchPending;
+  const hasChangelogSearch = Boolean(changelogSearchKeyword);
+  const visibleChangelogEntries = changelogSearchPending ? [] : entries;
+  useEffect(() => {
+    if (!changelogSearchKeyword && entries[0]?.version) setLatestChangelogVersion(entries[0].version);
+  }, [changelogSearchKeyword, entries]);
   const changelogLoadMoreRef = useInfinitePageLoader({
     fetchNextPage: () => changelog.fetchNextPage(),
-    hasNextPage: Boolean(changelog.hasNextPage),
+    hasNextPage: !changelogSearchPending && Boolean(changelog.hasNextPage),
     isFetchingNextPage: changelog.isFetchingNextPage,
     rootRef: settingsContentRef,
     rootMargin: "160px"
@@ -207,10 +243,14 @@ export function AppSettingsDialog({
     if (settingsContentRef.current) settingsContentRef.current.scrollTop = 0;
     setActiveSection(nextSection);
   };
+  const resetChangelogSearch = () => {
+    setChangelogSearchInput("");
+    setChangelogSearchKeyword("");
+  };
 
   if (!open) return null;
 
-  const latestEntry = entries[0];
+  const latestVersion = latestChangelogVersion || (!changelogSearchKeyword ? entries[0]?.version ?? "" : "");
   const avatarSource = user.username?.trim() || user.account?.trim() || "U";
   const avatarText = avatarSource.slice(0, 1).toUpperCase();
   const toneDisabled = !preferences.editSuggestionsEnabled;
@@ -498,10 +538,21 @@ export function AppSettingsDialog({
             <div className="settings-list">
               <div className="settings-row">
                 <div>
+                  <strong>{t("settings.data.sharedLinks")}</strong>
+                  <span>{sharedLinkCount.data?.pageInfo.total ?? 0}</span>
+                </div>
+                <button className="secondary-btn" type="button" onClick={() => setSharedLinksOpen(true)}>
+                  <Link2 size={15} />
+                  {t("common.manage")}
+                </button>
+              </div>
+              <div className="settings-row">
+                <div>
                   <strong>{t("settings.data.archivedChats")}</strong>
                   <span>{archivedSessionCount}</span>
                 </div>
                 <button className="secondary-btn" type="button" onClick={onOpenArchivedChats}>
+                  <Archive size={15} />
                   {t("common.manage")}
                 </button>
               </div>
@@ -542,7 +593,7 @@ export function AppSettingsDialog({
                 <div className="settings-row settings-about-version-row">
                   <div>
                     <strong>{t("settings.about.currentVersion")}</strong>
-                    <span>{latestEntry?.version ?? "-"}</span>
+                    <span>{latestVersion || "-"}</span>
                   </div>
                   {showGithubEntry ? (
                     <a className="secondary-btn" href={PROJECT_REPOSITORY_URL} target="_blank" rel="noreferrer">
@@ -553,11 +604,37 @@ export function AppSettingsDialog({
                 </div>
               </div>
               <div className="settings-changelog">
-                <h3 className="settings-section-title">{t("settings.about.changelog")}</h3>
-                {changelog.isLoading ? <div className="settings-empty">{t("settings.about.changelogLoading")}</div> : null}
+                <div className="settings-changelog-head">
+                  <h3 className="settings-section-title">{t("settings.about.changelog")}</h3>
+                  <div className="settings-changelog-search">
+                    <Search size={16} aria-hidden="true" />
+                    <input
+                      value={changelogSearchInput}
+                      onChange={(event) => setChangelogSearchInput(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") resetChangelogSearch();
+                      }}
+                      placeholder={t("settings.about.changelogSearchPlaceholder")}
+                      aria-label={t("settings.about.changelogSearchAria")}
+                    />
+                    <button
+                      type="button"
+                      className={cx("settings-changelog-search-clear", changelogSearchInput && "is-visible")}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={resetChangelogSearch}
+                      aria-label={t("common.clear")}
+                      title={t("common.clear")}
+                      tabIndex={changelogSearchInput ? 0 : -1}
+                      aria-hidden={!changelogSearchInput}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                </div>
+                {changelogLoading ? <div className="settings-empty">{t("settings.about.changelogLoading")}</div> : null}
                 {changelog.error ? <div className="form-error">{changelog.error.message}</div> : null}
-                {!changelog.isLoading && entries.length === 0 ? <div className="settings-empty">{t("settings.about.changelogEmpty")}</div> : null}
-                {entries.map((entry) => (
+                {!changelogLoading && visibleChangelogEntries.length === 0 ? <div className="settings-empty">{hasChangelogSearch ? t("settings.about.changelogSearchEmpty") : t("settings.about.changelogEmpty")}</div> : null}
+                {visibleChangelogEntries.map((entry) => (
                   <article className="settings-changelog-entry" key={entry.id}>
                     <header>
                       <strong>{entry.version}</strong>
@@ -566,7 +643,7 @@ export function AppSettingsDialog({
                     <MarkdownView markdown={entry.content} />
                   </article>
                 ))}
-                {changelog.hasNextPage ? <div className="settings-changelog-load-sentinel" ref={changelogLoadMoreRef} aria-hidden="true" /> : null}
+                {!changelogSearchPending && changelog.hasNextPage ? <div className="settings-changelog-load-sentinel" ref={changelogLoadMoreRef} aria-hidden="true" /> : null}
                 {changelog.isFetchingNextPage ? <div className="settings-changelog-load-state">{t("settings.about.changelogLoading")}</div> : null}
               </div>
             </div>
@@ -586,6 +663,11 @@ export function AppSettingsDialog({
       <PromptColorSchemeSettingsDialog
         open={promptColorSchemeSettingsOpen}
         onClose={() => setPromptColorSchemeSettingsOpen(false)}
+      />
+      <SharedLinksDialog
+        open={sharedLinksOpen}
+        onClose={() => setSharedLinksOpen(false)}
+        onCloseSettings={onClose}
       />
     </div>
   );

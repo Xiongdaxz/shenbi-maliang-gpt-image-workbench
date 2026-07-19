@@ -78,6 +78,11 @@ import { registerPromptReferenceLinkRoutes } from "./promptReferenceLinkRoutes";
 import { registerPromptTemplateRoutes } from "./promptTemplateRoutes";
 import { registerSearchHistoryRoutes } from "./searchHistoryRoutes";
 import { registerSearchRoutes } from "./searchRoutes";
+import {
+  registerSessionShareRoutes,
+  resolveSessionShareClientAddress,
+  SESSION_SHARE_CLIENT_IP_HEADER
+} from "./sessionShareRoutes";
 import { registerSafetyReviewRoutes } from "./safetyReview";
 import { registerStarterCopyRoutes, startStarterCopyScheduler } from "./starterCopyRoutes";
 import { registerUserRoutes } from "./userRoutes";
@@ -269,6 +274,8 @@ api.onError((error, c) => {
 api.get("/health", (c) => c.json({ ok: true }));
 
 registerUserRoutes(api);
+
+registerSessionShareRoutes(api);
 
 registerBrandingRoutes(api);
 
@@ -3205,6 +3212,16 @@ app.get("/login/:file", async (c) => {
     }
   });
 });
+app.use("/share/*", async (c, next) => {
+  await next();
+  c.header("Cache-Control", "private, no-store");
+  c.header("Content-Security-Policy", "frame-ancestors 'none'");
+  c.header("Cross-Origin-Resource-Policy", "same-origin");
+  c.header("Referrer-Policy", "no-referrer");
+  c.header("X-Content-Type-Options", "nosniff");
+  c.header("X-Frame-Options", "DENY");
+  c.header("X-Robots-Tag", "noindex, nofollow, noarchive");
+});
 app.use("*", serveStatic({ root: "./dist" }));
 app.get("*", async (c) => {
   const indexPath = path.join(ROOT, "dist", "index.html");
@@ -3217,6 +3234,7 @@ app.get("*", async (c) => {
 const port = Number(Bun.env.PORT ?? 8787);
 const hostname = String(Bun.env.HOST ?? "0.0.0.0").trim() || "0.0.0.0";
 const displayHost = hostname === "0.0.0.0" ? "127.0.0.1" : hostname;
+const trustProxy = ["1", "true", "on"].includes(String(Bun.env.APP_TRUST_PROXY ?? "").trim().toLowerCase());
 console.log(`GPT Image Workbench listening on http://${displayHost}:${port}`);
 if (hostname === "0.0.0.0") {
   console.log(`LAN access enabled. Use this Windows machine's LAN IP with port ${port}.`);
@@ -3226,7 +3244,19 @@ const server = Bun.serve({
   port,
   hostname,
   idleTimeout: Math.min(255, Math.ceil(IMAGE_JOB_RUNNING_TIMEOUT_MS / 1000) + 30),
-  fetch: app.fetch
+  fetch(request, bunServer) {
+    const headers = new Headers(request.headers);
+    headers.delete(SESSION_SHARE_CLIENT_IP_HEADER);
+    const clientAddress = resolveSessionShareClientAddress({
+      socketAddress: bunServer.requestIP(request)?.address,
+      trustProxy,
+      cfConnectingIp: request.headers.get("cf-connecting-ip"),
+      forwardedFor: request.headers.get("x-forwarded-for"),
+      realIp: request.headers.get("x-real-ip")
+    });
+    if (clientAddress) headers.set(SESSION_SHARE_CLIENT_IP_HEADER, clientAddress);
+    return app.fetch(new Request(request, { headers }));
+  }
 });
 (globalThis as typeof globalThis & { __gptImageServer?: typeof server }).__gptImageServer = server;
 

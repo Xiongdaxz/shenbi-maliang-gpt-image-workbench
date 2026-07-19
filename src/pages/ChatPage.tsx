@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { InfiniteData } from "@tanstack/react-query";
+import { Share } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
 import { AddAssetFromImageModal } from "../components/AddAssetFromImageModal";
 import { CaseMaterialPickerModal } from "../components/CaseMaterialPickerModal";
 import { ChatComposer } from "../components/chat/ChatComposer";
-import { ChatMessage, ChatMessageThread } from "../components/chat/ChatMessages";
+import { ConversationView } from "../components/chat/ConversationView";
 import { FeatureIntroModal } from "../components/FeatureIntroModal";
 import { ImageEditWorkspace } from "../components/ImageEditWorkspace";
 import { PromptStarter } from "../components/PromptStarter";
 import { RenderingErrorMessage, RenderingMessage } from "../components/RenderingMessage";
 import { ScrollJumpButton } from "../components/ScrollJumpButton";
+import { absoluteShareUrl, ShareConversationDialog } from "../components/ShareConversationDialog";
+import { SessionActionsMenu } from "../components/sidebar/SessionActionsMenu";
 import {
   NEW_SESSION_PENDING_SCOPE,
   createSubmitRequestId,
@@ -39,8 +42,9 @@ import { GUIDE_KEYS, useGuideSeen } from "../hooks/useGuideSeen";
 import { useImageProviderSelection } from "../hooks/useImageProviderSelection";
 import { useImageEditorLauncher } from "../hooks/useImageEditorLauncher";
 import { useRunningImageJobRefresh } from "../hooks/useRunningImageJobRefresh";
+import { copyTextToClipboard } from "../lib/clipboard";
 import { COMPOSER_NEW_DRAFT_SCOPE_KEY, useWorkbench, type ComposerSessionDraft, type ImageEditorOpenRequest } from "../store/workbench";
-import type { AssetItem, CaseCategory, CaseMaterialItem, ChatSession, ImageEditSuggestion, ImageJob, Message, User, WorkImage } from "../types";
+import type { AssetItem, CaseCategory, CaseMaterialItem, ChatSession, ImageEditSuggestion, ImageJob, Message, SessionShareLink, User, WorkImage } from "../types";
 import { ConfirmDialog, useToast } from "../ui";
 
 type SessionPage = Awaited<ReturnType<typeof api.sessions>>;
@@ -461,7 +465,19 @@ function initialPromptInputOptimizeStyleFromBrowser(): ComposerSessionDraft["pro
   }
 }
 
-export function ChatPage({ user }: { user: User }) {
+type ChatPageSessionActions = {
+  open: boolean;
+  title: string;
+  pinned: boolean;
+  disabled: boolean;
+  onOpenChange: (open: boolean) => void;
+  onRename: (title: string) => void;
+  onPin: () => void;
+  onArchive: () => void;
+  onDelete: () => void;
+};
+
+export function ChatPage({ user, sessionActions }: { user: User; sessionActions?: ChatPageSessionActions }) {
   const { sessionId } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -510,6 +526,10 @@ export function ChatPage({ user }: { user: User }) {
   const [activeSubmitCancellation, setActiveSubmitCancellation] = useState<ActiveSubmitCancellation | null>(null);
   const [cancelPending, setCancelPending] = useState(false);
   const [restoreConflict, setRestoreConflict] = useState<RestoreConflictState | null>(null);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [createdShareLink, setCreatedShareLink] = useState<SessionShareLink | null>(null);
+  const currentSessionIdRef = useRef(sessionId);
+  currentSessionIdRef.current = sessionId;
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const promptOptimizeCustomInstructionSaveTimerRef = useRef<number | null>(null);
   const pendingSubmitScopeRef = useRef<string | null>(pendingSubmitScope);
@@ -891,6 +911,23 @@ export function ChatPage({ user }: { user: User }) {
     },
     onSettled: (_result, _error, request) => {
       cancelledSubmitIdsRef.current.delete(request.clientRequestId);
+    }
+  });
+  const createShareLink = useMutation({
+    mutationFn: (request: { sessionId: string; messageIds: string[] }) => api.createSessionShareLink(request.sessionId, request.messageIds),
+    onSuccess: ({ shareLink }, request) => {
+      queryClient.invalidateQueries({ queryKey: ["session-share-links"] });
+      if (currentSessionIdRef.current !== request.sessionId) return;
+      setCreatedShareLink(shareLink);
+      setShareDialogOpen(true);
+      void copyTextToClipboard(absoluteShareUrl(shareLink), { requireGrantedPermission: true }).then((copied) => {
+        if (currentSessionIdRef.current !== request.sessionId) return;
+        showToast(t(copied ? "shareDialog.copied" : "shareDialog.createdToast"));
+      });
+    },
+    onError: (shareError, request) => {
+      if (currentSessionIdRef.current !== request.sessionId) return;
+      showToast(shareError instanceof Error ? shareError.message : t("shareDialog.createFailed"), "error");
     }
   });
   const captureSubmittedDraft = (overrides: Partial<SubmittedDraftSnapshot> = {}): SubmittedDraftSnapshot => ({
@@ -1415,6 +1452,7 @@ export function ChatPage({ user }: { user: User }) {
 
   const serverMessages = messages.data?.messages ?? [];
   const serverRenderState = useMemo(() => buildChatRenderState(serverMessages, activeBranchId), [activeBranchId, serverMessages]);
+  const shareableMessageIds = useMemo(() => serverRenderState.visibleMessages.map((message) => message.id), [serverRenderState.visibleMessages]);
   const selectedBranchId = activeBranchId ?? serverRenderState.activeBranchId;
   const { currentViewSubmitting, loadingTitle, messageList, visibleLoadingMode, visiblePendingUserMessage } = useChatViewState({
     currentScopeBusy,
@@ -1542,6 +1580,10 @@ export function ChatPage({ user }: { user: User }) {
     setActiveBranchId(null);
     setStarterPromptOptimizeRequest(null);
     setError("");
+    if (sessionChanged) {
+      setShareDialogOpen(false);
+      setCreatedShareLink(null);
+    }
     if (sessionChanged && imageEditor && !editorImageRequest?.persistAcrossSessionChange) {
       closeImageEditor({ restoreSidebar: false });
     }
@@ -2005,6 +2047,9 @@ export function ChatPage({ user }: { user: User }) {
     !latestVisibleFailedJob &&
     !showStarter
   );
+  const shareLinkPendingForCurrentSession = Boolean(
+    createShareLink.isPending && createShareLink.variables?.sessionId === sessionId
+  );
 
   return (
     <section
@@ -2016,21 +2061,57 @@ export function ChatPage({ user }: { user: User }) {
         branchSwitchOptions.length > 1 && "has-branch-switch"
       )}
     >
-      {branchSwitchOptions.length > 1 ? (
-        <div className="chat-branch-switch" aria-label={t("chat.branchSwitch")}>
-          {branchSwitchOptions.map((option) => (
+      {sessionId ? (
+        <div className="chat-page-top-actions">
+          <div className="chat-page-actions">
             <button
-              key={option.id}
+              className="chat-share-trigger"
               type="button"
-              className={cx(option.active && "active")}
-              onClick={() => setActiveBranchId(option.id)}
-              aria-label={t("chat.switchBranch", { label: option.label })}
-              aria-pressed={option.active}
-              title={option.title}
+              aria-label={t("shareDialog.share")}
+              data-tooltip={t("shareDialog.share")}
+              disabled={currentScopeBusy || messages.isLoading || shareLinkPendingForCurrentSession || shareableMessageIds.length === 0}
+              onClick={() => {
+                setCreatedShareLink(null);
+                setShareDialogOpen(false);
+                createShareLink.reset();
+                createShareLink.mutate({ sessionId, messageIds: shareableMessageIds });
+              }}
             >
-              {option.label}
+              <Share size={17} />
+              <span>{t("shareDialog.share")}</span>
             </button>
-          ))}
+            {sessionActions ? (
+              <SessionActionsMenu
+                variant="toolbar"
+                open={sessionActions.open}
+                title={sessionActions.title}
+                pinned={sessionActions.pinned}
+                disabled={sessionActions.disabled}
+                onOpenChange={sessionActions.onOpenChange}
+                onRename={sessionActions.onRename}
+                onPin={sessionActions.onPin}
+                onArchive={sessionActions.onArchive}
+                onDelete={sessionActions.onDelete}
+              />
+            ) : null}
+          </div>
+          {branchSwitchOptions.length > 1 ? (
+            <div className="chat-branch-switch" aria-label={t("chat.branchSwitch")}>
+              {branchSwitchOptions.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={cx(option.active && "active")}
+                  onClick={() => setActiveBranchId(option.id)}
+                  aria-label={t("chat.switchBranch", { label: option.label })}
+                  aria-pressed={option.active}
+                  title={option.title}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
       <div className={cx("message-area", showStarter && "message-area-empty")}>
@@ -2045,41 +2126,25 @@ export function ChatPage({ user }: { user: User }) {
           />
         ) : null}
         {showMessageSkeleton ? <ChatMessageSkeleton /> : null}
-        {renderItems.map((item, index) =>
-          item.type === "thread" ? (
-            <div key={`${item.branchId}:${item.rootId}`} className="message-enter-thread" style={messageRevealStyle(index)}>
-              <ChatMessageThread
-                rootId={item.rootId}
-                versions={item.versions}
-                activeVersionIndex={item.activeVersionIndex}
-                isSubmitting={currentViewSubmitting}
-                onOpenEditor={openImageEditor}
-                onAddAsset={openAssetModal}
-                failedJobIds={failedJobIds}
-                retryingJobId={retryingJobId}
-                onRetryJob={(jobId) => {
-                  triggerRetryImageJob(jobId);
-                }}
-                onSelectVersion={
-                  item.activeVersionIndex === undefined
-                    ? undefined
-                    : (revision) => setActiveBranchId(revision.branchId || MAIN_CHAT_BRANCH_ID)
-                }
-                onSubmitEdit={(payload) =>
-                  submitMessageEdit({
-                    ...payload,
-                    branchId: item.branchId,
-                    branchForkMessageId: item.rootId
-                  })
-                }
-              />
-            </div>
-          ) : (
-            <div key={item.message.id} className="message-enter-row" style={messageRevealStyle(index)}>
-              <ChatMessage message={item.message} onOpenEditor={openImageEditor} onAddAsset={openAssetModal} />
-            </div>
-          )
-        )}
+        <ConversationView
+          items={renderItems}
+          downloadBaseName={sessionActions?.title}
+          isSubmitting={currentViewSubmitting}
+          failedJobIds={failedJobIds}
+          retryingJobId={retryingJobId}
+          itemStyle={messageRevealStyle}
+          onOpenEditor={openImageEditor}
+          onAddAsset={openAssetModal}
+          onRetryJob={triggerRetryImageJob}
+          onSelectVersion={(revision) => setActiveBranchId(revision.branchId || MAIN_CHAT_BRANCH_ID)}
+          onSubmitEdit={(context, payload) =>
+            submitMessageEdit({
+              ...payload,
+              branchId: context.branchId,
+              branchForkMessageId: context.rootId
+            })
+          }
+        />
         {visibleLoadingMode ? (
           <div ref={loadingMessageRef} className="message-enter-row loading-message-anchor" style={messageRevealStyle(renderItems.length)}>
             <RenderingMessage mode={visibleLoadingMode} />
@@ -2102,6 +2167,7 @@ export function ChatPage({ user }: { user: User }) {
       {imageEditor ? (
         <ImageEditWorkspace
           images={imageEditor.images}
+          downloadBaseName={sessionActions?.title}
           activeImageId={imageEditor.activeImageId}
           initialPrompt={imageEditor.initialPrompt}
           sizeOptions={sizeOptions}
@@ -2146,6 +2212,11 @@ export function ChatPage({ user }: { user: User }) {
           onAdd={(payload) => addAsset.mutate({ source: assetTarget, ...payload })}
         />
       ) : null}
+      <ShareConversationDialog
+        open={shareDialogOpen && createdShareLink?.sessionId === sessionId}
+        link={createdShareLink}
+        onClose={() => setShareDialogOpen(false)}
+      />
       <CaseMaterialPickerModal
         open={casePickerOpen}
         selectedCaseMaterials={selectedCaseMaterials}

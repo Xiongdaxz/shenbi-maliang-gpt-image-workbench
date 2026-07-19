@@ -10,7 +10,7 @@ import { parseImageBatchIds } from "./imageBatch";
 import { imageExtensionFromMime, mimeTypeFromPath } from "./imageFiles";
 import { readStoredFile } from "./secureFiles";
 import { imageOriginPromptsByImageIds } from "./serializers";
-import type { AssetRow, ImageAssetReferenceRow, ImageRow, MessageSourceReferenceRow, UserRow } from "./types";
+import type { AssetRow, ImageAssetReferenceRow, ImageRow, MessageSourceReferenceRow, UserAvatarHistoryRow, UserRow } from "./types";
 import { createHash } from "node:crypto";
 import { approvedCaseSql, reviewableCaseSql, reviewableSharedAssetSql, visibleAssetSql } from "./utils";
 
@@ -422,6 +422,24 @@ export function registerFileRoutes(api: Hono) {
     } catch (error) {
       console.warn("用户头像读取失败", targetUserId, error);
       return c.json({ error: "头像文件不存在" }, 404);
+    }
+  });
+
+  api.get("/files/avatar-history/:historyId", async (c) => {
+    const user = await requireUser(c);
+    if (!user) return c.json({ error: "未登录" }, 401);
+    const entry = getOne<Pick<UserAvatarHistoryRow, "path" | "mime_type">>(
+      appDb,
+      "select path, mime_type from user_avatar_history where id = ? and user_id = ?",
+      c.req.param("historyId"),
+      user.id
+    );
+    if (!entry?.path) return c.json({ error: "历史头像不存在" }, 404);
+    try {
+      return imageResponse(await readStoredFile(entry.path), entry.mime_type || "image/png");
+    } catch (error) {
+      console.warn("历史头像读取失败", user.id, error);
+      return c.json({ error: "历史头像文件不存在" }, 404);
     }
   });
 

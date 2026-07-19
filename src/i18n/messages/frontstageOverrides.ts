@@ -1,10 +1,12 @@
 import type { LocaleCode } from "../locales";
+import { sharingOverrides } from "./sharingOverrides";
 import type { Messages } from "./types";
 
 type FrontstageLocale = Exclude<LocaleCode, "zh-CN" | "zh-TW" | "en-US">;
 
 export const frontstageOverrides: Record<FrontstageLocale, Messages> = {
   "ja-JP": {
+    ...sharingOverrides["ja-JP"],
     "common.clear": "クリア",
     "common.copy": "コピー",
     "common.error": "エラーが発生しました",
@@ -103,6 +105,7 @@ export const frontstageOverrides: Record<FrontstageLocale, Messages> = {
     "inspirationBarrage.toast.sent": "新しい会話に入れました。最適化中です"
   },
   "ko-KR": {
+    ...sharingOverrides["ko-KR"],
     "common.clear": "지우기",
     "common.copy": "복사",
     "common.error": "오류가 발생했습니다",
@@ -201,6 +204,7 @@ export const frontstageOverrides: Record<FrontstageLocale, Messages> = {
     "inspirationBarrage.toast.sent": "새 대화에 입력했습니다. 최적화 중입니다"
   },
   "es-ES": {
+    ...sharingOverrides["es-ES"],
     "common.clear": "Limpiar",
     "common.copy": "Copiar",
     "common.error": "Se produjo un error",
@@ -299,6 +303,7 @@ export const frontstageOverrides: Record<FrontstageLocale, Messages> = {
     "inspirationBarrage.toast.sent": "Se insertó en una nueva conversación y se está optimizando"
   },
   "fr-FR": {
+    ...sharingOverrides["fr-FR"],
     "common.clear": "Effacer",
     "common.copy": "Copier",
     "common.error": "Une erreur est survenue",
@@ -397,6 +402,7 @@ export const frontstageOverrides: Record<FrontstageLocale, Messages> = {
     "inspirationBarrage.toast.sent": "Ajouté à une nouvelle conversation, optimisation en cours"
   },
   "de-DE": {
+    ...sharingOverrides["de-DE"],
     "common.clear": "Leeren",
     "common.copy": "Kopieren",
     "common.error": "Ein Fehler ist aufgetreten",
@@ -495,6 +501,7 @@ export const frontstageOverrides: Record<FrontstageLocale, Messages> = {
     "inspirationBarrage.toast.sent": "In eine neue Unterhaltung übernommen, Optimierung läuft"
   },
   "pt-BR": {
+    ...sharingOverrides["pt-BR"],
     "common.clear": "Limpar",
     "common.copy": "Copiar",
     "common.error": "Ocorreu um erro",
@@ -593,6 +600,7 @@ export const frontstageOverrides: Record<FrontstageLocale, Messages> = {
     "inspirationBarrage.toast.sent": "Inserido em uma nova conversa, otimizando"
   },
   "ru-RU": {
+    ...sharingOverrides["ru-RU"],
     "common.clear": "Очистить",
     "common.copy": "Копировать",
     "common.error": "Произошла ошибка",
@@ -691,6 +699,7 @@ export const frontstageOverrides: Record<FrontstageLocale, Messages> = {
     "inspirationBarrage.toast.sent": "Добавлено в новый диалог, идет оптимизация"
   },
   "fa-IR": {
+    ...sharingOverrides["fa-IR"],
     "common.clear": "پاک کردن",
     "common.copy": "کپی",
     "common.error": "خطایی رخ داد",

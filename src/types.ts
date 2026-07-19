@@ -31,6 +31,12 @@ export type User = {
   hasConfigAccess: boolean;
 };
 
+export type AvatarHistoryEntry = {
+  id: string;
+  createdAt: string;
+  url: string;
+};
+
 export type Team = {
   id: string;
   name: string;
@@ -608,6 +614,25 @@ export type PromptTemplateColorOption = {
   name: string;
   role: string;
   hex: string;
+};
+
+export type SessionShareLink = {
+  id: string;
+  sessionId: string;
+  title: string;
+  type: "chat";
+  path: string;
+  url?: string;
+  messageCount: number;
+  createdAt: string;
+};
+
+export type SharedConversation = {
+  share: {
+    title: string;
+    createdAt: string;
+  };
+  messages: Message[];
 };
 
 export type GlobalSearchScope = "all" | "chat" | "images" | "assets" | "cases" | "promptTemplates";

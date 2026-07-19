@@ -21,6 +21,11 @@ html[data-appearance="light"] .user-footer-name span {
   color: #8f8f8f;
 }
 
+html:not([data-appearance]) .shared-guest-shell .sidebar-toggle,
+html:not([data-appearance]) .shared-guest-shell .sidebar-head-search {
+  color: #8f8f8f;
+}
+
 html[data-appearance="light"] .sidebar-toggle:hover,
 html[data-appearance="light"] .sidebar-head-search:hover,
 html[data-appearance="light"] .sidebar .nav-item:hover,
@@ -84,6 +89,20 @@ html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance=
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .recent-row.menu-open .session-menu-trigger:hover,
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .recent-row.menu-open .session-menu-trigger[aria-expanded="true"] {
   background: transparent;
+}
+
+html[data-appearance="light"] .chat-share-trigger:hover:not(:disabled),
+html[data-appearance="light"] .chat-share-trigger:focus-visible,
+html[data-appearance="light"] .session-menu-trigger-toolbar:hover,
+html[data-appearance="light"] .session-menu-trigger-toolbar[aria-expanded="true"] {
+  background: #f4f4f4;
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .chat-share-trigger:hover:not(:disabled),
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .chat-share-trigger:focus-visible,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .session-menu-trigger-toolbar:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .session-menu-trigger-toolbar[aria-expanded="true"] {
+  background: var(--app-surface-soft);
 }
 
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) body {
@@ -1064,6 +1083,18 @@ html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance=
   border-color: rgba(244, 241, 234, 0.2);
   background: rgba(31, 31, 28, 0.78);
   box-shadow: 0 14px 38px rgba(0, 0, 0, 0.38);
+}
+
+html[data-appearance="dark"] .case-preview-item-thumbs button.active {
+  background: var(--app-surface);
+}
+
+html[data-appearance="dark"] .case-preview-item-thumbs button.active::after {
+  box-shadow: inset 0 0 0 2px rgba(143, 207, 255, 0.7);
+}
+
+html[data-appearance="dark"] .case-preview-item-thumbs img {
+  background: var(--app-preview-bg);
 }
 
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-preview-toolbar {

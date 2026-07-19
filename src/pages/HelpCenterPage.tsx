@@ -9,6 +9,7 @@ import { helpCenterOverrides } from "../i18n/messages/helpCenterOverrides";
 import { helpCenterPrimaryOverrides } from "../i18n/messages/helpCenterPrimaryOverrides";
 import { toTraditionalChinese } from "../i18n/messages/zh-TW";
 import { publicAssetPath } from "../lib/publicAssets";
+import type { User } from "../types";
 import {
   HELP_ARTICLES,
   HELP_CATEGORIES,
@@ -131,7 +132,7 @@ function ArticleVisual({ visual, t }: { visual: HelpArticleVisual; t: (key: stri
   );
 }
 
-export function HelpCenterPage() {
+export function HelpCenterPage({ user }: { user: User }) {
   const { resolvedLanguage, t: baseT } = useI18n();
   const helpMessages = resolvedLanguage === "zh-TW"
     ? HELP_CENTER_TRADITIONAL_MESSAGES
@@ -144,6 +145,12 @@ export function HelpCenterPage() {
     const message = helpMessages?.[key];
     return message ? formatHelpMessage(message, params) : baseT(key, params);
   }, [baseT, helpMessages]);
+  const displayName = user.username.trim() || user.account.trim();
+  const homeTitle = displayName
+    ? resolvedLanguage.startsWith("zh")
+      ? `${displayName}，${t("help.home.title")}`
+      : `${displayName}, ${t("help.home.title")}`
+    : t("help.home.title");
   const [searchParams, setSearchParams] = useSearchParams();
   const articleDetailRef = useRef<HTMLElement | null>(null);
   const rawSearch = (searchParams.get("q") ?? "").slice(0, 120);
@@ -313,7 +320,7 @@ export function HelpCenterPage() {
             <img className="help-home-maliang-art" src={HELP_MALIANG_HERO} alt="" aria-hidden="true" decoding="async" />
             <div className="help-home-intro-copy">
               <span className="help-home-eyebrow">{t("help.eyebrow")}</span>
-              <h2 id="help-home-title">{t("help.home.title")}</h2>
+              <h2 id="help-home-title">{homeTitle}</h2>
               <p>{t("help.home.description")}</p>
             </div>
           </section>

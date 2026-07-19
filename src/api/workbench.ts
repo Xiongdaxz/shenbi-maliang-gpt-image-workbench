@@ -1,5 +1,6 @@
 import type {
   AssetItem,
+  AvatarHistoryEntry,
   CaseCategory,
   ChatSession,
   ChangelogEntry,
@@ -30,6 +31,8 @@ import type {
   ProviderConfig,
   SearchHistoryItem,
   SearchHistoryScope,
+  SessionShareLink,
+  SharedConversation,
   StarterDailyCopy,
   User,
   UserPreferences,
@@ -615,11 +618,12 @@ export const api = {
       method: "POST",
       body: form
     }),
+  avatarHistory: () => request<{ entries: AvatarHistoryEntry[] }>("/api/auth/avatar-history"),
   providers: () => request<{ providers: ProviderConfig[]; imageMode: ImageGenerationMode }>("/api/providers"),
   starterCopiesToday: (language?: string) => request<StarterDailyCopy>(`/api/starter-copies/today${queryString({ language })}`),
-  changelog: (params?: Pick<PageQuery, "limit" | "offset">) =>
+  changelog: (params?: Pick<PageQuery, "limit" | "offset" | "keyword">) =>
     request<PagedResponse<{ entries: ChangelogEntry[] }>>(
-      `/api/changelog${queryString({ limit: params?.limit, offset: params?.offset })}`
+      `/api/changelog${queryString({ limit: params?.limit, offset: params?.offset, keyword: params?.keyword })}`
     ),
   sessions: (params?: SessionQuery, init?: RequestInit) =>
     request<PagedResponse<{ sessions: ChatSession[] }>>(
@@ -631,6 +635,8 @@ export const api = {
       })}`,
       init
     ),
+  session: (sessionId: string, init?: RequestInit) =>
+    request<{ session: ChatSession }>(`/api/sessions/${encodeURIComponent(sessionId)}`, init),
   createSession: (payload?: { prompt?: string; title?: string; clientRequestId?: string }, init?: RequestInit) =>
     request<{ session: ChatSession }>("/api/sessions", {
       ...init,
@@ -670,6 +676,25 @@ export const api = {
     }),
   messages: (sessionId: string, init?: RequestInit) =>
     request<{ messages: Message[] }>(`/api/sessions/${sessionId}/messages`, init),
+  createSessionShareLink: (sessionId: string, messageIds: string[]) =>
+    request<{ shareLink: SessionShareLink }>(`/api/sessions/${encodeURIComponent(sessionId)}/share-links`, {
+      method: "POST",
+      body: JSON.stringify({ messageIds })
+    }),
+  sessionShareLinks: (params?: Pick<PageQuery, "limit" | "offset">, init?: RequestInit) =>
+    request<PagedResponse<{ links: SessionShareLink[] }>>(
+      `/api/session-share-links${queryString({ limit: params?.limit, offset: params?.offset })}`,
+      init
+    ),
+  deleteSessionShareLink: (shareId: string) =>
+    request<{ ok: boolean }>(`/api/session-share-links/${encodeURIComponent(shareId)}`, { method: "DELETE" }),
+  deleteAllSessionShareLinks: () =>
+    request<{ ok: boolean; deleted: number }>("/api/session-share-links", { method: "DELETE" }),
+  sharedConversation: (token: string, init?: RequestInit) =>
+    request<SharedConversation>(`/api/shared-sessions/${encodeURIComponent(token)}`, {
+      ...init,
+      credentials: "omit"
+    }),
   sessionImageJobs: (sessionId: string, status = "running", init?: RequestInit) =>
     request<{ jobs: ImageJob[] }>(`/api/sessions/${sessionId}/image-jobs?status=${encodeURIComponent(status)}`, init),
   retryImageJob: (jobId: string) =>

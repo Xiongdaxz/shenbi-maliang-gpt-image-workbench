@@ -97,7 +97,14 @@ export function MyImageCard({
           >
             <FolderOpen size={16} />
           </button>
-          <ImageDownloadMenu source={{ type: "image", id: image.id }} className="case-action-icon" />
+          <ImageDownloadMenu
+            source={{
+              type: "image",
+              id: image.id,
+              downloadBaseName: image.suggestedCaseTitle?.trim() || image.suggestedAssetName?.trim() || image.originPrompt?.trim() || image.prompt
+            }}
+            className="case-action-icon"
+          />
         </div> : null}
       </div>
     </article>

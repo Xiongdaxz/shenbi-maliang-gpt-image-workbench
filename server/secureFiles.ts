@@ -89,6 +89,17 @@ export function secureUserAvatarPath(userId: string) {
   ].join("/");
 }
 
+export function secureUserAvatarHistoryPath(userId: string, historyId: string) {
+  return [
+    "files",
+    "secure",
+    "user-avatars",
+    sanitizeSegment(userId, "user"),
+    "history",
+    `${sanitizeSegment(historyId, "avatar")}.gimg`
+  ].join("/");
+}
+
 export function secureImageReferencePath(userId: string, sessionId: string | null | undefined, imageId: string, referenceId: string) {
   return [
     "files",
@@ -166,8 +177,10 @@ export function isStoredPathReferenced(filePath: string) {
        (select count(*) from message_source_references where path = ?) +
        (select count(*) from image_derivatives where path = ?) +
        (select count(*) from users where avatar_path = ?) +
+       (select count(*) from user_avatar_history where path = ?) +
        (select count(*) from case_items where image_url = ? or image_url = ?) +
        (select count(*) from case_group_images where image_url = ? or image_url = ?) as count`,
+    normalized,
     normalized,
     normalized,
     normalized,

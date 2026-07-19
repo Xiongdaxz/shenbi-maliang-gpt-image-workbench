@@ -26,6 +26,7 @@ import {
 } from "../lib/loginAssets";
 
 type LoginMode = "login" | "register" | "reset";
+export type LoginEntryMode = Extract<LoginMode, "login" | "register">;
 type SlideDirection = "left" | "right";
 
 const LOGIN_MODE_ORDER: Record<LoginMode, number> = {
@@ -42,13 +43,19 @@ function isRegisterEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeRegisterEmail(value));
 }
 
-export function LoginPage() {
+export function LoginPage({
+  initialMode = "login",
+  onAuthenticated
+}: {
+  initialMode?: LoginEntryMode;
+  onAuthenticated?: () => void;
+} = {}) {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const { t } = useI18n();
   const initialLoginTheme = readLoginThemePreference();
   const [rememberedLogin] = useState(readRememberedLogin);
-  const [mode, setMode] = useState<LoginMode>("login");
+  const [mode, setMode] = useState<LoginMode>(initialMode);
   const [modeSlideDirection, setModeSlideDirection] = useState<SlideDirection>("left");
   const [account, setAccount] = useState(() => rememberedLogin.account);
   const [password, setPassword] = useState(() => rememberedLogin.password);
@@ -84,16 +91,17 @@ export function LoginPage() {
   const titleEnterTimeoutRef = useRef<number | null>(null);
   const registrationStatus = useQuery({ queryKey: ["registration-status"], queryFn: api.registrationStatus });
   const branding = useQuery({ queryKey: ["branding"], queryFn: api.branding });
-  const registrationEnabled = registrationStatus.data?.enabled !== false;
+  const registrationEnabled = registrationStatus.data?.enabled === true;
   const login = useMutation({
     mutationFn: () => api.login(account, password),
-    onSuccess: () => {
+    onSuccess: async () => {
       if (rememberPassword) {
         writeRememberedLogin(account, password);
       } else {
         clearRememberedLogin();
       }
-      queryClient.invalidateQueries({ queryKey: ["me"] });
+      await queryClient.invalidateQueries({ queryKey: ["me"] });
+      onAuthenticated?.();
     }
   });
   const sendRegisterCode = useMutation({
@@ -120,8 +128,9 @@ export function LoginPage() {
         inviteCode
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["me"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["me"] });
+      onAuthenticated?.();
     }
   });
   const sendPasswordResetCode = useMutation({
@@ -175,12 +184,12 @@ export function LoginPage() {
   };
 
   useEffect(() => {
-    if (registrationEnabled || mode !== "register") return;
+    if (registrationStatus.isPending || registrationEnabled || mode !== "register") return;
     setModeSlideDirection("right");
     setMode("login");
     register.reset();
     sendRegisterCode.reset();
-  }, [mode, register, registrationEnabled, sendRegisterCode]);
+  }, [mode, register, registrationEnabled, registrationStatus.isPending, sendRegisterCode]);
 
   useEffect(() => {
     if (registerCooldown <= 0 && resetCooldown <= 0) return;
@@ -534,7 +543,7 @@ export function LoginPage() {
               </button>
             </form>
           ) : null}
-          {mode === "register" ? (
+          {mode === "register" && registrationEnabled ? (
             <form
               onSubmit={(event) => {
                 event.preventDefault();

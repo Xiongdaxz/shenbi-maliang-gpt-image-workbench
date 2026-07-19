@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { Database } from "bun:sqlite";
 import {
   DEFAULT_IMAGE_MODEL,
@@ -540,6 +540,18 @@ export function initAppDb() {
   );
 
   appDb.run(`
+    create table if not exists user_avatar_history (
+      id text primary key,
+      user_id text not null,
+      path text not null,
+      mime_type text not null,
+      created_at text not null,
+      foreign key (user_id) references users(id) on delete cascade
+    )
+  `);
+  appDb.run("create index if not exists idx_user_avatar_history_user_created on user_avatar_history(user_id, created_at desc, id desc)");
+
+  appDb.run(`
     create table if not exists user_preferences (
       user_id text primary key,
       language text not null default 'auto',
@@ -747,6 +759,53 @@ export function initAppDb() {
   `);
   appDb.run("create index if not exists messages_session_user_time_idx on messages(session_id, user_id, created_at)");
   appDb.run("create index if not exists messages_session_user_role_idx on messages(session_id, user_id, role)");
+
+  appDb.run(`
+    create table if not exists session_share_links (
+      id text primary key,
+      public_token text not null,
+      user_id text not null,
+      session_id text not null,
+      title text not null,
+      created_at text not null,
+      foreign key (user_id) references users(id) on delete cascade,
+      foreign key (session_id) references sessions(id) on delete cascade
+    )
+  `);
+  if (!tableColumnExists(appDb, "session_share_links", "public_token")) {
+    appDb.run("alter table session_share_links add column public_token text");
+  }
+  const usedSessionShareTokens = new Set(
+    getAll<{ public_token: string | null }>(appDb, "select public_token from session_share_links where public_token is not null and public_token <> ''")
+      .map((row) => row.public_token?.trim().toLowerCase() ?? "")
+      .filter(Boolean)
+  );
+  const legacySessionShares = getAll<{ id: string }>(
+    appDb,
+    "select id from session_share_links where public_token is null or public_token = '' order by created_at asc, rowid asc"
+  );
+  for (const share of legacySessionShares) {
+    let publicToken = randomUUID();
+    while (usedSessionShareTokens.has(publicToken)) publicToken = randomUUID();
+    usedSessionShareTokens.add(publicToken);
+    run(appDb, "update session_share_links set public_token = ? where id = ?", publicToken, share.id);
+  }
+  appDb.run("create unique index if not exists session_share_links_public_token_idx on session_share_links(public_token)");
+  appDb.run("create index if not exists session_share_links_user_time_idx on session_share_links(user_id, created_at desc)");
+  appDb.run("create index if not exists session_share_links_session_idx on session_share_links(session_id)");
+
+  appDb.run(`
+    create table if not exists session_share_messages (
+      share_id text not null,
+      message_id text not null,
+      sort_order integer not null,
+      primary key (share_id, message_id),
+      foreign key (share_id) references session_share_links(id) on delete cascade,
+      foreign key (message_id) references messages(id) on delete cascade
+    )
+  `);
+  appDb.run("create unique index if not exists session_share_messages_order_idx on session_share_messages(share_id, sort_order)");
+  appDb.run("create index if not exists session_share_messages_message_idx on session_share_messages(message_id)");
 
   appDb.run(`
     create table if not exists image_jobs (
@@ -1553,6 +1612,24 @@ export function initConfigDb() {
       created_at text not null
     )
   `);
+
+  configDb.run(`
+    create table if not exists session_share_signing_settings (
+      id text primary key,
+      signing_secret text not null,
+      created_at text not null,
+      updated_at text not null
+    )
+  `);
+  const sessionShareSecretTimestamp = now();
+  run(
+    configDb,
+    "insert or ignore into session_share_signing_settings (id, signing_secret, created_at, updated_at) values (?, ?, ?, ?)",
+    "default",
+    randomBytes(32).toString("base64url"),
+    sessionShareSecretTimestamp,
+    sessionShareSecretTimestamp
+  );
 
   configDb.run(`
     create table if not exists branding_assets (

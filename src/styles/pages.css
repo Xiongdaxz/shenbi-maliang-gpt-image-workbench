@@ -64,7 +64,7 @@ html:has(.help-center-page) {
   align-items: center;
   gap: 8px;
   border: 1px solid var(--app-border);
-  border-radius: 11px;
+  border-radius: 999px;
   color: var(--app-muted);
   background: var(--app-input-bg);
   padding: 0 11px;
@@ -75,8 +75,8 @@ html:has(.help-center-page) {
 }
 
 .help-search-field:focus-within {
-  border-color: color-mix(in srgb, var(--help-accent) 58%, var(--app-border));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--help-accent) 13%, transparent);
+  border-color: var(--app-border);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
 }
 
 .help-search-field input {

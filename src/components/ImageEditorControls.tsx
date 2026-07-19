@@ -45,6 +45,7 @@ export type EditorComposerPreview = {
 
 type ImageEditorTopbarProps = {
   activeImage: WorkImage;
+  downloadBaseName?: string;
   brushRangeStyle: CSSProperties;
   brushSize: number;
   hasSelection: boolean;
@@ -77,6 +78,7 @@ type ImageEditorTopbarProps = {
 
 export function ImageEditorTopbar({
   activeImage,
+  downloadBaseName,
   brushRangeStyle,
   brushSize,
   hasSelection,
@@ -197,7 +199,7 @@ export function ImageEditorTopbar({
             <Share2 size={18} />
           </button>
           <ImageDownloadMenu
-            source={{ type: "image", id: activeImage.id }}
+            source={{ type: "image", id: activeImage.id, downloadBaseName }}
             className="editor-round-btn"
             iconSize={18}
             ariaLabel={t("imageEditor.download")}

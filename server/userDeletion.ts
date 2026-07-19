@@ -54,6 +54,7 @@ export async function deleteUserAccount(userId: string) {
   ];
   const pathsToDelete = uniquePaths([
     { path: existing.avatar_path },
+    ...getAll<{ path: string }>(appDb, "select path from user_avatar_history where user_id = ?", userId),
     ...getAll<{ path: string }>(appDb, "select path from images where user_id = ?", userId),
     ...getAll<{ path: string }>(appDb, "select path from assets where user_id = ?", userId),
     ...getAll<{ path: string }>(
@@ -126,6 +127,8 @@ export async function deleteUserAccount(userId: string) {
     run(appDb, "delete from message_source_references where user_id = ? or message_id in (select id from messages where user_id = ?)", userId, userId);
     run(appDb, "delete from image_edit_suggestions where user_id = ? or image_id in (select id from images where user_id = ?)", userId, userId);
     run(appDb, "delete from asset_categories where asset_id in (select id from assets where user_id = ?)", userId);
+    run(appDb, "delete from session_share_messages where share_id in (select id from session_share_links where user_id = ?)", userId);
+    run(appDb, "delete from session_share_links where user_id = ?", userId);
     deleteImageDerivativesForSources(derivativeSources);
     run(appDb, "delete from images where user_id = ?", userId);
     run(appDb, "delete from assets where user_id = ?", userId);
@@ -135,6 +138,7 @@ export async function deleteUserAccount(userId: string) {
     run(appDb, "delete from search_history where user_id = ?", userId);
     run(appDb, "delete from prompt_color_schemes where user_id = ?", userId);
     run(appDb, "delete from user_preferences where user_id = ?", userId);
+    run(appDb, "delete from user_avatar_history where user_id = ?", userId);
     run(appDb, "delete from user_auth_sessions where user_id = ?", userId);
     run(appDb, "delete from image_job_cancel_requests where user_id = ?", userId);
     if (existing.email) run(appDb, "delete from auth_verification_codes where target_type = 'email' and lower(target) = lower(?)", existing.email);

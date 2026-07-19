@@ -52,14 +52,15 @@ export function CaseMaterialActionsMenu({ buttonClassName, onUseAsMaterial, onAd
       nextPlacement === "top-end"
         ? rect.top - CASE_MORE_MENU_HEIGHT - CASE_MORE_MENU_GAP
         : rect.bottom + CASE_MORE_MENU_GAP;
+    const viewportWidth = document.documentElement.clientWidth;
     const maxTop = window.innerHeight - CASE_MORE_MENU_HEIGHT - CASE_MORE_MENU_VIEWPORT_PADDING;
-    const maxLeft = window.innerWidth - CASE_MORE_MENU_WIDTH - CASE_MORE_MENU_VIEWPORT_PADDING;
+    const maxRight = viewportWidth - CASE_MORE_MENU_WIDTH - CASE_MORE_MENU_VIEWPORT_PADDING;
 
     return {
       placement: nextPlacement,
       style: {
         top: clamp(rawTop, CASE_MORE_MENU_VIEWPORT_PADDING, maxTop),
-        left: clamp(rect.right - CASE_MORE_MENU_WIDTH, CASE_MORE_MENU_VIEWPORT_PADDING, maxLeft)
+        right: clamp(viewportWidth - rect.right, CASE_MORE_MENU_VIEWPORT_PADDING, maxRight)
       } satisfies CSSProperties
     };
   }, []);

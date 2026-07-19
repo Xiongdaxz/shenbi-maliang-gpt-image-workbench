@@ -656,10 +656,16 @@ export function CasesPage({
                       <button className="case-action-icon" type="button" onClick={() => setEditTarget(item)} aria-label={t("pages.cases.edit")} title={t("pages.cases.edit")}>
                         <Pencil size={16} />
                       </button>
-                      <button className="case-action-icon danger" type="button" onClick={() => setDeleteTarget(item)} aria-label={t("pages.cases.delete")} title={t("pages.cases.delete")}>
-                        <Trash2 size={16} />
-                      </button>
                     </>
+                  ) : null}
+                  <ImageDownloadMenu
+                    source={item.downloadSourceType && item.downloadSourceId ? { type: item.downloadSourceType, id: item.downloadSourceId, downloadBaseName: item.title } : null}
+                    className="case-action-icon"
+                  />
+                  {item.canDelete ? (
+                    <button className="case-action-icon danger" type="button" onClick={() => setDeleteTarget(item)} aria-label={t("pages.cases.delete")} title={t("pages.cases.delete")}>
+                      <Trash2 size={16} />
+                    </button>
                   ) : null}
                   <CaseMaterialActionsMenu
                     buttonClassName="case-action-icon"
@@ -780,7 +786,7 @@ export function CasesPage({
                 </button>
               ) : null}
               <ImageDownloadMenu
-                source={item.downloadSourceType && item.downloadSourceId ? { type: item.downloadSourceType, id: item.downloadSourceId } : null}
+                source={item.downloadSourceType && item.downloadSourceId ? { type: item.downloadSourceType, id: item.downloadSourceId, downloadBaseName: item.title } : null}
                 className="case-preview-tool"
               />
               {item.canDelete ? (

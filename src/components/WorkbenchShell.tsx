@@ -16,8 +16,9 @@ import { ChatPage } from "../pages/ChatPage";
 import { ImagesPage } from "../pages/ImagesPage";
 import { InspirationBarragePage } from "../pages/InspirationBarragePage";
 import { PromptTemplateEditorPage, PromptTemplatesPage } from "../pages/PromptTemplatesPage";
+import { SharedConversationPage } from "../pages/SharedConversationPage";
 import { useWorkbench } from "../store/workbench";
-import type { ChatSession, ImageJob, User, UserPreferences } from "../types";
+import type { AvatarHistoryEntry, ChatSession, ImageJob, User, UserPreferences } from "../types";
 import { ConfirmDialog, useToast } from "../ui";
 import { useInfinitePageLoader } from "../hooks/useInfinitePageLoader";
 import { useImageJobEvents, type ImageJobEventPayload } from "../hooks/useImageJobEvents";
@@ -46,6 +47,8 @@ const SIDEBAR_WIDTH_ANIMATION_MS = 200;
 const SIDEBAR_MAIN_NAV_PATHS = ["/cases", "/assets", "/images", "/prompt-templates"];
 const SESSION_GROUP_COLLAPSE_STORAGE_KEY = "gpt-image.sidebar.session-groups.collapsed";
 const IMAGE_EDIT_SUGGESTIONS_STALE_MS = 5 * 60 * 1000;
+const AVATAR_CROP_VIEWPORT_SIZE = 280;
+const AVATAR_CROP_OUTPUT_SIZE = 512;
 type SidebarMotionState = "expanded" | "collapsing" | "collapsed" | "expanding";
 type SessionGroupKey = "pinned" | "recent";
 type SessionGroupCollapseState = Record<SessionGroupKey, boolean>;
@@ -331,6 +334,7 @@ export function WorkbenchShell({ user }: { user: User }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [archivedChatsOpen, setArchivedChatsOpen] = useState(false);
   const [openSessionMenuId, setOpenSessionMenuId] = useState<string | null>(null);
+  const [topSessionMenuOpen, setTopSessionMenuOpen] = useState(false);
   const [deleteSessionTarget, setDeleteSessionTarget] = useState<DeleteSessionTarget | null>(null);
   const [archiveAllConfirmOpen, setArchiveAllConfirmOpen] = useState(false);
   const [deleteAllConfirmOpen, setDeleteAllConfirmOpen] = useState(false);
@@ -374,6 +378,7 @@ export function WorkbenchShell({ user }: { user: User }) {
     </span>
   );
   const activeChatSessionId = location.pathname.match(/^\/chat\/([^/]+)/)?.[1] ?? null;
+  useEffect(() => setTopSessionMenuOpen(false), [activeChatSessionId]);
   const openCurrentOrNewChat = useCallback(() => {
     pauseRenderingMotion();
     setMobileMenuOpen(false);
@@ -619,11 +624,18 @@ export function WorkbenchShell({ user }: { user: User }) {
   const logout = useMutation({
     mutationFn: api.logout,
     onSuccess: () => {
+      const sharedRoute = /^\/share\/[^/]+\/?$/.test(location.pathname);
+      const sharedParams = new URLSearchParams(location.search);
+      sharedParams.delete("auth");
+      sharedParams.delete("next");
+      const postLogoutPath = sharedRoute
+        ? `${location.pathname}${sharedParams.size > 0 ? `?${sharedParams.toString()}` : ""}`
+        : "/";
       setLogoutConfirmOpen(false);
       queryClient.setQueryData(["me"], { user: null });
       queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== "me" });
       clearSessionGenerationStatuses();
-      navigate("/", { replace: true });
+      navigate(postLogoutPath, { replace: true });
     }
   });
   const deleteAccount = useMutation({
@@ -737,6 +749,7 @@ export function WorkbenchShell({ user }: { user: User }) {
       queryClient.invalidateQueries({ queryKey: ["images"] });
       queryClient.invalidateQueries({ queryKey: ["cases"] });
       queryClient.invalidateQueries({ queryKey: ["assets"] });
+      queryClient.invalidateQueries({ queryKey: ["session-share-links"] });
       leaveDeletedOrArchivedChat([sessionId]);
       showToast(t("toast.chatDeleted"));
     },
@@ -765,6 +778,7 @@ export function WorkbenchShell({ user }: { user: User }) {
       queryClient.invalidateQueries({ queryKey: ["images"] });
       queryClient.invalidateQueries({ queryKey: ["cases"] });
       queryClient.invalidateQueries({ queryKey: ["assets"] });
+      queryClient.invalidateQueries({ queryKey: ["session-share-links"] });
       if (activeChatSessionId) {
         resetNewChatComposer();
         navigate("/", { replace: true });
@@ -786,11 +800,12 @@ export function WorkbenchShell({ user }: { user: User }) {
     }
   });
   const saveProfile = useMutation({
-    mutationFn: async ({ username, avatarFile }: { username: string; avatarFile: File | null }) => {
+    mutationFn: async ({ username, avatarFile, avatarHistoryId }: { username: string; avatarFile: File | null; avatarHistoryId: string }) => {
       let nextUser = user;
       if (avatarFile) {
         const form = new FormData();
         form.set("file", avatarFile);
+        if (avatarHistoryId) form.set("historyId", avatarHistoryId);
         nextUser = (await api.uploadAvatar(form)).user;
       }
       if (username.trim() !== user.username.trim()) {
@@ -801,6 +816,7 @@ export function WorkbenchShell({ user }: { user: User }) {
     onSuccess: (data) => {
       setEditProfileDialogOpen(false);
       queryClient.setQueryData(["me"], { user: data.user });
+      queryClient.invalidateQueries({ queryKey: ["avatar-history"] });
       showToast(t("toast.profileSaved"));
     },
     onError: (error) => {
@@ -896,6 +912,7 @@ export function WorkbenchShell({ user }: { user: User }) {
   };
   const requestDeleteSession = (session: Pick<ChatSession, "id" | "title">, source: DeleteSessionTarget["source"]) => {
     setOpenSessionMenuId(null);
+    setTopSessionMenuOpen(false);
     setDeleteSessionTarget({ id: session.id, title: session.title, source });
   };
 
@@ -1130,6 +1147,36 @@ export function WorkbenchShell({ user }: { user: User }) {
 
   const pendingPinSessionId = pinChat.isPending ? pinChat.variables?.sessionId ?? null : null;
   const globalSessionActionPending = renameChat.isPending || archiveChat.isPending || deleteChat.isPending;
+  const listedActiveChatSession = activeChatSessionId
+    ? activeSessions.find((session) => session.id === activeChatSessionId) ?? null
+    : null;
+  const activeChatSessionDetails = useQuery({
+    queryKey: ["sessions", "detail", activeChatSessionId],
+    queryFn: ({ signal }) => api.session(activeChatSessionId!, { signal }),
+    enabled: Boolean(activeChatSessionId && !listedActiveChatSession),
+    staleTime: 30_000,
+    retry: false
+  });
+  const activeChatSession = listedActiveChatSession ?? activeChatSessionDetails.data?.session ?? null;
+  const activeChatSessionActionPending = Boolean(
+    activeChatSession && (globalSessionActionPending || pendingPinSessionId === activeChatSession.id)
+  );
+  const chatPageSessionActions = activeChatSession
+    ? {
+        open: topSessionMenuOpen,
+        title: activeChatSession.title,
+        pinned: Boolean(activeChatSession.pinnedAt),
+        disabled: activeChatSessionActionPending,
+        onOpenChange: (open: boolean) => {
+          if (open) setOpenSessionMenuId(null);
+          setTopSessionMenuOpen(open);
+        },
+        onRename: (title: string) => renameChat.mutate({ sessionId: activeChatSession.id, title }),
+        onPin: () => pinChat.mutate({ sessionId: activeChatSession.id, pinned: !activeChatSession.pinnedAt }),
+        onArchive: () => archiveChat.mutate({ sessionId: activeChatSession.id, archived: true }),
+        onDelete: () => requestDeleteSession(activeChatSession, "active")
+      }
+    : undefined;
 
   useLayoutEffect(() => {
     const container = sidebarScrollContentRef.current;
@@ -1232,6 +1279,7 @@ export function WorkbenchShell({ user }: { user: User }) {
             pinned={pinned}
             disabled={sessionActionPending}
             onOpenChange={(open) => {
+              if (open) setTopSessionMenuOpen(false);
               setOpenSessionMenuId((current) => (open ? session.id : current === session.id ? null : current));
             }}
             onRename={(title) => renameChat.mutate({ sessionId: session.id, title })}
@@ -1783,7 +1831,7 @@ export function WorkbenchShell({ user }: { user: User }) {
       <main className="content">
         <Routes>
           <Route path="/" element={<ChatPage user={user} />} />
-          <Route path="/chat/:sessionId" element={<ChatPage user={user} />} />
+          <Route path="/chat/:sessionId" element={<ChatPage user={user} sessionActions={chatPageSessionActions} />} />
           <Route
             path="/cases"
             element={(
@@ -1824,10 +1872,11 @@ export function WorkbenchShell({ user }: { user: User }) {
             path="/help"
             element={(
               <Suspense fallback={<div className="settings-empty">{t("common.loading")}</div>}>
-                <PageRouteTransition key="help"><HelpCenterPage /></PageRouteTransition>
+                <PageRouteTransition key="help"><HelpCenterPage user={user} /></PageRouteTransition>
               </Suspense>
             )}
           />
+          <Route path="/share/:token" element={<SharedConversationPage authenticated />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
@@ -1922,6 +1971,248 @@ function ChangePasswordDialog({
   );
 }
 
+type AvatarCropImageSize = {
+  width: number;
+  height: number;
+};
+
+type AvatarCropPosition = {
+  x: number;
+  y: number;
+};
+
+type AvatarCropSource = { url: string };
+
+function avatarCropContainScale(imageSize: AvatarCropImageSize) {
+  return Math.min(AVATAR_CROP_VIEWPORT_SIZE / imageSize.width, AVATAR_CROP_VIEWPORT_SIZE / imageSize.height);
+}
+
+function avatarCropGuideDiameter(imageSize: AvatarCropImageSize) {
+  const containScale = avatarCropContainScale(imageSize);
+  return Math.min(AVATAR_CROP_VIEWPORT_SIZE - 56, imageSize.width * containScale, imageSize.height * containScale);
+}
+
+function avatarCropMinimumZoom(imageSize: AvatarCropImageSize) {
+  const containScale = avatarCropContainScale(imageSize);
+  const guideDiameter = avatarCropGuideDiameter(imageSize);
+  return Math.max(guideDiameter / (imageSize.width * containScale), guideDiameter / (imageSize.height * containScale));
+}
+
+function clampAvatarCropImagePosition(position: AvatarCropPosition, imageSize: AvatarCropImageSize, scale: number, guideDiameter: number): AvatarCropPosition {
+  const maxX = Math.max(0, (imageSize.width * scale - guideDiameter) / 2);
+  const maxY = Math.max(0, (imageSize.height * scale - guideDiameter) / 2);
+  return {
+    x: Math.min(maxX, Math.max(-maxX, position.x)),
+    y: Math.min(maxY, Math.max(-maxY, position.y))
+  };
+}
+
+function avatarFileExtension(mimeType: string) {
+  if (mimeType === "image/jpeg") return "jpg";
+  if (mimeType === "image/png") return "png";
+  if (mimeType === "image/avif") return "avif";
+  return "webp";
+}
+
+function AvatarCropDialog({
+  imageUrl,
+  onCancel,
+  onConfirm,
+  onReselect
+}: {
+  imageUrl: string;
+  onCancel: () => void;
+  onConfirm: (file: File) => void;
+  onReselect: () => void;
+}) {
+  const { t } = useI18n();
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; position: AvatarCropPosition } | null>(null);
+  const [imageSize, setImageSize] = useState<AvatarCropImageSize | null>(null);
+  const [imagePosition, setImagePosition] = useState<AvatarCropPosition>({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [processing, setProcessing] = useState(false);
+  const [cropError, setCropError] = useState("");
+  const zoomRef = useRef(zoom);
+  const minimumScale = imageSize ? avatarCropContainScale(imageSize) : 1;
+  const scale = minimumScale * zoom;
+  const guideDiameter = imageSize ? avatarCropGuideDiameter(imageSize) : 0;
+  const minimumZoom = imageSize && guideDiameter ? avatarCropMinimumZoom(imageSize) : 1;
+
+  const updateZoom = useCallback((nextZoom: number) => {
+    const boundedZoom = Math.min(3, Math.max(minimumZoom, nextZoom));
+    setZoom(boundedZoom);
+    if (imageSize) {
+      const nextScale = minimumScale * boundedZoom;
+      setImagePosition((current) => clampAvatarCropImagePosition(current, imageSize, nextScale, guideDiameter));
+    }
+  }, [guideDiameter, imageSize, minimumScale, minimumZoom]);
+
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!imageSize || processing) return;
+      updateZoom(zoomRef.current + (event.deltaY > 0 ? -0.08 : 0.08));
+    };
+    stage.addEventListener("wheel", handleWheel, { passive: false });
+    return () => stage.removeEventListener("wheel", handleWheel);
+  }, [imageSize, processing, updateZoom]);
+
+  const resetCrop = () => {
+    setZoom(minimumZoom);
+    setImagePosition({ x: 0, y: 0 });
+    setCropError("");
+  };
+
+  const finishDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (dragRef.current?.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+
+  const confirmCrop = async () => {
+    const image = imageRef.current;
+    if (!image || !imageSize || processing) return;
+    setProcessing(true);
+    setCropError("");
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = AVATAR_CROP_OUTPUT_SIZE;
+      canvas.height = AVATAR_CROP_OUTPUT_SIZE;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("canvas unavailable");
+      const imageLeft = (AVATAR_CROP_VIEWPORT_SIZE - imageSize.width * scale) / 2 + imagePosition.x;
+      const imageTop = (AVATAR_CROP_VIEWPORT_SIZE - imageSize.height * scale) / 2 + imagePosition.y;
+      const sourceSize = guideDiameter / scale;
+      const sourceX = (AVATAR_CROP_VIEWPORT_SIZE / 2 - guideDiameter / 2 - imageLeft) / scale;
+      const sourceY = (AVATAR_CROP_VIEWPORT_SIZE / 2 - guideDiameter / 2 - imageTop) / scale;
+      context.drawImage(image, sourceX, sourceY, sourceSize, sourceSize, 0, 0, AVATAR_CROP_OUTPUT_SIZE, AVATAR_CROP_OUTPUT_SIZE);
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.92));
+      if (!blob) throw new Error("canvas export failed");
+      onConfirm(new File([blob], "avatar.webp", { type: blob.type || "image/webp" }));
+    } catch {
+      setCropError(t("profile.avatarCropLoadFailed"));
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop modal-backdrop-top avatar-crop-backdrop">
+      <section className="case-modal compact-modal action-modal avatar-crop-modal" role="dialog" aria-modal="true" aria-label={t("profile.avatarCrop")}>
+        <header>
+          <div>
+            <h3>{t("profile.avatarCrop")}</h3>
+            <p>{t("profile.avatarCropHint")}</p>
+          </div>
+          <button type="button" onClick={onCancel} disabled={processing} aria-label={t("common.close")}>
+            <X size={18} />
+          </button>
+        </header>
+        <div
+          ref={stageRef}
+          className="avatar-crop-stage"
+          aria-busy={!imageSize || processing}
+          onPointerDown={(event) => {
+            if (!imageSize || processing) return;
+            event.currentTarget.setPointerCapture(event.pointerId);
+            dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, position: imagePosition };
+          }}
+          onPointerMove={(event) => {
+            const drag = dragRef.current;
+            if (!drag || drag.pointerId !== event.pointerId || !imageSize) return;
+            setImagePosition(clampAvatarCropImagePosition({
+              x: drag.position.x + event.clientX - drag.startX,
+              y: drag.position.y + event.clientY - drag.startY
+            }, imageSize, scale, guideDiameter));
+          }}
+          onPointerUp={finishDrag}
+          onPointerCancel={finishDrag}
+        >
+          <img
+            ref={imageRef}
+            className="avatar-crop-image"
+            src={imageUrl}
+            alt=""
+            draggable={false}
+            style={imageSize ? {
+              width: `${imageSize.width * scale}px`,
+              height: `${imageSize.height * scale}px`,
+              left: `calc(50% + ${imagePosition.x}px)`,
+              top: `calc(50% + ${imagePosition.y}px)`
+            } : undefined}
+            onLoad={(event) => {
+              const nextImageSize = { width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight };
+              if (!nextImageSize.width || !nextImageSize.height) return;
+              setImageSize(nextImageSize);
+              setZoom(avatarCropMinimumZoom(nextImageSize));
+              setImagePosition({ x: 0, y: 0 });
+              setCropError("");
+            }}
+            onError={() => setCropError(t("profile.avatarCropLoadFailed"))}
+          />
+          {guideDiameter ? (
+            <>
+              <span
+                className="avatar-crop-outside-mask"
+                aria-hidden="true"
+                style={{ "--avatar-crop-guide-radius": `${guideDiameter / 2}px` } as CSSProperties}
+              />
+              <span
+                className="avatar-crop-guide"
+                aria-hidden="true"
+                style={{
+                  width: `${guideDiameter}px`,
+                  height: `${guideDiameter}px`,
+                  left: `${(AVATAR_CROP_VIEWPORT_SIZE - guideDiameter) / 2}px`,
+                  top: `${(AVATAR_CROP_VIEWPORT_SIZE - guideDiameter) / 2}px`
+                }}
+              />
+            </>
+          ) : null}
+        </div>
+        <div className="avatar-crop-zoom">
+          <label htmlFor="avatar-crop-zoom">{t("profile.avatarCropZoom")}</label>
+          <input
+            id="avatar-crop-zoom"
+            type="range"
+            min={minimumZoom}
+            max="3"
+            step="0.01"
+            value={zoom}
+            style={{ "--avatar-crop-zoom": `${((zoom - minimumZoom) / (3 - minimumZoom)) * 100}%` } as CSSProperties}
+            disabled={!imageSize || processing}
+            onChange={(event) => updateZoom(Number(event.target.value))}
+          />
+          <button type="button" className="secondary-btn" onClick={onReselect} disabled={processing}>
+            <Camera size={14} />
+            {t("profile.avatarCropReselect")}
+          </button>
+          <button type="button" className="secondary-btn" onClick={resetCrop} disabled={!imageSize || processing}>
+            <RotateCcw size={14} />
+            {t("profile.avatarCropReset")}
+          </button>
+        </div>
+        {cropError ? <div className="form-error">{cropError}</div> : null}
+        <div className="row-actions">
+          <button className="secondary-btn" type="button" onClick={onCancel} disabled={processing}>{t("common.cancel")}</button>
+          <button className="primary-btn" type="button" onClick={() => void confirmCrop()} disabled={!imageSize || processing}>
+            {processing ? t("common.saving") : t("profile.avatarCropConfirm")}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function EditProfileDialog({
   currentUsername,
   account,
@@ -1937,12 +2228,17 @@ function EditProfileDialog({
   pending: boolean;
   error: string;
   onClose: () => void;
-  onSubmit: (payload: { username: string; avatarFile: File | null }) => void;
+  onSubmit: (payload: { username: string; avatarFile: File | null; avatarHistoryId: string }) => void;
 }) {
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const [username, setUsername] = useState(currentUsername);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState("");
+  const [avatarCropSource, setAvatarCropSource] = useState<AvatarCropSource | null>(null);
+  const [selectedAvatarHistoryId, setSelectedAvatarHistoryId] = useState("");
+  const [selectingAvatarHistoryId, setSelectingAvatarHistoryId] = useState("");
+  const [usernameTouched, setUsernameTouched] = useState(false);
+  const [usernameFocused, setUsernameFocused] = useState(false);
   const [localError, setLocalError] = useState("");
   const [generatedUsername, setGeneratedUsername] = useState<{ previous: string; generated: string } | null>(null);
   const [usernameSuggestions, setUsernameSuggestions] = useState<string[]>([]);
@@ -1950,11 +2246,17 @@ function EditProfileDialog({
   const trimmedUsername = username.trim();
   const currentTrimmedUsername = currentUsername.trim();
   const usernameValidationError = validateProfileUsername(username, t);
+  const visibleUsernameValidationError = usernameTouched && !usernameFocused ? usernameValidationError : "";
   const usernameChanged = trimmedUsername !== currentTrimmedUsername;
   const avatarChanged = Boolean(avatarFile);
   const visibleAvatarUrl = avatarPreviewUrl || avatarUrl;
   const visibleAvatarText = (trimmedUsername || currentTrimmedUsername || "U").slice(0, 1).toUpperCase();
   const canUndoGeneratedUsername = Boolean(generatedUsername && username === generatedUsername.generated);
+  const avatarHistory = useQuery({
+    queryKey: ["avatar-history"],
+    queryFn: api.avatarHistory,
+    staleTime: Infinity
+  });
   const suggestUsername = useMutation({
     mutationFn: (_previousUsername: string) => api.suggestUsername(),
     onSuccess: (data) => {
@@ -1964,11 +2266,17 @@ function EditProfileDialog({
       setUsernameSuggestions(suggestions);
     }
   });
+  const recentAvatarHistoryEntries = (avatarHistory.data?.entries ?? []).slice(0, 3);
 
   useEffect(() => {
     setUsername(currentUsername);
     setAvatarFile(null);
     setAvatarPreviewUrl("");
+    setAvatarCropSource(null);
+    setSelectedAvatarHistoryId("");
+    setSelectingAvatarHistoryId("");
+    setUsernameTouched(false);
+    setUsernameFocused(false);
     setLocalError("");
     setGeneratedUsername(null);
     setUsernameSuggestions([]);
@@ -1986,15 +2294,26 @@ function EditProfileDialog({
     [avatarPreviewUrl]
   );
 
+  useEffect(
+    () => () => {
+      if (avatarCropSource?.url) URL.revokeObjectURL(avatarCropSource.url);
+    },
+    [avatarCropSource]
+  );
+
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (pending || suggestUsername.isPending) return;
-    if (usernameValidationError) return;
+    if (usernameValidationError) {
+      setUsernameFocused(false);
+      setUsernameTouched(true);
+      return;
+    }
     if (!usernameChanged && !avatarChanged) {
       setLocalError(t("profile.noChanges"));
       return;
     }
-    onSubmit({ username: trimmedUsername, avatarFile });
+    onSubmit({ username: trimmedUsername, avatarFile, avatarHistoryId: selectedAvatarHistoryId });
   };
   const generateUsername = () => {
     const previousUsername = generatedUsername?.previous ?? username;
@@ -2009,18 +2328,45 @@ function EditProfileDialog({
     setGeneratedUsername({ previous: previousUsername, generated: nextUsername });
     setLocalError("");
   };
-  const errorMessage = usernameValidationError || localError || (suggestUsername.error instanceof Error ? suggestUsername.error.message : "") || error;
+  const chooseAvatarHistory = async (entry: AvatarHistoryEntry) => {
+    if (pending || selectingAvatarHistoryId) return;
+    setSelectingAvatarHistoryId(entry.id);
+    setLocalError("");
+    try {
+      const response = await fetch(entry.url, { credentials: "same-origin" });
+      if (!response.ok) throw new Error("avatar history unavailable");
+      const blob = await response.blob();
+      const mimeType = blob.type || "image/png";
+      const file = new File([blob], `avatar-history.${avatarFileExtension(mimeType)}`, { type: mimeType });
+      setAvatarFile(file);
+      setAvatarPreviewUrl(URL.createObjectURL(file));
+      setSelectedAvatarHistoryId(entry.id);
+    } catch {
+      setLocalError(t("profile.avatarHistoryLoadFailed"));
+    } finally {
+      setSelectingAvatarHistoryId("");
+    }
+  };
+  const restoreCurrentAvatar = () => {
+    if (pending || selectingAvatarHistoryId) return;
+    setAvatarFile(null);
+    setAvatarPreviewUrl("");
+    setSelectedAvatarHistoryId("");
+    setLocalError("");
+  };
+  const errorMessage = visibleUsernameValidationError || localError || (suggestUsername.error instanceof Error ? suggestUsername.error.message : "") || error;
 
   return (
-    <div className="modal-backdrop modal-backdrop-top">
-      <form className="case-modal compact-modal action-modal edit-profile-modal" onSubmit={submit}>
+    <>
+      <div className="modal-backdrop modal-backdrop-top">
+        <form className="case-modal compact-modal action-modal edit-profile-modal" onSubmit={submit}>
         <header>
           <h3>{t("profile.editProfile")}</h3>
           <button type="button" onClick={onClose} aria-label={t("common.close")}>
             <X size={18} />
           </button>
         </header>
-        <div className="edit-profile-avatar-wrap">
+          <div className="edit-profile-avatar-wrap">
           <button
             className="edit-profile-avatar"
             type="button"
@@ -2034,28 +2380,69 @@ function EditProfileDialog({
             </span>
           </button>
           <div className="edit-profile-account">{account}</div>
-          <input
+            <input
             ref={avatarInputRef}
             className="settings-avatar-input"
             type="file"
             accept="image/png,image/jpeg,image/webp,image/avif"
-            onChange={(event) => {
-              const file = event.target.files?.[0] ?? null;
-              event.target.value = "";
-              if (!file) return;
-              if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
-              setAvatarFile(file);
-              setAvatarPreviewUrl(URL.createObjectURL(file));
-            }}
-          />
-        </div>
-        <label className="edit-profile-field">
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                event.target.value = "";
+                if (!file) return;
+                setAvatarCropSource({ url: URL.createObjectURL(file) });
+                setSelectedAvatarHistoryId("");
+              }}
+            />
+            {avatarUrl || visibleAvatarUrl || recentAvatarHistoryEntries.length ? (
+              <div className="edit-profile-avatar-history">
+                <strong>{t("profile.avatarRecord")}</strong>
+                <div className="edit-profile-avatar-history-list" role="list">
+                  <div
+                    className="edit-profile-avatar-history-current"
+                    role="listitem"
+                  >
+                    <button
+                      className="edit-profile-avatar-history-item is-current"
+                      type="button"
+                      onClick={restoreCurrentAvatar}
+                      disabled={pending || Boolean(selectingAvatarHistoryId)}
+                      aria-label={t("profile.avatarCurrent")}
+                      title={t("profile.avatarCurrent")}
+                    >
+                      {avatarUrl ? <img src={avatarUrl} alt="" /> : <span>{visibleAvatarText}</span>}
+                    </button>
+                    <small>{t("profile.avatarCurrent")}</small>
+                  </div>
+                  {recentAvatarHistoryEntries.map((entry, index) => (
+                    <button
+                      className={cx("edit-profile-avatar-history-item", selectedAvatarHistoryId === entry.id && "is-selected")}
+                      type="button"
+                      role="listitem"
+                      key={entry.id}
+                      onClick={() => void chooseAvatarHistory(entry)}
+                      disabled={pending || Boolean(selectingAvatarHistoryId)}
+                      aria-label={t("profile.avatarHistoryItem", { index: index + 1 })}
+                      title={entry.createdAt}
+                    >
+                      <img src={entry.url} alt="" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+          <label className="edit-profile-field">
           <span>{t("profile.username")}</span>
           <div className={cx("edit-profile-username-control", canUndoGeneratedUsername && "with-undo")}>
             <input
               value={username}
               autoComplete="name"
-              aria-invalid={Boolean(usernameValidationError)}
+              aria-invalid={Boolean(visibleUsernameValidationError)}
+              onFocus={() => setUsernameFocused(true)}
+              onBlur={() => {
+                setUsernameFocused(false);
+                setUsernameTouched(true);
+              }}
               onChange={(event) => {
                 const nextUsername = event.target.value;
                 setUsername(nextUsername);
@@ -2113,21 +2500,38 @@ function EditProfileDialog({
               )}
             </div>
           ) : null}
-        </label>
-        {errorMessage ? <div className="form-error">{errorMessage}</div> : null}
-        <div className="row-actions">
-          <button className="secondary-btn" type="button" onClick={onClose} disabled={pending}>
-            {t("common.cancel")}
-          </button>
-          <button
-            className="primary-btn"
-            type="submit"
-            disabled={pending || suggestUsername.isPending || Boolean(usernameValidationError) || (!usernameChanged && !avatarChanged)}
-          >
-            {pending ? t("common.saving") : t("common.save")}
-          </button>
-        </div>
-      </form>
-    </div>
+          </label>
+          {errorMessage ? <div className="form-error">{errorMessage}</div> : null}
+          <div className="row-actions">
+            <button className="secondary-btn" type="button" onClick={onClose} disabled={pending}>
+              {t("common.cancel")}
+            </button>
+            <button
+              className="primary-btn"
+              type="submit"
+              disabled={pending || suggestUsername.isPending || Boolean(usernameValidationError) || (!usernameChanged && !avatarChanged)}
+            >
+              {pending ? t("common.saving") : t("common.save")}
+            </button>
+          </div>
+        </form>
+      </div>
+      {avatarCropSource
+        ? createPortal(
+            <AvatarCropDialog
+              imageUrl={avatarCropSource.url}
+              onCancel={() => setAvatarCropSource(null)}
+              onConfirm={(file) => {
+                setAvatarFile(file);
+                setAvatarPreviewUrl(URL.createObjectURL(file));
+                setAvatarCropSource(null);
+                setSelectedAvatarHistoryId("");
+              }}
+              onReselect={() => avatarInputRef.current?.click()}
+            />,
+            document.body
+          )
+        : null}
+    </>
   );
 }
