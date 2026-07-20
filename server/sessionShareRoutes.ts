@@ -285,16 +285,32 @@ function sharePublicOrigin(c: Context) {
   return originFromHeader || resolveSessionSharePublicOrigin(c.req.url, lanAddress) || new URL(c.req.url).origin;
 }
 
-function sameOriginMutation(c: Context) {
-  if (String(c.req.header("sec-fetch-site") ?? "").toLowerCase() === "cross-site") return false;
-  const origin = String(c.req.header("origin") ?? "").trim();
+export function sessionShareMutationOriginAllowed(input: {
+  secFetchSite?: string | null;
+  origin?: string | null;
+  requestUrl: string;
+  configuredOrigin?: string | null;
+}) {
+  const fetchSite = String(input.secFetchSite ?? "").trim().toLowerCase();
+  if (fetchSite === "cross-site") return false;
+  if (fetchSite === "same-origin") return true;
+  const origin = String(input.origin ?? "").trim();
   if (!origin) return true;
-  const allowed = new Set([new URL(c.req.url).origin, configuredPublicOrigin()].filter(Boolean));
+  const allowed = new Set([new URL(input.requestUrl).origin, String(input.configuredOrigin ?? "").trim()].filter(Boolean));
   try {
     return allowed.has(new URL(origin).origin);
   } catch {
     return false;
   }
+}
+
+function sameOriginMutation(c: Context) {
+  return sessionShareMutationOriginAllowed({
+    secFetchSite: c.req.header("sec-fetch-site"),
+    origin: c.req.header("origin"),
+    requestUrl: c.req.url,
+    configuredOrigin: configuredPublicOrigin()
+  });
 }
 
 function sessionSharePath(row: Pick<SessionShareLinkRow, "id" | "public_token">) {

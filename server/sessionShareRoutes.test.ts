@@ -8,6 +8,7 @@ import {
   resolveSessionSharePublicOrigin,
   resolveSessionShareClientAddress,
   safeSharedMessageMetadata,
+  sessionShareMutationOriginAllowed,
   sessionShareSnapshotMatches,
   sessionShareIdFromToken,
   sessionShareTokenForLink,
@@ -76,6 +77,43 @@ describe("session share public origin", () => {
     expect(resolveSessionSharePublicOrigin("http://10.0.0.8:8787", "192.168.0.87")).toBe("http://10.0.0.8:8787");
     expect(resolveSessionSharePublicOrigin("http://127.0.0.1:8787", "")).toBe("http://127.0.0.1:8787");
     expect(resolveSessionSharePublicOrigin("not-a-url", "192.168.0.87")).toBe("");
+  });
+});
+
+describe("session share mutation origin", () => {
+  test("accepts browser-confirmed same-origin requests behind an HTTPS reverse proxy", () => {
+    expect(
+      sessionShareMutationOriginAllowed({
+        secFetchSite: "same-origin",
+        origin: "https://image.example.com",
+        requestUrl: "http://127.0.0.1:8787/api/sessions/session_1/share-links"
+      })
+    ).toBe(true);
+  });
+
+  test("rejects cross-site requests and keeps the origin fallback for other clients", () => {
+    expect(
+      sessionShareMutationOriginAllowed({
+        secFetchSite: "cross-site",
+        origin: "http://127.0.0.1:8787",
+        requestUrl: "http://127.0.0.1:8787/api/sessions/session_1/share-links"
+      })
+    ).toBe(false);
+    expect(
+      sessionShareMutationOriginAllowed({
+        secFetchSite: "same-site",
+        origin: "https://image.example.com",
+        requestUrl: "http://127.0.0.1:8787/api/sessions/session_1/share-links",
+        configuredOrigin: "https://image.example.com"
+      })
+    ).toBe(true);
+    expect(
+      sessionShareMutationOriginAllowed({
+        origin: "https://attacker.example",
+        requestUrl: "http://127.0.0.1:8787/api/sessions/session_1/share-links",
+        configuredOrigin: "https://image.example.com"
+      })
+    ).toBe(false);
   });
 });
 
