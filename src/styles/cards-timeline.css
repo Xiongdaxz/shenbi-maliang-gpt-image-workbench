@@ -23,6 +23,14 @@
   grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
 }
 
+.case-virtual-grid {
+  width: 100%;
+}
+
+.case-virtual-grid-row {
+  align-items: start;
+}
+
 .case-card,
 .image-card,
 .asset-card,
@@ -41,8 +49,10 @@
 }
 
 .case-card {
-  display: grid;
-  grid-template-rows: auto 1fr;
+  --case-card-height-offset: 85px;
+  position: relative;
+  display: block;
+  border: 0;
 }
 
 .case-image-frame,
@@ -50,6 +60,18 @@
   position: relative;
   overflow: hidden;
   background: #f3f4f6;
+}
+
+.case-image-frame::before {
+  content: "";
+  display: block;
+  padding-top: calc(100% + var(--case-card-height-offset));
+}
+
+.case-image-frame .case-image-btn {
+  position: absolute;
+  inset: 0;
+  height: 100%;
 }
 
 .case-image-btn,
@@ -73,7 +95,8 @@
 }
 
 .case-image-btn .image-load-shell {
-  aspect-ratio: 1 / 1;
+  height: 100%;
+  aspect-ratio: auto;
 }
 
 .image-card-image-btn .image-load-shell {
@@ -354,86 +377,8 @@
   gap: 10px;
 }
 
-.case-card-body {
-  display: grid;
-  grid-template-rows: auto auto auto;
-  gap: 4px;
-  min-width: 0;
-  min-height: 0;
-  padding: 8px 10px 9px;
-}
-
-.case-card h3,
 .asset-group h3 {
   margin: 0 0 8px;
-}
-
-.case-card h3 {
-  margin: 0;
-  color: #111827;
-  font-size: 14px;
-  font-weight: 700;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  line-height: 1.35;
-}
-
-.case-card-title-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-.case-card-title-row h3 {
-  flex: 1;
-  min-width: 0;
-}
-
-.case-card-title-row .asset-space-badge {
-  padding: 3px 6px;
-  font-size: 11px;
-}
-
-.case-card p {
-  min-height: 54px;
-  color: #4b5563;
-  line-height: 1.55;
-}
-
-.case-card p {
-  min-height: 0;
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  line-clamp: 1;
-  -webkit-box-orient: vertical;
-}
-
-.case-review-reject {
-  min-width: 0;
-  color: #b91c1c;
-  font-size: 11px;
-  line-height: 1.35;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.case-card-body.no-style {
-  grid-template-rows: auto auto;
-}
-
-.case-card-body.no-style p {
-  height: 2.9em;
-  min-height: 2.9em;
-  max-height: 2.9em;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
 }
 
 .case-card-actions {

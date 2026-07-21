@@ -4430,6 +4430,11 @@ td small {
   background: #fef2f2;
 }
 
+.request-log-status-pill.cancelled {
+  color: #a16207;
+  background: #fef9c3;
+}
+
 .request-route-cell {
   overflow: visible;
 }

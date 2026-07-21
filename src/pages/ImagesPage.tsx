@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { CalendarArrowDown, CalendarArrowUp, CalendarDays, ChevronDown, ChevronUp, Heart, Images, LayoutGrid, ListChecks, Plus, Search, X } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../api";
@@ -18,20 +18,23 @@ import { LibraryEmptyState } from "../components/LibraryEmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { SearchHistoryInput } from "../components/SearchHistoryInput";
 import { ScrollJumpButton } from "../components/ScrollJumpButton";
+import { VirtualizedResponsiveGrid } from "../components/VirtualizedResponsiveGrid";
 import { useI18n } from "../i18n";
 import { type AssetUploadMode } from "../lib/assets";
 import { cx } from "../lib/cx";
 import { groupImagesByTimeline, imageCreatedTime, imageTimelineDateParts } from "../lib/imageTimeline";
 import { IMAGE_PAGE_SIZE } from "../lib/pagination";
-import { newestWorkImages } from "../lib/workImages";
+import { orderedWorkImages, workImageFromLibraryCard } from "../lib/workImages";
 import { useInfinitePageLoader } from "../hooks/useInfinitePageLoader";
+import { useCursorLibraryQuery } from "../hooks/useCursorLibraryQuery";
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { useScrollJump } from "../hooks/useScrollJump";
 import { useWorkbench } from "../store/workbench";
-import type { ImageBatchResult, ImageDeleteImpact, ImagePreviewOpenMode, ImagePreviewWheelMode, WorkImage } from "../types";
+import type { ImageBatchResult, ImageDeleteImpact, ImagePreviewOpenMode, ImagePreviewWheelMode, LibraryImageCard, LibraryPage, WorkImage } from "../types";
 import { ConfirmDialog, useToast } from "../ui";
 
 type ImagesViewMode = "grid" | "timeline";
-type ImageInfiniteData = InfiniteData<Awaited<ReturnType<typeof api.images>>, number>;
+type ImageInfiniteData = InfiniteData<LibraryPage<LibraryImageCard>, string | null>;
 type BatchResultState = { title: string; result: ImageBatchResult };
 
 const IMAGES_VIEW_MODE_STORAGE_KEY = "gpt-image.images.viewMode";
@@ -48,6 +51,11 @@ const TIMELINE_PADDING_LEFT = 30;
 const TIMELINE_MOBILE_PADDING_LEFT = 22;
 const TIMELINE_DATE_ROW_HEIGHT = 28;
 const TIMELINE_MOBILE_DATE_ROW_HEIGHT = 24;
+const TIMELINE_LAYOUT_SETTLE_MS = 48;
+
+function imageCardToWorkImage(card: LibraryImageCard): WorkImage {
+  return workImageFromLibraryCard(card);
+}
 
 type VirtualMetric = {
   top: number;
@@ -72,6 +80,10 @@ type TimelineVirtualRow =
       images: WorkImage[];
     };
 
+type TimelineScrollAnchor =
+  | { type: "date"; rowKey: string; viewportTop: number }
+  | { type: "image"; imageId: string; viewportTop: number };
+
 function storedImagesViewMode(): ImagesViewMode {
   try {
     const value = window.localStorage.getItem(IMAGES_VIEW_MODE_STORAGE_KEY);
@@ -86,20 +98,57 @@ function columnsForWidth(width: number, minWidth: number, gap: number, fixedMobi
   return Math.max(1, Math.floor((Math.max(1, width) + gap) / (minWidth + gap)));
 }
 
-function useElementWidth<T extends HTMLElement>(ref: RefObject<T | null>, observeKey: unknown) {
+function useSettledElementWidth<T extends HTMLElement>(ref: RefObject<T | null>, observeKey: unknown) {
   const [width, setWidth] = useState(0);
+  const [settling, setSettling] = useState(false);
+  const settlingRef = useRef(false);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    settlingRef.current = false;
+    setSettling(false);
     const element = ref.current;
     if (!element) return;
-    const updateWidth = () => setWidth(element.getBoundingClientRect().width);
-    updateWidth();
-    const observer = new ResizeObserver(updateWidth);
+    let frame = 0;
+    let settleTimer = 0;
+    let initialized = false;
+    let lastObservedWidth = -1;
+    const measure = () => {
+      frame = 0;
+      const nextWidth = Math.round(element.getBoundingClientRect().width);
+      if (nextWidth === lastObservedWidth) return;
+      lastObservedWidth = nextWidth;
+      window.clearTimeout(settleTimer);
+      if (!initialized) {
+        initialized = true;
+        setWidth(nextWidth);
+        return;
+      }
+      if (!settlingRef.current) {
+        settlingRef.current = true;
+        setSettling(true);
+      }
+      settleTimer = window.setTimeout(() => {
+        setWidth((current) => current === lastObservedWidth ? current : lastObservedWidth);
+        settlingRef.current = false;
+        setSettling(false);
+      }, TIMELINE_LAYOUT_SETTLE_MS);
+    };
+    const schedule = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(measure);
+    };
+    measure();
+    const observer = new ResizeObserver(schedule);
     observer.observe(element);
-    return () => observer.disconnect();
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(settleTimer);
+      settlingRef.current = false;
+      observer.disconnect();
+    };
   }, [observeKey, ref]);
 
-  return width;
+  return { settling, width };
 }
 
 function lowerBound(metrics: VirtualMetric[], value: number, useEnd: boolean) {
@@ -194,14 +243,14 @@ export function ImagesPage({
   const [batchCaseOpen, setBatchCaseOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ImagesViewMode>(storedImagesViewMode);
   const [keyword, setKeyword] = useState(() => urlKeyword);
+  const debouncedKeyword = useDebouncedValue(keyword, 250);
   const [favoriteOnly, setFavoriteOnly] = useState(false);
   const [collapsedTimelineGroups, setCollapsedTimelineGroups] = useState<Set<string>>(() => new Set());
   const [autoCollapseTimelineGroups, setAutoCollapseTimelineGroups] = useState(false);
   const knownTimelineGroupKeysRef = useRef<Set<string>>(new Set());
-  const gridVirtualRef = useRef<HTMLDivElement | null>(null);
   const timelineVirtualRef = useRef<HTMLDivElement | null>(null);
-  const gridWidth = useElementWidth(gridVirtualRef, viewMode);
-  const timelineWidth = useElementWidth(timelineVirtualRef, viewMode);
+  const timelineScrollAnchorRef = useRef<TimelineScrollAnchor | null>(null);
+  const { settling: timelineLayoutSettling, width: timelineWidth } = useSettledElementWidth(timelineVirtualRef, viewMode);
   const [timelineSort, setTimelineSort] = useState<"desc" | "asc">("desc");
   const clearOpenImage = useCallback(() => {
     const nextParams = new URLSearchParams(searchParams);
@@ -214,20 +263,27 @@ export function ImagesPage({
     enabled: Boolean(openImageId),
     retry: false
   });
-  const images = useInfiniteQuery({
-    queryKey: ["images", "paged", keyword, favoriteOnly, timelineSort],
-    queryFn: ({ pageParam }) =>
-      api.images({
+  const images = useCursorLibraryQuery({
+    queryKey: ["images", "library", debouncedKeyword, favoriteOnly, timelineSort],
+    queryFn: ({ cursor, signal }) =>
+      api.libraryImages({
         limit: IMAGE_PAGE_SIZE,
-        offset: Number(pageParam),
-        keyword,
+        cursor,
+        keyword: debouncedKeyword,
         sort: timelineSort,
         favoriteOnly
-      }),
-    initialPageParam: 0,
-    getNextPageParam: (lastPage) => (lastPage.pageInfo.hasMore ? lastPage.pageInfo.offset + lastPage.pageInfo.limit : undefined)
+      }, { signal })
   });
-  const imageItems = useMemo(() => images.data?.pages.flatMap((page) => page.images) ?? [], [images.data?.pages]);
+  const imageFacets = useQuery({
+    queryKey: ["images", "library-facets", debouncedKeyword],
+    queryFn: ({ signal }) => api.libraryImageFacets({ keyword: debouncedKeyword }, { signal }),
+    staleTime: 30_000,
+    gcTime: 10 * 60_000
+  });
+  const imageItems = useMemo(
+    () => (images.data?.pages.flatMap((page) => page.items) ?? []).map(imageCardToWorkImage),
+    [images.data?.pages]
+  );
   const openImagePreviewItems = useMemo(() => {
     const image = openImage.data?.image;
     if (!image) return [];
@@ -257,12 +313,12 @@ export function ImagesPage({
   const imageLoadMoreRef = useInfinitePageLoader({
     fetchNextPage: () => images.fetchNextPage(),
     hasNextPage: Boolean(images.hasNextPage),
-    isFetchingNextPage: images.isFetchingNextPage
+    isFetchNextPageError: images.isFetchNextPageError,
+    isFetchingNextPage: images.isFetchingNextPage,
+    rootMargin: "320px"
   });
   const assetCategoryList = assetCategories.data?.categories ?? [];
   const assetReviewEnabled = assetCategories.data?.reviewEnabled ?? true;
-  const allImagesNewestFirst = useMemo(() => newestWorkImages(imageItems), [imageItems]);
-
   useEffect(() => {
     setKeyword((current) => (current === urlKeyword ? current : urlKeyword));
   }, [urlKeyword]);
@@ -274,15 +330,15 @@ export function ImagesPage({
     clearOpenImage();
   }, [clearOpenImage, openImage.isError, openImageId, showToast, t]);
   const imageFilterCounts = useMemo(() => {
-    const serverCounts = images.data?.pages[0]?.counts;
+    const serverCounts = imageFacets.data;
     if (serverCounts) return serverCounts;
     return {
       all: imageItems.length,
       favorite: imageItems.filter((image) => image.favorited).length
     };
-  }, [imageItems, images.data?.pages]);
+  }, [imageFacets.data, imageItems]);
   const imageList = useMemo(() => {
-    const normalizedKeyword = keyword.trim().toLowerCase();
+    const normalizedKeyword = debouncedKeyword.trim().toLowerCase();
     return [...imageItems]
       .filter((image) => !favoriteOnly || image.favorited)
       .filter((image) => {
@@ -305,7 +361,7 @@ export function ImagesPage({
         const diff = imageCreatedTime(b.createdAt) - imageCreatedTime(a.createdAt);
         return timelineSort === "desc" ? diff : -diff;
       });
-  }, [favoriteOnly, imageItems, keyword, resolvedLanguage, t, timelineSort]);
+  }, [debouncedKeyword, favoriteOnly, imageItems, resolvedLanguage, t, timelineSort]);
   const selectedImages = useMemo(() => imageList.filter((image) => selectedImageIds.has(image.id)), [imageList, selectedImageIds]);
   const selectableLoadedImages = useMemo(() => imageList.slice(0, 200), [imageList]);
   const allLoadedSelected = selectableLoadedImages.length > 0 && selectableLoadedImages.every((image) => selectedImageIds.has(image.id));
@@ -347,12 +403,14 @@ export function ImagesPage({
     });
   }, [autoCollapseTimelineGroups, visibleTimelineGroupKeys]);
 
-  const updateCachedImages = useCallback((updater: (items: WorkImage[]) => WorkImage[]) => {
-    queryClient.setQueriesData<ImageInfiniteData>({ queryKey: ["images"] }, (data) => {
+  const updateCachedImages = useCallback((updater: (items: LibraryImageCard[]) => LibraryImageCard[]) => {
+    queryClient.setQueriesData<ImageInfiniteData>({
+      predicate: (query) => query.queryKey[0] === "images" && query.queryKey[1] === "library"
+    }, (data) => {
       if (!data) return data;
       return {
         ...data,
-        pages: data.pages.map((page) => ({ ...page, images: updater(page.images) }))
+        pages: data.pages.map((page) => ({ ...page, items: updater(page.items) }))
       };
     });
   }, [queryClient]);
@@ -528,12 +586,68 @@ export function ImagesPage({
   const mutateImageFavorite = setImageFavorite.mutate;
   const hasImageFilters = favoriteOnly || Boolean(keyword.trim());
 
-  const openEditor = useCallback((image: WorkImage) => {
-    setDraftPrompt("");
-    setEditImage(null);
-    setEditorImageRequest({ image, images: allImagesNewestFirst });
-    navigate("/");
-  }, [allImagesNewestFirst, navigate, setDraftPrompt, setEditImage, setEditorImageRequest]);
+  const loadImageDetail = useCallback(
+    (imageId: string) => queryClient.fetchQuery({
+      queryKey: ["image-detail", imageId],
+      queryFn: ({ signal }) => api.imageDetail(imageId, { signal }),
+      staleTime: 30_000
+    }).then((result) => result.image),
+    [queryClient]
+  );
+  const openEditor = useCallback(async (image: WorkImage) => {
+    const index = imageList.findIndex((item) => item.id === image.id);
+    const neighborCards = imageList.slice(Math.max(0, index - 1), Math.min(imageList.length, index + 2));
+    try {
+      const [active, counts] = await Promise.all([
+        loadImageDetail(image.id),
+        imageFacets.data
+          ? Promise.resolve(imageFacets.data)
+          : queryClient.fetchQuery({
+              queryKey: ["images", "library-facets", debouncedKeyword],
+              queryFn: ({ signal }) => api.libraryImageFacets({ keyword: debouncedKeyword }, { signal }),
+              staleTime: 30_000,
+              gcTime: 10 * 60_000
+            }).catch(() => ({
+              all: imageList.length,
+              favorite: imageList.filter((item) => item.favorited).length
+            }))
+      ]);
+      if (!active) throw new Error(t("globalSearch.openUnavailable"));
+      const pageInfo = images.data?.pages.at(-1)?.pageInfo;
+      const continuationDirection = timelineSort === "asc" ? "newer" : "older";
+      const libraryContinuations = pageInfo?.hasMore && pageInfo.nextCursor
+        ? {
+            [continuationDirection]: {
+              keyword: debouncedKeyword,
+              favoriteOnly,
+              sort: timelineSort,
+              nextCursor: pageInfo.nextCursor,
+              hasMore: true
+            }
+          }
+        : undefined;
+      setDraftPrompt("");
+      setEditImage(null);
+      setEditorImageRequest({
+        image: active,
+        images: orderedWorkImages(imageList.map((item) => item.id === active.id ? active : item), "desc"),
+        imageSort: "desc",
+        totalImageCount: favoriteOnly ? counts.favorite : counts.all,
+        libraryContinuations
+      });
+      navigate("/");
+      for (const item of neighborCards) {
+        if (item.id === active.id) continue;
+        void queryClient.prefetchQuery({
+          queryKey: ["image-detail", item.id],
+          queryFn: ({ signal }) => api.imageDetail(item.id, { signal }),
+          staleTime: 30_000
+        });
+      }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t("globalSearch.openUnavailable"), "error");
+    }
+  }, [debouncedKeyword, favoriteOnly, imageFacets.data, imageList, images.data?.pages, loadImageDetail, navigate, queryClient, setDraftPrompt, setEditImage, setEditorImageRequest, showToast, t, timelineSort]);
   const startImageCreation = useCallback(() => {
     setDraftPrompt("");
     setEditImage(null);
@@ -545,18 +659,33 @@ export function ImagesPage({
     setKeyword("");
   }, []);
 
-  const addCaseFromImage = useCallback((image: WorkImage) => {
-    const originPrompt = image.originPrompt?.trim() || image.prompt;
-    setCaseSource({
-      type: "image",
-      id: image.id,
-      url: image.previewUrl || image.url,
-      titleSeed: image.prompt,
-      promptSeed: originPrompt,
-      suggestedTitle: image.suggestedCaseTitle,
-      suggestedCategoryIds: image.suggestedCaseCategoryIds
-    });
-  }, []);
+  const addCaseFromImage = useCallback(async (image: WorkImage) => {
+    try {
+      const detail = await loadImageDetail(image.id);
+      if (!detail) throw new Error(t("globalSearch.openUnavailable"));
+      const originPrompt = detail.originPrompt?.trim() || detail.prompt;
+      setCaseSource({
+        type: "image",
+        id: detail.id,
+        url: detail.previewUrl || detail.url,
+        titleSeed: detail.prompt,
+        promptSeed: originPrompt,
+        suggestedTitle: detail.suggestedCaseTitle,
+        suggestedCategoryIds: detail.suggestedCaseCategoryIds
+      });
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t("globalSearch.openUnavailable"), "error");
+    }
+  }, [loadImageDetail, showToast, t]);
+  const openAssetFromImage = useCallback(async (image: WorkImage) => {
+    try {
+      const detail = await loadImageDetail(image.id);
+      if (!detail) throw new Error(t("globalSearch.openUnavailable"));
+      setAssetTarget(detail);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t("globalSearch.openUnavailable"), "error");
+    }
+  }, [loadImageDetail, showToast, t]);
 
   const enterBatchMode = useCallback(() => {
     if (imageList.length === 0) return;
@@ -618,29 +747,6 @@ export function ImagesPage({
     });
   }, [allTimelineGroupsCollapsed, visibleTimelineGroupKeys]);
 
-  const gridVirtual = useMemo(() => {
-    const width = Math.max(1, gridWidth || 840);
-    const mobile = width <= 640;
-    const gap = mobile ? GRID_MOBILE_GAP : GRID_GAP;
-    const columns = columnsForWidth(width, GRID_MIN_CARD_WIDTH, gap, mobile);
-    const cardWidth = (width - gap * (columns - 1)) / columns;
-    const rowHeight = Math.ceil(cardWidth * 1.25) + 2;
-    const rowStride = rowHeight + gap;
-    const rowCount = Math.ceil(imageList.length / columns);
-    const metrics = Array.from({ length: rowCount }, (_, index) => ({
-      top: index * rowStride,
-      height: rowHeight
-    }));
-    return {
-      columns,
-      gap,
-      rowHeight,
-      totalHeight: rowCount > 0 ? rowCount * rowStride - gap : 0,
-      metrics
-    };
-  }, [gridWidth, imageList.length]);
-  const gridRange = useWindowVirtualRange<HTMLDivElement>(gridVirtual.metrics, VIRTUAL_OVERSCAN_PX, gridVirtualRef, viewMode).range;
-
   const timelineVirtual = useMemo(() => {
     const measuredWidth = Math.max(1, timelineWidth || 840);
     const mobile = measuredWidth <= 640;
@@ -688,6 +794,7 @@ export function ImagesPage({
 
     return {
       columns,
+      contentWidth,
       panelGap,
       paddingLeft,
       rows,
@@ -695,64 +802,103 @@ export function ImagesPage({
       totalHeight: rows.length > 0 ? Math.max(0, cursor - groupGap) : 0
     };
   }, [collapsedTimelineGroups, timelineGroups, timelineWidth]);
+
+  useLayoutEffect(() => {
+    if (viewMode !== "timeline") {
+      timelineScrollAnchorRef.current = null;
+      return;
+    }
+    const container = timelineVirtualRef.current;
+    if (!container || timelineVirtual.rows.length === 0) return;
+
+    const containerTop = container.getBoundingClientRect().top + window.scrollY;
+    if (timelineLayoutSettling) {
+      if (timelineScrollAnchorRef.current) return;
+      const viewportOffset = window.scrollY - containerTop;
+      const anchorRow = timelineVirtual.rows.find((row) => row.top + row.height > viewportOffset)
+        ?? timelineVirtual.rows[0];
+      const viewportTop = containerTop + anchorRow.top - window.scrollY;
+      if (anchorRow.type === "date") {
+        timelineScrollAnchorRef.current = { type: "date", rowKey: anchorRow.key, viewportTop };
+        return;
+      }
+      const imageId = anchorRow.images[0]?.id;
+      if (imageId) timelineScrollAnchorRef.current = { type: "image", imageId, viewportTop };
+      return;
+    }
+
+    const anchor = timelineScrollAnchorRef.current;
+    if (!anchor) return;
+    timelineScrollAnchorRef.current = null;
+    const targetRow = anchor.type === "date"
+      ? timelineVirtual.rows.find((row) => row.key === anchor.rowKey)
+      : timelineVirtual.rows.find((row) => row.type === "images" && row.images.some((image) => image.id === anchor.imageId));
+    if (!targetRow) return;
+    const nextViewportTop = containerTop + targetRow.top - window.scrollY;
+    const scrollDelta = nextViewportTop - anchor.viewportTop;
+    if (Math.abs(scrollDelta) > 0.5) window.scrollBy({ top: scrollDelta, behavior: "auto" });
+  }, [timelineLayoutSettling, timelineVirtual.rows, timelineWidth, viewMode]);
+
   const timelineRange = useWindowVirtualRange<HTMLDivElement>(timelineVirtual.metrics, VIRTUAL_OVERSCAN_PX, timelineVirtualRef, viewMode).range;
 
   const imageContent = useMemo(() => {
     if (viewMode === "grid") {
-      const visibleRows = gridVirtual.metrics.slice(gridRange.start, gridRange.end);
       return (
-        <div ref={gridVirtualRef} className="image-virtual-grid" style={{ height: gridVirtual.totalHeight }}>
-          {visibleRows.map((metric, visibleIndex) => {
-            const rowIndex = gridRange.start + visibleIndex;
-            const rowImages = imageList.slice(rowIndex * gridVirtual.columns, rowIndex * gridVirtual.columns + gridVirtual.columns);
-            return (
-              <div
-                className="image-virtual-grid-row"
-                key={`grid-row-${rowIndex}`}
-                style={{
-                  height: metric.height,
-                  gap: gridVirtual.gap,
-                  gridTemplateColumns: `repeat(${gridVirtual.columns}, minmax(0, 1fr))`,
-                  transform: `translateY(${metric.top}px)`
-                }}
-              >
-                {rowImages.map((image) => (
-                  <MyImageCard
-                    key={image.id}
-                    image={image}
-                    assetPending={addAsset.isPending}
-                    deletePending={deleteImage.isPending}
-                    favoritePending={setImageFavorite.isPending}
-                    selectionMode={selectionMode}
-                    selected={selectedImageIds.has(image.id)}
-                    selectionDisabled={Boolean(pendingBatchAction)}
-                    onOpenEditor={openEditor}
-                    onAddCase={addCaseFromImage}
-                    onAddAsset={setAssetTarget}
-                    onDelete={setDeleteTarget}
-                    onToggleFavorite={toggleImageFavorite}
-                    onToggleSelected={toggleSelectedImage}
-                  />
-                ))}
-              </div>
-            );
-          })}
-        </div>
+        <VirtualizedResponsiveGrid
+          items={imageList}
+          getKey={(image) => image.id}
+          minColumnWidth={GRID_MIN_CARD_WIDTH}
+          estimateCardHeight={(cardWidth) => Math.ceil(cardWidth * 1.25) + 2}
+          gap={GRID_GAP}
+          mobileGap={GRID_MOBILE_GAP}
+          className="image-virtual-grid"
+          rowClassName="image-virtual-grid-row"
+          renderItem={(image, { eager, highPriority }) => (
+            <MyImageCard
+              key={image.id}
+              image={image}
+              loading={eager ? "eager" : "lazy"}
+              fetchPriority={highPriority ? "high" : "auto"}
+              assetPending={addAsset.isPending}
+              deletePending={deleteImage.isPending}
+              favoritePending={setImageFavorite.isPending}
+              selectionMode={selectionMode}
+              selected={selectedImageIds.has(image.id)}
+              selectionDisabled={Boolean(pendingBatchAction)}
+              onOpenEditor={openEditor}
+              onAddCase={addCaseFromImage}
+              onAddAsset={openAssetFromImage}
+              onDelete={setDeleteTarget}
+              onToggleFavorite={toggleImageFavorite}
+              onToggleSelected={toggleSelectedImage}
+            />
+          )}
+        />
       );
     }
 
     const visibleRows = timelineVirtual.rows.slice(timelineRange.start, timelineRange.end);
     return (
-      <div ref={timelineVirtualRef} className="image-timeline image-virtual-timeline" style={{ height: timelineVirtual.totalHeight }}>
+      <div
+        ref={timelineVirtualRef}
+        className="image-timeline image-virtual-timeline"
+        data-layout-settling={timelineLayoutSettling || undefined}
+        style={{
+          height: timelineVirtual.totalHeight,
+          overflowX: timelineLayoutSettling ? "clip" : undefined
+        }}
+      >
         {visibleRows.map((row) => {
           if (row.type === "date") {
             return (
               <section
                 className={cx("image-timeline-node", "image-virtual-timeline-row", "image-virtual-timeline-date-row", row.collapsed && "collapsed")}
+                data-timeline-row-key={row.key}
                 key={row.key}
                 style={{
                   height: row.height,
                   left: timelineVirtual.paddingLeft,
+                  width: timelineVirtual.contentWidth,
                   transform: `translateY(${row.top}px)`
                 }}
               >
@@ -779,10 +925,12 @@ export function ImagesPage({
           return (
             <div
               className="image-timeline-panel image-virtual-timeline-row image-virtual-timeline-image-row"
+              data-timeline-row-key={row.key}
               key={row.key}
               style={{
                 height: row.height,
                 left: timelineVirtual.paddingLeft,
+                width: timelineVirtual.contentWidth,
                 transform: `translateY(${row.top}px)`
               }}
             >
@@ -806,7 +954,7 @@ export function ImagesPage({
                     selectionDisabled={Boolean(pendingBatchAction)}
                     onOpenEditor={openEditor}
                     onAddCase={addCaseFromImage}
-                    onAddAsset={setAssetTarget}
+                    onAddAsset={openAssetFromImage}
                     onDelete={setDeleteTarget}
                     onToggleFavorite={toggleImageFavorite}
                     onToggleSelected={toggleSelectedImage}
@@ -822,11 +970,9 @@ export function ImagesPage({
     addAsset.isPending,
     addCaseFromImage,
     deleteImage.isPending,
-    gridRange.end,
-    gridRange.start,
-    gridVirtual,
     imageList,
     openEditor,
+    openAssetFromImage,
     pendingBatchAction,
     selectedImageIds,
     selectionMode,
@@ -834,6 +980,7 @@ export function ImagesPage({
     t,
     timelineRange.end,
     timelineRange.start,
+    timelineLayoutSettling,
     timelineVirtual,
     toggleImageFavorite,
     toggleSelectedImage,
@@ -965,6 +1112,7 @@ export function ImagesPage({
           ariaLabel={t("globalSearch.imagePreview")}
           initialZoomMode={imagePreviewOpenMode}
           wheelMode={imagePreviewWheelMode}
+          suppressStableScrollbarGutter
           onIndexChange={() => undefined}
           onClose={clearOpenImage}
         />

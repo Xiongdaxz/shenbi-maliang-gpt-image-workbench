@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, FocusEvent, FormEvent, MouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { InfiniteData } from "@tanstack/react-query";
@@ -10,6 +10,7 @@ import { languagePreferenceLabel, useI18n, type LocaleCode, type Translate } fro
 import type { AppearanceMode } from "../lib/appearance";
 import { cx } from "../lib/cx";
 import { pauseRenderingMotion } from "../lib/renderingMotion";
+import { IMAGE_PAGE_SIZE } from "../lib/pagination";
 import { AssetsPage } from "../pages/AssetsPage";
 import { CasesPage } from "../pages/CasesPage";
 import { ChatPage } from "../pages/ChatPage";
@@ -22,13 +23,38 @@ import type { AvatarHistoryEntry, ChatSession, ImageJob, User, UserPreferences }
 import { ConfirmDialog, useToast } from "../ui";
 import { useInfinitePageLoader } from "../hooks/useInfinitePageLoader";
 import { useImageJobEvents, type ImageJobEventPayload } from "../hooks/useImageJobEvents";
+import { cursorLibraryQueryOptions } from "../hooks/useCursorLibraryQuery";
 import { ProjectLogo } from "./ProjectLogo";
 import { SearchChatModal } from "./SearchChatModal";
 import { ArchivedChatsDialog } from "./settings/ArchivedChatsDialog";
 import { AppSettingsDialog } from "./settings/AppSettingsDialog";
 import { SessionActionsMenu } from "./sidebar/SessionActionsMenu";
 
-const HelpCenterPage = lazy(() => import("../pages/HelpCenterPage").then((module) => ({ default: module.HelpCenterPage })));
+type HelpCenterPageModule = typeof import("../pages/HelpCenterPage");
+let helpCenterPageModule: HelpCenterPageModule | null = null;
+let helpCenterPagePromise: Promise<HelpCenterPageModule> | null = null;
+
+function loadHelpCenterPage() {
+  if (helpCenterPageModule) return Promise.resolve(helpCenterPageModule);
+  if (!helpCenterPagePromise) {
+    helpCenterPagePromise = import("../pages/HelpCenterPage")
+      .then((module) => {
+        helpCenterPageModule = module;
+        return module;
+      })
+      .catch((error) => {
+        helpCenterPagePromise = null;
+        throw error;
+      });
+  }
+  return helpCenterPagePromise;
+}
+
+function HelpCenterPage(props: { user: User }) {
+  const Page = helpCenterPageModule?.HelpCenterPage;
+  if (!Page) throw loadHelpCenterPage();
+  return <Page {...props} />;
+}
 
 type DeleteSessionTarget = {
   id: string;
@@ -40,11 +66,28 @@ const SIDEBAR_SESSION_PAGE_SIZE = 30;
 const COLLAPSED_RECENT_CHAT_LIMIT = 10;
 const COLLAPSED_RECENT_CARD_ESTIMATED_HEIGHT = 442;
 const COLLAPSED_RECENT_VIEWPORT_PADDING = 14;
+const ROUTE_TRANSITION_MS = 300;
+const ROUTE_TRANSITION_INTERRUPT_MS = 220;
 const USER_CARD_CLOSE_ANIMATION_MS = 240;
 const SIDEBAR_TITLE_CHAR_DELAY_MS = 34;
-const SIDEBAR_CONTENT_FADE_MS = 110;
 const SIDEBAR_WIDTH_ANIMATION_MS = 200;
+
+function mergeAbortSignals(...signals: AbortSignal[]) {
+  const abortedSignal = signals.find((signal) => signal.aborted);
+  if (abortedSignal) return abortedSignal;
+
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  const cleanup = () => {
+    for (const signal of signals) signal.removeEventListener("abort", abort);
+  };
+  for (const signal of signals) signal.addEventListener("abort", abort, { once: true });
+  controller.signal.addEventListener("abort", cleanup, { once: true });
+  return controller.signal;
+}
+
 const SIDEBAR_MAIN_NAV_PATHS = ["/cases", "/assets", "/images", "/prompt-templates"];
+const SIDEBAR_MAIN_NAV_PATH_SET = new Set<string>(SIDEBAR_MAIN_NAV_PATHS);
 const SESSION_GROUP_COLLAPSE_STORAGE_KEY = "gpt-image.sidebar.session-groups.collapsed";
 const IMAGE_EDIT_SUGGESTIONS_STALE_MS = 5 * 60 * 1000;
 const AVATAR_CROP_VIEWPORT_SIZE = 280;
@@ -63,6 +106,15 @@ type ActiveSessionPages = InfiniteData<SessionPage, number>;
 
 function PageRouteTransition({ children }: { children: ReactNode }) {
   return <div className="page-route-transition">{children}</div>;
+}
+
+function routeTransitionIndex(path: string) {
+  if (path === "/cases" || path.startsWith("/cases/")) return 0;
+  if (path === "/assets") return 1;
+  if (path === "/images") return 2;
+  if (path === "/prompt-templates" || path.startsWith("/prompt-templates/")) return 3;
+  if (path === "/help") return 4;
+  return -1;
 }
 
 function moveSidebarSelectionIndicator(
@@ -314,6 +366,12 @@ export function WorkbenchShell({ user }: { user: User }) {
   const location = useLocation();
   const { showToast } = useToast();
   const { resolvedLanguage, t } = useI18n();
+  const routeTransitionStageRef = useRef<HTMLDivElement | null>(null);
+  const routeTransitionAnimationRef = useRef<Animation | null>(null);
+  const mainRoutePrefetchAbortRef = useRef<AbortController | null>(null);
+  const previousRoutePathRef = useRef(location.pathname);
+  const activeMainRouteScrollPathRef = useRef(location.pathname);
+  const mainRouteScrollPositionsRef = useRef(new Map<string, number>());
   const mobileMenuOpen = useWorkbench((state) => state.mobileMenuOpen);
   const setMobileMenuOpen = useWorkbench((state) => state.setMobileMenuOpen);
   const resetNewChatComposer = useWorkbench((state) => state.resetNewChatComposer);
@@ -459,11 +517,9 @@ export function WorkbenchShell({ user }: { user: User }) {
     setSidebarMotionState("collapsing");
     sidebarMotionTimerRef.current = window.setTimeout(() => {
       setSidebarCollapsed(true);
-      sidebarMotionTimerRef.current = window.setTimeout(() => {
-        setSidebarMotionState("collapsed");
-        sidebarMotionTimerRef.current = null;
-      }, SIDEBAR_WIDTH_ANIMATION_MS);
-    }, SIDEBAR_CONTENT_FADE_MS);
+      setSidebarMotionState("collapsed");
+      sidebarMotionTimerRef.current = null;
+    }, SIDEBAR_WIDTH_ANIMATION_MS);
   };
 
   const clearUserCardCloseTimer = useCallback(() => {
@@ -1015,6 +1071,230 @@ export function WorkbenchShell({ user }: { user: User }) {
     pauseRenderingMotion();
   }, []);
 
+  const prefetchMainRoute = useCallback(async (path: string, navigationSignal: AbortSignal) => {
+    if (path === "/cases") {
+      await Promise.all([
+        queryClient.prefetchInfiniteQuery(cursorLibraryQueryOptions({
+          queryKey: ["cases", "library", "", false, false, ""],
+          queryFn: ({ cursor, signal }) => api.libraryCases({
+            limit: IMAGE_PAGE_SIZE,
+            cursor,
+            categoryIds: [],
+            mineOnly: false,
+            favoriteOnly: false,
+            keyword: ""
+          }, { signal: mergeAbortSignals(signal, navigationSignal) })
+        })),
+        queryClient.prefetchQuery({
+          queryKey: ["cases", "library-facets", ""],
+          queryFn: ({ signal }) => api.libraryCaseFacets(
+            { keyword: "" },
+            { signal: mergeAbortSignals(signal, navigationSignal) }
+          ),
+          staleTime: 30_000,
+          gcTime: 10 * 60_000
+        }),
+        queryClient.prefetchQuery({
+          queryKey: ["case-categories"],
+          queryFn: ({ signal }) => api.caseCategories({ signal: mergeAbortSignals(signal, navigationSignal) }),
+          staleTime: 30_000,
+          gcTime: 10 * 60_000
+        })
+      ]);
+      return;
+    }
+    if (path === "/assets") {
+      await Promise.all([
+        queryClient.prefetchInfiniteQuery(cursorLibraryQueryOptions({
+          queryKey: ["assets", "library", "all", "", ""],
+          queryFn: ({ cursor, signal }) => api.libraryAssets({
+            limit: IMAGE_PAGE_SIZE,
+            cursor,
+            categoryIds: [],
+            keyword: "",
+            space: "all"
+          }, { signal: mergeAbortSignals(signal, navigationSignal) })
+        })),
+        queryClient.prefetchQuery({
+          queryKey: ["assets", "library-facets", "all", "", ""],
+          queryFn: ({ signal }) => api.libraryAssetFacets(
+            { categoryIds: [], keyword: "", space: "all" },
+            { signal: mergeAbortSignals(signal, navigationSignal) }
+          ),
+          staleTime: 30_000,
+          gcTime: 10 * 60_000
+        }),
+        queryClient.prefetchQuery({
+          queryKey: ["asset-categories"],
+          queryFn: ({ signal }) => api.assetCategories({ signal: mergeAbortSignals(signal, navigationSignal) }),
+          staleTime: 30_000,
+          gcTime: 10 * 60_000
+        })
+      ]);
+      return;
+    }
+    if (path === "/images") {
+      await Promise.all([
+        queryClient.prefetchInfiniteQuery(cursorLibraryQueryOptions({
+          queryKey: ["images", "library", "", false, "desc"],
+          queryFn: ({ cursor, signal }) => api.libraryImages({
+            limit: IMAGE_PAGE_SIZE,
+            cursor,
+            keyword: "",
+            sort: "desc",
+            favoriteOnly: false
+          }, { signal: mergeAbortSignals(signal, navigationSignal) })
+        })),
+        queryClient.prefetchQuery({
+          queryKey: ["images", "library-facets", ""],
+          queryFn: ({ signal }) => api.libraryImageFacets(
+            { keyword: "" },
+            { signal: mergeAbortSignals(signal, navigationSignal) }
+          ),
+          staleTime: 30_000,
+          gcTime: 10 * 60_000
+        })
+      ]);
+      return;
+    }
+    if (path === "/prompt-templates") {
+      await queryClient.prefetchQuery({
+        queryKey: ["prompt-templates", "all", ""],
+        queryFn: ({ signal }) => api.promptTemplates(
+          { scope: "all", keyword: "" },
+          { signal: mergeAbortSignals(signal, navigationSignal) }
+        ),
+        staleTime: 30_000,
+        gcTime: 10 * 60_000
+      });
+      return;
+    }
+    if (path === "/help") {
+      await loadHelpCenterPage();
+    }
+  }, [queryClient]);
+
+  useLayoutEffect(() => {
+    const previousPath = activeMainRouteScrollPathRef.current;
+    if (previousPath === location.pathname) return;
+
+    activeMainRouteScrollPathRef.current = location.pathname;
+    if (!SIDEBAR_MAIN_NAV_PATH_SET.has(location.pathname)) return;
+
+    window.scrollTo({
+      top: mainRouteScrollPositionsRef.current.get(location.pathname) ?? 0,
+      left: 0,
+      behavior: "auto"
+    });
+  }, [location.pathname]);
+
+  useLayoutEffect(() => {
+    const previousPath = previousRoutePathRef.current;
+    if (previousPath === location.pathname) return;
+    previousRoutePathRef.current = location.pathname;
+
+    const stage = routeTransitionStageRef.current;
+    if (!stage) return;
+
+    const runningAnimation = routeTransitionAnimationRef.current;
+    const interrupted = Boolean(runningAnimation && ["pending", "running"].includes(runningAnimation.playState));
+    const computedStyle = window.getComputedStyle(stage);
+    const currentOpacity = interrupted ? Number.parseFloat(computedStyle.opacity) : 1;
+    const currentTransform = interrupted && computedStyle.transform !== "none"
+      ? computedStyle.transform
+      : "";
+
+    runningAnimation?.cancel();
+    routeTransitionAnimationRef.current = null;
+    stage.style.removeProperty("will-change");
+
+    const nextIndex = routeTransitionIndex(location.pathname);
+    if (
+      nextIndex < 0
+      || typeof stage.animate !== "function"
+      || window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) return;
+
+    const previousIndex = routeTransitionIndex(previousPath);
+    const direction = previousIndex >= 0 && nextIndex < previousIndex ? -1 : 1;
+    const fromOpacity = interrupted && Number.isFinite(currentOpacity)
+      ? Math.min(1, Math.max(0.82, currentOpacity))
+      : 0.9;
+    const fromTransform = currentTransform || `translate3d(${direction * 7}px, 0, 0)`;
+
+    stage.style.willChange = "opacity, transform";
+    const animation = stage.animate(
+      [
+        { opacity: fromOpacity, transform: fromTransform },
+        { opacity: 1, transform: "translate3d(0, 0, 0)" }
+      ],
+      {
+        duration: interrupted ? ROUTE_TRANSITION_INTERRUPT_MS : ROUTE_TRANSITION_MS,
+        easing: "cubic-bezier(0.22, 0.8, 0.24, 1)",
+        fill: "both"
+      }
+    );
+    routeTransitionAnimationRef.current = animation;
+
+    const finish = () => {
+      if (routeTransitionAnimationRef.current !== animation) return;
+      routeTransitionAnimationRef.current = null;
+      animation.onfinish = null;
+      animation.oncancel = null;
+      animation.cancel();
+      stage.style.removeProperty("will-change");
+    };
+    animation.onfinish = finish;
+    animation.oncancel = finish;
+  }, [location.pathname]);
+
+  const navigateMainRoute = useCallback((path: string) => {
+    if (location.pathname === path) return;
+
+    mainRoutePrefetchAbortRef.current?.abort();
+    mainRoutePrefetchAbortRef.current = null;
+
+    if (SIDEBAR_MAIN_NAV_PATH_SET.has(location.pathname)) {
+      mainRouteScrollPositionsRef.current.set(location.pathname, window.scrollY);
+    }
+
+    const prefetchController = new AbortController();
+    mainRoutePrefetchAbortRef.current = prefetchController;
+    void prefetchMainRoute(path, prefetchController.signal)
+      .catch(() => undefined)
+      .finally(() => {
+        if (mainRoutePrefetchAbortRef.current === prefetchController) {
+          mainRoutePrefetchAbortRef.current = null;
+        }
+      });
+
+    navigate(path);
+  }, [location.pathname, navigate, prefetchMainRoute]);
+
+  useEffect(() => () => {
+    routeTransitionAnimationRef.current?.cancel();
+    routeTransitionAnimationRef.current = null;
+    routeTransitionStageRef.current?.style.removeProperty("will-change");
+    mainRoutePrefetchAbortRef.current?.abort();
+    mainRoutePrefetchAbortRef.current = null;
+  }, []);
+
+  const handleMainRouteNavigation = useCallback((event: MouseEvent<HTMLAnchorElement>, path: string) => {
+    pauseRenderingBeforeRouteNavigation();
+    setMobileMenuOpen(false);
+    if (
+      event.defaultPrevented
+      || event.button !== 0
+      || event.altKey
+      || event.ctrlKey
+      || event.metaKey
+      || event.shiftKey
+      || event.currentTarget.target === "_blank"
+    ) return;
+    event.preventDefault();
+    navigateMainRoute(path);
+  }, [navigateMainRoute, pauseRenderingBeforeRouteNavigation, setMobileMenuOpen]);
+
   const animateSidebarSelection = useCallback((target: HTMLElement, selectionKey: string) => {
     const container = sidebarScrollContentRef.current;
     const indicator = sidebarSelectionIndicatorRef.current;
@@ -1024,10 +1304,11 @@ export function WorkbenchShell({ user }: { user: User }) {
   }, []);
 
   const handleSidebarMainNavPointerDown = useCallback((event: ReactPointerEvent<HTMLAnchorElement>, index: number) => {
-    if (event.button === 0 && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
-      animateSidebarSelection(event.currentTarget, `nav:${SIDEBAR_MAIN_NAV_PATHS[index] ?? index}`);
-    }
     pauseRenderingBeforeRouteNavigation();
+    const path = SIDEBAR_MAIN_NAV_PATHS[index];
+    if (event.button === 0 && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && path) {
+      animateSidebarSelection(event.currentTarget, `nav:${path}`);
+    }
   }, [animateSidebarSelection, pauseRenderingBeforeRouteNavigation]);
 
   const handleSidebarSessionPointerDown = useCallback((event: ReactPointerEvent<HTMLAnchorElement>, session: ChatSession) => {
@@ -1188,10 +1469,6 @@ export function WorkbenchShell({ user }: { user: User }) {
       indicator.classList.remove("is-visible");
       container.classList.remove("is-selection-animating");
     };
-    if (sidebarMotionState === "collapsing" || sidebarMotionState === "expanding") {
-      hideIndicator();
-      return;
-    }
     const target = container.querySelector<HTMLElement>(
       '.main-nav .nav-item[aria-current="page"], .recent-row.active'
     );
@@ -1200,8 +1477,48 @@ export function WorkbenchShell({ user }: { user: User }) {
       return;
     }
     const selectionKey = target.dataset.sidebarSelectionKey ?? "";
-    if (indicator.dataset.selectionKey === selectionKey && indicator.getAnimations().length > 0) return;
-    moveSidebarSelectionIndicator(container, indicator, target, false);
+    const geometryKeyFor = (nextTarget: HTMLElement) => {
+      const containerRect = container.getBoundingClientRect();
+      const targetRect = nextTarget.getBoundingClientRect();
+      return [containerRect.left, containerRect.top, targetRect.left, targetRect.top, targetRect.width, targetRect.height]
+        .map((value) => Math.round(value * 10))
+        .join(":");
+    };
+    if (!(indicator.dataset.selectionKey === selectionKey && indicator.getAnimations().length > 0)) {
+      moveSidebarSelectionIndicator(container, indicator, target, false);
+    }
+
+    let lastGeometryKey = geometryKeyFor(target);
+    let frame = 0;
+    const syncIndicator = () => {
+      frame = 0;
+      const nextTarget = container.querySelector<HTMLElement>(
+        '.main-nav .nav-item[aria-current="page"], .recent-row.active'
+      );
+      if (!nextTarget || nextTarget.closest(".session-group.collapsed")) return;
+      const nextGeometryKey = geometryKeyFor(nextTarget);
+      if (nextGeometryKey === lastGeometryKey) return;
+      lastGeometryKey = nextGeometryKey;
+      moveSidebarSelectionIndicator(container, indicator, nextTarget, false);
+    };
+    const scheduleSync = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(syncIndicator);
+    };
+    const observer = new ResizeObserver(scheduleSync);
+    observer.observe(container);
+    observer.observe(target);
+    if (target.parentElement) observer.observe(target.parentElement);
+    const shell = container.closest(".app-shell");
+    const sidebar = container.closest(".sidebar");
+    shell?.addEventListener("transitionend", scheduleSync);
+    sidebar?.addEventListener("transitionend", scheduleSync);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+      shell?.removeEventListener("transitionend", scheduleSync);
+      sidebar?.removeEventListener("transitionend", scheduleSync);
+    };
   }, [location.pathname, sessionGroupsCollapsed.pinned, sessionGroupsCollapsed.recent, sidebarCollapsed, sidebarMotionState, sidebarSessionLayoutKey]);
 
   const renderSessionRows = (sessionRows: ChatSession[]) =>
@@ -1413,7 +1730,7 @@ export function WorkbenchShell({ user }: { user: User }) {
                 data-sidebar-tip={t("sidebar.inspiration")}
                 data-sidebar-selection-key="nav:/cases"
                 onPointerDown={(event) => handleSidebarMainNavPointerDown(event, 0)}
-                onClick={pauseRenderingBeforeRouteNavigation}
+                onClick={(event) => handleMainRouteNavigation(event, "/cases")}
               >
                 <Lightbulb size={18} />
                 <span>{t("sidebar.inspiration")}</span>
@@ -1425,7 +1742,7 @@ export function WorkbenchShell({ user }: { user: User }) {
                 data-sidebar-tip={t("sidebar.assets")}
                 data-sidebar-selection-key="nav:/assets"
                 onPointerDown={(event) => handleSidebarMainNavPointerDown(event, 1)}
-                onClick={pauseRenderingBeforeRouteNavigation}
+                onClick={(event) => handleMainRouteNavigation(event, "/assets")}
               >
                 <FolderOpen size={18} />
                 <span>{t("sidebar.assets")}</span>
@@ -1437,7 +1754,7 @@ export function WorkbenchShell({ user }: { user: User }) {
                 data-sidebar-tip={t("sidebar.images")}
                 data-sidebar-selection-key="nav:/images"
                 onPointerDown={(event) => handleSidebarMainNavPointerDown(event, 2)}
-                onClick={pauseRenderingBeforeRouteNavigation}
+                onClick={(event) => handleMainRouteNavigation(event, "/images")}
               >
                 <Images size={18} />
                 <span>{t("sidebar.images")}</span>
@@ -1449,7 +1766,7 @@ export function WorkbenchShell({ user }: { user: User }) {
                 data-sidebar-tip={t("sidebar.promptCreation")}
                 data-sidebar-selection-key="nav:/prompt-templates"
                 onPointerDown={(event) => handleSidebarMainNavPointerDown(event, 3)}
-                onClick={pauseRenderingBeforeRouteNavigation}
+                onClick={(event) => handleMainRouteNavigation(event, "/prompt-templates")}
               >
                 <Sparkles size={18} />
                 <span>{t("sidebar.promptCreation")}</span>
@@ -1578,8 +1895,8 @@ export function WorkbenchShell({ user }: { user: User }) {
                 onClick={() => {
                   closeUserCard();
                   setMobileMenuOpen(false);
-                  pauseRenderingMotion();
-                  navigate("/help");
+                  pauseRenderingBeforeRouteNavigation();
+                  navigateMainRoute("/help");
                 }}
               >
                 <CircleHelp size={16} />
@@ -1829,56 +2146,58 @@ export function WorkbenchShell({ user }: { user: User }) {
         onCancel={() => setDeleteAllConfirmOpen(false)}
       />
       <main className="content">
-        <Routes>
-          <Route path="/" element={<ChatPage user={user} />} />
-          <Route path="/chat/:sessionId" element={<ChatPage user={user} sessionActions={chatPageSessionActions} />} />
-          <Route
-            path="/cases"
-            element={(
-              <PageRouteTransition key="cases">
-                <CasesPage
-                  imagePreviewWheelMode={user.preferences?.imagePreviewWheelMode ?? "zoom"}
-                  imagePreviewOpenMode={user.preferences?.imagePreviewOpenMode ?? "contain"}
-                />
-              </PageRouteTransition>
-            )}
-          />
-          <Route path="/cases/barrage" element={<PageRouteTransition key="cases-barrage"><InspirationBarragePage /></PageRouteTransition>} />
-          <Route path="/prompt-templates" element={<PageRouteTransition key="prompt-templates"><PromptTemplatesPage /></PageRouteTransition>} />
-          <Route path="/prompt-templates/:templateId/edit" element={<PageRouteTransition key="prompt-template-editor"><PromptTemplateEditorPage /></PageRouteTransition>} />
-          <Route
-            path="/assets"
-            element={(
-              <PageRouteTransition key="assets">
-                <AssetsPage
-                  imagePreviewWheelMode={user.preferences?.imagePreviewWheelMode ?? "zoom"}
-                  imagePreviewOpenMode={user.preferences?.imagePreviewOpenMode ?? "contain"}
-                />
-              </PageRouteTransition>
-            )}
-          />
-          <Route
-            path="/images"
-            element={(
-              <PageRouteTransition key="images">
-                <ImagesPage
-                  imagePreviewWheelMode={user.preferences?.imagePreviewWheelMode ?? "zoom"}
-                  imagePreviewOpenMode={user.preferences?.imagePreviewOpenMode ?? "contain"}
-                />
-              </PageRouteTransition>
-            )}
-          />
-          <Route
-            path="/help"
-            element={(
-              <Suspense fallback={<div className="settings-empty">{t("common.loading")}</div>}>
-                <PageRouteTransition key="help"><HelpCenterPage user={user} /></PageRouteTransition>
-              </Suspense>
-            )}
-          />
-          <Route path="/share/:token" element={<SharedConversationPage authenticated />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <div className="page-route-stage" ref={routeTransitionStageRef}>
+          <Routes>
+            <Route path="/" element={<ChatPage user={user} />} />
+            <Route path="/chat/:sessionId" element={<ChatPage user={user} sessionActions={chatPageSessionActions} />} />
+            <Route
+              path="/cases"
+              element={(
+                <PageRouteTransition key="cases">
+                  <CasesPage
+                    imagePreviewWheelMode={user.preferences?.imagePreviewWheelMode ?? "pan"}
+                    imagePreviewOpenMode={user.preferences?.imagePreviewOpenMode ?? "contain"}
+                  />
+                </PageRouteTransition>
+              )}
+            />
+            <Route path="/cases/barrage" element={<PageRouteTransition key="cases-barrage"><InspirationBarragePage /></PageRouteTransition>} />
+            <Route path="/prompt-templates" element={<PageRouteTransition key="prompt-templates"><PromptTemplatesPage /></PageRouteTransition>} />
+            <Route path="/prompt-templates/:templateId/edit" element={<PageRouteTransition key="prompt-template-editor"><PromptTemplateEditorPage /></PageRouteTransition>} />
+            <Route
+              path="/assets"
+              element={(
+                <PageRouteTransition key="assets">
+                  <AssetsPage
+                    imagePreviewWheelMode={user.preferences?.imagePreviewWheelMode ?? "pan"}
+                    imagePreviewOpenMode={user.preferences?.imagePreviewOpenMode ?? "contain"}
+                  />
+                </PageRouteTransition>
+              )}
+            />
+            <Route
+              path="/images"
+              element={(
+                <PageRouteTransition key="images">
+                  <ImagesPage
+                    imagePreviewWheelMode={user.preferences?.imagePreviewWheelMode ?? "pan"}
+                    imagePreviewOpenMode={user.preferences?.imagePreviewOpenMode ?? "contain"}
+                  />
+                </PageRouteTransition>
+              )}
+            />
+            <Route
+              path="/help"
+              element={(
+                <Suspense fallback={<div className="settings-empty">{t("common.loading")}</div>}>
+                  <PageRouteTransition key="help"><HelpCenterPage user={user} /></PageRouteTransition>
+                </Suspense>
+              )}
+            />
+            <Route path="/share/:token" element={<SharedConversationPage authenticated />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </div>
       </main>
     </div>
   );

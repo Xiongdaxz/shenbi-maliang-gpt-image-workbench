@@ -40,11 +40,13 @@ export function ShareConversationDialog({
     <div className="modal-backdrop modal-backdrop-top" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="case-modal compact-modal action-modal share-conversation-dialog" role="dialog" aria-modal="true" aria-label={t("shareDialog.title")}>
         <header>
-          <h3>{t("shareDialog.title")}</h3>
+          <div className="share-dialog-heading">
+            <h3>{t("shareDialog.title")}</h3>
+            <p>{t("shareDialog.description")}</p>
+          </div>
           <button className="share-dialog-close" type="button" onClick={onClose} aria-label={t("common.close")}>
             <X size={18} />
           </button>
-          <p>{t("shareDialog.description")}</p>
         </header>
         <div className="share-dialog-result">
           <div className="share-dialog-url-row">

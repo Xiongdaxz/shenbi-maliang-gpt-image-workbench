@@ -59,8 +59,8 @@ const editSuggestionToneOptions: Array<{ value: EditSuggestionTone; labelKey: st
 ];
 
 const imagePreviewWheelOptions: Array<{ value: ImagePreviewWheelMode; labelKey: string; descriptionKey: string }> = [
-  { value: "zoom", labelKey: "settings.general.imagePreview.wheel.zoom", descriptionKey: "settings.general.imagePreview.wheel.zoomDesc" },
-  { value: "pan", labelKey: "settings.general.imagePreview.wheel.pan", descriptionKey: "settings.general.imagePreview.wheel.panDesc" }
+  { value: "pan", labelKey: "settings.general.imagePreview.wheel.pan", descriptionKey: "settings.general.imagePreview.wheel.panDesc" },
+  { value: "zoom", labelKey: "settings.general.imagePreview.wheel.zoom", descriptionKey: "settings.general.imagePreview.wheel.zoomDesc" }
 ];
 
 const imagePreviewOpenOptions: Array<{ value: ImagePreviewOpenMode; labelKey: string; descriptionKey: string }> = [
@@ -184,7 +184,7 @@ export function AppSettingsDialog({
     editSuggestionsEnabled: user.preferences?.editSuggestionsEnabled ?? true,
     editSuggestionTone: user.preferences?.editSuggestionTone ?? "default" as const,
     autoUploadPastedAssets: user.preferences?.autoUploadPastedAssets ?? true,
-    imagePreviewWheelMode: user.preferences?.imagePreviewWheelMode ?? "zoom" as const,
+    imagePreviewWheelMode: user.preferences?.imagePreviewWheelMode ?? "pan" as const,
     imagePreviewOpenMode: user.preferences?.imagePreviewOpenMode ?? "contain" as const,
     language: normalizeLanguagePreference(user.preferences?.language ?? language),
     promptOptimizeStyleGroups

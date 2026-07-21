@@ -23,6 +23,11 @@ export function paginationFromQuery(c: Context): Pagination {
   return { enabled, limit, offset };
 }
 
+export function boundedPaginationFromQuery(c: Context): Pagination {
+  const pagination = paginationFromQuery(c);
+  return pagination.enabled ? pagination : { enabled: true, limit: DEFAULT_PAGE_LIMIT, offset: 0 };
+}
+
 export function pageInfo(total: number, pagination: Pagination) {
   return {
     limit: pagination.enabled ? pagination.limit : total,

@@ -16,6 +16,7 @@ import {
   sharedAssistantReferencesHidden,
   sharedImageViewUrls,
   sharedInlineImageVariantAllowed,
+  sharedReferenceViewUrls,
   sharedMessageHidesReferences,
   withinShareLookupRateLimit
 } from "./sessionShareRoutes";
@@ -186,15 +187,24 @@ describe("shared message projection", () => {
     expect(sharedAssistantReferencesHidden({}, hiddenJobs)).toBe(false);
   });
 
-  test("exposes only derivatives through the generic image view URL", () => {
+  test("allows shared assistant originals through the image view without exposing user originals", () => {
     const urls = sharedImageViewUrls("token", 0);
     expect(urls.imageUrl.endsWith("?variant=preview")).toBe(true);
-    expect(urls.imageOriginalUrl.endsWith("?variant=preview")).toBe(true);
+    expect(urls.imageOriginalUrl.endsWith("/image?variant=original")).toBe(true);
     expect(urls.imagePreviewUrl.endsWith("?variant=preview")).toBe(true);
     expect(urls.imageThumbnailUrl.endsWith("?variant=thumb")).toBe(true);
-    expect(sharedInlineImageVariantAllowed("thumb")).toBe(true);
-    expect(sharedInlineImageVariantAllowed("preview")).toBe(true);
-    expect(sharedInlineImageVariantAllowed("original")).toBe(false);
+    expect(sharedInlineImageVariantAllowed("thumb", "user")).toBe(true);
+    expect(sharedInlineImageVariantAllowed("preview", "user")).toBe(true);
+    expect(sharedInlineImageVariantAllowed("original", "assistant")).toBe(true);
+    expect(sharedInlineImageVariantAllowed("original", "user")).toBe(false);
+  });
+
+  test("keeps shared reference previews derivative-only and gives downloads a dedicated original route", () => {
+    const urls = sharedReferenceViewUrls("/api/shared-sessions/token/messages/shared-message-2/source-references/1");
+    expect(urls.url.endsWith("?variant=preview")).toBe(true);
+    expect(urls.previewUrl.endsWith("?variant=preview")).toBe(true);
+    expect(urls.thumbnailUrl.endsWith("?variant=thumb")).toBe(true);
+    expect(urls.originalUrl.endsWith("/download")).toBe(true);
   });
 
   test("uses the socket address unless proxy trust is explicitly enabled", () => {

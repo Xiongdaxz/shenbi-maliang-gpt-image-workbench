@@ -721,14 +721,17 @@
 }
 
 .share-conversation-dialog > header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 4px 12px;
+  align-items: flex-start;
+  gap: 12px;
 }
 
-.share-conversation-dialog > header p {
-  grid-column: 1 / -1;
+.share-dialog-heading {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.share-dialog-heading p {
   margin: 0;
   color: var(--app-muted);
   font-size: 13px;
@@ -1104,13 +1107,11 @@
 @keyframes starterCaseReveal {
   0% {
     opacity: 0;
-    clip-path: inset(0 100% 0 0 round 14px);
-    filter: blur(7px) saturate(0.9);
+    transform: translate3d(6px, 0, 0);
   }
   100% {
     opacity: 1;
-    clip-path: inset(0 0 0 0 round 14px);
-    filter: blur(0) saturate(1);
+    transform: translate3d(0, 0, 0);
   }
 }
 

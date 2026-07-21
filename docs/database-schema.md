@@ -64,7 +64,7 @@
 | --- | --- |
 | `user_id` | 用户 ID，主键 |
 | `language` | 用户界面语言偏好：`auto` 自动检测，或 `zh-CN`、`zh-TW`、`en-US`、`ja-JP`、`ko-KR`、`es-ES`、`fr-FR`、`de-DE`、`pt-BR`、`ru-RU`、`fa-IR` |
-| `image_preview_wheel_mode` | 完整图片预览的滚轮行为：`zoom` 缩放图片、`pan` 平移查看超出窗口的区域 |
+| `image_preview_wheel_mode` | 完整图片预览的滚轮行为：`zoom` 缩放图片、`pan` 平移查看超出窗口的区域；新偏好默认 `pan` |
 | `image_preview_open_mode` | 完整图片预览的默认打开方式：`contain` 适应窗口、`actual` 按 100% 原始尺寸显示 |
 | `edit_suggestions_enabled` | 对话页图片续改建议开关，`0` 关闭、`1` 开启 |
 | `edit_suggestion_tone` | 图片续改建议倾向：`default` 默认均衡、`practical` 实用优化、`creative` 创意扩展、`detail` 细节修复 |
@@ -72,6 +72,15 @@
 | `prompt_optimize_styles_json` | 用户自定义 AI优化风格 JSON，保存主风格、子风格、排序、显示状态和自定义优化指令；为空时使用系统默认风格 |
 | `prompt_optimize_custom_instruction` | 用户在输入区 AI优化风格里的自定义补充指令 |
 | `updated_at` | 更新时间 |
+
+### app_migrations
+
+应用数据库的一次性迁移记录。当前用于标记已执行过的偏好默认值迁移，避免启动时重复批量更新。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 迁移 ID，主键 |
+| `created_at` | 执行时间 |
 
 ### user_auth_sessions
 
@@ -261,6 +270,8 @@
 | `generated_by_retry` | 这张图片是否由重试生成；自动重试或手动重试成功时为 `1` |
 | `created_at` | 创建时间 |
 
+相关索引：`images_user_created_id_idx` 支撑“我的图片”按用户、创建时间和稳定 ID 游标分页；`images_session_created_id_idx` 支撑按会话进入图片编辑时的相邻图片加载。
+
 ### image_favorites
 
 我的图片收藏关系。
@@ -354,6 +365,8 @@
 | `image_width` / `image_height` | 图片尺寸 |
 | `created_at` | 创建时间 |
 
+相关索引：`assets_user_created_id_idx` 支撑素材库按用户、创建时间和稳定 ID 游标分页；`assets_share_created_id_idx` 支撑共享素材筛选和按时间加载。
+
 ### case_categories
 
 灵感空间和素材标签分类。
@@ -387,6 +400,8 @@
 | `prompt` | 灵感提示词 |
 | `image_url` | 封面展示图片地址 |
 | `created_at` | 创建时间 |
+
+相关索引：`case_items_review_created_id_idx`、`case_items_approved_created_id_idx`、`case_items_user_created_id_idx`、`case_items_category_created_id_idx` 支撑灵感空间审核、我的、分类和时间游标加载；`case_items_group_idx`、`case_items_group_created_id_idx` 支撑多图灵感按组聚合和翻页。
 
 ### case_group_images
 
@@ -529,6 +544,8 @@
 | `asset_id` | 素材 ID |
 | `category_id` | 分类 ID |
 | `created_at` | 创建时间 |
+
+相关索引：`asset_categories_category_asset_idx` 支撑素材按标签筛选和数量统计。
 
 ## config.db
 
@@ -928,6 +945,7 @@ CPA 同步执行记录。
 | `status_code` | HTTP 状态码 |
 | `duration_ms` | 耗时 |
 | `success` | 是否成功，`0` 否、`1` 是 |
+| `cancelled` | 请求是否对应用户主动取消的图片任务，`0` 否、`1` 是；旧取消任务日志会在启动迁移时尽量回填 |
 | `error` | 错误信息 |
 | `response_snapshot` | 图片请求 HTTP 成功但后处理失败时保存的脱敏响应快照，图片 base64 会被占位文本替换 |
 | `created_at` | 创建时间 |

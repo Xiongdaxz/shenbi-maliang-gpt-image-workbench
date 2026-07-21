@@ -8,8 +8,7 @@ import type {
   RefObject,
   WheelEventHandler
 } from "react";
-import { ChevronLeft, ChevronRight, Maximize2, RefreshCw, RotateCcw, RotateCw, ZoomIn, ZoomOut, X } from "lucide-react";
-import { ImageDownloadMenu } from "./ImageDownloadMenu";
+import { ChevronLeft, ChevronRight, Download, Maximize2, RefreshCw, RotateCcw, RotateCw, ZoomIn, ZoomOut, X } from "lucide-react";
 import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import type { CaseGroupImage, ImageReferenceItem } from "../types";
@@ -378,15 +377,18 @@ export function ReferenceLightbox({ reference, onClose }: ReferenceLightboxProps
       >
         <X size={20} />
       </button>
-      <ImageDownloadMenu
-        source={{ type: "image-reference", id: reference.id, downloadBaseName: reference.name }}
-        rootClassName="case-reference-lightbox-download"
-        iconSize={18}
-        ariaLabel={t("imagePreview.downloadReference")}
+      <a
+        className="case-reference-lightbox-download"
+        href={reference.originalUrl ?? reference.url}
+        download={reference.name}
+        rel="noopener"
+        onMouseDown={(event) => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
+        aria-label={t("imagePreview.downloadReference")}
         title={t("imagePreview.downloadReference")}
-        placement="bottom-end"
-        stopMouseDownPropagation
-      />
+      >
+        <Download size={20} />
+      </a>
       <div className="case-reference-lightbox-frame" onMouseDown={(event) => event.stopPropagation()}>
         <img src={reference.previewUrl ?? reference.url} alt={reference.name} />
         <span>{reference.name}</span>

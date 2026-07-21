@@ -5,7 +5,7 @@ import { caseUsageSourceFromCaseItem, caseUsageSourceKey, type CaseUsageSource }
 import { appDb, getAll, getOne, run } from "./db";
 import { globalSwitchEnabled } from "./globalSwitches";
 import { ensureImageSourceReferences } from "./imageReferenceBackfill";
-import { pageInfo, paginationFromQuery, pageSlice } from "./pagination";
+import { boundedPaginationFromQuery, pageInfo, pageSlice } from "./pagination";
 import { assetUrlFromAssetId, imageOriginPromptsByImageIds, imageReferencesByImageIds, imageUrlFromImageId } from "./serializers";
 import type { AssetRow, ImageRow } from "./types";
 import { approvedCaseSql, makeId, normalizeIdList, normalizeReviewStatus, now, visibleAssetSql, visibleCaseSql, type ReviewStatus } from "./utils";
@@ -410,7 +410,7 @@ api.get("/cases", async (c) => {
   const user = await requireUser(c);
   if (!user) return c.json({ error: "未登录" }, 401);
   const currentUserId = user.id;
-  const pagination = paginationFromQuery(c);
+  const pagination = boundedPaginationFromQuery(c);
   const selectedCategoryIds = normalizeIdList(c.req.query("categoryIds") ?? c.req.query("categoryId"));
   const mineOnly = c.req.query("mineOnly") === "true" || c.req.query("mineOnly") === "1";
   const favoriteOnly = c.req.query("favoriteOnly") === "true" || c.req.query("favoriteOnly") === "1";

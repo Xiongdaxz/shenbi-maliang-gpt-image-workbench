@@ -1,7 +1,9 @@
 import path from "node:path";
 
 export const ROOT = process.cwd();
-export const DATA_DIR = path.join(ROOT, "data");
+export const DATA_DIR = Bun.env.GPT_IMAGE_DATA_DIR?.trim()
+  ? path.resolve(Bun.env.GPT_IMAGE_DATA_DIR.trim())
+  : path.join(ROOT, "data");
 export const FILES_DIR = path.join(DATA_DIR, "files");
 export const IMAGE_DIR = path.join(FILES_DIR, "images");
 export const ASSET_DIR = path.join(FILES_DIR, "assets");
@@ -17,8 +19,8 @@ export const DIST_LOGIN_DIR = path.join(ROOT, "dist", "login");
 export const CONFIG_FILE = path.join(DATA_DIR, "config.toml");
 export const DEBUG_DIR = path.join(DATA_DIR, "debug");
 export const IMAGE_EDIT_DEBUG_DIR = path.join(DEBUG_DIR, "image-edits");
-export const APP_DB_PATH = path.join(DATA_DIR, "app.db");
-export const CONFIG_DB_PATH = path.join(DATA_DIR, "config.db");
+export const APP_DB_PATH = Bun.env.GPT_IMAGE_APP_DB_PATH?.trim() || path.join(DATA_DIR, "app.db");
+export const CONFIG_DB_PATH = Bun.env.GPT_IMAGE_CONFIG_DB_PATH?.trim() || path.join(DATA_DIR, "config.db");
 
 export function absoluteDataPath(relativePath: string) {
   return path.join(DATA_DIR, relativePath.replace(/^\/+/, ""));

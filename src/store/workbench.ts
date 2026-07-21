@@ -8,9 +8,26 @@ const SIDEBAR_COLLAPSED_STORAGE_KEY = "gpt-image.sidebar.collapsed";
 
 export const COMPOSER_NEW_DRAFT_SCOPE_KEY = "new";
 
+export type ImageLibraryContinuation = {
+  sessionId?: string;
+  anchorId?: string;
+  keyword?: string;
+  favoriteOnly?: boolean;
+  sort: "asc" | "desc";
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
+export type ImageLibraryContinuations = Partial<Record<"newer" | "older", ImageLibraryContinuation>>;
+
+export type ImageEditorImageSort = "asc" | "desc";
+
 export type ImageEditorOpenRequest = {
   image: WorkImage;
   images?: WorkImage[];
+  imageSort?: ImageEditorImageSort;
+  totalImageCount?: number;
+  libraryContinuations?: ImageLibraryContinuations;
   initialPrompt?: string;
   preserveSelectedAssets?: boolean;
   persistAcrossSessionChange?: boolean;

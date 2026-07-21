@@ -54,7 +54,7 @@ export function AddCaseModal({
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const { t } = useI18n();
-  const cases = useQuery({ queryKey: ["cases"], queryFn: () => api.cases() });
+  const cases = useQuery({ queryKey: ["case-categories"], queryFn: () => api.caseCategories() });
   const selectableCategories = useMemo(
     () => (cases.data?.categories ?? []).filter((category) => !isUncategorizedCaseCategory(category)),
     [cases.data?.categories]

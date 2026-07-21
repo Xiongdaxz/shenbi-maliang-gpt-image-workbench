@@ -38,7 +38,9 @@ import {
   snapshotMessageSourceReferences,
   type MessageSourceReferenceInput
 } from "./messageSourceReferences";
-import { pageInfo, paginationFromQuery } from "./pagination";
+import { boundedPaginationFromQuery, pageInfo } from "./pagination";
+import { invalidateLibraryFacetCache } from "./libraryRoutes";
+import { imageDateSearchConditions } from "./imageSearch";
 import { callProviderChain, providerChainById, providerRequestWasCancelled } from "./providerRuntime";
 import { providerResponseSnapshot } from "./responseSnapshots";
 import { reviewConversationPrompt } from "./safetyReview";
@@ -1203,6 +1205,7 @@ async function runStoredImageJob({
       }
       await applyImageFieldSuggestions(allImageIds, job.prompt);
       await ensureImageEditSuggestionsForImages(job.user_id, allImageIds, preparedEditSuggestions);
+      if (savedImageIds.length > 0) invalidateLibraryFacetCache("images");
       const resultImageId = allImageIds[0] ?? null;
       const completed = run(
         appDb,
@@ -1381,6 +1384,7 @@ async function runStoredImageJob({
     }
     await applyImageFieldSuggestions(allImageIds);
     await ensureImageEditSuggestionsForImages(job.user_id, allImageIds, preparedEditSuggestions);
+    if (savedImageIds.length > 0) invalidateLibraryFacetCache("images");
     const resultImageId = allImageIds[0] ?? null;
     const completed = run(
       appDb,
@@ -1584,13 +1588,11 @@ export function startInterruptedImageJobRecovery() {
   console.info(`图片任务启动恢复完成：接管 ${resumed} 个，失败 ${failed} 个`);
 }
 
-const IMAGE_WEEKDAY_LABELS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
-
 export function registerImageRoutes(api: Hono) {
 api.get("/images", async (c) => {
   const user = await requireUser(c);
   if (!user) return c.json({ error: "未登录" }, 401);
-  const pagination = paginationFromQuery(c);
+  const pagination = boundedPaginationFromQuery(c);
   const keyword = String(c.req.query("keyword") ?? "").trim().toLowerCase();
   const sort = String(c.req.query("sort") ?? "desc").trim() === "asc" ? "asc" : "desc";
   const favoriteOnly = c.req.query("favoriteOnly") === "true" || c.req.query("favoriteOnly") === "1";
@@ -1608,19 +1610,9 @@ api.get("/images", async (c) => {
     const dateParams: string[] = [];
     if ("生成".includes(keyword) || keyword.includes("生成")) kindClauses.push("kind = 'generation'");
     if ("编辑".includes(keyword) || keyword.includes("编辑")) kindClauses.push("kind = 'edit'");
-    const matchedWeekdays = IMAGE_WEEKDAY_LABELS.map((label, index) => ({ label, index }))
-      .filter((item) => item.label.includes(keyword) || keyword.includes(item.label))
-      .map((item) => String(item.index));
-    if (matchedWeekdays.length > 0) {
-      dateClauses.push(`strftime('%w', created_at) in (${matchedWeekdays.map(() => "?").join(", ")})`);
-      dateParams.push(...matchedWeekdays);
-    }
-    const normalizedDateKeyword = keyword.replace("年", "-").replace("月", "-").replace(/[日号]/g, "");
-    if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(normalizedDateKeyword)) {
-      const [year, month, day] = normalizedDateKeyword.split("-");
-      dateClauses.push("created_at like ?");
-      dateParams.push(`%${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}%`);
-    }
+    const dateSearch = imageDateSearchConditions(keyword, "created_at");
+    dateClauses.push(...dateSearch.clauses);
+    dateParams.push(...dateSearch.params);
     where.push(
       `(
         lower(prompt) like ?
@@ -1838,6 +1830,7 @@ api.post("/images/batch/delete", async (c) => {
     return c.json({ error: "这些图片包含关联内容，请确认后再删除", impact }, 409);
   }
   const deleted = await deleteImageRecordsBatch(user.id, parsed.imageIds);
+  if (deleted.deletedImageIds.length > 0) invalidateLibraryFacetCache();
   return c.json({
     ...imageBatchResult([
       ...deleted.deletedImageIds.map((imageId) => ({ imageId, status: "deleted" as const })),
@@ -1878,6 +1871,7 @@ api.delete("/images/:imageId", async (c) => {
   if (!user) return c.json({ error: "未登录" }, 401);
   const deleted = await deleteImageRecords(user.id, c.req.param("imageId"));
   if (!deleted) return c.json({ error: "图片不存在" }, 404);
+  invalidateLibraryFacetCache();
   return c.json({ ok: true });
 });
 
@@ -2059,6 +2053,7 @@ api.post("/images/generate", async (c) => {
           "running"
         );
       }
+      if (savedImageIds.length > 0) invalidateLibraryFacetCache("images");
       if (savedImageIds.length < imageCount) {
         throw new Error(`渠道返回图片数量不足：期望 ${imageCount} 张，实际 ${savedImageIds.length} 张`);
       }
@@ -2519,6 +2514,7 @@ api.post("/images/edit", async (c) => {
       });
     }
     const savedImageIds = savedImages.map((image) => image.id);
+    if (savedImageIds.length > 0) invalidateLibraryFacetCache("images");
     if (savedImageIds.length < imageCount) {
       throw new Error(`渠道返回图片数量不足：期望 ${imageCount} 张，实际 ${savedImageIds.length} 张`);
     }

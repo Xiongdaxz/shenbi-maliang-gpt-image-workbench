@@ -2,10 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { CSSProperties, WheelEvent as ReactWheelEvent } from "react";
 import { ArrowRight, PartyPopper, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
-import { api } from "../api";
 import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
-import { visibleCaseStyleNames } from "../lib/caseMaterials";
 import { defaultCaseItems } from "../lib/defaultCases";
 import { defaultStarterHeadlineIdeas, isChineseStarterCopyLocale } from "../lib/starterCopy";
 import { getTimeGreetingKey } from "../lib/timeGreeting";
@@ -15,6 +13,30 @@ import { ProjectLogo } from "./ProjectLogo";
 type StarterCaseItem = CaseCategory["items"][number];
 const STARTER_CASE_IMAGE_LIMIT = 10;
 const STARTER_HEADLINE_ROTATE_INTERVAL_MS = 12000;
+const STARTER_IMAGE_READY_TIMEOUT_MS = 3_000;
+
+function preloadStarterImage(src: string) {
+  return new Promise<void>((resolve) => {
+    const image = new Image();
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      resolve();
+    };
+    const timer = window.setTimeout(finish, STARTER_IMAGE_READY_TIMEOUT_MS);
+    image.onload = () => {
+      if (typeof image.decode !== "function") {
+        finish();
+        return;
+      }
+      void image.decode().catch(() => undefined).then(finish);
+    };
+    image.onerror = finish;
+    image.src = src;
+  });
+}
 
 function shuffleCopy<T>(items: T[]) {
   const result = [...items];
@@ -94,30 +116,23 @@ function handleStarterCaseWheel(event: ReactWheelEvent<HTMLDivElement>) {
   element.scrollBy({ left: delta, behavior: "auto" });
 }
 
-function handleStarterTagWheel(event: ReactWheelEvent<HTMLDivElement>) {
-  const element = event.currentTarget;
-  if (element.scrollWidth <= element.clientWidth) return;
-  const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
-  if (!delta) return;
-  const atStart = element.scrollLeft <= 0;
-  const atEnd = Math.ceil(element.scrollLeft + element.clientWidth) >= element.scrollWidth;
-  if ((delta < 0 && atStart) || (delta > 0 && atEnd)) return;
-  event.preventDefault();
-  event.stopPropagation();
-  element.scrollBy({ left: delta, behavior: "auto" });
-}
-
 export function PromptStarter({
   caseCategories,
   caseCategoriesLoaded = false,
+  dailyHeadlineIdeas: dailyHeadlineIdeaInput,
+  headlineIdeasLoaded = false,
   onOpenIntro,
+  onRefreshCases,
   onUseHeadlinePrompt,
   user,
   onPickPrompt
 }: {
   caseCategories: CaseCategory[];
   caseCategoriesLoaded?: boolean;
+  dailyHeadlineIdeas?: string[];
+  headlineIdeasLoaded?: boolean;
   onOpenIntro?: () => void;
+  onRefreshCases?: () => Promise<unknown> | void;
   onUseHeadlinePrompt?: (prompt: string) => void;
   user: User;
   onPickPrompt: (item: StarterCaseItem) => void;
@@ -125,26 +140,13 @@ export function PromptStarter({
   const [caseBatchSeed, setCaseBatchSeed] = useState(0);
   const { t, resolvedLanguage } = useI18n();
   const fallbackHeadlineIdeas = useMemo(() => defaultStarterHeadlineIdeas(resolvedLanguage), [resolvedLanguage]);
-  const [dailyHeadlineIdeas, setDailyHeadlineIdeas] = useState<string[]>([]);
+  const dailyHeadlineIdeas = useMemo(
+    () => Array.isArray(dailyHeadlineIdeaInput)
+      ? dailyHeadlineIdeaInput.map((item) => String(item ?? "").trim()).filter(Boolean)
+      : [],
+    [dailyHeadlineIdeaInput]
+  );
   const [headlineIdeaIndex, setHeadlineIdeaIndex] = useState(() => Math.floor(Math.random() * fallbackHeadlineIdeas.length));
-  useEffect(() => {
-    let cancelled = false;
-    setDailyHeadlineIdeas([]);
-    api.starterCopiesToday(resolvedLanguage)
-      .then((data) => {
-        if (cancelled) return;
-        const copies = Array.isArray(data.copies)
-          ? data.copies.map((item) => String(item ?? "").trim()).filter(Boolean)
-          : [];
-        setDailyHeadlineIdeas(copies);
-      })
-      .catch(() => {
-        if (!cancelled) setDailyHeadlineIdeas([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [resolvedLanguage]);
   const headlineIdeas = useMemo(() => {
     return dailyHeadlineIdeas.length > 0 ? dailyHeadlineIdeas : fallbackHeadlineIdeas;
   }, [dailyHeadlineIdeas, fallbackHeadlineIdeas]);
@@ -168,19 +170,80 @@ export function PromptStarter({
   const headlineIdeaChars = useMemo(() => Array.from(headlineParts.idea), [headlineParts.idea]);
   const realCasePoolCount = useMemo(() => starterCasePoolCount(caseCategories), [caseCategories]);
   const includeDefaultCases = caseCategoriesLoaded && realCasePoolCount < STARTER_CASE_IMAGE_LIMIT;
-  const caseImages = useMemo(() => {
+  const candidateCaseImages = useMemo(() => {
     return fillStarterCaseImages(caseCategories, includeDefaultCases);
   }, [caseBatchSeed, caseCategories, includeDefaultCases]);
   const casePoolCount = includeDefaultCases ? STARTER_CASE_IMAGE_LIMIT : realCasePoolCount;
+  const caseImageSources = useMemo(
+    () => candidateCaseImages
+      .map((item) => item.imageThumbnailUrl ?? item.imagePreviewUrl ?? item.imageUrl)
+      .filter((src): src is string => Boolean(src)),
+    [candidateCaseImages]
+  );
+  const caseImageLoadKey = useMemo(() => caseImageSources.join("\u0000"), [caseImageSources]);
+  const [caseImages, setCaseImages] = useState<StarterCaseItem[]>([]);
   const caseImageIds = useMemo(() => caseImages.map((item) => item.id).join("\u0000"), [caseImages]);
+  const [readyCaseImageKey, setReadyCaseImageKey] = useState("");
+  const [initialContentReady, setInitialContentReady] = useState(false);
   const caseScrollRef = useRef<HTMLDivElement | null>(null);
   const logoMotionFrameRef = useRef<number | null>(null);
+  const caseRefreshPromiseRef = useRef<Promise<unknown> | null>(null);
+  const mountedRef = useRef(true);
   const [caseScrollHint, setCaseScrollHint] = useState({ overflow: false, atEnd: true });
-  const [isLogoMotionPlaying, setIsLogoMotionPlaying] = useState(true);
-  const refreshCaseImages = useCallback((behavior: ScrollBehavior = "smooth") => {
-    caseScrollRef.current?.scrollTo({ left: 0, behavior });
-    setCaseBatchSeed((value) => value + 1);
+  const [isLogoMotionPlaying, setIsLogoMotionPlaying] = useState(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
+  useEffect(() => {
+    if (!caseCategoriesLoaded) return;
+    let cancelled = false;
+    if (caseImageSources.length === 0) {
+      setCaseImages(candidateCaseImages);
+      setReadyCaseImageKey(caseImageLoadKey);
+      return;
+    }
+    void Promise.all(caseImageSources.map(preloadStarterImage)).then(() => {
+      if (cancelled) return;
+      setCaseImages(candidateCaseImages);
+      setReadyCaseImageKey(caseImageLoadKey);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [candidateCaseImages, caseCategoriesLoaded, caseImageLoadKey, caseImageSources]);
+  const caseImagesReady = caseCategoriesLoaded && readyCaseImageKey === caseImageLoadKey;
+  useEffect(() => {
+    if (!initialContentReady && headlineIdeasLoaded && caseImagesReady) setInitialContentReady(true);
+  }, [caseImagesReady, headlineIdeasLoaded, initialContentReady]);
+  const refreshCaseImages = useCallback((behavior: ScrollBehavior = "smooth") => {
+    if (caseRefreshPromiseRef.current) return;
+    caseScrollRef.current?.scrollTo({ left: 0, behavior });
+    if (!onRefreshCases) {
+      setCaseBatchSeed((value) => value + 1);
+      return;
+    }
+    try {
+      const result = onRefreshCases();
+      if (!result || typeof result.then !== "function") {
+        setCaseBatchSeed((value) => value + 1);
+        return;
+      }
+      const request = Promise.resolve(result);
+      caseRefreshPromiseRef.current = request;
+      void request
+        .catch(() => {
+          if (mountedRef.current) setCaseBatchSeed((value) => value + 1);
+        })
+        .finally(() => {
+          if (caseRefreshPromiseRef.current === request) caseRefreshPromiseRef.current = null;
+        });
+    } catch {
+      setCaseBatchSeed((value) => value + 1);
+    }
+  }, [onRefreshCases]);
   const playLogoMotion = () => {
     if (logoMotionFrameRef.current !== null) {
       cancelAnimationFrame(logoMotionFrameRef.current);
@@ -237,10 +300,21 @@ export function PromptStarter({
   useLayoutEffect(() => {
     const element = caseScrollRef.current;
     if (!element) return;
+    const appShell = element.closest<HTMLElement>(".app-shell");
     let frame = 0;
+    const sidebarMoving = () => Boolean(
+      appShell?.classList.contains("sidebar-motion-collapsing")
+      || appShell?.classList.contains("sidebar-motion-expanding")
+    );
     const sync = () => {
+      if (sidebarMoving()) {
+        cancelAnimationFrame(frame);
+        frame = 0;
+        return;
+      }
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
+        frame = 0;
         const overflow = element.scrollWidth - element.clientWidth > 1;
         const endCard = element.querySelector<HTMLElement>(".starter-case-more");
         const elementRect = element.getBoundingClientRect();
@@ -257,14 +331,17 @@ export function PromptStarter({
     Array.from(element.children).forEach((child) => resizeObserver.observe(child));
     element.addEventListener("scroll", sync, { passive: true });
     window.addEventListener("resize", sync);
+    const shellObserver = appShell ? new MutationObserver(sync) : null;
+    if (appShell) shellObserver?.observe(appShell, { attributes: true, attributeFilter: ["class"] });
 
     return () => {
       cancelAnimationFrame(frame);
       resizeObserver.disconnect();
+      shellObserver?.disconnect();
       element.removeEventListener("scroll", sync);
       window.removeEventListener("resize", sync);
     };
-  }, [caseImageIds]);
+  }, [caseImageIds, initialContentReady]);
 
   useLayoutEffect(() => {
     return () => {
@@ -273,6 +350,20 @@ export function PromptStarter({
       }
     };
   }, []);
+
+  if (!initialContentReady) {
+    return (
+      <div className="starter starter-loading" aria-busy="true">
+        <div className="starter-loading-title" aria-hidden="true">
+          <span className="starter-loading-logo" />
+          <span className="starter-loading-headline" />
+        </div>
+        <div className="starter-loading-cases" aria-hidden="true">
+          {Array.from({ length: 4 }, (_, index) => <span className="starter-loading-case" key={index} />)}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="starter">
@@ -288,7 +379,7 @@ export function PromptStarter({
         </button>
         <span className="starter-title-text">
           {headlinePrefixChars.map((char, index) => (
-            <span key={`${char}-${index}`} style={{ animationDelay: `${index * 34}ms` }}>
+            <span key={`${char}-${index}`} style={{ animationDelay: `${index * 22}ms` }}>
               {char === " " ? "\u00a0" : char}
             </span>
           ))}
@@ -301,14 +392,14 @@ export function PromptStarter({
               title={t("starter.useThisCopy")}
             >
               {headlineIdeaChars.map((char, index) => (
-                <span key={`${char}-${index}`} style={{ animationDelay: `${(headlinePrefixChars.length + index) * 34}ms` }}>
+                <span key={`${char}-${index}`} style={{ animationDelay: `${(headlinePrefixChars.length + index) * 22}ms` }}>
                   {char === " " ? "\u00a0" : char}
                 </span>
               ))}
             </button>
           ) : (
             headlineIdeaChars.map((char, index) => (
-              <span key={`${char}-${index}`} style={{ animationDelay: `${(headlinePrefixChars.length + index) * 34}ms` }}>
+              <span key={`${char}-${index}`} style={{ animationDelay: `${(headlinePrefixChars.length + index) * 22}ms` }}>
                 {char === " " ? "\u00a0" : char}
               </span>
             ))
@@ -321,7 +412,6 @@ export function PromptStarter({
             <div className="starter-case-scroll" ref={caseScrollRef} onWheelCapture={handleStarterCaseWheel}>
               <div className="starter-case-strip">
                 {caseImages.map((item, index) => {
-                  const styleNames = visibleCaseStyleNames(item);
                   return (
                     <button
                       key={item.id}
@@ -329,23 +419,13 @@ export function PromptStarter({
                       className="starter-case-thumb"
                       style={
                         {
-                          "--starter-card-delay": `${index * 95 + 340}ms`
+                          "--starter-card-delay": `${index * 42}ms`
                         } as CSSProperties
                       }
                       aria-label={item.title}
                       onClick={() => onPickPrompt(item)}
                     >
                       <img src={item.imageThumbnailUrl ?? item.imagePreviewUrl ?? item.imageUrl} alt={item.title} />
-                      <div className="starter-case-meta">
-                        <span className="starter-case-thumb-prompt">{item.prompt}</span>
-                        {styleNames.length > 0 ? (
-                          <div className="starter-case-style-tags" onWheelCapture={handleStarterTagWheel}>
-                            {styleNames.map((name) => (
-                              <span key={`${item.id}-${name}`}>{name}</span>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
                     </button>
                   );
                 })}
@@ -354,7 +434,7 @@ export function PromptStarter({
                   to="/cases"
                   style={
                     {
-                      "--starter-card-delay": `${caseImages.length * 95 + 340}ms`
+                      "--starter-card-delay": `${caseImages.length * 42}ms`
                     } as CSSProperties
                   }
                 >
@@ -370,7 +450,13 @@ export function PromptStarter({
           {casePoolCount > 1 || onOpenIntro ? (
             <div className="starter-case-actions">
               {casePoolCount > 1 ? (
-                <button className="starter-case-refresh" type="button" onClick={() => refreshCaseImages()}>
+                <button
+                  className="starter-case-refresh"
+                  type="button"
+                  onClick={() => {
+                    refreshCaseImages();
+                  }}
+                >
                   <RefreshCw size={15} />
                   <span>{t("starter.refreshGroup")}</span>
                 </button>

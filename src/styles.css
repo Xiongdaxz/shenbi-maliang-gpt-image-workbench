@@ -282,7 +282,7 @@ html.chat-page-stable-scrollbar {
   scrollbar-gutter: stable;
 }
 
-html.chat-page-stable-scrollbar.shared-image-preview-open {
+html.chat-page-stable-scrollbar.image-preview-gutter-suppressed {
   scrollbar-gutter: auto;
 }
 

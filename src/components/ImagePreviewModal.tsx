@@ -44,6 +44,7 @@ type ImagePreviewModalProps<TItem extends ImagePreviewItem> = {
   index: number;
   ariaLabel: string;
   initialZoomMode?: ImagePreviewOpenMode;
+  initialImageSource?: "preview" | "original";
   wheelMode?: ImagePreviewWheelMode;
   showItemThumbnails?: boolean;
   suppressStableScrollbarGutter?: boolean;
@@ -95,7 +96,8 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
   index,
   ariaLabel,
   initialZoomMode = "contain",
-  wheelMode = "zoom",
+  initialImageSource,
+  wheelMode = "pan",
   showItemThumbnails = false,
   suppressStableScrollbarGutter = false,
   onIndexChange,
@@ -113,7 +115,7 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
   const [previewToolbarHeight, setPreviewToolbarHeight] = useState(0);
   const [previewPan, setPreviewPan] = useState({ x: 0, y: 0 });
   const [previewDragging, setPreviewDragging] = useState(false);
-  const defaultPreviewImageSource = initialZoomMode === "actual" ? "original" : "preview";
+  const defaultPreviewImageSource = initialImageSource ?? (initialZoomMode === "actual" ? "original" : "preview");
   const [previewImageSource, setPreviewImageSource] = useState<"preview" | "original">(defaultPreviewImageSource);
   const [previewLoadedSrc, setPreviewLoadedSrc] = useState("");
   const [referencePreview, setReferencePreview] = useState<ImageReferenceItem | null>(null);
@@ -122,9 +124,12 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
   const previewToolbarRef = useRef<HTMLDivElement | null>(null);
   const previewDragRef = useRef<{ pointerId: number; startX: number; startY: number; startPan: { x: number; y: number }; moved: boolean } | null>(null);
   const previewNavigatorDragRef = useRef<number | null>(null);
+  const previewClickHandledRef = useRef(false);
+  const previewPointerStartedOnImageRef = useRef(false);
   const previewUserAdjustedRef = useRef(false);
   const pendingOriginalPanRef = useRef(false);
   const previewGroupImages = previewItem?.groupImages ?? [];
+  const previewCoverImageId = previewGroupImages.find((image) => image.isCover)?.id ?? "";
   const normalizedGroupImageIndex = Math.max(0, Math.min(previewGroupImageIndex, Math.max(0, previewGroupImages.length - 1)));
   const activeGroupImage = previewGroupImages.length > 1 ? previewGroupImages[normalizedGroupImageIndex] ?? previewGroupImages[0] : null;
   const activeGroupImageId = activeGroupImage?.id ?? "";
@@ -145,6 +150,7 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
         isActiveGroupImageCover: activeGroupImage.isCover
       } as TItem
     : previewItem;
+  const previewOpen = Boolean(previewDisplayItem);
   const hasPreviewPrev = items.length > 1;
   const hasPreviewNext = items.length > 1;
   const previewSizeLabel = previewImageSize ? `${previewImageSize.width} x ${previewImageSize.height}` : "--";
@@ -223,7 +229,9 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
       previewVisibleStageSize &&
       (previewDisplaySize.width > previewVisibleStageSize.width + 1 || previewDisplaySize.height > previewVisibleStageSize.height + 1)
   );
-  const previewUsesHandCursor = previewImageSource === "original" || Math.abs(previewZoom - previewDefaultZoom) > 0.001;
+  const previewUsesHandCursor =
+    (previewImageSource === "original" && Math.abs(previewZoom - 1) <= 0.001) ||
+    Math.abs(previewZoom - previewDefaultZoom) > 0.001;
   const showPreviewNavigator = Boolean(previewImageSize && previewStageSize && previewDisplaySize && canPreviewPan);
   const previewImagePosition =
     previewImageSize && previewDisplaySize && previewStageSize
@@ -398,7 +406,9 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
 
   const handlePreviewPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!canPreviewPan || event.button !== 0) return;
-    if ((event.target as HTMLElement).closest("button")) return;
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (!target?.closest(".case-preview-image")) return;
+    previewPointerStartedOnImageRef.current = true;
     event.preventDefault();
     previewDragRef.current = {
       pointerId: event.pointerId,
@@ -438,15 +448,31 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    if (activateOriginalSize && !drag.moved && !previewUsesHandCursor) showPreviewOriginalSize();
+    if (!activateOriginalSize) {
+      previewPointerStartedOnImageRef.current = false;
+      return;
+    }
+    if (activateOriginalSize && drag.moved) {
+      previewClickHandledRef.current = true;
+    }
+    window.setTimeout(() => {
+      previewClickHandledRef.current = false;
+      previewPointerStartedOnImageRef.current = false;
+    }, 250);
   };
   const finishPreviewDrag = (event: ReactPointerEvent<HTMLDivElement>) => releasePreviewDrag(event, true);
   const cancelPreviewDrag = (event: ReactPointerEvent<HTMLDivElement>) => releasePreviewDrag(event, false);
   const handlePreviewClick = (event: ReactMouseEvent<HTMLDivElement>) => {
-    if (canPreviewPan || previewUsesHandCursor) return;
+    const startedOnImage = previewPointerStartedOnImageRef.current;
+    previewPointerStartedOnImageRef.current = false;
+    if (previewClickHandledRef.current) {
+      previewClickHandledRef.current = false;
+      return;
+    }
     const target = event.target instanceof HTMLElement ? event.target : null;
-    if (target?.closest("button")) return;
-    showPreviewOriginalSize();
+    if (!target?.closest(".case-preview-image") && !startedOnImage) return;
+    if (previewUsesHandCursor) resetPreviewTransform();
+    else showPreviewOriginalSize();
   };
 
   const handlePreviewNavigatorPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -488,7 +514,7 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
   useLayoutEffect(() => {
     const coverIndex = previewItem?.groupImages?.findIndex((image) => image.isCover) ?? -1;
     setPreviewGroupImageIndex(coverIndex >= 0 ? coverIndex : 0);
-  }, [previewItem?.id]);
+  }, [previewCoverImageId, previewGroupImages.length, previewItem?.id]);
 
   useLayoutEffect(() => {
     previewUserAdjustedRef.current = false;
@@ -500,6 +526,8 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
     setPreviewLoadedSrc("");
     previewDragRef.current = null;
     previewNavigatorDragRef.current = null;
+    previewClickHandledRef.current = false;
+    previewPointerStartedOnImageRef.current = false;
     pendingOriginalPanRef.current = initialZoomMode === "actual";
     setPreviewImageSize(
       previewDisplayItem?.imageWidth && previewDisplayItem.imageHeight
@@ -555,12 +583,12 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
     previewStageSize
   ]);
 
-  useEffect(() => {
-    if (!previewDisplayItem) return;
+  useLayoutEffect(() => {
+    if (!previewOpen) return;
     const root = document.documentElement;
-    const stableScrollbarGutterWasSuppressed = root.classList.contains("shared-image-preview-open");
+    const stableScrollbarGutterWasSuppressed = root.classList.contains("image-preview-gutter-suppressed");
     if (suppressStableScrollbarGutter) {
-      root.classList.add("shared-image-preview-open");
+      root.classList.add("image-preview-gutter-suppressed");
     }
     const previousOverflow = document.body.style.overflow;
     const previousPaddingRight = document.body.style.paddingRight;
@@ -580,10 +608,10 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
       document.body.style.paddingRight = previousPaddingRight;
       document.body.style.overscrollBehavior = previousOverscrollBehavior;
       if (suppressStableScrollbarGutter && !stableScrollbarGutterWasSuppressed) {
-        root.classList.remove("shared-image-preview-open");
+        root.classList.remove("image-preview-gutter-suppressed");
       }
     };
-  }, [previewDisplayItem?.id, suppressStableScrollbarGutter]);
+  }, [previewOpen, suppressStableScrollbarGutter]);
 
   useLayoutEffect(() => {
     const stage = previewStageRef.current;

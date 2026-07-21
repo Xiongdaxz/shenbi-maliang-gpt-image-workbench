@@ -82,14 +82,15 @@
 }
 
 .asset-card {
-  display: grid;
-  grid-template-rows: auto auto;
+  display: block;
   align-self: start;
+  border: 0;
 }
 
 .asset-image-frame {
   position: relative;
-  height: 132px;
+  height: auto;
+  aspect-ratio: 1 / 1;
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -187,41 +188,39 @@
   cursor: not-allowed;
 }
 
-.asset-card-body {
-  display: grid;
-  align-content: start;
-  gap: 6px;
-  min-width: 0;
-  padding: 8px;
-}
-
-.asset-card-title-row {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-}
-
-.asset-card-title-row h3 {
-  margin: 0;
-  overflow: hidden;
-  color: #111827;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .asset-space-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
   border-radius: 999px;
   padding: 4px 7px;
   color: #0f766e;
   background: #ecfdf5;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   font-size: 12px;
   line-height: 1;
   white-space: nowrap;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    visibility 0s linear 140ms;
+}
+
+.asset-card:hover .asset-space-badge {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
 }
 
 .asset-space-badge.shared {
@@ -234,6 +233,14 @@
   background: #eff6ff;
 }
 
+.asset-library-virtual-grid {
+  width: 100%;
+}
+
+.asset-library-virtual-row {
+  align-items: start;
+}
+
 .asset-space-badge.share-status-pending {
   color: #c2410c;
   background: #fff7ed;
@@ -242,22 +249,6 @@
 .asset-space-badge.share-status-rejected {
   color: #b91c1c;
   background: #fef2f2;
-}
-
-.asset-card-meta {
-  min-width: 0;
-  display: flex;
-  gap: 8px;
-  color: #6b7280;
-  font-size: 12px;
-  overflow: hidden;
-}
-
-.asset-card-meta span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .asset-card-tags-wrap {

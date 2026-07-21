@@ -1,3 +1,7 @@
+html.image-preview-gutter-suppressed {
+  scrollbar-gutter: auto;
+}
+
 .case-preview-backdrop {
   position: fixed;
   top: 0;
@@ -773,6 +777,7 @@
   color: #111827;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 12px 34px rgba(0, 0, 0, 0.24);
+  text-decoration: none;
 }
 
 .case-reference-lightbox-close {

@@ -422,6 +422,7 @@ export type ProviderRequestLog = {
   statusCode: number | null;
   durationMs: number;
   success: boolean;
+  cancelled: boolean;
   error: string;
   responseSnapshot: string;
   createdAt: string;
@@ -968,6 +969,98 @@ export type WorkImage = {
   favorited: boolean;
   referenceImages?: ImageReferenceItem[];
   createdAt: string;
+};
+
+export type LibraryPageInfo = {
+  limit: number;
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
+export type LibraryPage<T> = {
+  items: T[];
+  pageInfo: LibraryPageInfo;
+};
+
+export type LibraryImageCard = {
+  id: string;
+  sessionId: string | null;
+  title: string;
+  prompt: string;
+  thumbnailUrl: string;
+  imageWidth: number;
+  imageHeight: number;
+  imageFileSize: number;
+  kind: "generation" | "edit";
+  size: string;
+  quality: string;
+  providerId: string;
+  favoriteCount: number;
+  favorited: boolean;
+  createdAt: string;
+  sourceType: "image";
+  sourceId: string;
+};
+
+export type LibraryAssetCard = {
+  id: string;
+  title: string;
+  name: string;
+  thumbnailUrl: string;
+  mimeType: string;
+  size: number;
+  imageWidth: number;
+  imageHeight: number;
+  createdAt: string;
+  sourceUsername: string;
+  canEdit: boolean;
+  space: "private" | "shared";
+  shared: boolean;
+  shareStatus: "none" | "pending" | "approved" | "rejected";
+  shareRequestedAt: string;
+  shareReviewedAt: string;
+  shareRejectReason: string;
+  categoryIds: string[];
+  categoryNames: string[];
+  sourceType: "asset";
+  sourceId: string;
+};
+
+export type LibraryCaseCard = {
+  id: string;
+  caseItemId: string;
+  groupId: string;
+  title: string;
+  prompt: string;
+  thumbnailUrl: string;
+  imageWidth: number;
+  imageHeight: number;
+  imageFileSize: number;
+  useCount: number;
+  favoriteCount: number;
+  favorited: boolean;
+  sourceUsername: string;
+  canDelete: boolean;
+  categoryIds: string[];
+  categoryNames: string[];
+  includeReferences: boolean;
+  reviewStatus: "pending" | "approved" | "rejected";
+  reviewRequestedAt: string;
+  reviewedAt: string;
+  rejectReason: string;
+  imageCount: number;
+  downloadSourceType: "image" | "asset" | null;
+  downloadSourceId: string | null;
+  sourceType: "image" | "asset" | "url" | "case_group";
+  sourceId: string;
+  createdAt: string;
+};
+
+export type LibraryImageFacets = { all: number; favorite: number };
+export type LibraryCaseFacets = { all: number; mine: number; favorite: number; byCategory: Record<string, number> };
+export type LibraryAssetFacets = {
+  tags: { all: number; byCategory: Record<string, number> };
+  spaces: { all: number; shared: number; private: number };
 };
 
 export type ImageBatchItemResult = {

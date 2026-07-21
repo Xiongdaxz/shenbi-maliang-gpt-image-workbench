@@ -1,4 +1,4 @@
-import type { Message, WorkImage } from "../types";
+import type { LibraryImageCard, Message, WorkImage } from "../types";
 import { imageCreatedTime } from "./imageTimeline";
 
 export function workImageFromMessage(message: Message): WorkImage | null {
@@ -32,6 +32,32 @@ export function workImageFromMessage(message: Message): WorkImage | null {
   };
 }
 
+export function workImageFromLibraryCard(card: LibraryImageCard): WorkImage {
+  const originalUrl = `/api/files/images/${encodeURIComponent(card.id)}`;
+  return {
+    id: card.id,
+    sessionId: card.sessionId,
+    jobId: null,
+    url: originalUrl,
+    originalUrl,
+    previewUrl: `${originalUrl}?variant=preview`,
+    thumbnailUrl: card.thumbnailUrl,
+    prompt: card.prompt,
+    originPrompt: card.prompt,
+    kind: card.kind,
+    size: card.size,
+    imageWidth: card.imageWidth,
+    imageHeight: card.imageHeight,
+    imageFileSize: card.imageFileSize,
+    quality: card.quality,
+    providerId: card.providerId,
+    parentImageId: null,
+    favoriteCount: card.favoriteCount,
+    favorited: card.favorited,
+    createdAt: card.createdAt
+  };
+}
+
 export function uniqueWorkImages(images: WorkImage[]) {
   const seen = new Set<string>();
   return images.filter((image) => {
@@ -41,6 +67,14 @@ export function uniqueWorkImages(images: WorkImage[]) {
   });
 }
 
-export function newestWorkImages(images: WorkImage[]) {
-  return [...images].sort((a, b) => imageCreatedTime(b.createdAt) - imageCreatedTime(a.createdAt));
+export function orderedWorkImages(images: WorkImage[], sort: "asc" | "desc") {
+  return [...images].sort((a, b) => {
+    const createdDiff = imageCreatedTime(a.createdAt) - imageCreatedTime(b.createdAt);
+    const stableDiff = createdDiff || a.id.localeCompare(b.id);
+    return sort === "asc" ? stableDiff : -stableDiff;
+  });
+}
+
+export function chronologicalWorkImages(images: WorkImage[]) {
+  return orderedWorkImages(images, "asc");
 }

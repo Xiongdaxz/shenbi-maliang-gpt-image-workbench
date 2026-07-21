@@ -1,4 +1,5 @@
-import { configDb, run } from "./db";
+import type { Database } from "bun:sqlite";
+import { appDb, configDb, getOne, run } from "./db";
 import type { RuntimeProviderRow } from "./types";
 import { inferChannelFromType, makeId, normalizeProviderChannel, now } from "./utils";
 
@@ -10,6 +11,14 @@ export function audit(action: string, detail: unknown = {}) {
     action,
     JSON.stringify(detail),
     now()
+  );
+}
+
+export function imageJobWasCancelled(db: Database, jobId?: string) {
+  const normalizedJobId = String(jobId ?? "").trim();
+  if (!normalizedJobId) return false;
+  return Boolean(
+    getOne<{ id: string }>(db, "select id from image_jobs where id = ? and status = 'cancelled' limit 1", normalizedJobId)
   );
 }
 
@@ -29,13 +38,14 @@ export function logProviderRequest(input: {
   sourceAccountId?: string;
   userId?: string;
 }) {
+  const cancelled = !input.success && imageJobWasCancelled(appDb, input.jobId);
   run(
     configDb,
     `insert into provider_request_logs (
       id, provider_id, provider_name, channel, route_mode, operation,
       job_id, attempt_no, max_attempts, is_retry,
-      source_account_id, user_id, endpoint, status_code, duration_ms, success, error, created_at
-    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      source_account_id, user_id, endpoint, status_code, duration_ms, success, cancelled, error, created_at
+    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     makeId("req"),
     input.provider.id,
     input.provider.name,
@@ -52,6 +62,7 @@ export function logProviderRequest(input: {
     input.statusCode,
     Math.max(0, Math.round(input.durationMs)),
     input.success ? 1 : 0,
+    cancelled ? 1 : 0,
     input.error ?? null,
     now()
   );

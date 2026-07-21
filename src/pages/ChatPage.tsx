@@ -33,7 +33,7 @@ import { requestSizeFromSelection, type SizeOption } from "../lib/imageOptions";
 import { normalizePromptColorSchemeIds } from "../lib/promptColorSchemes";
 import { normalizePromptOptimizeStyle, sanitizePromptOptimizeStyleGroups } from "../lib/promptOptimizeStyles";
 import { getTimeGreetingKey } from "../lib/timeGreeting";
-import { workImageFromMessage } from "../lib/workImages";
+import { workImageFromLibraryCard, workImageFromMessage } from "../lib/workImages";
 import { useComposerPasteAsset } from "../hooks/useComposerPasteAsset";
 import { useComposerTextareaAutosize } from "../hooks/useComposerTextareaAutosize";
 import { useChatScrollJump } from "../hooks/useChatScrollJump";
@@ -575,9 +575,50 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
   }, [savePromptOptimizeCustomInstruction]);
 
   const providers = useQuery({ queryKey: ["providers"], queryFn: api.providers });
-  const assets = useQuery({ queryKey: ["assets"], queryFn: () => api.assets() });
   const assetCategories = useQuery({ queryKey: ["asset-categories"], queryFn: api.assetCategories, enabled: Boolean(assetTarget) });
-  const cases = useQuery({ queryKey: ["cases"], queryFn: () => api.cases() });
+  const starterCases = useQuery({
+    queryKey: ["cases", "starter"],
+    queryFn: ({ signal }) => api.starterCases({ limit: 10 }, { signal }),
+    enabled: !sessionId,
+    staleTime: 30_000,
+    gcTime: 10 * 60_000
+  });
+  const refreshStarterCases = useCallback(async () => {
+    const currentIds = (starterCases.data?.items ?? []).map((item) => item.groupId || item.id);
+    const result = await api.starterCases({ limit: 10, excludeIds: currentIds });
+    queryClient.setQueryData(["cases", "starter"], result);
+    return result;
+  }, [queryClient, starterCases.data?.items]);
+  const starterCaseCategories = useMemo(() => [{
+    id: "starter",
+    name: "starter",
+    slug: "starter",
+    items: (starterCases.data?.items ?? []).map((item) => ({
+      ...item,
+      id: item.caseItemId,
+      imageUrl: item.thumbnailUrl,
+      imageThumbnailUrl: item.thumbnailUrl,
+      downloadSourceType: item.downloadSourceType,
+      downloadSourceId: item.downloadSourceId,
+      useCount: item.useCount,
+      favoriteCount: item.favoriteCount,
+      favorited: item.favorited,
+      sourceUsername: item.sourceUsername,
+      canDelete: item.canDelete,
+      includeReferences: item.includeReferences,
+      reviewStatus: item.reviewStatus,
+      reviewRequestedAt: item.reviewRequestedAt,
+      reviewedAt: item.reviewedAt,
+      rejectReason: item.rejectReason
+    }))
+  }], [starterCases.data?.items]);
+  const starterCopies = useQuery({
+    queryKey: ["starter-copies", "today", resolvedLanguage],
+    queryFn: ({ signal }) => api.starterCopiesToday(resolvedLanguage, { signal }),
+    enabled: !sessionId,
+    staleTime: 30_000,
+    gcTime: 10 * 60_000
+  });
   const promptColorSchemes = useQuery({ queryKey: ["prompt-color-schemes"], queryFn: () => api.promptColorSchemes() });
   const messages = useQuery({
     queryKey: ["messages", sessionId],
@@ -1488,7 +1529,10 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
     }
     return null;
   }, [activeChatBranchId, imageJobs]);
-  const { closeImageEditor, imageEditor, openImageEditor } = useImageEditorLauncher({
+  const [editorLibraryLoadingDirection, setEditorLibraryLoadingDirection] = useState<"newer" | "older" | null>(null);
+  const [editorLibraryFailedDirections, setEditorLibraryFailedDirections] = useState<Set<"newer" | "older">>(() => new Set());
+  const editorLibraryRequestIdRef = useRef(0);
+  const { closeImageEditor, imageEditor, mergeImageEditorImages, openImageEditor } = useImageEditorLauncher({
     editorImageRequest,
     messageList: visibleBranchMessages,
     setEditorImageRequest,
@@ -1496,9 +1540,64 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
     setSelectedAssets,
     setSidebarCollapsed
   });
+  const hydrateEditorImage = useCallback((imageId: string) => {
+    setEditorLibraryFailedDirections(new Set());
+    void queryClient.fetchQuery({
+      queryKey: ["image-detail", imageId],
+      queryFn: ({ signal }) => api.imageDetail(imageId, { signal }),
+      staleTime: 30_000
+    }).then((result) => {
+      if (result.image) mergeImageEditorImages([result.image]);
+    }).catch(() => undefined);
+  }, [mergeImageEditorImages, queryClient]);
+  const loadMoreEditorImages = useCallback((direction: "newer" | "older") => {
+    const continuation = imageEditor?.libraryContinuations?.[direction];
+    if (!continuation?.hasMore || !continuation.nextCursor || editorLibraryLoadingDirection || editorLibraryFailedDirections.has(direction)) return;
+    const cursor = continuation.nextCursor;
+    const requestId = ++editorLibraryRequestIdRef.current;
+    setEditorLibraryLoadingDirection(direction);
+    void api.libraryImages({
+      sessionId: continuation.sessionId,
+      anchorId: continuation.anchorId,
+      keyword: continuation.keyword,
+      favoriteOnly: continuation.favoriteOnly,
+      cursor,
+      sort: continuation.sort,
+      limit: 30
+    }).then((page) => {
+      if (editorLibraryRequestIdRef.current !== requestId) return;
+      setEditorLibraryFailedDirections((current) => {
+        if (!current.has(direction)) return current;
+        const next = new Set(current);
+        next.delete(direction);
+        return next;
+      });
+      mergeImageEditorImages(page.items.map(workImageFromLibraryCard), {
+        direction,
+        expectedCursor: cursor,
+        continuation: {
+          ...continuation,
+          nextCursor: page.pageInfo.nextCursor,
+          hasMore: page.pageInfo.hasMore
+        }
+      });
+    }).catch(() => {
+      if (editorLibraryRequestIdRef.current !== requestId) return;
+      setEditorLibraryFailedDirections((current) => new Set(current).add(direction));
+      showToast(t("globalSearch.openUnavailable"), "error");
+    }).finally(() => {
+      if (editorLibraryRequestIdRef.current === requestId) setEditorLibraryLoadingDirection(null);
+    });
+  }, [editorLibraryFailedDirections, editorLibraryLoadingDirection, imageEditor?.libraryContinuations, mergeImageEditorImages, showToast, t]);
+  const closePagedImageEditor = useCallback((options?: Parameters<typeof closeImageEditor>[0]) => {
+    editorLibraryRequestIdRef.current += 1;
+    setEditorLibraryLoadingDirection(null);
+    setEditorLibraryFailedDirections(new Set());
+    closeImageEditor(options);
+  }, [closeImageEditor]);
   const handleCloseImageEditor = () => {
     const discardEditorDraft = Boolean(imageEditor?.discardDraftOnClose);
-    closeImageEditor();
+    closePagedImageEditor();
     if (!discardEditorDraft) return;
     setDraftPrompt("", null);
     setEditImage(null);
@@ -1585,9 +1684,9 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
       setCreatedShareLink(null);
     }
     if (sessionChanged && imageEditor && !editorImageRequest?.persistAcrossSessionChange) {
-      closeImageEditor({ restoreSidebar: false });
+      closePagedImageEditor({ restoreSidebar: false });
     }
-  }, [closeImageEditor, editorImageRequest?.persistAcrossSessionChange, imageEditor, sessionId]);
+  }, [closePagedImageEditor, editorImageRequest?.persistAcrossSessionChange, imageEditor, sessionId]);
   useEffect(() => {
     const storedDraft = useWorkbench.getState().composerDrafts[composerScopeKey];
     const draftSelectedAssets = persistableAssets(selectedAssets);
@@ -1627,7 +1726,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
     setError("");
     if (!sessionId) {
       setPendingScope(null);
-      if (imageEditor && !editorImageRequest?.persistAcrossSessionChange) closeImageEditor();
+      if (imageEditor && !editorImageRequest?.persistAcrossSessionChange) closePagedImageEditor();
     }
 
     const restoreTimer = window.setTimeout(() => {
@@ -1702,6 +1801,9 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
     const editorReturn: ImageEditorOpenRequest | null = imageEditor ? {
       image,
       images: imageEditor.images,
+      imageSort: imageEditor.imageSort,
+      totalImageCount: imageEditor.totalImageCount,
+      libraryContinuations: imageEditor.libraryContinuations,
       initialPrompt: trimmedPrompt,
       preserveSelectedAssets: true,
       persistAcrossSessionChange: true,
@@ -1772,7 +1874,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
         parentImageId: image.parentImageId
       }
     });
-    closeImageEditor();
+    closePagedImageEditor();
     setDraftPrompt("");
     setEditImage(null);
     setSelectedAssets([]);
@@ -2117,10 +2219,13 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
       <div className={cx("message-area", showStarter && "message-area-empty")}>
         {showStarter ? (
           <PromptStarter
-            caseCategories={cases.data?.categories ?? []}
-            caseCategoriesLoaded={cases.isSuccess}
+            caseCategories={starterCaseCategories}
+            caseCategoriesLoaded={starterCases.isFetched}
+            dailyHeadlineIdeas={starterCopies.data?.copies}
+            headlineIdeasLoaded={starterCopies.isFetched}
             user={user}
             onOpenIntro={() => setChatIntroOpen(true)}
+            onRefreshCases={refreshStarterCases}
             onUseHeadlinePrompt={useStarterHeadlinePrompt}
             onPickPrompt={pickCasePrompt}
           />
@@ -2167,15 +2272,23 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
       {imageEditor ? (
         <ImageEditWorkspace
           images={imageEditor.images}
+          imageSort={imageEditor.imageSort}
+          totalImageCount={imageEditor.totalImageCount}
           downloadBaseName={sessionActions?.title}
           activeImageId={imageEditor.activeImageId}
           initialPrompt={imageEditor.initialPrompt}
           sizeOptions={sizeOptions}
           selectedSize=""
           isSubmitting={currentViewSubmitting}
-          wheelMode={user.preferences?.imagePreviewWheelMode ?? "zoom"}
-          assets={assets.data}
+          wheelMode={user.preferences?.imagePreviewWheelMode ?? "pan"}
           materialPickerOpen={materialPickerOpen}
+          hasMoreNewerImages={Boolean(imageEditor.libraryContinuations?.newer?.hasMore)}
+          hasMoreOlderImages={Boolean(imageEditor.libraryContinuations?.older?.hasMore)}
+          failedLoadingNewerImages={editorLibraryFailedDirections.has("newer")}
+          failedLoadingOlderImages={editorLibraryFailedDirections.has("older")}
+          loadingMoreImages={Boolean(editorLibraryLoadingDirection)}
+          onActiveImageChange={hydrateEditorImage}
+          onLoadMoreImages={loadMoreEditorImages}
           onOpenCasePicker={() => {
             setMaterialPickerOpen(false);
             setCasePickerOpen(true);
@@ -2226,7 +2339,6 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
       <ChatComposer
         key={composerInstanceKey}
         autoOptimizePromptRequest={sessionId ? null : starterPromptOptimizeRequest}
-        assets={assets.data}
         busy={currentScopeBusy || cancelPending}
         cancelPending={cancelPending}
         composerInstanceKey={composerInstanceKey}

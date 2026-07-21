@@ -11,6 +11,11 @@
   grid-template-columns: 53px minmax(0, 1fr);
 }
 
+.app-shell.sidebar-motion-collapsing {
+  --app-sidebar-width: 53px;
+  grid-template-columns: 53px minmax(0, 1fr);
+}
+
 .sidebar {
   --sidebar-pad-x: 14px;
   --sidebar-pad-y: 14px;
@@ -348,18 +353,11 @@
 .sidebar-scroll,
 .user-footer-panel {
   opacity: 1;
-  transition: opacity 150ms ease;
-  will-change: opacity;
 }
 
-.app-shell.sidebar-motion-collapsing .sidebar-fixed .main-nav-actions,
-.app-shell.sidebar-motion-collapsing .sidebar-scroll,
-.app-shell.sidebar-motion-collapsing .user-footer-panel,
-.app-shell.sidebar-motion-expanding .sidebar-fixed .main-nav-actions,
-.app-shell.sidebar-motion-expanding .sidebar-scroll,
-.app-shell.sidebar-motion-expanding .user-footer-panel {
-  opacity: 0;
+.app-shell:is(.sidebar-motion-collapsing, .sidebar-motion-expanding) .sidebar {
   pointer-events: none;
+  overflow: hidden;
 }
 
 .main-nav button.nav-item,
@@ -455,6 +453,7 @@
 .main-nav-actions .nav-item span {
   font-size: 14px;
   line-height: 20px;
+  white-space: nowrap;
 }
 
 .main-nav-actions button.nav-item:hover,
@@ -559,6 +558,7 @@
   font-size: 14px;
   font-weight: 700;
   line-height: 20px;
+  white-space: nowrap;
 }
 
 .session-group-chevron {
@@ -1320,26 +1320,18 @@
   background: #fff;
 }
 
+.page-route-stage,
 .page-route-transition {
   min-width: 0;
   min-height: 100%;
-  animation: page-route-enter 240ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-@keyframes page-route-enter {
-  from {
-    opacity: 0;
-    transform: translateX(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+  backface-visibility: hidden;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .page-route-transition {
-    animation: none;
+  .page-route-stage {
+    transform: none !important;
+    opacity: 1 !important;
+    will-change: auto;
   }
 
   .sidebar-selection-indicator {

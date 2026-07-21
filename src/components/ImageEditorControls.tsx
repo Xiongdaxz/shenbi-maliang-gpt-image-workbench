@@ -13,7 +13,6 @@ import {
   RefreshCw,
   RotateCcw,
   RotateCw,
-  Share2,
   Trash2,
   Undo2,
   X,
@@ -72,7 +71,6 @@ type ImageEditorTopbarProps = {
   onPreviewZoomIn?: () => void;
   onPreviewZoomOut?: () => void;
   onRedoStroke: () => void;
-  onShareImage: () => void;
   onUndoStroke: () => void;
 };
 
@@ -105,7 +103,6 @@ export function ImageEditorTopbar({
   onPreviewZoomIn,
   onPreviewZoomOut,
   onRedoStroke,
-  onShareImage,
   onUndoStroke
 }: ImageEditorTopbarProps) {
   const { t } = useI18n();
@@ -195,9 +192,6 @@ export function ImageEditorTopbar({
             {t("imageEditor.select")}
           </button>
           <EditorSizePicker value={selectedSize} options={sizeOptions} onSelect={onPickSize} />
-          <button type="button" className="editor-round-btn" onClick={onShareImage} aria-label={t("imageEditor.share")}>
-            <Share2 size={18} />
-          </button>
           <ImageDownloadMenu
             source={{ type: "image", id: activeImage.id, downloadBaseName }}
             className="editor-round-btn"
@@ -217,6 +211,7 @@ type ImageEditorRailProps = {
   activeIndex: number;
   activeThumbRef: RefObject<HTMLButtonElement | null>;
   images: WorkImage[];
+  totalImageCount?: number;
   thumbListRef: RefObject<HTMLDivElement | null>;
   onSelectByOffset: (offset: number) => void;
   onSelectImage: (image: WorkImage) => void;
@@ -227,29 +222,42 @@ export function ImageEditorRail({
   activeIndex,
   activeThumbRef,
   images,
+  totalImageCount,
   thumbListRef,
   onSelectByOffset,
   onSelectImage
 }: ImageEditorRailProps) {
   const { t } = useI18n();
+  const firstVisibleIndex = Math.max(0, activeIndex - 8);
+  const visibleImages = images.slice(firstVisibleIndex, activeIndex + 9);
+  const resolvedTotalImageCount = Math.max(images.length, totalImageCount ?? images.length);
   return (
     <aside className="image-editor-rail">
       <button type="button" className="thumb-step-btn" onClick={() => onSelectByOffset(-1)} disabled={activeIndex <= 0} aria-label={t("imagePreview.previous")}>
         <ChevronUp size={17} />
       </button>
       <div className="image-editor-thumbs" ref={thumbListRef}>
-        {images.map((image) => (
-          <button
-            key={image.id}
-            type="button"
-            ref={image.id === activeImage.id ? activeThumbRef : undefined}
-            className={cx(image.id === activeImage.id && "active")}
-            onClick={() => onSelectImage(image)}
-            aria-label={t("imageEditor.selectImage")}
-          >
-            <img src={image.thumbnailUrl || image.previewUrl || image.url} alt={image.prompt} />
-          </button>
-        ))}
+        {visibleImages.map((image, visibleIndex) => {
+          const distance = Math.abs(firstVisibleIndex + visibleIndex - activeIndex);
+          return (
+            <button
+              key={image.id}
+              type="button"
+              ref={image.id === activeImage.id ? activeThumbRef : undefined}
+              className={cx(image.id === activeImage.id && "active")}
+              onClick={() => onSelectImage(image)}
+              aria-label={t("imageEditor.selectImage")}
+            >
+              <img
+                src={image.thumbnailUrl || image.previewUrl || image.url}
+                alt={image.prompt}
+                loading={distance <= 1 ? "eager" : "lazy"}
+                fetchPriority={distance === 0 ? "high" : "auto"}
+                decoding="async"
+              />
+            </button>
+          );
+        })}
       </div>
       <button
         type="button"
@@ -260,7 +268,7 @@ export function ImageEditorRail({
       >
         <ChevronDown size={17} />
       </button>
-      <span className="image-editor-count">{t("pages.images.count", { count: images.length })}</span>
+      <span className="image-editor-count">{t("pages.images.count", { count: resolvedTotalImageCount })}</span>
     </aside>
   );
 }

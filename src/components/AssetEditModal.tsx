@@ -10,6 +10,7 @@ import { CaseCategoryMultiSelect } from "./CaseCategoryMultiSelect";
 export function AssetEditModal({
   asset,
   categories,
+  assetReviewEnabled,
   pending,
   error,
   onClose,
@@ -17,6 +18,7 @@ export function AssetEditModal({
 }: {
   asset: AssetItem;
   categories: CaseCategory[];
+  assetReviewEnabled: boolean;
   pending: boolean;
   error: Error | null;
   onClose: () => void;
@@ -76,7 +78,17 @@ export function AssetEditModal({
                   onClick={() => setShared((value) => !value)}
                 >
                   <span className="asset-option-check">{shared ? <Check size={14} /> : null}</span>
-                  <span>{shared ? (asset.shareStatus === "pending" ? t("assetEdit.sharePending") : t("assetEdit.shareApplied")) : t("assetEdit.submitShare")}</span>
+                  <span>
+                    {assetReviewEnabled
+                      ? shared
+                        ? asset.shareStatus === "pending"
+                          ? t("assetEdit.sharePending")
+                          : t("assetEdit.shareApplied")
+                        : t("assetEdit.submitShare")
+                      : shared
+                        ? t("assetEdit.shared")
+                        : t("assetEdit.share")}
+                  </span>
                 </button>
               </div>
             ) : (

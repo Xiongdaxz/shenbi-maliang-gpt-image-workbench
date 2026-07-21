@@ -29,6 +29,20 @@ function tableExists(db: Database, table: string) {
   return Boolean(getOne<{ name: string }>(db, "select name from sqlite_master where type = 'table' and name = ?", table));
 }
 
+export function backfillCancelledProviderRequests(jobsDb: Database, logsDb: Database) {
+  const cancelledJobIds = getAll<{ id: string }>(jobsDb, "select id from image_jobs where status = 'cancelled'").map((row) => row.id);
+  for (let index = 0; index < cancelledJobIds.length; index += 400) {
+    const batch = cancelledJobIds.slice(index, index + 400);
+    run(
+      logsDb,
+      `update provider_request_logs
+       set cancelled = 1
+       where success = 0 and job_id in (${batch.map(() => "?").join(", ")})`,
+      ...batch
+    );
+  }
+}
+
 const LEGACY_DALLE_IMAGE_SIZES = ["1024x1024", "1792x1024", "1024x1792"];
 const EXPANDED_GPT_IMAGE_2_SIZES = ["1024x1024", "1024x1536", "1536x2048", "1152x2048", "1536x1024", "2048x1536", "2048x1152"];
 
@@ -464,9 +478,31 @@ function migrateAssetCategoryType() {
   }
 }
 
+export function migrateImagePreviewWheelDefault(db: Database, timestamp = now()) {
+  db.run(`
+    create table if not exists app_migrations (
+      id text primary key,
+      created_at text not null
+    )
+  `);
+  const migrationId = "user_preferences_preview_wheel_pan_20260720";
+  if (getOne<{ id: string }>(db, "select id from app_migrations where id = ?", migrationId)) return;
+  db.transaction(() => {
+    run(db, "update user_preferences set image_preview_wheel_mode = 'pan' where image_preview_wheel_mode = 'zoom'");
+    run(db, "insert into app_migrations (id, created_at) values (?, ?)", migrationId, timestamp);
+  })();
+}
+
 export function initAppDb() {
   appDb.run("PRAGMA journal_mode = MEMORY");
   appDb.run("PRAGMA foreign_keys = ON");
+
+  appDb.run(`
+    create table if not exists app_migrations (
+      id text primary key,
+      created_at text not null
+    )
+  `);
 
   appDb.run(`
     create table if not exists teams (
@@ -555,7 +591,7 @@ export function initAppDb() {
     create table if not exists user_preferences (
       user_id text primary key,
       language text not null default 'auto',
-      image_preview_wheel_mode text not null default 'zoom',
+      image_preview_wheel_mode text not null default 'pan',
       image_preview_open_mode text not null default 'contain',
       edit_suggestions_enabled integer not null default 1,
       edit_suggestion_tone text not null default 'default',
@@ -573,7 +609,7 @@ export function initAppDb() {
     appDb.run("alter table user_preferences add column language text not null default 'auto'");
   }
   if (!tableColumnExists(appDb, "user_preferences", "image_preview_wheel_mode")) {
-    appDb.run("alter table user_preferences add column image_preview_wheel_mode text not null default 'zoom'");
+    appDb.run("alter table user_preferences add column image_preview_wheel_mode text not null default 'pan'");
   }
   if (!tableColumnExists(appDb, "user_preferences", "image_preview_open_mode")) {
     appDb.run("alter table user_preferences add column image_preview_open_mode text not null default 'contain'");
@@ -600,8 +636,9 @@ export function initAppDb() {
   );
   run(
     appDb,
-    "update user_preferences set image_preview_wheel_mode = 'zoom' where image_preview_wheel_mode not in ('zoom', 'pan')"
+    "update user_preferences set image_preview_wheel_mode = 'pan' where image_preview_wheel_mode not in ('zoom', 'pan')"
   );
+  migrateImagePreviewWheelDefault(appDb);
   run(
     appDb,
     "update user_preferences set image_preview_open_mode = 'contain' where image_preview_open_mode not in ('contain', 'actual')"
@@ -922,6 +959,8 @@ export function initAppDb() {
     }
   }
   backfillImageDimensions();
+  appDb.run("create index if not exists images_user_created_id_idx on images(user_id, created_at desc, id desc)");
+  appDb.run("create index if not exists images_session_created_id_idx on images(session_id, created_at desc, id desc)");
 
   appDb.run(`
     create table if not exists image_edit_suggestions (
@@ -1098,6 +1137,8 @@ export function initAppDb() {
   }
   backfillAssetDimensions();
   backfillAssetContentHashes();
+  appDb.run("create index if not exists assets_user_created_id_idx on assets(user_id, created_at desc, id desc)");
+  appDb.run("create index if not exists assets_share_created_id_idx on assets(share_status, space, created_at desc, id desc)");
 
   appDb.run(`
     create table if not exists case_categories (
@@ -1444,6 +1485,7 @@ export function initAppDb() {
       foreign key (category_id) references case_categories(id)
     )
   `);
+  appDb.run("create index if not exists asset_categories_category_asset_idx on asset_categories(category_id, asset_id)");
   migrateAssetCategoryType();
 
   if (!tableColumnExists(appDb, "case_items", "user_id")) {
@@ -1478,6 +1520,12 @@ export function initAppDb() {
   }
   appDb.run("create index if not exists case_items_review_status_idx on case_items(review_status, review_requested_at)");
   appDb.run("create index if not exists case_items_user_review_idx on case_items(user_id, review_status)");
+  appDb.run("create index if not exists case_items_review_created_id_idx on case_items(review_status, created_at desc, id desc)");
+  appDb.run("create index if not exists case_items_approved_created_id_idx on case_items(created_at desc, id desc) where coalesce(review_status, 'approved') = 'approved'");
+  appDb.run("create index if not exists case_items_user_created_id_idx on case_items(user_id, created_at desc, id desc)");
+  appDb.run("create index if not exists case_items_category_created_id_idx on case_items(category_id, created_at desc, id desc)");
+  appDb.run("create index if not exists case_items_group_idx on case_items(group_id)");
+  appDb.run("create index if not exists case_items_group_created_id_idx on case_items(group_id, created_at desc, id desc)");
   run(
     appDb,
     `update case_items
@@ -2287,6 +2335,7 @@ export function initConfigDb() {
       status_code integer,
       duration_ms integer not null,
       success integer not null,
+      cancelled integer not null default 0,
       error text,
       response_snapshot text not null default '',
       created_at text not null
@@ -2298,6 +2347,10 @@ export function initConfigDb() {
   if (!tableColumnExists(configDb, "provider_request_logs", "user_id")) {
     configDb.run("alter table provider_request_logs add column user_id text not null default ''");
   }
+  const shouldBackfillCancelledProviderRequests = !tableColumnExists(configDb, "provider_request_logs", "cancelled");
+  if (shouldBackfillCancelledProviderRequests) {
+    configDb.run("alter table provider_request_logs add column cancelled integer not null default 0");
+  }
   for (const [column, definition] of [
     ["job_id", "text not null default ''"],
     ["attempt_no", "integer not null default 1"],
@@ -2308,6 +2361,9 @@ export function initConfigDb() {
     if (!tableColumnExists(configDb, "provider_request_logs", column)) {
       configDb.run(`alter table provider_request_logs add column ${column} ${definition}`);
     }
+  }
+  if (shouldBackfillCancelledProviderRequests) {
+    backfillCancelledProviderRequests(appDb, configDb);
   }
   configDb.run("create index if not exists provider_request_logs_source_account_idx on provider_request_logs(source_account_id, created_at desc)");
   configDb.run("create index if not exists provider_request_logs_user_idx on provider_request_logs(user_id, created_at desc)");

@@ -141,6 +141,7 @@ export const frontstageJaOverrides: Messages = {
   "starter.featureIntro": "機能紹介",
 
   "pages.assets.desc": "共有素材と個人用の参考画像。タグで絞り込み、再利用できます。共有素材は公開前に管理者レビューが必要です。",
+  "pages.assets.descNoReview": "共有素材と個人用の参考画像。タグで絞り込み、再利用できます。",
   "pages.assets.scope": "素材範囲フィルター",
   "pages.assets.tags": "素材タグフィルター",
   "pages.assets.searchAria": "素材を検索",
@@ -150,6 +151,7 @@ export const frontstageJaOverrides: Messages = {
   "pages.assets.editAsset": "素材を編集",
   "pages.assets.deleteAsset": "素材を削除",
   "pages.assets.submitShare": "共有レビューに提出",
+  "pages.assets.share": "素材を共有",
   "pages.assets.cancelShare": "共有をキャンセル",
   "pages.assets.imageMaterial": "画像素材",
   "pages.assets.source": "ソース：{source}",
@@ -326,6 +328,8 @@ export const frontstageJaOverrides: Messages = {
   "assetEdit.sharePending": "共有レビュー待ち",
   "assetEdit.shareApplied": "共有申請済み",
   "assetEdit.submitShare": "共有レビューに提出",
+  "assetEdit.share": "素材を共有",
+  "assetEdit.shared": "共有済み",
   "assetEdit.alreadyShared": "この素材はすでに共有済みのため、追加申請は不要です。",
 
   "caseMaterialPicker.title": "インスピレーション画像を素材として選択",
@@ -481,6 +485,7 @@ export const frontstageJaOverrides: Messages = {
   "toast.assetDeleted": "素材を削除しました",
   "toast.assetDeleteFailed": "素材の削除に失敗しました",
   "toast.assetShareSubmitted": "共有レビューに提出しました",
+  "toast.assetShared": "素材を共有しました",
   "toast.assetShareCancelled": "共有をキャンセルしました",
   "toast.assetShareStatusUpdated": "共有ステータスを更新しました",
   "toast.assetShareUpdateFailed": "共有ステータスの更新に失敗しました",

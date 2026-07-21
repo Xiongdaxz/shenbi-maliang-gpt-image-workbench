@@ -31,9 +31,9 @@ export function splitFileDisplayName(name: string) {
   return { base: match[1], ext: match[2] };
 }
 
-export function assetSpaceLabel(asset: AssetItem) {
-  if (asset.shareStatus === "pending") return "待审核";
-  if (asset.shareStatus === "rejected") return "未通过";
+export function assetSpaceLabel(asset: AssetItem, reviewEnabled = true) {
+  if (reviewEnabled && asset.shareStatus === "pending") return "待审核";
+  if (reviewEnabled && asset.shareStatus === "rejected") return "未通过";
   if (asset.space === "private" && asset.shared) return asset.canEdit ? "我的并共享" : "共享";
   return ASSET_SPACE_LABEL[asset.space];
 }

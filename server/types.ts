@@ -345,6 +345,7 @@ export type ProviderRequestLogRow = {
   status_code: number | null;
   duration_ms: number;
   success: number;
+  cancelled: number;
   error: string | null;
   response_snapshot: string;
   created_at: string;

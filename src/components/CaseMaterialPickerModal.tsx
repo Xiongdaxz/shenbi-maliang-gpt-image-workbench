@@ -1,16 +1,21 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { createPortal } from "react-dom";
 import { Check, Heart, Lightbulb, Search, X } from "lucide-react";
 import { api } from "../api";
 import { useI18n } from "../i18n";
 import { buildGalleryCaseItems, caseMaterialFromCaseItem, caseStyleCategories } from "../lib/caseMaterials";
+import { isUncategorizedCaseCategory } from "../lib/cases";
 import { cx } from "../lib/cx";
 import { IMAGE_PAGE_SIZE } from "../lib/pagination";
 import { useInfinitePageLoader } from "../hooks/useInfinitePageLoader";
+import { useCursorLibraryQuery } from "../hooks/useCursorLibraryQuery";
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { FilterTabLabel, FilterTabsScroller } from "./HorizontalScrollers";
 import { SearchHistoryInput } from "./SearchHistoryInput";
 import { SkeletonImage } from "./SkeletonImage";
-import type { CaseMaterialItem } from "../types";
+import { VirtualizedResponsiveGrid } from "./VirtualizedResponsiveGrid";
+import type { CaseCategory, CaseMaterialItem, LibraryCaseCard } from "../types";
 
 const CASE_MATERIAL_PICKER_CLOSE_ANIMATION_MS = 240;
 
@@ -18,6 +23,21 @@ type CasePickerScrollAnchor = {
   id: string;
   offsetTop: number;
 };
+
+function pickerCaseItem(card: LibraryCaseCard): CaseCategory["items"][number] {
+  const originalUrl = card.downloadSourceType && card.downloadSourceId
+    ? `/api/files/${card.downloadSourceType === "image" ? "images" : "assets"}/${encodeURIComponent(card.downloadSourceId)}`
+    : card.thumbnailUrl;
+  return {
+    ...card,
+    id: card.caseItemId,
+    imageUrl: originalUrl,
+    imageOriginalUrl: originalUrl,
+    imagePreviewUrl: card.downloadSourceType && card.downloadSourceId ? `${originalUrl}?variant=preview` : card.thumbnailUrl,
+    imageThumbnailUrl: card.thumbnailUrl,
+    coverImageId: card.downloadSourceId ?? card.sourceId
+  };
+}
 
 export function CaseMaterialPickerModal({
   open,
@@ -38,6 +58,7 @@ export function CaseMaterialPickerModal({
   const [mineOnly, setMineOnly] = useState(false);
   const [favoriteOnly, setFavoriteOnly] = useState(false);
   const [keyword, setKeyword] = useState("");
+  const debouncedKeyword = useDebouncedValue(keyword, 250);
   const [closing, setClosing] = useState(false);
   const [draftSelectedCaseMaterials, setDraftSelectedCaseMaterials] = useState<CaseMaterialItem[]>([]);
   const visible = open || closing;
@@ -45,30 +66,41 @@ export function CaseMaterialPickerModal({
     () => [selectedCategoryIds.join(","), mineOnly ? "mine" : "all", favoriteOnly ? "favorite" : "normal", keyword].join("\u0000"),
     [favoriteOnly, keyword, mineOnly, selectedCategoryIds]
   );
-  const cases = useInfiniteQuery({
-    queryKey: ["case-material-picker", selectedCategoryIds.join(","), mineOnly, favoriteOnly, keyword],
-    queryFn: ({ pageParam }) =>
-      api.cases({
+  const cases = useCursorLibraryQuery({
+    queryKey: ["case-material-picker", selectedCategoryIds.join(","), mineOnly, favoriteOnly, debouncedKeyword],
+    queryFn: ({ cursor, signal }) =>
+      api.libraryCases({
         limit: IMAGE_PAGE_SIZE,
-        offset: Number(pageParam),
+        cursor,
         categoryIds: selectedCategoryIds,
         mineOnly,
         favoriteOnly,
-        keyword
-      }),
+        keyword: debouncedKeyword
+      }, { signal }),
     enabled: visible,
-    initialPageParam: 0,
-    placeholderData: (previousData) => previousData,
-    getNextPageParam: (lastPage) => (lastPage.pageInfo.hasMore ? lastPage.pageInfo.offset + lastPage.pageInfo.limit : undefined)
+  });
+  const categoryQuery = useQuery({
+    queryKey: ["case-categories"],
+    queryFn: ({ signal }) => api.caseCategories({ signal }),
+    enabled: visible,
+    staleTime: 30_000,
+    gcTime: 10 * 60_000
+  });
+  const facets = useQuery({
+    queryKey: ["cases", "library-facets", debouncedKeyword],
+    queryFn: ({ signal }) => api.libraryCaseFacets({ keyword: debouncedKeyword }, { signal }),
+    enabled: visible,
+    staleTime: 30_000,
+    gcTime: 10 * 60_000
   });
   const categories = useMemo(() => {
-    const pages = cases.data?.pages ?? [];
-    const baseCategories = pages[0]?.categories ?? [];
+    const baseCategories = categoryQuery.data?.categories ?? [];
+    const items = (cases.data?.pages.flatMap((page) => page.items) ?? []).map(pickerCaseItem);
     return baseCategories.map((category) => ({
       ...category,
-      items: pages.flatMap((page) => page.categories.find((item) => item.id === category.id)?.items ?? [])
+      items: items.filter((item) => item.categoryIds.includes(category.id) || (item.categoryIds.length === 0 && isUncategorizedCaseCategory(category)))
     }));
-  }, [cases.data?.pages]);
+  }, [cases.data?.pages, categoryQuery.data?.categories]);
   const captureScrollAnchor = useCallback((): CasePickerScrollAnchor | null => {
     const body = bodyRef.current;
     if (!body) return null;
@@ -91,8 +123,10 @@ export function CaseMaterialPickerModal({
   const loadMoreRef = useInfinitePageLoader({
     fetchNextPage: fetchNextPickerPage,
     hasNextPage: Boolean(cases.hasNextPage),
+    isFetchNextPageError: cases.isFetchNextPageError,
     isFetchingNextPage: cases.isFetchingNextPage,
-    rootRef: bodyRef
+    rootRef: bodyRef,
+    rootMargin: "320px"
   });
   const styles = useMemo(() => caseStyleCategories(categories), [categories]);
   const visibleItems = useMemo(() => {
@@ -100,7 +134,7 @@ export function CaseMaterialPickerModal({
     const sourceCategories = selectedCategoryIds.length === 0 ? categories : categories.filter((category) => selectedCategorySet.has(category.id));
     return buildGalleryCaseItems(sourceCategories);
   }, [categories, selectedCategoryIds]);
-  const counts = cases.data?.pages[0]?.counts;
+  const counts = facets.data;
   const activeCaseItemIds = useMemo(() => new Set(draftSelectedCaseMaterials.map((item) => item.caseItemId)), [draftSelectedCaseMaterials]);
   const selectedCount = draftSelectedCaseMaterials.length;
   const hintKey = useMemo(
@@ -212,7 +246,7 @@ export function CaseMaterialPickerModal({
     </>
   );
 
-  return (
+  const modal = (
     <div className="modal-backdrop case-picker-backdrop" onMouseDown={requestClose}>
       <section
         className={cx("case-picker-modal", "ui-modal-motion")}
@@ -276,8 +310,17 @@ export function CaseMaterialPickerModal({
         <div className="case-picker-body" ref={bodyRef}>
           {cases.isLoading ? <div className="case-empty">{t("caseMaterialPicker.loading")}</div> : null}
           {!cases.isLoading && visibleItems.length === 0 ? <div className="case-empty">{t("caseMaterialPicker.empty")}</div> : null}
-          <div className="case-picker-grid">
-            {visibleItems.map((item) => {
+          <VirtualizedResponsiveGrid
+            items={visibleItems}
+            getKey={(item) => item.groupId || item.id}
+            minColumnWidth={154}
+            estimateCardHeight={(width) => width + 60}
+            gap={12}
+            mobileGap={9}
+            className="case-picker-virtual-grid"
+            rowClassName="case-picker-virtual-row"
+            scrollRootRef={bodyRef}
+            renderItem={(item, { eager, highPriority }) => {
               const caseMaterial = caseMaterialFromCaseItem(item);
               const active = activeCaseItemIds.has(caseMaterial.caseItemId);
               return (
@@ -294,15 +337,20 @@ export function CaseMaterialPickerModal({
                       <Check size={13} />
                     </span>
                   ) : null}
-                  <SkeletonImage src={item.imageThumbnailUrl ?? item.imagePreviewUrl ?? item.imageUrl} alt={item.title} />
+                  <SkeletonImage
+                    src={item.imageThumbnailUrl ?? item.imagePreviewUrl ?? item.imageUrl}
+                    alt={item.title}
+                    loading={eager ? "eager" : "lazy"}
+                    fetchPriority={highPriority ? "high" : "auto"}
+                  />
                   <span className="case-picker-card-copy">
                     <strong>{item.title}</strong>
                     <span>{item.prompt}</span>
                   </span>
                 </button>
               );
-            })}
-          </div>
+            }}
+          />
           <div ref={loadMoreRef} className="page-load-sentinel" aria-hidden="true" />
         </div>
         <footer className="case-picker-footer">
@@ -319,4 +367,6 @@ export function CaseMaterialPickerModal({
       </section>
     </div>
   );
+
+  return typeof document === "undefined" ? modal : createPortal(modal, document.body);
 }

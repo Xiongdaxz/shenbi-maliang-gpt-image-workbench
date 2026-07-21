@@ -831,19 +831,6 @@
     gap: 8px;
   }
 
-  .asset-card-body {
-    padding: 8px;
-  }
-
-  .asset-image-frame {
-    height: 112px;
-  }
-
-  .asset-card-title-row {
-    grid-template-columns: 1fr;
-    align-items: start;
-  }
-
   .case-card p {
     min-height: 0;
     font-size: 13px;

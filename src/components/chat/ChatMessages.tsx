@@ -129,6 +129,7 @@ function SharedResultImagePreview({
       index={normalizedIndex}
       ariaLabel={t("imageLightbox.preview")}
       initialZoomMode="contain"
+      initialImageSource="original"
       wheelMode="pan"
       showItemThumbnails
       suppressStableScrollbarGutter
@@ -886,7 +887,7 @@ export function ChatMessage({
                 kind: "asset",
                 name: referenceImagePrompt,
                 url: referenceImageUrl,
-                originalUrl: referenceImageUrl,
+                originalUrl: message.referenceImageOriginalUrl ?? referenceImageUrl,
                 previewUrl: message.referenceImagePreviewUrl ?? referenceImageUrl,
                 thumbnailUrl: message.referenceImageThumbnailUrl ?? message.referenceImagePreviewUrl ?? referenceImageUrl,
                 imageWidth: message.referenceImageWidth ?? 0,
@@ -910,11 +911,13 @@ export function ChatMessage({
   const longAssistantImage = message.role === "assistant" && isLongAssistantImage(message);
   const directReferencePreviewItems = directReferenceImages.map((item) => ({
     url: item.previewUrl ?? item.url,
+    downloadUrl: item.originalUrl ?? item.url,
     thumbnailUrl: item.thumbnailUrl ?? item.previewUrl ?? item.url,
     name: item.name
   }));
   const editMaterialPreviewItems = editMaterialReferenceImages.map((item) => ({
     url: item.previewUrl ?? item.url,
+    downloadUrl: item.originalUrl ?? item.url,
     thumbnailUrl: item.thumbnailUrl ?? item.previewUrl ?? item.url,
     name: item.name
   }));
@@ -922,6 +925,7 @@ export function ChatMessage({
     ? [
         {
           url: referencePreviewUrl(message),
+          downloadUrl: message.referenceImageOriginalUrl ?? referenceImageUrl,
           thumbnailUrl: referenceThumbnailUrl(message),
           name: referenceImagePrompt
         }

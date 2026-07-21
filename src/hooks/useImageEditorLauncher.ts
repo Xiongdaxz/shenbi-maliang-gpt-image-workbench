@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ImageEditorOpenRequest } from "../store/workbench";
-import { newestWorkImages, uniqueWorkImages, workImageFromMessage } from "../lib/workImages";
+import type { ImageEditorOpenRequest, ImageLibraryContinuation } from "../store/workbench";
+import { orderedWorkImages, uniqueWorkImages, workImageFromMessage } from "../lib/workImages";
 import type { AssetItem, Message, WorkImage } from "../types";
 import type { ImageEditorState } from "../components/ImageEditWorkspace";
 
@@ -40,18 +40,22 @@ export function useImageEditorLauncher({
     if (handledEditorRequestRef.current === editorImageRequest) return;
     handledEditorRequestRef.current = editorImageRequest;
     const requestImage = editorImageRequest.image;
+    const requestImageSort = editorImageRequest.imageSort ?? "asc";
     const requestImages =
       editorImageRequest.images && editorImageRequest.images.length > 0
-        ? newestWorkImages(uniqueWorkImages([requestImage, ...editorImageRequest.images]))
+        ? orderedWorkImages(uniqueWorkImages([requestImage, ...editorImageRequest.images]), requestImageSort)
         : editorImages.some((item) => item.id === requestImage.id)
-          ? editorImages
-          : [requestImage, ...editorImages];
+          ? orderedWorkImages(editorImages, requestImageSort)
+          : orderedWorkImages([requestImage, ...editorImages], requestImageSort);
     setSidebarCollapsed(true);
     if (!editorImageRequest.preserveSelectedAssets) setSelectedAssets([]);
     setMaterialPickerOpen(false);
     setImageEditor({
       images: requestImages,
       activeImageId: requestImage.id,
+      imageSort: requestImageSort,
+      totalImageCount: editorImageRequest.totalImageCount,
+      libraryContinuations: editorImageRequest.libraryContinuations,
       initialPrompt: editorImageRequest.initialPrompt,
       discardDraftOnClose: editorImageRequest.discardDraftOnClose
     });
@@ -64,7 +68,9 @@ export function useImageEditorLauncher({
     setMaterialPickerOpen(false);
     setImageEditor({
       images: editorImages.some((item) => item.id === image.id) ? editorImages : [image, ...editorImages],
-      activeImageId: image.id
+      activeImageId: image.id,
+      imageSort: "asc",
+      totalImageCount: editorImages.some((item) => item.id === image.id) ? editorImages.length : editorImages.length + 1
     });
   };
 
@@ -76,5 +82,33 @@ export function useImageEditorLauncher({
     if (restoreSidebar) setSidebarCollapsed(false);
   }, [setEditorImageRequest, setSidebarCollapsed]);
 
-  return { closeImageEditor, imageEditor, openImageEditor };
+  const mergeImageEditorImages = useCallback((
+    images: WorkImage[],
+    pagination?: {
+      direction: "newer" | "older";
+      expectedCursor: string;
+      continuation: ImageLibraryContinuation;
+    }
+  ) => {
+    setImageEditor((current) => {
+      if (!current) return current;
+      if (pagination && current.libraryContinuations?.[pagination.direction]?.nextCursor !== pagination.expectedCursor) return current;
+      const incomingById = new Map(images.map((image) => [image.id, image]));
+      const currentIds = new Set(current.images.map((image) => image.id));
+      if (!pagination && !images.some((image) => currentIds.has(image.id))) return current;
+      const mergedImages = orderedWorkImages([
+        ...current.images.map((image) => incomingById.get(image.id) ?? image),
+        ...images.filter((image) => !currentIds.has(image.id))
+      ], current.imageSort);
+      return {
+        ...current,
+        images: mergedImages,
+        libraryContinuations: pagination
+          ? { ...current.libraryContinuations, [pagination.direction]: pagination.continuation }
+          : current.libraryContinuations
+      };
+    });
+  }, []);
+
+  return { closeImageEditor, imageEditor, mergeImageEditorImages, openImageEditor };
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Balloon, Check, Heart, Images as ImagesIcon, Lightbulb, Link2, Pencil, Plus, RefreshCw, Search, Send, Trash2, Trophy, X } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
@@ -7,7 +7,7 @@ import { AddAssetFromImageModal } from "../components/AddAssetFromImageModal";
 import { CaseModalImagePreview, type CaseModalPreviewImage } from "../components/CaseModalImagePreview";
 import { CaseCategoryMultiSelect } from "../components/CaseCategoryMultiSelect";
 import { CaseMaterialActionsMenu } from "../components/CaseMaterialActionsMenu";
-import { AssetTagScroller, FilterModeToggle, FilterTabLabel, FilterTabsScroller, useLibraryFilterDisplayMode } from "../components/HorizontalScrollers";
+import { FilterModeToggle, FilterTabLabel, FilterTabsScroller, useLibraryFilterDisplayMode } from "../components/HorizontalScrollers";
 import { ImageDownloadMenu } from "../components/ImageDownloadMenu";
 import { InspirationLeaderboardDialog } from "../components/InspirationLeaderboardDialog";
 import { ImagePreviewModal } from "../components/ImagePreviewModal";
@@ -17,16 +17,19 @@ import { PromptReferenceLinksDialog } from "../components/PromptReferenceLinksDi
 import { SearchHistoryInput } from "../components/SearchHistoryInput";
 import { SkeletonImage } from "../components/SkeletonImage";
 import { ScrollJumpButton } from "../components/ScrollJumpButton";
+import { VirtualizedResponsiveGrid } from "../components/VirtualizedResponsiveGrid";
 import { useI18n } from "../i18n";
 import { isUncategorizedCaseCategory } from "../lib/cases";
 import { buildGalleryCaseItems, caseMaterialFromCaseItem, visibleCaseStyleNames, type GalleryCaseItem } from "../lib/caseMaterials";
 import { cx } from "../lib/cx";
 import { IMAGE_PAGE_SIZE } from "../lib/pagination";
 import { useInfinitePageLoader } from "../hooks/useInfinitePageLoader";
+import { useCursorLibraryQuery } from "../hooks/useCursorLibraryQuery";
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { useScrollJump } from "../hooks/useScrollJump";
 import { useWorkbench } from "../store/workbench";
 import { type AssetUploadMode } from "../lib/assets";
-import type { CaseCategory, CaseGroupImage, ImagePreviewOpenMode, ImagePreviewWheelMode } from "../types";
+import type { CaseCategory, CaseGroupImage, ImagePreviewOpenMode, ImagePreviewWheelMode, LibraryCaseCard } from "../types";
 import { ConfirmDialog, ModalPortal, PromptDialog, useToast } from "../ui";
 
 function filterGalleryCaseItems(items: GalleryCaseItem[], options: { mineOnly: boolean; favoriteOnly: boolean; keyword: string }) {
@@ -42,17 +45,47 @@ function filterGalleryCaseItems(items: GalleryCaseItem[], options: { mineOnly: b
   });
 }
 
-function caseReviewStatusLabel(status: GalleryCaseItem["reviewStatus"], t: (key: string) => string) {
-  if (status === "pending") return t("status.pendingReview");
-  if (status === "rejected") return t("status.rejected");
-  return t("status.approved");
-}
-
 function galleryCaseFromDetail(item: CaseCategory["items"][number]): GalleryCaseItem {
   return {
     ...item,
     styleId: item.categoryIds[0] ?? "",
     styleName: item.categoryNames[0] ?? ""
+  };
+}
+
+function caseCardToCategoryItem(card: LibraryCaseCard): CaseCategory["items"][number] {
+  const originalUrl = card.downloadSourceType && card.downloadSourceId
+    ? `/api/files/${card.downloadSourceType === "image" ? "images" : "assets"}/${encodeURIComponent(card.downloadSourceId)}`
+    : card.thumbnailUrl;
+  return {
+    id: card.caseItemId,
+    title: card.title,
+    prompt: card.prompt,
+    imageUrl: originalUrl,
+    imageOriginalUrl: originalUrl,
+    imagePreviewUrl: card.downloadSourceType && card.downloadSourceId ? `${originalUrl}?variant=preview` : card.thumbnailUrl,
+    imageThumbnailUrl: card.thumbnailUrl,
+    downloadSourceType: card.downloadSourceType,
+    downloadSourceId: card.downloadSourceId,
+    createdAt: card.createdAt,
+    imageWidth: card.imageWidth,
+    imageHeight: card.imageHeight,
+    imageFileSize: card.imageFileSize,
+    useCount: card.useCount,
+    favoriteCount: card.favoriteCount,
+    favorited: card.favorited,
+    sourceUsername: card.sourceUsername,
+    canDelete: card.canDelete,
+    groupId: card.groupId,
+    categoryIds: card.categoryIds,
+    categoryNames: card.categoryNames,
+    includeReferences: card.includeReferences,
+    reviewStatus: card.reviewStatus,
+    reviewRequestedAt: card.reviewRequestedAt,
+    reviewedAt: card.reviewedAt,
+    rejectReason: card.rejectReason,
+    imageCount: card.imageCount,
+    coverImageId: card.downloadSourceId ?? card.sourceId
   };
 }
 
@@ -217,6 +250,7 @@ export function CasesPage({
   const [mineOnly, setMineOnly] = useState(false);
   const [favoriteOnly, setFavoriteOnly] = useState(false);
   const [keyword, setKeyword] = useState(() => urlKeyword);
+  const debouncedKeyword = useDebouncedValue(keyword, 250);
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<GalleryCaseItem | null>(null);
   const [editTarget, setEditTarget] = useState<GalleryCaseItem | null>(null);
@@ -236,40 +270,67 @@ export function CasesPage({
     enabled: Boolean(openCaseId),
     retry: false
   });
-  const cases = useInfiniteQuery({
-    queryKey: ["cases", "paged", selectedCategoryIds.join(","), mineOnly, favoriteOnly, keyword],
-    queryFn: ({ pageParam }) =>
-      api.cases({
+  const cases = useCursorLibraryQuery({
+    queryKey: ["cases", "library", selectedCategoryIds.join(","), mineOnly, favoriteOnly, debouncedKeyword],
+    queryFn: ({ cursor, signal }) =>
+      api.libraryCases({
         limit: IMAGE_PAGE_SIZE,
-        offset: Number(pageParam),
+        cursor,
         categoryIds: selectedCategoryIds,
         mineOnly,
         favoriteOnly,
-        keyword
-      }),
-    initialPageParam: 0,
-    placeholderData: (previousData) => previousData,
-    getNextPageParam: (lastPage) => (lastPage.pageInfo.hasMore ? lastPage.pageInfo.offset + lastPage.pageInfo.limit : undefined)
+        keyword: debouncedKeyword
+      }, { signal })
+  });
+  const caseFacets = useQuery({
+    queryKey: ["cases", "library-facets", debouncedKeyword],
+    queryFn: ({ signal }) => api.libraryCaseFacets({ keyword: debouncedKeyword }, { signal }),
+    staleTime: 30_000,
+    gcTime: 10 * 60_000
+  });
+  const caseCategoriesQuery = useQuery({
+    queryKey: ["case-categories"],
+    queryFn: ({ signal }) => api.caseCategories({ signal }),
+    staleTime: 30_000,
+    gcTime: 10 * 60_000
   });
   const assetCategories = useQuery({ queryKey: ["asset-categories"], queryFn: api.assetCategories, enabled: Boolean(assetCaseTarget) });
   const categories = useMemo(() => {
-    const pages = cases.data?.pages ?? [];
-    const baseCategories = pages[0]?.categories ?? [];
+    const baseCategories = caseCategoriesQuery.data?.categories ?? [];
+    const caseItems = (cases.data?.pages.flatMap((page) => page.items) ?? []).map(caseCardToCategoryItem);
     return baseCategories.map((category) => ({
       ...category,
-      items: pages.flatMap((page) => page.categories.find((item) => item.id === category.id)?.items ?? [])
+      items: caseItems.filter((item) => item.categoryIds.includes(category.id) || (item.categoryIds.length === 0 && isUncategorizedCaseCategory(category)))
     }));
-  }, [cases.data?.pages]);
+  }, [caseCategoriesQuery.data?.categories, cases.data?.pages]);
   const caseLoadMoreRef = useInfinitePageLoader({
     fetchNextPage: () => cases.fetchNextPage(),
     hasNextPage: Boolean(cases.hasNextPage),
-    isFetchingNextPage: cases.isFetchingNextPage
+    isFetchNextPageError: cases.isFetchNextPageError,
+    isFetchingNextPage: cases.isFetchingNextPage,
+    rootMargin: "320px"
   });
   const caseStyleCategories = useMemo(() => categories.filter((category) => !isUncategorizedCaseCategory(category)), [categories]);
+  const refreshCaseLibraryAndDetails = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ["cases"] });
+    void queryClient.invalidateQueries({ queryKey: ["case-detail"] });
+  }, [queryClient]);
+  const updateCachedCaseDetails = useCallback((
+    caseId: string,
+    updater: (item: CaseCategory["items"][number]) => CaseCategory["items"][number]
+  ) => {
+    queryClient.setQueriesData<{ caseItem: CaseCategory["items"][number] }>({ queryKey: ["case-detail"] }, (current) => {
+      if (!current?.caseItem) return current;
+      const currentCaseId = current.caseItem.groupId || current.caseItem.id;
+      if (currentCaseId !== caseId && current.caseItem.id !== caseId) return current;
+      return { ...current, caseItem: updater(current.caseItem) };
+    });
+  }, [queryClient]);
   const createCategory = useMutation({
     mutationFn: (name: string) => api.createCaseCategory(name),
     onSuccess: ({ category }) => {
       queryClient.invalidateQueries({ queryKey: ["cases"] });
+      queryClient.invalidateQueries({ queryKey: ["case-categories"] });
       setSelectedCategoryIds([category.id]);
       setMineOnly(false);
       setTagDialogOpen(false);
@@ -309,8 +370,37 @@ export function CasesPage({
       }
       return result;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["cases"] });
+    onSuccess: (_, payload) => {
+      const categoryNames = caseStyleCategories
+        .filter((category) => payload.categoryIds.includes(category.id))
+        .map((category) => category.name);
+      updateCachedCaseDetails(payload.caseId, (item) => {
+        const coverImage = payload.coverImage;
+        return {
+          ...item,
+          title: payload.title,
+          prompt: payload.prompt,
+          categoryIds: payload.categoryIds,
+          categoryNames,
+          includeReferences: payload.includeReferences,
+          ...(coverImage
+            ? {
+                imageUrl: coverImage.imageUrl,
+                imageOriginalUrl: coverImage.imageOriginalUrl,
+                imagePreviewUrl: coverImage.imagePreviewUrl,
+                imageThumbnailUrl: coverImage.imageThumbnailUrl,
+                imageWidth: coverImage.imageWidth,
+                imageHeight: coverImage.imageHeight,
+                imageFileSize: coverImage.imageFileSize,
+                downloadSourceType: coverImage.downloadSourceType,
+                downloadSourceId: coverImage.downloadSourceId,
+                coverImageId: coverImage.sourceId,
+                images: item.images?.map((image) => ({ ...image, isCover: image.id === coverImage.id }))
+              }
+            : {})
+        };
+      });
+      refreshCaseLibraryAndDetails();
       setEditTarget(null);
       showToast(t("toast.caseUpdated"));
     },
@@ -320,9 +410,10 @@ export function CasesPage({
   });
   const setCaseFavorite = useMutation({
     mutationFn: (payload: { caseId: string; favorited: boolean }) => api.setCaseFavorite(payload.caseId, payload.favorited),
-    onSuccess: ({ favorited }) => {
+    onSuccess: ({ favorited, favoriteCount }, payload) => {
+      updateCachedCaseDetails(payload.caseId, (item) => ({ ...item, favorited, favoriteCount }));
       showToast(favorited ? t("toast.favoriteAdded") : t("toast.favoriteRemoved"));
-      queryClient.invalidateQueries({ queryKey: ["cases"] });
+      refreshCaseLibraryAndDetails();
     },
     onError: (error) => {
       showToast(error instanceof Error ? error.message : t("toast.caseFavoriteFailed"), "error");
@@ -330,8 +421,9 @@ export function CasesPage({
   });
   const submitCaseReview = useMutation({
     mutationFn: (caseId: string) => api.submitCaseReview(caseId),
-    onSuccess: ({ reviewStatus }) => {
-      queryClient.invalidateQueries({ queryKey: ["cases"] });
+    onSuccess: ({ groupId, reviewStatus }) => {
+      updateCachedCaseDetails(groupId, (item) => ({ ...item, reviewStatus }));
+      refreshCaseLibraryAndDetails();
       showToast(reviewStatus === "approved" ? t("toast.casePublished") : t("toast.caseReviewSubmitted"));
     },
     onError: (error) => {
@@ -341,8 +433,23 @@ export function CasesPage({
   const setCaseCover = useMutation({
     mutationFn: (payload: { caseId: string; groupImage: CaseGroupImage }) =>
       api.setCaseCover(payload.caseId, { groupImageId: payload.groupImage.id, sourceId: payload.groupImage.sourceId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["cases"] });
+    onSuccess: ({ groupId }, payload) => {
+      const coverImage = payload.groupImage;
+      updateCachedCaseDetails(groupId, (item) => ({
+        ...item,
+        imageUrl: coverImage.imageUrl,
+        imageOriginalUrl: coverImage.imageOriginalUrl,
+        imagePreviewUrl: coverImage.imagePreviewUrl,
+        imageThumbnailUrl: coverImage.imageThumbnailUrl,
+        imageWidth: coverImage.imageWidth,
+        imageHeight: coverImage.imageHeight,
+        imageFileSize: coverImage.imageFileSize,
+        downloadSourceType: coverImage.downloadSourceType,
+        downloadSourceId: coverImage.downloadSourceId,
+        coverImageId: coverImage.sourceId,
+        images: item.images?.map((image) => ({ ...image, isCover: image.id === coverImage.id }))
+      }));
+      refreshCaseLibraryAndDetails();
       showToast(t("toast.caseCoverUpdated"));
     },
     onError: (error) => {
@@ -374,15 +481,60 @@ export function CasesPage({
     const selectedCategorySet = new Set(selectedCategoryIds);
     const sourceCategories =
       selectedCategoryIds.length === 0 ? categories : categories.filter((category) => selectedCategorySet.has(category.id));
-    return filterGalleryCaseItems(buildGalleryCaseItems(sourceCategories), { mineOnly, favoriteOnly, keyword });
-  }, [categories, favoriteOnly, keyword, mineOnly, selectedCategoryIds]);
-  const previewSourceItems = useMemo(() => {
-    const target = openCase.data?.caseItem ? galleryCaseFromDetail(openCase.data.caseItem) : null;
-    if (!openCaseId || !target || visibleItems.some((item) => (item.groupId || item.id) === openCaseId)) return visibleItems;
-    return [target, ...visibleItems];
+    return filterGalleryCaseItems(buildGalleryCaseItems(sourceCategories), { mineOnly, favoriteOnly, keyword: debouncedKeyword });
+  }, [categories, debouncedKeyword, favoriteOnly, mineOnly, selectedCategoryIds]);
+  const openCaseEditor = useCallback(async (item: GalleryCaseItem) => {
+    if ((item.images?.length ?? 0) > 0) {
+      setEditTarget(item);
+      return;
+    }
+    const caseId = item.groupId || item.id;
+    try {
+      const result = await queryClient.fetchQuery({
+        queryKey: ["case-detail", caseId],
+        queryFn: ({ signal }) => api.caseDetail(caseId, { signal }),
+        staleTime: 30_000
+      });
+      if (!result.caseItem) throw new Error(t("globalSearch.openUnavailable"));
+      setEditTarget(galleryCaseFromDetail(result.caseItem));
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t("globalSearch.openUnavailable"), "error");
+    }
+  }, [queryClient, showToast, t]);
+  const previewBaseItems = useMemo(() => {
+    const deepLinkTarget = openCase.data?.caseItem ? galleryCaseFromDetail(openCase.data.caseItem) : null;
+    if (!openCaseId || !deepLinkTarget) return visibleItems;
+    const deepLinkTargetId = deepLinkTarget.groupId || deepLinkTarget.id;
+    if (visibleItems.some((item) => (item.groupId || item.id) === deepLinkTargetId)) return visibleItems;
+    return [deepLinkTarget, ...visibleItems];
   }, [openCase.data?.caseItem, openCaseId, visibleItems]);
+  const activePreviewCaseId = previewIndex !== null ? previewBaseItems[previewIndex]?.groupId || previewBaseItems[previewIndex]?.id || "" : "";
+  const previewCase = useQuery({
+    queryKey: ["case-detail", activePreviewCaseId],
+    queryFn: ({ signal }) => api.caseDetail(activePreviewCaseId, { signal }),
+    enabled: Boolean(activePreviewCaseId),
+    staleTime: 30_000
+  });
+  useEffect(() => {
+    if (previewIndex === null) return;
+    for (const item of [previewBaseItems[previewIndex - 1], previewBaseItems[previewIndex + 1]]) {
+      const caseId = item?.groupId || item?.id;
+      if (!caseId) continue;
+      void queryClient.prefetchQuery({
+        queryKey: ["case-detail", caseId],
+        queryFn: ({ signal }) => api.caseDetail(caseId, { signal }),
+        staleTime: 30_000
+      });
+    }
+  }, [previewBaseItems, previewIndex, queryClient]);
+  const previewSourceItems = useMemo(() => {
+    const previewTarget = previewCase.data?.caseItem ? galleryCaseFromDetail(previewCase.data.caseItem) : null;
+    return previewTarget
+      ? previewBaseItems.map((item) => (item.groupId || item.id) === (previewTarget.groupId || previewTarget.id) ? previewTarget : item)
+      : previewBaseItems;
+  }, [previewBaseItems, previewCase.data?.caseItem]);
   const caseFilterCounts = useMemo(() => {
-    const serverCounts = cases.data?.pages[0]?.counts;
+    const serverCounts = caseFacets.data;
     if (serverCounts) return { ...serverCounts, favorite: serverCounts.favorite ?? 0, byCategory: new Map(Object.entries(serverCounts.byCategory)) };
     const allItems = buildGalleryCaseItems(categories);
     return {
@@ -396,7 +548,7 @@ export function CasesPage({
         ])
       )
     };
-  }, [caseStyleCategories, cases.data?.pages, categories, keyword]);
+  }, [caseFacets.data, caseStyleCategories, categories, keyword]);
   const casePreviewItems = useMemo(
     () =>
       previewSourceItems.map((item) => {
@@ -412,7 +564,7 @@ export function CasesPage({
           ...item,
           imageUrl: originalUrl,
           originalUrl,
-          previewUrl: originalUrl,
+          previewUrl: item.imagePreviewUrl ?? item.imageUrl,
           thumbnailUrl: item.imageThumbnailUrl ?? item.imagePreviewUrl ?? item.imageUrl,
           description: item.prompt,
           groupImages,
@@ -488,7 +640,8 @@ export function CasesPage({
 
   useEffect(() => {
     if (!openCaseId || !openCase.data?.caseItem) return;
-    const nextIndex = previewSourceItems.findIndex((item) => (item.groupId || item.id) === openCaseId);
+    const deepLinkTargetId = openCase.data.caseItem.groupId || openCase.data.caseItem.id;
+    const nextIndex = previewSourceItems.findIndex((item) => (item.groupId || item.id) === deepLinkTargetId);
     if (nextIndex >= 0) setPreviewIndex(nextIndex);
   }, [openCase.data?.caseItem, openCaseId, previewSourceItems]);
 
@@ -606,14 +759,26 @@ export function CasesPage({
           </button>
         </div>
       </div>
-      <div className="case-grid">
-        {visibleItems.map((item, index) => {
-          const styleNames = visibleCaseStyleNames(item);
+      <VirtualizedResponsiveGrid
+        items={visibleItems}
+        getKey={(item) => item.groupId || item.id}
+        minColumnWidth={210}
+        estimateCardHeight={(width) => width + 85}
+        gap={16}
+        mobileGap={10}
+        className="case-virtual-grid"
+        rowClassName="case-virtual-grid-row"
+        renderItem={(item, { index, eager, highPriority }) => {
           return (
             <article className="case-card" key={item.id}>
               <div className="case-image-frame" title={(item.imageCount ?? 1) > 1 ? t("pages.cases.groupImage") : undefined}>
                 <button className="case-image-btn" type="button" onClick={() => setPreviewIndex(index)}>
-                  <SkeletonImage src={item.imageThumbnailUrl ?? item.imagePreviewUrl ?? item.imageUrl} alt={item.title} />
+                  <SkeletonImage
+                    src={item.imageThumbnailUrl ?? item.imagePreviewUrl ?? item.imageUrl}
+                    alt={item.title}
+                    loading={eager ? "eager" : "lazy"}
+                    fetchPriority={highPriority ? "high" : "auto"}
+                  />
                 </button>
                 {(item.imageCount ?? 1) > 1 ? (
                   <span
@@ -653,7 +818,7 @@ export function CasesPage({
                           <RefreshCw size={16} />
                         </button>
                       ) : null}
-                      <button className="case-action-icon" type="button" onClick={() => setEditTarget(item)} aria-label={t("pages.cases.edit")} title={t("pages.cases.edit")}>
+                      <button className="case-action-icon" type="button" onClick={() => void openCaseEditor(item)} aria-label={t("pages.cases.edit")} title={t("pages.cases.edit")}>
                         <Pencil size={16} />
                       </button>
                     </>
@@ -677,23 +842,10 @@ export function CasesPage({
                   />
                 </div>
               </div>
-              <div className={cx("case-card-body", styleNames.length === 0 && "no-style")}>
-                <div className="case-card-title-row">
-                  <h3>{item.title}</h3>
-                  {item.canDelete && item.reviewStatus !== "approved" ? (
-                    <span className={cx("asset-space-badge", `share-status-${item.reviewStatus}`)}>{caseReviewStatusLabel(item.reviewStatus, t)}</span>
-                  ) : null}
-                </div>
-                <p>{item.prompt}</p>
-                {item.canDelete && item.reviewStatus === "rejected" && item.rejectReason ? (
-                  <small className="case-review-reject">{t("pages.cases.rejectReason", { reason: item.rejectReason })}</small>
-                ) : null}
-                {styleNames.length > 0 ? <AssetTagScroller names={styleNames} /> : null}
-              </div>
             </article>
           );
-        })}
-      </div>
+        }}
+      />
       {!cases.isLoading && visibleItems.length === 0 ? (
         hasCaseFilters ? (
           <LibraryEmptyState
@@ -732,7 +884,9 @@ export function CasesPage({
           index={previewIndex}
           ariaLabel={t("pages.cases.preview")}
           initialZoomMode={imagePreviewOpenMode}
+          initialImageSource="original"
           wheelMode={imagePreviewWheelMode}
+          suppressStableScrollbarGutter
           onIndexChange={setPreviewIndex}
           onClose={() => {
             setPreviewIndex(null);
@@ -768,7 +922,7 @@ export function CasesPage({
                       <RefreshCw size={16} />
                     </button>
                   ) : null}
-                  <button className="case-preview-tool" type="button" onClick={() => setEditTarget(item)} aria-label={t("pages.cases.edit")} title={t("pages.cases.edit")}>
+                  <button className="case-preview-tool" type="button" onClick={() => void openCaseEditor(item)} aria-label={t("pages.cases.edit")} title={t("pages.cases.edit")}>
                     <Pencil size={16} />
                   </button>
                 </>

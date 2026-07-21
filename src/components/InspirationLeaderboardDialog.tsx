@@ -63,6 +63,39 @@ function PodiumCard({ contributor, rank }: { contributor: InspirationContributor
   );
 }
 
+function LeaderboardSkeleton({ label }: { label: string }) {
+  return (
+    <div className="inspiration-leaderboard-content inspiration-leaderboard-skeleton" role="status" aria-label={label}>
+      <div className="inspiration-leaderboard-podium" aria-hidden="true">
+        {PODIUM_RANKS.map((rank) => (
+          <article className={`inspiration-leaderboard-podium-card inspiration-leaderboard-skeleton-podium-card rank-${rank}`} key={rank}>
+            <span className="inspiration-leaderboard-rank-badge inspiration-leaderboard-skeleton-shape" />
+            <span className="inspiration-leaderboard-avatar is-podium inspiration-leaderboard-skeleton-shape" />
+            <span className="inspiration-leaderboard-name inspiration-leaderboard-skeleton-shape" />
+            <span className="inspiration-leaderboard-podium-count">
+              <span className="inspiration-leaderboard-skeleton-shape" />
+            </span>
+          </article>
+        ))}
+      </div>
+      <div className="inspiration-leaderboard-list" aria-hidden="true">
+        {[0, 1, 2].map((item) => (
+          <article className="inspiration-leaderboard-row inspiration-leaderboard-skeleton-row" key={item}>
+            <span className="inspiration-leaderboard-row-rank">
+              <span className="inspiration-leaderboard-skeleton-shape" />
+            </span>
+            <span className="inspiration-leaderboard-avatar inspiration-leaderboard-skeleton-shape" />
+            <span className="inspiration-leaderboard-name inspiration-leaderboard-skeleton-shape" />
+            <span className="inspiration-leaderboard-row-count">
+              <span className="inspiration-leaderboard-skeleton-shape" />
+            </span>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function InspirationLeaderboardDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t, formatNumber } = useI18n();
   const titleId = useId();
@@ -77,15 +110,10 @@ export function InspirationLeaderboardDialog({ open, onClose }: { open: boolean;
   useEffect(() => {
     if (!open || typeof document === "undefined") return;
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const root = document.documentElement;
     const previousOverflow = document.body.style.overflow;
     const previousOverscrollBehavior = document.body.style.overscrollBehavior;
-    const previousPaddingRight = document.body.style.paddingRight;
-    const scrollbarWidth = Math.max(0, window.innerWidth - root.clientWidth);
-    const bodyPaddingRight = Number.parseFloat(window.getComputedStyle(document.body).paddingRight) || 0;
     const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
 
-    if (scrollbarWidth > 0) document.body.style.paddingRight = `${bodyPaddingRight + scrollbarWidth}px`;
     document.body.style.overflow = "hidden";
     document.body.style.overscrollBehavior = "contain";
 
@@ -99,7 +127,6 @@ export function InspirationLeaderboardDialog({ open, onClose }: { open: boolean;
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
       document.body.style.overscrollBehavior = previousOverscrollBehavior;
-      document.body.style.paddingRight = previousPaddingRight;
       previousFocus?.focus();
     };
   }, [onClose, open]);
@@ -145,18 +172,7 @@ export function InspirationLeaderboardDialog({ open, onClose }: { open: boolean;
           </header>
 
           {contributorsQuery.isLoading ? (
-            <div className="inspiration-leaderboard-loading" role="status" aria-label={t("inspirationLeaderboard.loading")}>
-              <div className="inspiration-leaderboard-skeleton-podium">
-                {[0, 1, 2].map((item) => (
-                  <span key={item} />
-                ))}
-              </div>
-              <div className="inspiration-leaderboard-skeleton-list">
-                {[0, 1, 2].map((item) => (
-                  <span key={item} />
-                ))}
-              </div>
-            </div>
+            <LeaderboardSkeleton label={t("inspirationLeaderboard.loading")} />
           ) : contributorsQuery.isError ? (
             <div className="inspiration-leaderboard-state" role="alert">
               <Trophy size={30} aria-hidden="true" />

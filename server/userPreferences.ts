@@ -37,7 +37,7 @@ export function normalizeLanguagePreference(value: unknown): LanguagePreference 
 }
 
 export function normalizeImagePreviewWheelMode(value: unknown): ImagePreviewWheelMode {
-  return typeof value === "string" && IMAGE_PREVIEW_WHEEL_MODES.has(value as ImagePreviewWheelMode) ? (value as ImagePreviewWheelMode) : "zoom";
+  return typeof value === "string" && IMAGE_PREVIEW_WHEEL_MODES.has(value as ImagePreviewWheelMode) ? (value as ImagePreviewWheelMode) : "pan";
 }
 
 export function normalizeImagePreviewOpenMode(value: unknown): ImagePreviewOpenMode {
@@ -47,7 +47,7 @@ export function normalizeImagePreviewOpenMode(value: unknown): ImagePreviewOpenM
 export function defaultUserPreferences(): PublicUserPreferences {
   return {
     language: "auto",
-    imagePreviewWheelMode: "zoom",
+    imagePreviewWheelMode: "pan",
     imagePreviewOpenMode: "contain",
     editSuggestionsEnabled: true,
     editSuggestionTone: "default",

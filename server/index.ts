@@ -72,6 +72,7 @@ import { registerCaseRoutes } from "./caseRoutes";
 import { registerChangelogRoutes } from "./changelogRoutes";
 import { registerFileRoutes } from "./fileRoutes";
 import { registerImageRoutes, startInterruptedImageJobRecovery } from "./imageRoutes";
+import { invalidateLibraryFacetCache, registerLibraryRoutes } from "./libraryRoutes";
 import { registerPromptOptimizerRoutes } from "./promptOptimizerRoutes";
 import { registerPromptColorSchemeRoutes } from "./promptColorSchemeRoutes";
 import { registerPromptReferenceLinkRoutes } from "./promptReferenceLinkRoutes";
@@ -281,6 +282,8 @@ registerBrandingRoutes(api);
 
 registerFileRoutes(api);
 
+registerLibraryRoutes(api);
+
 registerCaseRoutes(api);
 
 registerPromptReferenceLinkRoutes(api);
@@ -393,6 +396,8 @@ api.put("/config/global-switches/:type", async (c) => {
   assertGlobalSwitchCanEnable(type, enabled);
   const setting = saveGlobalSwitch(type, enabled);
   if (setting.type === "github_entry") invalidatePublicBrandingCache();
+  if (setting.type === "asset_review") invalidateLibraryFacetCache("assets");
+  if (setting.type === "case_review") invalidateLibraryFacetCache("cases");
   audit("global_switch.save", { type: setting.type, enabled: setting.enabled });
   return c.json({ switch: setting, switches: globalSwitches() });
 });
@@ -885,6 +890,7 @@ api.post("/config/assets/reviews/:assetId/approve", (c) => {
     timestamp,
     assetId
   );
+  invalidateLibraryFacetCache("assets");
   audit("asset.share.approve", { assetId, userId: asset.user_id });
   return c.json({ ok: true });
 });
@@ -912,6 +918,7 @@ api.post("/config/assets/reviews/:assetId/reject", async (c) => {
     reason,
     assetId
   );
+  invalidateLibraryFacetCache("assets");
   audit("asset.share.reject", { assetId, userId: asset.user_id, reason });
   return c.json({ ok: true });
 });
@@ -1122,6 +1129,7 @@ api.post("/config/cases/reviews/:caseId/approve", (c) => {
     groupId,
     target.id
   );
+  invalidateLibraryFacetCache("cases");
   audit("case.review.approve", { caseId: target.id, groupId, userId: target.user_id });
   return c.json({ ok: true });
 });
@@ -1149,6 +1157,7 @@ api.post("/config/cases/reviews/:caseId/reject", async (c) => {
     groupId,
     target.id
   );
+  invalidateLibraryFacetCache("cases");
   audit("case.review.reject", { caseId: target.id, groupId, userId: target.user_id, reason });
   return c.json({ ok: true });
 });
@@ -2945,6 +2954,7 @@ api.get("/config/request-logs", (c) => {
         statusCode: log.status_code,
         durationMs: log.duration_ms,
         success: Boolean(log.success),
+        cancelled: Boolean(log.cancelled),
         error: log.error ?? "",
         responseSnapshot: log.response_snapshot ?? "",
         createdAt: log.created_at

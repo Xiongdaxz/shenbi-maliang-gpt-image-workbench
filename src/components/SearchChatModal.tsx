@@ -6,7 +6,8 @@ import { api } from "../api";
 import { useI18n } from "../i18n";
 import { formatDate } from "../lib/format";
 import { promptTemplateIconFor } from "../lib/promptTemplateIcons";
-import { useWorkbench } from "../store/workbench";
+import { chronologicalWorkImages, workImageFromLibraryCard } from "../lib/workImages";
+import { useWorkbench, type ImageLibraryContinuations } from "../store/workbench";
 import type { ChatSession, GlobalSearchItem, GlobalSearchResultScope } from "../types";
 import { useToast } from "../ui";
 import { SearchHistoryInput } from "./SearchHistoryInput";
@@ -219,14 +220,63 @@ export function SearchChatModal({ sessions, onClose }: { sessions: ChatSession[]
         const { image } = await api.imageDetail(item.id);
         if (!image) throw new Error("Image not found");
         let editorImages = [image];
+        let libraryContinuations: ImageLibraryContinuations | undefined;
         if (image.sessionId) {
-          const sessionResult = await api.images({ sessionId: image.sessionId, sort: "desc" }).catch(() => null);
-          if (sessionResult?.images.length) editorImages = sessionResult.images;
+          const [olderPage, newerPage] = await Promise.all([
+            api.libraryImages({ sessionId: image.sessionId, anchorId: image.id, sort: "desc", limit: 15 }).catch(() => null),
+            api.libraryImages({ sessionId: image.sessionId, anchorId: image.id, sort: "asc", limit: 15 }).catch(() => null)
+          ]);
+          const cards = chronologicalWorkImages(
+            Array.from(new Map(
+              [...(olderPage?.items ?? []), ...(newerPage?.items ?? [])]
+                .map((card) => [card.id, workImageFromLibraryCard(card)])
+            ).values())
+          );
+          const activeIndex = cards.findIndex((card) => card.id === image.id);
+          if (activeIndex >= 0) {
+            const neighbors = cards.slice(Math.max(0, activeIndex - 1), activeIndex + 2);
+            const neighborDetails = await Promise.all(
+              neighbors
+                .filter((card) => card.id !== image.id)
+                .map((card) => api.imageDetail(card.id).then((result) => result.image).catch(() => null))
+            );
+            const detailsById = new Map([
+              [image.id, image],
+              ...neighborDetails
+                .filter((detail): detail is NonNullable<typeof detail> => Boolean(detail))
+                .map((detail) => [detail.id, detail] as const)
+            ]);
+            editorImages = cards.map((card) => detailsById.get(card.id) ?? card);
+            libraryContinuations = {
+              ...(newerPage?.pageInfo.hasMore && newerPage.pageInfo.nextCursor
+                ? {
+                    newer: {
+                      sessionId: image.sessionId,
+                      anchorId: image.id,
+                      sort: "asc" as const,
+                      nextCursor: newerPage.pageInfo.nextCursor,
+                      hasMore: true
+                    }
+                  }
+                : {}),
+              ...(olderPage?.pageInfo.hasMore && olderPage.pageInfo.nextCursor
+                ? {
+                    older: {
+                      sessionId: image.sessionId,
+                      anchorId: image.id,
+                      sort: "desc" as const,
+                      nextCursor: olderPage.pageInfo.nextCursor,
+                      hasMore: true
+                    }
+                  }
+                : {})
+            };
+          }
         }
         setOpeningImageId("");
         setDraftPrompt("");
         setEditImage(null);
-        setEditorImageRequest({ image, images: editorImages });
+        setEditorImageRequest({ image, images: editorImages, imageSort: "asc", libraryContinuations });
         onClose();
         navigate("/");
       } catch {

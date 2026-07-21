@@ -1423,8 +1423,14 @@ export function BackupPanel() {
 
 function requestStatusLabel(item: ProviderRequestLog) {
   const status = item.statusCode == null ? "" : ` ${item.statusCode}`;
+  if (item.cancelled) return "已终止";
   if (!item.success) return `失败${status}`;
   return item.statusCode ? `${item.statusCode}` : "成功";
+}
+
+function requestStatusClass(item: ProviderRequestLog) {
+  if (item.cancelled) return "cancelled";
+  return item.success ? "success" : "failed";
 }
 
 function requestUserLabel(item: ProviderRequestLog) {
@@ -1660,14 +1666,14 @@ export function RequestLogsPanel() {
                   </td>
                   <td className="request-log-result-cell">
                     <div>
-                      <span className={cx("request-log-status-pill", item.success ? "success" : "failed")}>{requestStatusLabel(item)}</span>
+                      <span className={cx("request-log-status-pill", requestStatusClass(item))}>{requestStatusLabel(item)}</span>
                       <span>{item.operation === "edit" ? "编辑" : "生成"}</span>
                     </div>
                     <small>{requestAttemptLabel(item) || "首次请求"} · {item.durationMs} ms</small>
                   </td>
                   <td className="endpoint-cell">
                     <span className="request-endpoint-text" title={item.endpoint}>{item.endpoint}</span>
-                    {item.error ? <small>{item.error}</small> : null}
+                    {item.cancelled ? <small>用户手动终止</small> : item.error ? <small>{item.error}</small> : null}
                     {item.responseSnapshot ? (
                       <details className="request-response-snapshot">
                         <summary>响应快照</summary>

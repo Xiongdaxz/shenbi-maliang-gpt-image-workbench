@@ -8,6 +8,8 @@ import { SkeletonImage } from "./SkeletonImage";
 export function MyImageCard({
   image,
   compact = false,
+  loading = "lazy",
+  fetchPriority = "auto",
   assetPending,
   deletePending,
   favoritePending,
@@ -23,6 +25,8 @@ export function MyImageCard({
 }: {
   image: WorkImage;
   compact?: boolean;
+  loading?: "eager" | "lazy";
+  fetchPriority?: "high" | "low" | "auto";
   assetPending: boolean;
   deletePending: boolean;
   favoritePending: boolean;
@@ -50,7 +54,7 @@ export function MyImageCard({
           title={selectionMode ? t("pages.images.batch.selectImage") : t("pages.images.editImage")}
           disabled={selectionMode && selectionDisabled}
         >
-          <SkeletonImage src={thumbnailUrl} alt={image.prompt} />
+          <SkeletonImage src={thumbnailUrl} alt={image.prompt} loading={loading} fetchPriority={fetchPriority} />
         </button>
         {selectionMode ? (
           <button

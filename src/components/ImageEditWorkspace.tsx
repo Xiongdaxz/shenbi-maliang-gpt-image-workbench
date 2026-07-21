@@ -30,12 +30,15 @@ import {
   type SelectionOverlaySnapshot,
   type Stroke
 } from "../lib/selectionMask";
-import { useWorkbench } from "../store/workbench";
+import { useWorkbench, type ImageEditorImageSort, type ImageLibraryContinuations } from "../store/workbench";
 import type { AssetItem, ImagePreviewWheelMode, WorkImage } from "../types";
 
 export type ImageEditorState = {
   images: WorkImage[];
   activeImageId: string;
+  imageSort: ImageEditorImageSort;
+  totalImageCount?: number;
+  libraryContinuations?: ImageLibraryContinuations;
   initialPrompt?: string;
   discardDraftOnClose?: boolean;
 };
@@ -43,6 +46,8 @@ export type ImageEditorState = {
 type ImageEditWorkspaceProps = {
   images: WorkImage[];
   activeImageId: string;
+  imageSort?: ImageEditorImageSort;
+  totalImageCount?: number;
   downloadBaseName?: string;
   initialPrompt?: string;
   sizeOptions: SizeOption[];
@@ -51,7 +56,14 @@ type ImageEditWorkspaceProps = {
   wheelMode?: ImagePreviewWheelMode;
   assets?: { assets: AssetItem[] };
   materialPickerOpen: boolean;
+  hasMoreNewerImages?: boolean;
+  hasMoreOlderImages?: boolean;
+  failedLoadingNewerImages?: boolean;
+  failedLoadingOlderImages?: boolean;
+  loadingMoreImages?: boolean;
   onClose: () => void;
+  onActiveImageChange?: (imageId: string) => void;
+  onLoadMoreImages?: (direction: "newer" | "older") => void;
   onPickSize: (image: WorkImage, option: SizeOption) => void;
   onOpenCasePicker: () => void;
   onToggleMaterialPicker: () => void;
@@ -99,15 +111,24 @@ function buildPreviewStartPan(contentSize: number, stageSize: number, visibleSiz
 export function ImageEditWorkspace({
   images,
   activeImageId,
+  imageSort = "asc",
+  totalImageCount,
   downloadBaseName,
   initialPrompt,
   sizeOptions,
   selectedSize,
   isSubmitting,
-  wheelMode = "zoom",
+  wheelMode = "pan",
   assets,
   materialPickerOpen,
+  hasMoreNewerImages = false,
+  hasMoreOlderImages = false,
+  failedLoadingNewerImages = false,
+  failedLoadingOlderImages = false,
+  loadingMoreImages = false,
   onClose,
+  onActiveImageChange,
+  onLoadMoreImages,
   onPickSize,
   onOpenCasePicker,
   onToggleMaterialPicker,
@@ -149,6 +170,8 @@ export function ImageEditWorkspace({
   const thumbWheelThrottleRef = useRef<number | null>(null);
   const previewDragRef = useRef<{ pointerId: number; startX: number; startY: number; startPan: { x: number; y: number }; moved: boolean } | null>(null);
   const previewNavigatorDragRef = useRef<number | null>(null);
+  const previewClickHandledRef = useRef(false);
+  const previewPointerStartedOnImageRef = useRef(false);
   const pointerActiveRef = useRef(false);
   const strokesRef = useRef<Stroke[]>([]);
   const currentStrokeRef = useRef<Stroke | null>(null);
@@ -159,6 +182,11 @@ export function ImageEditWorkspace({
   const activeImage = images.find((image) => image.id === activeId) ?? images[0];
   const activeIndex = Math.max(0, images.findIndex((image) => image.id === activeImage?.id));
   const activeImageOriginalUrl = activeImage?.originalUrl || activeImage?.url || "";
+  const activeImageMetadataSize =
+    activeImage && activeImage.imageWidth > 0 && activeImage.imageHeight > 0
+      ? { width: activeImage.imageWidth, height: activeImage.imageHeight }
+      : null;
+  const activeImageDisplayUrl = activeImageOriginalUrl;
   const hasSelection = strokes.length > 0 || liveStrokeActive;
   const editorComposerPreviews = [
     ...selectedCaseMaterials.map((caseMaterial) => ({
@@ -517,6 +545,49 @@ export function ImageEditWorkspace({
   useEffect(() => setActiveId(activeImageId), [activeImageId]);
 
   useEffect(() => {
+    if (activeImage?.id) onActiveImageChange?.(activeImage.id);
+  }, [activeImage?.id, onActiveImageChange]);
+
+  useEffect(() => {
+    if (loadingMoreImages || !onLoadMoreImages) return;
+    const threshold = Math.min(8, Math.max(1, Math.floor(images.length / 3)));
+    const startDirection = imageSort === "asc" ? "older" : "newer";
+    const endDirection = imageSort === "asc" ? "newer" : "older";
+    const canLoad = (direction: "newer" | "older") =>
+      direction === "newer"
+        ? hasMoreNewerImages && !failedLoadingNewerImages
+        : hasMoreOlderImages && !failedLoadingOlderImages;
+    if (activeIndex <= threshold && canLoad(startDirection)) {
+      onLoadMoreImages(startDirection);
+      return;
+    }
+    if (activeIndex >= Math.max(0, images.length - threshold - 1) && canLoad(endDirection)) {
+      onLoadMoreImages(endDirection);
+    }
+  }, [
+    activeIndex,
+    failedLoadingNewerImages,
+    failedLoadingOlderImages,
+    hasMoreNewerImages,
+    hasMoreOlderImages,
+    imageSort,
+    images.length,
+    loadingMoreImages,
+    onLoadMoreImages
+  ]);
+
+  useEffect(() => {
+    for (const index of [activeIndex - 2, activeIndex - 1, activeIndex + 1, activeIndex + 2]) {
+      const image = images[index];
+      const url = image?.previewUrl || image?.url;
+      if (!url) continue;
+      const preload = new Image();
+      preload.decoding = "async";
+      preload.src = url;
+    }
+  }, [activeIndex, images]);
+
+  useEffect(() => {
     const root = document.documentElement;
     const previousOverflow = document.body.style.overflow;
     const previousRootOverflow = root.style.overflow;
@@ -552,7 +623,8 @@ export function ImageEditWorkspace({
     pointerStartRef.current = null;
     selectionSnapshotRef.current = null;
     setEditorError("");
-  }, [activeImage?.id]);
+    setNaturalSize(activeImageMetadataSize ?? { width: 0, height: 0 });
+  }, [activeImage?.id, activeImageMetadataSize?.height, activeImageMetadataSize?.width]);
 
   useEffect(() => {
     const image = imageRef.current;
@@ -562,7 +634,9 @@ export function ImageEditWorkspace({
         width: Math.max(0, Math.round(image.offsetWidth)),
         height: Math.max(0, Math.round(image.offsetHeight))
       });
-      if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+      if (activeImageMetadataSize) {
+        setNaturalSize(activeImageMetadataSize);
+      } else if (image.naturalWidth > 0 && image.naturalHeight > 0) {
         setNaturalSize({ width: image.naturalWidth, height: image.naturalHeight });
       }
     };
@@ -574,7 +648,7 @@ export function ImageEditWorkspace({
       observer.disconnect();
       window.removeEventListener("resize", updateSize);
     };
-  }, [activeImageOriginalUrl, selectionMode]);
+  }, [activeImageDisplayUrl, activeImageMetadataSize?.height, activeImageMetadataSize?.width, selectionMode]);
 
   useEffect(() => {
     strokesRef.current = strokes;
@@ -715,7 +789,8 @@ export function ImageEditWorkspace({
   const handlePreviewPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
     if (selectionMode || isSubmitting || !canPreviewPan || event.button !== 0) return;
     const target = event.target instanceof HTMLElement ? event.target : null;
-    if (target?.closest("button, input, textarea, select, [contenteditable='true']")) return;
+    if (!target?.closest(".image-editor-canvas-wrap")) return;
+    previewPointerStartedOnImageRef.current = true;
     event.preventDefault();
     event.stopPropagation();
     previewDragRef.current = {
@@ -754,15 +829,32 @@ export function ImageEditWorkspace({
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    if (activateOriginalSize && !drag.moved) showPreviewOriginalSize();
+    if (!activateOriginalSize) {
+      previewPointerStartedOnImageRef.current = false;
+      return;
+    }
+    if (activateOriginalSize && drag.moved) {
+      previewClickHandledRef.current = true;
+    }
+    window.setTimeout(() => {
+      previewClickHandledRef.current = false;
+      previewPointerStartedOnImageRef.current = false;
+    }, 250);
   };
   const finishPreviewDrag = (event: ReactPointerEvent<HTMLElement>) => releasePreviewDrag(event, true);
   const cancelPreviewDrag = (event: ReactPointerEvent<HTMLElement>) => releasePreviewDrag(event, false);
   const handlePreviewClick = (event: ReactMouseEvent<HTMLElement>) => {
-    if (selectionMode || isSubmitting || canPreviewPan) return;
+    if (selectionMode || isSubmitting) return;
+    const startedOnImage = previewPointerStartedOnImageRef.current;
+    previewPointerStartedOnImageRef.current = false;
+    if (previewClickHandledRef.current) {
+      previewClickHandledRef.current = false;
+      return;
+    }
     const target = event.target instanceof HTMLElement ? event.target : null;
-    if (target?.closest("button, input, textarea, select, [contenteditable='true']")) return;
-    showPreviewOriginalSize();
+    if (!target?.closest(".image-editor-canvas-wrap") && !startedOnImage) return;
+    if (previewUsesHandCursor) resetPreviewTransform();
+    else showPreviewOriginalSize();
   };
   const handlePreviewNavigatorPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (selectionMode || isSubmitting || !previewNavigatorMetrics || !canPreviewPan || event.button !== 0) return;
@@ -937,14 +1029,6 @@ export function ImageEditWorkspace({
       setEditorError(error instanceof Error ? error.message : t("imageEditor.error.submitFailed"));
     }
   };
-  const shareImage = async () => {
-    const url = new URL(activeImageOriginalUrl, window.location.origin).toString();
-    if (navigator.share) {
-      await navigator.share({ title: activeImage.prompt || t("imageEditor.shareTitle"), url }).catch(() => undefined);
-      return;
-    }
-    await navigator.clipboard?.writeText(url).catch(() => undefined);
-  };
   return (
     <div
       className={cx(
@@ -984,7 +1068,6 @@ export function ImageEditWorkspace({
         onPreviewZoomIn={() => adjustPreviewZoom(EDITOR_PREVIEW_SCALE_STEP)}
         onPreviewZoomOut={() => adjustPreviewZoom(-EDITOR_PREVIEW_SCALE_STEP)}
         onRedoStroke={redoStroke}
-        onShareImage={() => void shareImage()}
         onUndoStroke={undoStroke}
       />
       <div className="image-editor-body">
@@ -994,6 +1077,7 @@ export function ImageEditWorkspace({
             activeIndex={activeIndex}
             activeThumbRef={activeThumbRef}
             images={images}
+            totalImageCount={totalImageCount}
             thumbListRef={thumbListRef}
             onSelectByOffset={selectByOffset}
             onSelectImage={selectImage}
@@ -1026,13 +1110,13 @@ export function ImageEditWorkspace({
             >
               <img
                 ref={imageRef}
-                src={activeImageOriginalUrl}
+                src={activeImageDisplayUrl}
                 alt={activeImage.prompt}
                 className="image-editor-image"
                 style={originalSizeImageStyle}
                 onLoad={(event) => {
                   const target = event.currentTarget;
-                  setNaturalSize({ width: target.naturalWidth, height: target.naturalHeight });
+                  setNaturalSize(activeImageMetadataSize ?? { width: target.naturalWidth, height: target.naturalHeight });
                   setDisplaySize({ width: Math.round(target.offsetWidth), height: Math.round(target.offsetHeight) });
                 }}
               />

@@ -436,14 +436,23 @@ export function sharedImageViewUrls(token: string, sortOrder: number) {
   const baseUrl = sharedMessageBaseUrl(token, sortOrder);
   return {
     imageUrl: `${baseUrl}/image?variant=preview`,
-    imageOriginalUrl: `${baseUrl}/image?variant=preview`,
+    imageOriginalUrl: `${baseUrl}/image?variant=original`,
     imagePreviewUrl: `${baseUrl}/image?variant=preview`,
     imageThumbnailUrl: `${baseUrl}/image?variant=thumb`
   };
 }
 
-export function sharedInlineImageVariantAllowed(variant: ImageVariant) {
-  return variant !== "original";
+export function sharedReferenceViewUrls(baseUrl: string) {
+  return {
+    url: `${baseUrl}?variant=preview`,
+    originalUrl: `${baseUrl}/download`,
+    previewUrl: `${baseUrl}?variant=preview`,
+    thumbnailUrl: `${baseUrl}?variant=thumb`
+  };
+}
+
+export function sharedInlineImageVariantAllowed(variant: ImageVariant, role: string) {
+  return variant !== "original" || role === "assistant";
 }
 
 function sharedMessages(share: SessionShareLinkRow, token: string) {
@@ -518,16 +527,14 @@ function sharedMessages(share: SessionShareLinkRow, token: string) {
     const imageOriginalUrl = viewUrls?.imageOriginalUrl ?? null;
     const imagePreviewUrl = viewUrls?.imagePreviewUrl ?? null;
     const imageThumbnailUrl = viewUrls?.imageThumbnailUrl ?? null;
+    const imageDownloadUrl = hasImage ? `${baseUrl}/image/download?variant=original` : null;
     const sourceReferences = (messageReferenceMap.get(row.id) ?? []).map((reference, index) => {
       const referenceBase = `${baseUrl}/source-references/${index + 1}`;
       return {
         id: `shared-source-reference-${row.share_sort_order + 1}-${index + 1}`,
         kind: "asset" as const,
         name: reference.source_name,
-        url: `${referenceBase}?variant=preview`,
-        originalUrl: `${referenceBase}?variant=preview`,
-        previewUrl: `${referenceBase}?variant=preview`,
-        thumbnailUrl: `${referenceBase}?variant=thumb`,
+        ...sharedReferenceViewUrls(referenceBase),
         imageWidth: reference.image_width ?? 0,
         imageHeight: reference.image_height ?? 0
       };
@@ -539,10 +546,7 @@ function sharedMessages(share: SessionShareLinkRow, token: string) {
           return {
             id: `shared-image-reference-${row.share_sort_order + 1}-${index + 1}`,
             name: reference.source_name,
-            url: `${referenceBase}?variant=preview`,
-            originalUrl: `${referenceBase}?variant=preview`,
-            previewUrl: `${referenceBase}?variant=preview`,
-            thumbnailUrl: `${referenceBase}?variant=thumb`,
+            ...sharedReferenceViewUrls(referenceBase),
             mimeType: reference.mime_type,
             size: reference.size ?? 0,
             imageWidth: reference.image_width ?? 0,
@@ -563,7 +567,7 @@ function sharedMessages(share: SessionShareLinkRow, token: string) {
       imageThumbnailUrl,
       imagePrompt: row.role === "assistant" ? row.image_prompt ?? null : null,
       referenceImageUrl: primaryReference?.url ?? (row.role === "user" ? imageUrl : null),
-      referenceImageOriginalUrl: primaryReference?.originalUrl ?? (row.role === "user" ? imagePreviewUrl : null),
+      referenceImageOriginalUrl: primaryReference?.originalUrl ?? (row.role === "user" ? imageDownloadUrl : null),
       referenceImagePreviewUrl: primaryReference?.previewUrl ?? (row.role === "user" ? imagePreviewUrl : null),
       referenceImageThumbnailUrl: primaryReference?.thumbnailUrl ?? (row.role === "user" ? imageThumbnailUrl : null),
       referenceImagePrompt: primaryReference?.name ?? (row.role === "user" && hasImage ? "参考图片" : null),
@@ -981,7 +985,7 @@ export function registerSessionShareRoutes(api: Hono) {
     if (!share) return publicNotFound(c);
     if (!withinShareRateLimit(c, share.id, "download")) return publicRateLimited(c);
     const image = sharedMessageMedia(share, c.req.param("messageId"));
-    if (!image || image.role !== "assistant") return publicNotFound(c);
+    if (!image) return publicNotFound(c);
     const variant = normalizeImageVariant(c.req.query("variant"));
     try {
       const file = await sharedImageFile(
@@ -1002,7 +1006,7 @@ export function registerSessionShareRoutes(api: Hono) {
     const image = sharedMessageMedia(share, c.req.param("messageId"));
     if (!image) return publicNotFound(c);
     const variant = normalizeImageVariant(c.req.query("variant"));
-    if (!sharedInlineImageVariantAllowed(variant)) return publicNotFound(c);
+    if (!sharedInlineImageVariantAllowed(variant, image.role)) return publicNotFound(c);
     try {
       return sharedImageResponse(
         await sharedImageFile(
@@ -1073,6 +1077,25 @@ export function registerSessionShareRoutes(api: Hono) {
     }
   });
 
+  api.get("/shared-sessions/:token/messages/:messageId/source-references/:index/download", async (c) => {
+    const token = c.req.param("token");
+    const share = activeShareFromToken(token);
+    if (!share) return publicNotFound(c);
+    if (!withinShareRateLimit(c, share.id, "download")) return publicRateLimited(c);
+    const reference = sharedReferenceByIndex(share, c.req.param("messageId"), c.req.param("index"), "source");
+    if (!reference) return publicNotFound(c);
+    try {
+      return sharedImageResponse(
+        await sharedImageFile(
+          { sourceType: "message-source-reference", sourceId: reference.id, path: reference.path, mimeType: reference.mime_type },
+          "original"
+        )
+      );
+    } catch {
+      return publicNotFound(c);
+    }
+  });
+
   api.get("/shared-sessions/:token/messages/:messageId/image-references/:index", async (c) => {
     const token = c.req.param("token");
     const share = activeShareFromToken(token);
@@ -1086,6 +1109,25 @@ export function registerSessionShareRoutes(api: Hono) {
         await sharedImageFile(
           { sourceType: "image-reference", sourceId: reference.id, path: reference.path, mimeType: reference.mime_type },
           variant
+        )
+      );
+    } catch {
+      return publicNotFound(c);
+    }
+  });
+
+  api.get("/shared-sessions/:token/messages/:messageId/image-references/:index/download", async (c) => {
+    const token = c.req.param("token");
+    const share = activeShareFromToken(token);
+    if (!share) return publicNotFound(c);
+    if (!withinShareRateLimit(c, share.id, "download")) return publicRateLimited(c);
+    const reference = sharedReferenceByIndex(share, c.req.param("messageId"), c.req.param("index"), "image");
+    if (!reference) return publicNotFound(c);
+    try {
+      return sharedImageResponse(
+        await sharedImageFile(
+          { sourceType: "image-reference", sourceId: reference.id, path: reference.path, mimeType: reference.mime_type },
+          "original"
         )
       );
     } catch {

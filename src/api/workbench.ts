@@ -16,6 +16,13 @@ import type {
   ImageGenerationMode,
   ImageJob,
   InspirationContributor,
+  LibraryAssetCard,
+  LibraryAssetFacets,
+  LibraryCaseCard,
+  LibraryCaseFacets,
+  LibraryImageCard,
+  LibraryImageFacets,
+  LibraryPage,
   LoginAssets,
   Message,
   PromptReferenceLink,
@@ -142,6 +149,30 @@ type ImagePageQuery = PageQuery & {
   sort?: "asc" | "desc";
   favoriteOnly?: boolean;
   sessionId?: string;
+};
+
+type LibraryPageQuery = {
+  limit?: number;
+  cursor?: string | null;
+  keyword?: string;
+};
+
+type LibraryImageQuery = LibraryPageQuery & {
+  sort?: "asc" | "desc";
+  favoriteOnly?: boolean;
+  sessionId?: string;
+  anchorId?: string;
+};
+
+type LibraryAssetQuery = LibraryPageQuery & {
+  categoryIds?: string[];
+  space?: "all" | AssetItem["space"];
+};
+
+type LibraryCaseQuery = LibraryPageQuery & {
+  categoryIds?: string[];
+  mineOnly?: boolean;
+  favoriteOnly?: boolean;
 };
 
 type PromptTemplateScope = "all" | "mine" | "shared";
@@ -620,7 +651,8 @@ export const api = {
     }),
   avatarHistory: () => request<{ entries: AvatarHistoryEntry[] }>("/api/auth/avatar-history"),
   providers: () => request<{ providers: ProviderConfig[]; imageMode: ImageGenerationMode }>("/api/providers"),
-  starterCopiesToday: (language?: string) => request<StarterDailyCopy>(`/api/starter-copies/today${queryString({ language })}`),
+  starterCopiesToday: (language?: string, init?: RequestInit) =>
+    request<StarterDailyCopy>(`/api/starter-copies/today${queryString({ language })}`, init),
   changelog: (params?: Pick<PageQuery, "limit" | "offset" | "keyword">) =>
     request<PagedResponse<{ entries: ChangelogEntry[] }>>(
       `/api/changelog${queryString({ limit: params?.limit, offset: params?.offset, keyword: params?.keyword })}`
@@ -743,6 +775,26 @@ export const api = {
         favoriteOnly: params?.favoriteOnly
       })}`
     ),
+  libraryCases: (params?: LibraryCaseQuery, init?: RequestInit) =>
+    request<LibraryPage<LibraryCaseCard>>(
+      `/api/library/cases${queryString({
+        limit: params?.limit,
+        cursor: params?.cursor ?? undefined,
+        keyword: params?.keyword,
+        categoryIds: params?.categoryIds,
+        mineOnly: params?.mineOnly,
+        favoriteOnly: params?.favoriteOnly
+      })}`,
+      init
+    ),
+  libraryCaseFacets: (params?: Pick<LibraryCaseQuery, "keyword">, init?: RequestInit) =>
+    request<LibraryCaseFacets>(`/api/library/cases/facets${queryString({ keyword: params?.keyword })}`, init),
+  caseCategories: (init?: RequestInit) => request<{ categories: CaseCategory[] }>("/api/cases/categories", init),
+  starterCases: (params: { limit?: number; excludeIds?: string[] } = {}, init?: RequestInit) =>
+    request<{ items: LibraryCaseCard[] }>(
+      `/api/cases/starter${queryString({ limit: params.limit ?? 10, excludeIds: params.excludeIds })}`,
+      init
+    ),
   caseContributors: () => request<{ contributors: InspirationContributor[] }>("/api/cases/contributors"),
   caseDetail: (caseId: string, init?: RequestInit) =>
     request<{ caseItem: CaseCategory["items"][number] }>(`/api/cases/${encodeURIComponent(caseId)}`, init),
@@ -786,12 +838,13 @@ export const api = {
     request<{ ok: boolean }>(`/api/prompt-reference-links/${linkId}`, {
       method: "DELETE"
     }),
-  promptTemplates: (params?: PromptTemplateQuery) =>
+  promptTemplates: (params?: PromptTemplateQuery, init?: RequestInit) =>
     request<{ templates: PromptTemplate[]; counts?: PromptTemplateCounts }>(
       `/api/prompt-templates${queryString({
         scope: params?.scope,
         keyword: params?.keyword
-      })}`
+      })}`,
+      init
     ),
   updatePromptTemplateOptimizeStyle: (id: string, optimizeStyle: PromptTemplateOptimizeStyle) =>
     request<{ template: PromptTemplate | null }>(`/api/prompt-templates/${encodeURIComponent(id)}/optimize-style`, {
@@ -869,7 +922,7 @@ export const api = {
     request<{ ok: boolean }>(`/api/prompt-template-results/${encodeURIComponent(id)}`, {
       method: "DELETE"
     }),
-  assetCategories: () => request<{ categories: CaseCategory[]; reviewEnabled: boolean }>("/api/assets/categories"),
+  assetCategories: (init?: RequestInit) => request<{ categories: CaseCategory[]; reviewEnabled: boolean }>("/api/assets/categories", init),
   createAssetCategory: (name: string) =>
     request<{ category: CaseCategory }>("/api/assets/categories", {
       method: "POST",
@@ -885,6 +938,24 @@ export const api = {
         favoriteOnly: params?.favoriteOnly,
         sessionId: params?.sessionId
       })}`
+    ),
+  libraryImages: (params?: LibraryImageQuery, init?: RequestInit) =>
+    request<LibraryPage<LibraryImageCard>>(
+      `/api/library/images${queryString({
+        limit: params?.limit,
+        cursor: params?.cursor ?? undefined,
+        keyword: params?.keyword,
+        sort: params?.sort,
+        favoriteOnly: params?.favoriteOnly,
+        sessionId: params?.sessionId,
+        anchorId: params?.anchorId
+      })}`,
+      init
+    ),
+  libraryImageFacets: (params?: Pick<LibraryImageQuery, "keyword" | "sessionId">, init?: RequestInit) =>
+    request<LibraryImageFacets>(
+      `/api/library/images/facets${queryString({ keyword: params?.keyword, sessionId: params?.sessionId })}`,
+      init
     ),
   imageDetail: (imageId: string, init?: RequestInit) =>
     request<{ image: WorkImage | null }>(`/api/images/${encodeURIComponent(imageId)}`, init),
@@ -923,6 +994,26 @@ export const api = {
         categoryIds: params?.categoryIds,
         space: params?.space
       })}`
+    ),
+  libraryAssets: (params?: LibraryAssetQuery, init?: RequestInit) =>
+    request<LibraryPage<LibraryAssetCard>>(
+      `/api/library/assets${queryString({
+        limit: params?.limit,
+        cursor: params?.cursor ?? undefined,
+        keyword: params?.keyword,
+        categoryIds: params?.categoryIds,
+        space: params?.space
+      })}`,
+      init
+    ),
+  libraryAssetFacets: (params?: LibraryAssetQuery, init?: RequestInit) =>
+    request<LibraryAssetFacets>(
+      `/api/library/assets/facets${queryString({
+        keyword: params?.keyword,
+        categoryIds: params?.categoryIds,
+        space: params?.space
+      })}`,
+      init
     ),
   assetDetail: (assetId: string, init?: RequestInit) =>
     request<{ asset: AssetItem }>(`/api/assets/${encodeURIComponent(assetId)}`, init),

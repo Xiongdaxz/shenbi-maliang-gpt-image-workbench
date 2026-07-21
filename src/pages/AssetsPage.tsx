@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FolderOpen, Pencil, Plus, Search, Send, Share2, Trash2, X } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { AssetEditModal } from "../components/AssetEditModal";
 import { AssetUploadModal } from "../components/AssetUploadModal";
-import { AssetTagScroller, FilterModeToggle, FilterTabLabel, FilterTabsScroller, useLibraryFilterDisplayMode } from "../components/HorizontalScrollers";
+import { FilterModeToggle, FilterTabLabel, FilterTabsScroller, useLibraryFilterDisplayMode } from "../components/HorizontalScrollers";
 import { ImageDownloadMenu } from "../components/ImageDownloadMenu";
 import { ImagePreviewModal } from "../components/ImagePreviewModal";
 import { LibraryEmptyState } from "../components/LibraryEmptyState";
@@ -13,16 +13,18 @@ import { PageHeader } from "../components/PageHeader";
 import { SearchHistoryInput } from "../components/SearchHistoryInput";
 import { SkeletonImage } from "../components/SkeletonImage";
 import { ScrollJumpButton } from "../components/ScrollJumpButton";
+import { VirtualizedResponsiveGrid } from "../components/VirtualizedResponsiveGrid";
 import { useI18n } from "../i18n";
 import { assetSpaceLabel, type AssetUploadMode } from "../lib/assets";
 import { cx } from "../lib/cx";
-import { formatImageFileSize } from "../lib/format";
 import { imageCreatedTime } from "../lib/imageTimeline";
 import { IMAGE_PAGE_SIZE } from "../lib/pagination";
 import { useInfinitePageLoader } from "../hooks/useInfinitePageLoader";
+import { useCursorLibraryQuery } from "../hooks/useCursorLibraryQuery";
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { useScrollJump } from "../hooks/useScrollJump";
 import { useWorkbench } from "../store/workbench";
-import type { AssetItem, ImagePreviewOpenMode, ImagePreviewWheelMode } from "../types";
+import type { AssetItem, ImagePreviewOpenMode, ImagePreviewWheelMode, LibraryAssetCard } from "../types";
 import { ConfirmDialog, PromptDialog, useToast } from "../ui";
 
 function assetMatchesSpace(asset: AssetItem, spaceFilter: "all" | AssetItem["space"]) {
@@ -31,12 +33,23 @@ function assetMatchesSpace(asset: AssetItem, spaceFilter: "all" | AssetItem["spa
   return asset.canEdit && asset.space === "private";
 }
 
-function assetMatchesKeyword(asset: AssetItem, normalizedKeyword: string) {
+function assetMatchesKeyword(asset: AssetItem, normalizedKeyword: string, reviewEnabled = true) {
   if (!normalizedKeyword) return true;
-  const haystack = [asset.name, asset.sourceUsername, assetSpaceLabel(asset), ...asset.categoryNames]
+  const haystack = [asset.name, asset.sourceUsername, assetSpaceLabel(asset, reviewEnabled), ...asset.categoryNames]
     .join(" ")
     .toLowerCase();
   return haystack.includes(normalizedKeyword);
+}
+
+function assetCardToItem(card: LibraryAssetCard): AssetItem {
+  const originalUrl = `/api/files/assets/${encodeURIComponent(card.id)}`;
+  return {
+    ...card,
+    url: originalUrl,
+    originalUrl,
+    previewUrl: `${originalUrl}?variant=preview`,
+    thumbnailUrl: card.thumbnailUrl
+  };
 }
 
 export function AssetsPage({
@@ -60,6 +73,7 @@ export function AssetsPage({
   const [spaceFilter, setSpaceFilter] = useState<"all" | AssetItem["space"]>("all");
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [keyword, setKeyword] = useState(() => urlKeyword);
+  const debouncedKeyword = useDebouncedValue(keyword, 250);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<AssetItem | null>(null);
@@ -77,25 +91,37 @@ export function AssetsPage({
     enabled: Boolean(openAssetId),
     retry: false
   });
-  const assets = useInfiniteQuery({
-    queryKey: ["assets", "paged", spaceFilter, selectedCategoryIds.join(","), keyword],
-    queryFn: ({ pageParam }) =>
-      api.assets({
+  const assets = useCursorLibraryQuery({
+    queryKey: ["assets", "library", spaceFilter, selectedCategoryIds.join(","), debouncedKeyword],
+    queryFn: ({ cursor, signal }) =>
+      api.libraryAssets({
         limit: IMAGE_PAGE_SIZE,
-        offset: Number(pageParam),
+        cursor,
         categoryIds: selectedCategoryIds,
-        keyword,
+        keyword: debouncedKeyword,
         space: spaceFilter
-      }),
-    initialPageParam: 0,
-    placeholderData: (previousData) => previousData,
-    getNextPageParam: (lastPage) => (lastPage.pageInfo.hasMore ? lastPage.pageInfo.offset + lastPage.pageInfo.limit : undefined)
+      }, { signal })
   });
-  const assetItems = useMemo(() => assets.data?.pages.flatMap((page) => page.assets) ?? [], [assets.data?.pages]);
+  const assetFacets = useQuery({
+    queryKey: ["assets", "library-facets", spaceFilter, selectedCategoryIds.join(","), debouncedKeyword],
+    queryFn: ({ signal }) => api.libraryAssetFacets({
+      categoryIds: selectedCategoryIds,
+      keyword: debouncedKeyword,
+      space: spaceFilter
+    }, { signal }),
+    staleTime: 30_000,
+    gcTime: 10 * 60_000
+  });
+  const assetItems = useMemo(
+    () => (assets.data?.pages.flatMap((page) => page.items) ?? []).map(assetCardToItem),
+    [assets.data?.pages]
+  );
   const assetLoadMoreRef = useInfinitePageLoader({
     fetchNextPage: () => assets.fetchNextPage(),
     hasNextPage: Boolean(assets.hasNextPage),
-    isFetchingNextPage: assets.isFetchingNextPage
+    isFetchNextPageError: assets.isFetchNextPageError,
+    isFetchingNextPage: assets.isFetchingNextPage,
+    rootMargin: "320px"
   });
   const categories = assetCategories.data?.categories ?? [];
   const assetReviewEnabled = assetCategories.data?.reviewEnabled ?? true;
@@ -140,6 +166,7 @@ export function AssetsPage({
       queryClient.setQueryData<{ assets: AssetItem[] }>(["assets"], (current) =>
         current ? { assets: current.assets.map((item) => (item.id === result.asset.id ? result.asset : item)) } : current
       );
+      queryClient.setQueryData<{ asset: AssetItem }>(["asset-detail", result.asset.id], { asset: result.asset });
       queryClient.invalidateQueries({ queryKey: ["assets"] });
       setEditTarget(null);
       showToast(t("toast.assetUpdated"));
@@ -175,8 +202,15 @@ export function AssetsPage({
       queryClient.setQueryData<{ assets: AssetItem[] }>(["assets"], (current) =>
         current ? { assets: current.assets.map((item) => (item.id === result.asset.id ? result.asset : item)) } : current
       );
+      queryClient.setQueryData<{ asset: AssetItem }>(["asset-detail", result.asset.id], { asset: result.asset });
       queryClient.invalidateQueries({ queryKey: ["assets"] });
-      showToast(payload.shared ? t("toast.assetShareSubmitted") : result.asset.shareStatus === "none" ? t("toast.assetShareCancelled") : t("toast.assetShareStatusUpdated"));
+      showToast(
+        payload.shared
+          ? t(assetReviewEnabled ? "toast.assetShareSubmitted" : "toast.assetShared")
+          : result.asset.shareStatus === "none"
+            ? t("toast.assetShareCancelled")
+            : t("toast.assetShareStatusUpdated")
+      );
     },
     onError: (error) => {
       showToast(error instanceof Error ? error.message : t("toast.assetShareUpdateFailed"), "error");
@@ -184,47 +218,71 @@ export function AssetsPage({
   });
   const visibleAssets = useMemo(() => {
     const selectedCategorySet = new Set(selectedCategoryIds);
-    const normalizedKeyword = keyword.trim().toLowerCase();
+    const normalizedKeyword = debouncedKeyword.trim().toLowerCase();
     return [...assetItems]
       .filter((asset) => assetMatchesSpace(asset, spaceFilter))
       .filter((asset) => selectedCategoryIds.length === 0 || asset.categoryIds.some((categoryId) => selectedCategorySet.has(categoryId)))
-      .filter((asset) => assetMatchesKeyword(asset, normalizedKeyword))
+      .filter((asset) => assetMatchesKeyword(asset, normalizedKeyword, assetReviewEnabled))
       .sort((a, b) => imageCreatedTime(b.createdAt) - imageCreatedTime(a.createdAt));
-  }, [assetItems, keyword, selectedCategoryIds, spaceFilter]);
-  const previewSourceAssets = useMemo(() => {
+  }, [assetItems, assetReviewEnabled, debouncedKeyword, selectedCategoryIds, spaceFilter]);
+  const previewBaseAssets = useMemo(() => {
     const target = openAsset.data?.asset;
     if (!openAssetId || !target || visibleAssets.some((asset) => asset.id === target.id)) return visibleAssets;
     return [target, ...visibleAssets];
   }, [openAsset.data?.asset, openAssetId, visibleAssets]);
+  const activePreviewAssetId = previewIndex !== null ? previewBaseAssets[previewIndex]?.id ?? "" : "";
+  const previewAsset = useQuery({
+    queryKey: ["asset-detail", activePreviewAssetId],
+    queryFn: ({ signal }) => api.assetDetail(activePreviewAssetId, { signal }),
+    enabled: Boolean(activePreviewAssetId),
+    staleTime: 30_000
+  });
+  useEffect(() => {
+    if (previewIndex === null) return;
+    for (const asset of [previewBaseAssets[previewIndex - 1], previewBaseAssets[previewIndex + 1]]) {
+      if (!asset) continue;
+      void queryClient.prefetchQuery({
+        queryKey: ["asset-detail", asset.id],
+        queryFn: ({ signal }) => api.assetDetail(asset.id, { signal }),
+        staleTime: 30_000
+      });
+    }
+  }, [previewBaseAssets, previewIndex, queryClient]);
+  const previewSourceAssets = useMemo(() => {
+    const detailedAsset = previewAsset.data?.asset;
+    return detailedAsset
+      ? previewBaseAssets.map((asset) => asset.id === detailedAsset.id ? detailedAsset : asset)
+      : previewBaseAssets;
+  }, [previewAsset.data?.asset, previewBaseAssets]);
   const assetTagFilterCounts = useMemo(() => {
-    const serverCounts = assets.data?.pages[0]?.counts?.tags;
+    const serverCounts = assetFacets.data?.tags;
     if (serverCounts) return { all: serverCounts.all, byCategory: new Map(Object.entries(serverCounts.byCategory)) };
     const normalizedKeyword = keyword.trim().toLowerCase();
     const baseAssets = assetItems
       .filter((asset) => assetMatchesSpace(asset, spaceFilter))
-      .filter((asset) => assetMatchesKeyword(asset, normalizedKeyword));
+      .filter((asset) => assetMatchesKeyword(asset, normalizedKeyword, assetReviewEnabled));
     return {
       all: baseAssets.length,
       byCategory: new Map(categories.map((category) => [category.id, baseAssets.filter((asset) => asset.categoryIds.includes(category.id)).length]))
     };
-  }, [assetItems, assets.data?.pages, categories, keyword, spaceFilter]);
+  }, [assetFacets.data?.tags, assetItems, assetReviewEnabled, categories, keyword, spaceFilter]);
   const assetSpaceFilterCounts = useMemo(() => {
-    const serverCounts = assets.data?.pages[0]?.counts?.spaces;
+    const serverCounts = assetFacets.data?.spaces;
     if (serverCounts) return serverCounts;
     const selectedCategorySet = new Set(selectedCategoryIds);
     const normalizedKeyword = keyword.trim().toLowerCase();
     const baseAssets = assetItems
       .filter((asset) => selectedCategoryIds.length === 0 || asset.categoryIds.some((categoryId) => selectedCategorySet.has(categoryId)))
-      .filter((asset) => assetMatchesKeyword(asset, normalizedKeyword));
+      .filter((asset) => assetMatchesKeyword(asset, normalizedKeyword, assetReviewEnabled));
     return {
       all: baseAssets.length,
       shared: baseAssets.filter((asset) => assetMatchesSpace(asset, "shared")).length,
       private: baseAssets.filter((asset) => assetMatchesSpace(asset, "private")).length
     };
-  }, [assetItems, assets.data?.pages, keyword, selectedCategoryIds]);
+  }, [assetFacets.data?.spaces, assetItems, assetReviewEnabled, keyword, selectedCategoryIds]);
   const assetSpaceLabelText = (asset: AssetItem) => {
-    if (asset.shareStatus === "pending") return t("status.pendingReview");
-    if (asset.shareStatus === "rejected") return t("status.rejected");
+    if (assetReviewEnabled && asset.shareStatus === "pending") return t("status.pendingReview");
+    if (assetReviewEnabled && asset.shareStatus === "rejected") return t("status.rejected");
     if (asset.space === "private" && asset.shared) return asset.canEdit ? t("status.privateAndShared") : t("common.shared");
     return asset.space === "shared" ? t("common.shared") : t("common.mine");
   };
@@ -240,7 +298,7 @@ export function AssetsPage({
         thumbnailUrl: asset.thumbnailUrl ?? asset.previewUrl ?? asset.url,
         imageFileSize: asset.size
       })),
-    [previewSourceAssets, t]
+    [assetReviewEnabled, previewSourceAssets, t]
   );
   const assetFilterHintKey = useMemo(
     () => ["asset-filter", spaceFilter, selectedCategoryIds.join(","), ...categories.map((category) => `${category.id}:${category.name}`)].join("\u0000"),
@@ -304,7 +362,7 @@ export function AssetsPage({
     <section className="page-section">
       <PageHeader
         title={t("pages.assets.title")}
-        desc={t("pages.assets.desc")}
+        desc={t(assetReviewEnabled ? "pages.assets.desc" : "pages.assets.descNoReview")}
         icon={<FolderOpen size={24} />}
         actions={<FilterModeToggle value={filterDisplayMode} onChange={setFilterDisplayMode} />}
       />
@@ -365,13 +423,27 @@ export function AssetsPage({
           </button>
         </div>
       </div>
-      <div className="asset-grid asset-library-grid">
-        {visibleAssets.map((asset, index) => (
+      <VirtualizedResponsiveGrid
+        items={visibleAssets}
+        getKey={(asset) => asset.id}
+        minColumnWidth={156}
+        estimateCardHeight={(width) => width}
+        gap={12}
+        mobileGap={10}
+        className="asset-library-virtual-grid"
+        rowClassName="asset-library-virtual-row"
+        renderItem={(asset, { index, eager, highPriority }) => (
           <article className="asset-card" key={asset.id}>
             <div className="asset-image-frame">
               <button className="asset-image-btn" type="button" onClick={() => setPreviewIndex(index)} aria-label={t("pages.assets.previewAsset", { name: asset.name })}>
-                <SkeletonImage src={asset.thumbnailUrl ?? asset.previewUrl ?? asset.url} alt={asset.name} />
+                <SkeletonImage
+                  src={asset.thumbnailUrl ?? asset.previewUrl ?? asset.url}
+                  alt={asset.name}
+                  loading={eager ? "eager" : "lazy"}
+                  fetchPriority={highPriority ? "high" : "auto"}
+                />
               </button>
+              <span className={cx("asset-space-badge", asset.space, asset.shared && "is-shared", assetReviewEnabled && `share-status-${asset.shareStatus}`)}>{assetSpaceLabelText(asset)}</span>
               <div className="asset-card-actions">
                 <button type="button" onClick={() => useAssetInNewChat(asset)} aria-label={t("pages.assets.useAsset")} title={t("pages.assets.useAsset")}>
                   <Send size={16} />
@@ -383,8 +455,8 @@ export function AssetsPage({
                         type="button"
                         onClick={() => updateShare.mutate({ assetId: asset.id, shared: !(asset.shared || asset.shareStatus === "pending") })}
                         disabled={updateShare.isPending}
-                        aria-label={asset.shared || asset.shareStatus === "pending" ? t("pages.assets.cancelShare") : t("pages.assets.submitShare")}
-                        title={asset.shared || asset.shareStatus === "pending" ? t("pages.assets.cancelShare") : t("pages.assets.submitShare")}
+                        aria-label={asset.shared || asset.shareStatus === "pending" ? t("pages.assets.cancelShare") : t(assetReviewEnabled ? "pages.assets.submitShare" : "pages.assets.share")}
+                        title={asset.shared || asset.shareStatus === "pending" ? t("pages.assets.cancelShare") : t(assetReviewEnabled ? "pages.assets.submitShare" : "pages.assets.share")}
                       >
                         {asset.shared || asset.shareStatus === "pending" ? <X size={16} /> : <Share2 size={16} />}
                       </button>
@@ -410,20 +482,9 @@ export function AssetsPage({
                 ) : null}
               </div>
             </div>
-            <div className="asset-card-body">
-              <div className="asset-card-title-row">
-                <h3>{asset.name}</h3>
-                <span className={cx("asset-space-badge", asset.space, asset.shared && "is-shared", `share-status-${asset.shareStatus}`)}>{assetSpaceLabelText(asset)}</span>
-              </div>
-              <div className="asset-card-meta">
-                <span>{formatImageFileSize(asset.size) || t("pages.assets.imageMaterial")}</span>
-                <span>{t("pages.assets.source", { source: asset.sourceUsername })}</span>
-              </div>
-              <AssetTagScroller names={asset.categoryNames} />
-            </div>
           </article>
-        ))}
-      </div>
+        )}
+      />
       {!assets.isLoading && visibleAssets.length === 0 ? (
         hasAssetFilters ? (
           <LibraryEmptyState
@@ -462,7 +523,9 @@ export function AssetsPage({
           index={previewIndex}
           ariaLabel={t("pages.assets.preview")}
           initialZoomMode={imagePreviewOpenMode}
+          initialImageSource="original"
           wheelMode={imagePreviewWheelMode}
+          suppressStableScrollbarGutter
           onIndexChange={setPreviewIndex}
           onClose={() => {
             setPreviewIndex(null);
@@ -481,8 +544,8 @@ export function AssetsPage({
                       type="button"
                       onClick={() => updateShare.mutate({ assetId: item.id, shared: !(item.shared || item.shareStatus === "pending") })}
                       disabled={updateShare.isPending}
-                      aria-label={item.shared || item.shareStatus === "pending" ? t("pages.assets.cancelShare") : t("pages.assets.submitShare")}
-                      title={item.shared || item.shareStatus === "pending" ? t("pages.assets.cancelShare") : t("pages.assets.submitShare")}
+                      aria-label={item.shared || item.shareStatus === "pending" ? t("pages.assets.cancelShare") : t(assetReviewEnabled ? "pages.assets.submitShare" : "pages.assets.share")}
+                      title={item.shared || item.shareStatus === "pending" ? t("pages.assets.cancelShare") : t(assetReviewEnabled ? "pages.assets.submitShare" : "pages.assets.share")}
                     >
                       {item.shared || item.shareStatus === "pending" ? <X size={16} /> : <Share2 size={16} />}
                     </button>
@@ -527,6 +590,7 @@ export function AssetsPage({
         <AssetEditModal
           asset={editTarget}
           categories={categories}
+          assetReviewEnabled={assetReviewEnabled}
           pending={updateAsset.isPending}
           error={updateAsset.error instanceof Error ? updateAsset.error : null}
           onClose={() => setEditTarget(null)}

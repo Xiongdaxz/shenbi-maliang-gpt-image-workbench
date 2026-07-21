@@ -1,11 +1,12 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
 import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 
 export type ImageLightboxTarget = {
   url: string;
+  downloadUrl?: string;
   thumbnailUrl?: string;
   name: string;
 };
@@ -57,6 +58,20 @@ export function ImageLightbox({
 
   return createPortal(
     <div className={cx("reference-image-lightbox", canSwitch && "has-thumbs")} onMouseDown={onClose} role="dialog" aria-modal="true" aria-label={t("imageLightbox.preview")}>
+      {activeItem.downloadUrl ? (
+        <a
+          className="reference-image-download"
+          href={activeItem.downloadUrl}
+          download={activeItem.name}
+          rel="noopener"
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+          aria-label={t("imagePreview.downloadReference")}
+          title={t("imagePreview.downloadReference")}
+        >
+          <Download size={20} />
+        </a>
+      ) : null}
       <button
         type="button"
         className="reference-image-close"

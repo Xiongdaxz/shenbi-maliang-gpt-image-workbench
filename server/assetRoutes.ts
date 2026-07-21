@@ -6,7 +6,8 @@ import { appDb, getAll, getOne, run } from "./db";
 import { globalSwitchEnabled } from "./globalSwitches";
 import { readImageDimensions } from "./imageDimensions";
 import { imageExtensionFromMime } from "./imageFiles";
-import { pageInfo, paginationFromQuery } from "./pagination";
+import { boundedPaginationFromQuery, pageInfo } from "./pagination";
+import { invalidateLibraryFacetCache } from "./libraryRoutes";
 import { generatePromptSummaryTitle } from "./promptTitle";
 import { deleteStoredFilesIfUnreferenced, readStoredFile, secureAssetPath, writeEncryptedFile } from "./secureFiles";
 import { assetUrlFromAssetId, imageOriginPromptsByImageIds } from "./serializers";
@@ -285,6 +286,7 @@ async function createAssetFromSource({
       }
       if (nextName) run(appDb, "update assets set name = ? where id = ? and user_id = ?", nextName, existing.id, userId);
       if (hasCategoryIds) replaceAssetCategories(existing.id, categoryIds);
+      invalidateLibraryFacetCache("assets");
     }
     return { asset: publicAssetById(existing.id, userId), created: false, duplicateScope: "own" as const };
   }
@@ -322,6 +324,7 @@ async function createAssetFromSource({
   );
   void warmImageDerivatives("asset", id, source.path);
   replaceAssetCategories(id, categoryIds);
+  invalidateLibraryFacetCache("assets");
   return { asset: publicAssetById(id, userId), created: true };
 }
 
@@ -404,7 +407,7 @@ function countAssets(userId: string, filters: AssetListFilters, options: { inclu
 async function listAssets(c: Context) {
   const user = await requireUser(c);
   if (!user) return c.json({ error: "未登录" }, 401);
-  const pagination = paginationFromQuery(c);
+  const pagination = boundedPaginationFromQuery(c);
   const filters: AssetListFilters = {
     categoryIds: normalizeIdList(c.req.query("categoryIds") ?? c.req.query("categoryId")),
     keyword: String(c.req.query("keyword") ?? "").trim().toLowerCase(),
@@ -547,6 +550,7 @@ api.post("/assets/upload", async (c) => {
   );
   if (ownExisting) {
     applyDuplicateUploadOptions({ asset: ownExisting, categoryIds, hasCategoryIds, uploadMode, userId: user.id });
+    invalidateLibraryFacetCache("assets");
     return c.json({ asset: publicAssetById(ownExisting.id, user.id), created: false, duplicateScope: "own" });
   }
 
@@ -600,6 +604,7 @@ api.post("/assets/upload", async (c) => {
     createdAt
   );
   replaceAssetCategories(id, categoryIds);
+  invalidateLibraryFacetCache("assets");
   const asset = getOne<AssetRow>(
     appDb,
     `select assets.*, users.username as source_username
@@ -845,6 +850,8 @@ api.patch("/assets/:assetId", async (c) => {
     replaceAssetCategories(assetId, categoryIds);
   }
 
+  invalidateLibraryFacetCache("assets");
+
   const updated = getOne<AssetRow>(
     appDb,
     `select assets.*, users.username as source_username
@@ -891,6 +898,7 @@ api.delete("/assets/:assetId", async (c) => {
   run(appDb, "delete from asset_categories where asset_id = ?", assetId);
   deleteImageDerivativesForSources(derivativeSources);
   run(appDb, "delete from assets where id = ? and user_id = ?", assetId, user.id);
+  invalidateLibraryFacetCache();
   await deleteStoredFilesIfUnreferenced(pathsToDelete);
 
   return c.json({ ok: true });

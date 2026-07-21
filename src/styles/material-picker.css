@@ -12,8 +12,7 @@
   z-index: 1;
   pointer-events: auto;
   box-shadow: 0 14px 44px rgba(15, 23, 42, 0.12);
-  animation: composerMaterialDrawerOpen 300ms cubic-bezier(0.2, 0.82, 0.2, 1) both;
-  will-change: height, margin-top, opacity, box-shadow;
+  animation: composerMaterialDrawerOpen 300ms cubic-bezier(0.2, 0.82, 0.2, 1);
 }
 
 .composer-material-drawer[data-state="closing"] {
@@ -29,8 +28,7 @@
   border-radius: 25px;
   margin-top: 0;
   box-shadow: none;
-  animation: materialPickerPanelOpen 300ms cubic-bezier(0.2, 0.82, 0.2, 1) both;
-  will-change: transform, opacity;
+  animation: materialPickerPanelOpen 300ms cubic-bezier(0.2, 0.82, 0.2, 1);
 }
 
 .composer-material-drawer[data-state="closing"] > .material-picker {
@@ -47,6 +45,7 @@
   box-shadow: 0 14px 44px rgba(15, 23, 42, 0.12);
   height: clamp(280px, 34vh, 340px);
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
 }
@@ -86,11 +85,11 @@
 @keyframes materialPickerPanelOpen {
   from {
     opacity: 0;
-    transform: translate3d(0, 34px, 0) scale(0.985);
+    transform: translate3d(0, 34px, 0);
   }
   to {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: translate3d(0, 0, 0);
   }
 }
 
@@ -186,6 +185,10 @@
 
 .material-tag-filter button {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   min-height: 30px;
   height: 30px;
   box-sizing: border-box;
@@ -218,6 +221,11 @@
   background: var(--button-primary-hover-bg);
 }
 
+.material-tag-filter button.active .filter-tab-count {
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.22);
+}
+
 .upload-btn.compact {
   min-height: 30px;
   height: 30px;
@@ -245,6 +253,7 @@
 .material-sections {
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
   display: grid;
   gap: 12px;
   align-content: start;
@@ -299,7 +308,8 @@
   text-align: left;
 }
 
-.material-grid button.active {
+.material-grid button.active,
+.material-virtual-row > button.active {
   border-color: var(--control-selected-border);
   background: var(--control-selected-bg);
 }
@@ -320,14 +330,16 @@
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.22);
 }
 
-.material-grid img {
+.material-grid img,
+.material-virtual-row > button > img {
   width: 100%;
   aspect-ratio: 1;
   object-fit: cover;
   border-radius: 6px;
 }
 
-.material-grid span {
+.material-grid span,
+.material-virtual-row > button > span {
   display: block;
   margin-top: 5px;
   color: #4b5563;
@@ -337,15 +349,35 @@
   text-overflow: ellipsis;
 }
 
-.material-grid .material-grid-check {
+.material-grid .material-grid-check,
+.material-virtual-row .material-grid-check {
   display: grid;
   margin-top: 0;
   color: #fff;
 }
 
-.material-grid .material-grid-check svg {
+.material-grid .material-grid-check svg,
+.material-virtual-row .material-grid-check svg {
   color: #fff;
   stroke: currentColor;
+}
+
+.material-virtual-grid {
+  width: 100%;
+}
+
+.material-virtual-row {
+  align-items: start;
+}
+
+.material-virtual-row > button {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px;
+  text-align: left;
 }
 
 .modal-backdrop.case-picker-backdrop {
@@ -570,7 +602,9 @@
 
 .case-picker-body {
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   display: grid;
   align-content: start;
   gap: 12px;
@@ -581,6 +615,14 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(154px, 1fr));
   gap: 12px;
+}
+
+.case-picker-virtual-grid {
+  width: 100%;
+}
+
+.case-picker-virtual-row {
+  align-items: start;
 }
 
 .case-picker-card {

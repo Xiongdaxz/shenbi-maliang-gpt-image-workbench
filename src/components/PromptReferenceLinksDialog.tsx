@@ -151,23 +151,14 @@ export function PromptReferenceLinksDialog({ open, onClose }: { open: boolean; o
 
   useEffect(() => {
     if (!open || typeof document === "undefined") return;
-    const root = document.documentElement;
     const previousOverflow = document.body.style.overflow;
     const previousOverscrollBehavior = document.body.style.overscrollBehavior;
-    const previousPaddingRight = document.body.style.paddingRight;
-    const scrollbarWidth = Math.max(0, window.innerWidth - root.clientWidth);
-    const bodyPaddingRight = Number.parseFloat(window.getComputedStyle(document.body).paddingRight) || 0;
-
-    if (scrollbarWidth > 0) {
-      document.body.style.paddingRight = `${bodyPaddingRight + scrollbarWidth}px`;
-    }
     document.body.style.overflow = "hidden";
     document.body.style.overscrollBehavior = "contain";
 
     return () => {
       document.body.style.overflow = previousOverflow;
       document.body.style.overscrollBehavior = previousOverscrollBehavior;
-      document.body.style.paddingRight = previousPaddingRight;
     };
   }, [open]);
 

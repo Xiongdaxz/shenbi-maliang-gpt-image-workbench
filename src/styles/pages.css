@@ -42,6 +42,21 @@ html:has(.help-center-page) {
   scrollbar-gutter: stable;
 }
 
+html:has(.case-virtual-grid),
+html:has(.asset-library-virtual-grid),
+html:has(.image-virtual-grid),
+html:has(.image-virtual-timeline) {
+  scrollbar-gutter: stable;
+  scrollbar-color: var(--app-scrollbar-thumb) transparent;
+}
+
+html:has(.case-virtual-grid)::-webkit-scrollbar-track,
+html:has(.asset-library-virtual-grid)::-webkit-scrollbar-track,
+html:has(.image-virtual-grid)::-webkit-scrollbar-track,
+html:has(.image-virtual-timeline)::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 .help-center-page {
   --help-accent: var(--app-activity-color);
   --help-maliang-gold: #d99f2d;
@@ -2405,60 +2420,92 @@ html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance=
   padding-block: 0;
 }
 
-.inspiration-leaderboard-loading {
-  display: grid;
-  gap: 12px;
-  margin-top: 24px;
+.inspiration-leaderboard-skeleton {
+  pointer-events: none;
 }
 
-.inspiration-leaderboard-skeleton-podium {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: end;
-  gap: 10px;
+.inspiration-leaderboard-skeleton .inspiration-leaderboard-skeleton-podium-card {
+  border-color: var(--app-border);
+  background: var(--app-card-bg);
+  box-shadow: none;
 }
 
-.inspiration-leaderboard-skeleton-podium span,
-.inspiration-leaderboard-skeleton-list span {
-  position: relative;
+.inspiration-leaderboard-skeleton-podium-card::before,
+.inspiration-leaderboard-skeleton-podium-card::after {
+  display: none;
+}
+
+.inspiration-leaderboard-skeleton .inspiration-leaderboard-skeleton-shape {
   display: block;
   overflow: hidden;
-  border: 1px solid var(--app-border);
-  background: var(--app-surface-soft);
-}
-
-.inspiration-leaderboard-skeleton-podium span {
-  height: 174px;
-  border-radius: 16px;
-}
-
-.inspiration-leaderboard-skeleton-podium span:nth-child(2) {
-  height: 190px;
-}
-
-.inspiration-leaderboard-skeleton-list {
-  display: grid;
-  gap: 8px;
-}
-
-.inspiration-leaderboard-skeleton-list span {
-  height: 62px;
-  border-radius: 13px;
-}
-
-.inspiration-leaderboard-skeleton-podium span::after,
-.inspiration-leaderboard-skeleton-list span::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.16), transparent);
-  transform: translateX(-100%);
+  color: transparent;
+  background:
+    linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.20), transparent),
+    var(--app-hover-bg);
+  background-repeat: no-repeat;
+  background-size: 220px 100%, 100% 100%;
+  background-position: -220px 0, 0 0;
   animation: inspirationLeaderboardShimmer 1.35s ease-in-out infinite;
+}
+
+.inspiration-leaderboard-skeleton .inspiration-leaderboard-rank-badge {
+  box-shadow: none;
+}
+
+.inspiration-leaderboard-skeleton .inspiration-leaderboard-skeleton-podium-card .inspiration-leaderboard-avatar,
+.inspiration-leaderboard-skeleton .inspiration-leaderboard-skeleton-row .inspiration-leaderboard-avatar {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.inspiration-leaderboard-skeleton-podium-card > .inspiration-leaderboard-name {
+  width: 54%;
+  height: 14px;
+  border-radius: 999px;
+}
+
+.inspiration-leaderboard-skeleton-podium-card.rank-1 > .inspiration-leaderboard-name {
+  width: 62%;
+}
+
+.inspiration-leaderboard-skeleton-podium-card > .inspiration-leaderboard-podium-count > span {
+  width: 48px;
+  height: 16px;
+  border-radius: 999px;
+}
+
+.inspiration-leaderboard-skeleton-row {
+  pointer-events: none;
+}
+
+.inspiration-leaderboard-skeleton-row:hover {
+  border-color: var(--app-border);
+  background: var(--app-card-bg);
+  transform: none;
+}
+
+.inspiration-leaderboard-skeleton-row .inspiration-leaderboard-row-rank > span {
+  width: 12px;
+  height: 12px;
+  margin-inline: auto;
+  border-radius: 4px;
+}
+
+.inspiration-leaderboard-skeleton-row > .inspiration-leaderboard-name {
+  width: min(42%, 124px);
+  height: 14px;
+  border-radius: 999px;
+}
+
+.inspiration-leaderboard-skeleton-row > .inspiration-leaderboard-row-count > span {
+  width: 42px;
+  height: 16px;
+  border-radius: 999px;
 }
 
 @keyframes inspirationLeaderboardShimmer {
   to {
-    transform: translateX(100%);
+    background-position: calc(100% + 220px) 0, 0 0;
   }
 }
 
@@ -2572,8 +2619,7 @@ html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance=
     transform: none;
   }
 
-  .inspiration-leaderboard-skeleton-podium span::after,
-  .inspiration-leaderboard-skeleton-list span::after {
+  .inspiration-leaderboard-skeleton-shape {
     animation: none;
   }
 }
