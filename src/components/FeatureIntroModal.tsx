@@ -60,6 +60,7 @@ type IntroPhase = "welcome" | "welcomeLeaving" | "slides";
 
 const WHEEL_SLIDE_THRESHOLD = 46;
 const WHEEL_SLIDE_COOLDOWN_MS = 560;
+const WELCOME_TYPING_WINDOW_MS = 300;
 
 const SLIDE_ICON_BY_ID: Record<string, LucideIcon> = {
   assets: FolderOpen,
@@ -170,9 +171,10 @@ export function FeatureIntroModal({
       return;
     }
     if (typedCount < trimmedWelcomeText.length) {
+      const characterDelayMs = WELCOME_TYPING_WINDOW_MS / trimmedWelcomeText.length;
       const timer = window.setTimeout(() => {
         setTypedCount((value) => Math.min(trimmedWelcomeText.length, value + 1));
-      }, 58);
+      }, characterDelayMs);
       return () => window.clearTimeout(timer);
     }
     const timer = window.setTimeout(() => setIntroPhase("welcomeLeaving"), 760);

@@ -39,6 +39,8 @@ export type ImagePreviewItem = {
   isActiveGroupImageCover?: boolean;
 };
 
+export type ImageTransparencyStatus = "transparent" | "opaque" | "checking" | "unknown";
+
 type ImagePreviewModalProps<TItem extends ImagePreviewItem> = {
   items: TItem[];
   index: number;
@@ -48,12 +50,13 @@ type ImagePreviewModalProps<TItem extends ImagePreviewItem> = {
   wheelMode?: ImagePreviewWheelMode;
   showItemThumbnails?: boolean;
   suppressStableScrollbarGutter?: boolean;
+  transparencyStatus?: ImageTransparencyStatus;
   onIndexChange: (index: number) => void;
   onClose: () => void;
   renderActions?: (item: TItem) => ReactNode;
 };
 
-const PREVIEW_MIN_ZOOM = 0.1;
+const PREVIEW_MIN_ZOOM = 0.01;
 const PREVIEW_MAX_ZOOM = 3;
 const PREVIEW_CONTAIN_INSET = 12;
 const PREVIEW_WHEEL_LINE_PX = 16;
@@ -100,6 +103,7 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
   wheelMode = "pan",
   showItemThumbnails = false,
   suppressStableScrollbarGutter = false,
+  transparencyStatus,
   onIndexChange,
   onClose,
   renderActions
@@ -158,6 +162,17 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
   const referenceImages = previewDisplayItem?.referenceImages ?? [];
   const previewObscuredHeight = !previewDragging ? previewToolbarHeight : 0;
   const previewZoomLabel = `${Math.round(previewZoom * 100)}%`;
+  const transparencyLabel = transparencyStatus
+    ? t(
+        transparencyStatus === "transparent"
+          ? "imagePreview.transparent"
+          : transparencyStatus === "opaque"
+            ? "imagePreview.opaque"
+            : transparencyStatus === "checking"
+              ? "imagePreview.transparencyChecking"
+              : "imagePreview.transparencyUnknown"
+      )
+    : "";
   const previewImageSrc =
     previewImageSource === "original"
       ? previewDisplayItem?.originalUrl ?? previewDisplayItem?.imageUrl ?? ""
@@ -175,6 +190,12 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
     ? {
         width: previewContentSize.width * previewScale,
         height: previewContentSize.height * previewScale
+      }
+    : null;
+  const previewRenderedImageSize = previewImageSize
+    ? {
+        width: previewImageSize.width * previewScale,
+        height: previewImageSize.height * previewScale
       }
     : null;
   const previewVisibleStageSize = previewStageSize
@@ -234,15 +255,15 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
     Math.abs(previewZoom - previewDefaultZoom) > 0.001;
   const showPreviewNavigator = Boolean(previewImageSize && previewStageSize && previewDisplaySize && canPreviewPan);
   const previewImagePosition =
-    previewImageSize && previewDisplaySize && previewStageSize
+    previewRenderedImageSize && previewDisplaySize && previewStageSize
       ? (() => {
-          const rawLeft = previewStageSize.width / 2 + previewPan.x - previewImageSize.width / 2;
-          const rawTop = previewStageSize.height / 2 + previewPan.y - previewImageSize.height / 2;
+          const rawLeft = previewStageSize.width / 2 + previewPan.x - previewRenderedImageSize.width / 2;
+          const rawTop = previewStageSize.height / 2 + previewPan.y - previewRenderedImageSize.height / 2;
           const pixelSnapped = normalizedPreviewRotation === 0 && previewScale === 1;
           const left = pixelSnapped ? Math.round(rawLeft) : rawLeft;
           const top = pixelSnapped ? Math.round(rawTop) : rawTop;
-          const centerX = left + previewImageSize.width / 2;
-          const centerY = top + previewImageSize.height / 2;
+          const centerX = left + previewRenderedImageSize.width / 2;
+          const centerY = top + previewRenderedImageSize.height / 2;
           return {
             left,
             top,
@@ -254,12 +275,16 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
       : null;
   const previewImageStyle = previewImagePosition
     ? {
+        width: previewRenderedImageSize?.width,
+        height: previewRenderedImageSize?.height,
         left: previewImagePosition.left,
         top: previewImagePosition.top,
-        transform: previewImagePosition.pixelSnapped ? "none" : `rotate(${previewRotation}deg) scale(${previewScale})`
+        transform: previewImagePosition.pixelSnapped ? "none" : `rotate(${previewRotation}deg)`
       }
     : {
-        transform: `translate(-50%, -50%) translate(${previewPan.x}px, ${previewPan.y}px) rotate(${previewRotation}deg) scale(${previewScale})`
+        width: previewRenderedImageSize?.width,
+        height: previewRenderedImageSize?.height,
+        transform: `translate(-50%, -50%) translate(${previewPan.x}px, ${previewPan.y}px) rotate(${previewRotation}deg)`
       };
   const previewNavigatorMetrics =
     showPreviewNavigator && previewContentSize && previewDisplaySize && previewStageSize && previewVisibleStageSize
@@ -587,17 +612,21 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
     if (!previewOpen) return;
     const root = document.documentElement;
     const stableScrollbarGutterWasSuppressed = root.classList.contains("image-preview-gutter-suppressed");
-    if (suppressStableScrollbarGutter) {
-      root.classList.add("image-preview-gutter-suppressed");
-    }
     const previousOverflow = document.body.style.overflow;
     const previousPaddingRight = document.body.style.paddingRight;
     const previousOverscrollBehavior = document.body.style.overscrollBehavior;
     const previousRootOverflow = root.style.overflow;
-    const scrollbarWidth = Math.max(0, window.innerWidth - root.clientWidth);
+    const rootLayoutWidth = root.getBoundingClientRect().width;
+    const scrollbarWidth = Math.max(
+      0,
+      window.innerWidth - (suppressStableScrollbarGutter ? rootLayoutWidth : root.clientWidth)
+    );
     if (scrollbarWidth > 0) {
       const currentPaddingRight = Number.parseFloat(window.getComputedStyle(document.body).paddingRight) || 0;
       document.body.style.paddingRight = `${currentPaddingRight + scrollbarWidth}px`;
+    }
+    if (suppressStableScrollbarGutter) {
+      root.classList.add("image-preview-gutter-suppressed");
     }
     root.style.overflow = "hidden";
     document.body.style.overflow = "hidden";
@@ -669,7 +698,12 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
     <div className="case-preview-backdrop">
       <section
         ref={previewModalRef}
-        className={cx("case-preview-modal", itemThumbnailsVisible && "has-item-thumbnails", previewDragging && "is-preview-dragging")}
+        className={cx(
+          "case-preview-modal",
+          itemThumbnailsVisible && "has-item-thumbnails",
+          transparencyStatus === "transparent" && "has-transparent-image",
+          previewDragging && "is-preview-dragging"
+        )}
         style={{ "--case-preview-toolbar-height": `${previewToolbarHeight}px` } as CSSProperties}
         aria-label={ariaLabel}
       >
@@ -724,6 +758,7 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
           itemCount={items.length}
           referenceImages={referenceImages}
           sizeLabel={previewSizeLabel}
+          transparencyLabel={transparencyLabel}
           zoomLabel={previewZoomLabel}
           onCopyDescription={() => void copyPreviewDescription()}
           onReferencePreview={setReferencePreview}

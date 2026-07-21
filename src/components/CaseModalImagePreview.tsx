@@ -1,4 +1,5 @@
 import { cx } from "../lib/cx";
+import { CheckerboardImage } from "./CheckerboardImage";
 
 export type CaseModalPreviewImage = {
   id: string;
@@ -38,7 +39,7 @@ export function CaseModalImagePreview({
   return (
     <div className="case-modal-preview-pane">
       <div className={cx("case-modal-preview-frame", showThumbs && "has-thumbs")}>
-        <img src={activeImage?.previewUrl || activeImage?.url || fallbackUrl} alt={alt} />
+        <CheckerboardImage src={activeImage?.previewUrl || activeImage?.url || fallbackUrl} alt={alt} />
         {showThumbs ? (
           <div className="case-preview-thumb-strip" aria-label={thumbStripLabel}>
             {images.map((image, index) => {
@@ -53,7 +54,7 @@ export function CaseModalImagePreview({
                   aria-pressed={active}
                   title={thumbTitle?.(image, index, active)}
                 >
-                  <img src={image.thumbnailUrl || image.previewUrl || image.url} alt="" />
+                  <CheckerboardImage src={image.thumbnailUrl || image.previewUrl || image.url} alt="" />
                   <span>{active ? activeThumbLabel : inactiveThumbLabel(index)}</span>
                 </button>
               );

@@ -229,7 +229,7 @@ export function providerWithChannelDefaults(
       type: "openai-compatible",
       baseUrl: "http://127.0.0.1:8317",
       apiKeyEnv: "GPT_IMAGE_API_KEY",
-      routeMode: "images_api",
+      routeMode: "auto",
       generationPath: "/v1/images/generations",
       editPath: "/v1/images/edits",
       responsesPath: "/v1/responses",

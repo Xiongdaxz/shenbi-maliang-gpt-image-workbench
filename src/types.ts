@@ -1011,6 +1011,7 @@ export type LibraryAssetCard = {
   size: number;
   imageWidth: number;
   imageHeight: number;
+  hasTransparency: boolean | null;
   createdAt: string;
   sourceUsername: string;
   canEdit: boolean;
@@ -1198,6 +1199,7 @@ export type AssetItem = {
   size: number;
   imageWidth: number;
   imageHeight: number;
+  hasTransparency?: boolean | null;
   createdAt: string;
   sourceUsername: string;
   canEdit: boolean;

@@ -6,6 +6,7 @@ import { useI18n } from "../i18n";
 import { ModalPortal } from "../ui";
 import type { AssetItem, CaseCategory } from "../types";
 import { CaseCategoryMultiSelect } from "./CaseCategoryMultiSelect";
+import { CheckerboardImage } from "./CheckerboardImage";
 
 export function AssetEditModal({
   asset,
@@ -56,7 +57,7 @@ export function AssetEditModal({
               <X size={18} />
             </button>
           </header>
-          <img src={asset.previewUrl ?? asset.url} alt={asset.name} />
+          <CheckerboardImage src={asset.previewUrl ?? asset.url} alt={asset.name} />
           <label>
             {t("assetEdit.name")}
             <span className="asset-name-input-row">

@@ -1017,6 +1017,8 @@ export const api = {
     ),
   assetDetail: (assetId: string, init?: RequestInit) =>
     request<{ asset: AssetItem }>(`/api/assets/${encodeURIComponent(assetId)}`, init),
+  assetTransparency: (assetId: string, init?: RequestInit) =>
+    request<{ hasTransparency: boolean | null }>(`/api/assets/${encodeURIComponent(assetId)}/transparency`, init),
   uploadAsset: (form: FormData) =>
     request<{ asset: AssetItem; created?: boolean; duplicateScope?: "shared" | "own" }>("/api/assets/upload", {
       method: "POST",

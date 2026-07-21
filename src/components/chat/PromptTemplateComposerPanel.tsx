@@ -103,6 +103,7 @@ import { useI18n } from "../../i18n";
 import { PromptOptimizeStyleSelect } from "../PromptOptimizeStyleSelect";
 import { PromptTemplateColorPicker } from "../PromptTemplateColorPicker";
 import { cx } from "../../lib/cx";
+import { CheckerboardImage } from "../CheckerboardImage";
 import {
   normalizePromptOptimizeStyle,
   promptOptimizeStyleGroups,
@@ -1506,7 +1507,7 @@ function PromptTemplateMiniForm({
                   <div className="template-upload-list">
                     {imageFiles.map((file) => (
                       <div className="template-upload-item" key={file.id ?? file.fileName}>
-                        {file.previewUrl ? <img src={file.previewUrl} alt="" /> : <div className="template-upload-thumb"><ImageIcon size={18} /></div>}
+                        {file.previewUrl ? <CheckerboardImage src={file.previewUrl} alt="" /> : <div className="template-upload-thumb"><ImageIcon size={18} /></div>}
                         <div>
                           <strong>{file.fileName}</strong>
                           <span>

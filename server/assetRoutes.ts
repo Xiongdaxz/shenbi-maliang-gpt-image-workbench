@@ -6,6 +6,7 @@ import { appDb, getAll, getOne, run } from "./db";
 import { globalSwitchEnabled } from "./globalSwitches";
 import { readImageDimensions } from "./imageDimensions";
 import { imageExtensionFromMime } from "./imageFiles";
+import { detectImageTransparency } from "./imageTransparency";
 import { boundedPaginationFromQuery, pageInfo } from "./pagination";
 import { invalidateLibraryFacetCache } from "./libraryRoutes";
 import { generatePromptSummaryTitle } from "./promptTitle";
@@ -39,6 +40,22 @@ async function assetContentHashFromPath(relativePath: string) {
     return assetContentHash(await readStoredFile(relativePath));
   } catch {
     return "";
+  }
+}
+
+async function assetTransparencyFromBuffer(buffer: Buffer) {
+  try {
+    return await detectImageTransparency(buffer);
+  } catch {
+    return null;
+  }
+}
+
+async function assetTransparencyFromPath(relativePath: string) {
+  try {
+    return await assetTransparencyFromBuffer(await readStoredFile(relativePath));
+  } catch {
+    return null;
   }
 }
 
@@ -102,6 +119,7 @@ function publicAsset(row: AssetRow, categoryMap: Map<string, Array<{ id: string;
     size: row.size,
     imageWidth: row.image_width,
     imageHeight: row.image_height,
+    hasTransparency: row.has_transparency == null ? null : Boolean(row.has_transparency),
     createdAt: row.created_at,
     sourceUsername: row.source_username ?? "未知用户",
     canEdit: row.user_id === currentUserId,
@@ -297,14 +315,15 @@ async function createAssetFromSource({
   const nameSeed = String(body.name ?? "").trim() || source.suggestedName.trim() || generatedName;
   const name = `${nameSeed.replace(/[\\/]/g, " ").replace(/\s+/g, " ").trim() || "素材图片"}${extension}`;
   const contentHash = await assetContentHashFromPath(source.path);
+  const hasTransparency = await assetTransparencyFromPath(source.path);
   const createdAt = now();
   const shareState = assetShareStateFromUploadMode(uploadMode, createdAt);
   run(
     appDb,
     `insert into assets (
       id, user_id, space, shared, share_status, share_requested_at, share_reviewed_at, share_reviewed_by, name, path, mime_type,
-      size, content_hash, image_width, image_height, created_at
-    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      size, content_hash, image_width, image_height, has_transparency, created_at
+    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     userId,
     assetSpaceFromUploadMode(uploadMode),
@@ -320,6 +339,7 @@ async function createAssetFromSource({
     contentHash,
     source.imageWidth,
     source.imageHeight,
+    hasTransparency == null ? null : Number(hasTransparency),
     createdAt
   );
   void warmImageDerivatives("asset", id, source.path);
@@ -521,6 +541,28 @@ api.get("/assets/:assetId", async (c) => {
   return c.json({ asset: publicAsset(asset, assetCategoryMap([asset.id]), user.id) });
 });
 
+api.get("/assets/:assetId/transparency", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return c.json({ error: "未登录" }, 401);
+  const asset = getOne<AssetRow>(
+    appDb,
+    `select assets.*
+     from assets
+     where assets.id = ? and ${visibleAssetSql("assets")}`,
+    c.req.param("assetId"),
+    user.id
+  );
+  if (!asset) return c.json({ error: "素材不存在" }, 404);
+  if (asset.has_transparency != null) {
+    return c.json({ hasTransparency: Boolean(asset.has_transparency) });
+  }
+  const hasTransparency = await assetTransparencyFromPath(asset.path);
+  if (hasTransparency != null) {
+    run(appDb, "update assets set has_transparency = ? where id = ?", Number(hasTransparency), asset.id);
+  }
+  return c.json({ hasTransparency });
+});
+
 api.post("/assets/upload", async (c) => {
   const user = await requireUser(c);
   if (!user) return c.json({ error: "未登录" }, 401);
@@ -576,6 +618,7 @@ api.post("/assets/upload", async (c) => {
   const id = makeId("asset");
   const relativePath = secureAssetPath(user.id, id);
   const dimensions = readImageDimensions(buffer);
+  const hasTransparency = await assetTransparencyFromBuffer(buffer);
   await writeEncryptedFile(relativePath, buffer);
   void warmImageDerivatives("asset", id, relativePath);
   const createdAt = now();
@@ -584,8 +627,8 @@ api.post("/assets/upload", async (c) => {
     appDb,
     `insert into assets (
       id, user_id, space, shared, share_status, share_requested_at, share_reviewed_at, share_reviewed_by, name, path, mime_type,
-      size, content_hash, image_width, image_height, created_at
-    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      size, content_hash, image_width, image_height, has_transparency, created_at
+    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     user.id,
     space,
@@ -601,6 +644,7 @@ api.post("/assets/upload", async (c) => {
     contentHash,
     dimensions.width,
     dimensions.height,
+    hasTransparency == null ? null : Number(hasTransparency),
     createdAt
   );
   replaceAssetCategories(id, categoryIds);

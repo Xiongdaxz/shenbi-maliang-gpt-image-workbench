@@ -118,6 +118,15 @@ export const HELP_ARTICLES: HelpArticle[] = [
     bodyKey: "help.article.shortcutsAndEfficiency.body"
   },
   {
+    id: "model-limits",
+    categoryId: "create",
+    titleKey: "help.article.modelLimits.title",
+    summaryKey: "help.article.modelLimits.summary",
+    keywordsKey: "help.article.modelLimits.keywords",
+    bodyKey: "help.article.modelLimits.body",
+    action: { to: "/", labelKey: "help.action.goCreate" }
+  },
+  {
     id: "describe-image",
     categoryId: "create",
     titleKey: "help.article.describeImage.title",

@@ -103,6 +103,28 @@ html.image-preview-gutter-suppressed {
   will-change: transform;
 }
 
+.case-preview-modal.has-transparent-image .case-preview-image {
+  background-color: #f8fafc;
+  background-image:
+    linear-gradient(45deg, #c7cdd6 25%, transparent 25%),
+    linear-gradient(-45deg, #c7cdd6 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #c7cdd6 75%),
+    linear-gradient(-45deg, transparent 75%, #c7cdd6 75%);
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+  background-size: 20px 20px;
+}
+
+img.image-alpha-checkerboard {
+  background-color: #f8fafc !important;
+  background-image:
+    linear-gradient(45deg, #c7cdd6 25%, transparent 25%),
+    linear-gradient(-45deg, #c7cdd6 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #c7cdd6 75%),
+    linear-gradient(-45deg, transparent 75%, #c7cdd6 75%) !important;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0 !important;
+  background-size: 20px 20px !important;
+}
+
 .case-preview-stage.is-zoomed .case-preview-image {
   cursor: grab;
 }

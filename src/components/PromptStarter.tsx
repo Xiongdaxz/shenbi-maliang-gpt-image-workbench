@@ -14,6 +14,8 @@ type StarterCaseItem = CaseCategory["items"][number];
 const STARTER_CASE_IMAGE_LIMIT = 10;
 const STARTER_HEADLINE_ROTATE_INTERVAL_MS = 12000;
 const STARTER_IMAGE_READY_TIMEOUT_MS = 3_000;
+const STARTER_HEADLINE_MAX_CHAR_STAGGER_MS = 22;
+const STARTER_HEADLINE_STAGGER_WINDOW_MS = 300;
 
 function preloadStarterImage(src: string) {
   return new Promise<void>((resolve) => {
@@ -168,6 +170,10 @@ export function PromptStarter({
   const headline = `${headlineParts.prefix}${headlineParts.idea}`;
   const headlinePrefixChars = useMemo(() => Array.from(headlineParts.prefix), [headlineParts.prefix]);
   const headlineIdeaChars = useMemo(() => Array.from(headlineParts.idea), [headlineParts.idea]);
+  const headlineCharCount = headlinePrefixChars.length + headlineIdeaChars.length;
+  const headlineCharStaggerMs = headlineCharCount > 1
+    ? Math.min(STARTER_HEADLINE_MAX_CHAR_STAGGER_MS, STARTER_HEADLINE_STAGGER_WINDOW_MS / (headlineCharCount - 1))
+    : 0;
   const realCasePoolCount = useMemo(() => starterCasePoolCount(caseCategories), [caseCategories]);
   const includeDefaultCases = caseCategoriesLoaded && realCasePoolCount < STARTER_CASE_IMAGE_LIMIT;
   const candidateCaseImages = useMemo(() => {
@@ -379,7 +385,7 @@ export function PromptStarter({
         </button>
         <span className="starter-title-text">
           {headlinePrefixChars.map((char, index) => (
-            <span key={`${char}-${index}`} style={{ animationDelay: `${index * 22}ms` }}>
+            <span key={`${char}-${index}`} style={{ animationDelay: `${Math.round(index * headlineCharStaggerMs)}ms` }}>
               {char === " " ? "\u00a0" : char}
             </span>
           ))}
@@ -392,14 +398,14 @@ export function PromptStarter({
               title={t("starter.useThisCopy")}
             >
               {headlineIdeaChars.map((char, index) => (
-                <span key={`${char}-${index}`} style={{ animationDelay: `${(headlinePrefixChars.length + index) * 22}ms` }}>
+                <span key={`${char}-${index}`} style={{ animationDelay: `${Math.round((headlinePrefixChars.length + index) * headlineCharStaggerMs)}ms` }}>
                   {char === " " ? "\u00a0" : char}
                 </span>
               ))}
             </button>
           ) : (
             headlineIdeaChars.map((char, index) => (
-              <span key={`${char}-${index}`} style={{ animationDelay: `${(headlinePrefixChars.length + index) * 22}ms` }}>
+              <span key={`${char}-${index}`} style={{ animationDelay: `${Math.round((headlinePrefixChars.length + index) * headlineCharStaggerMs)}ms` }}>
                 {char === " " ? "\u00a0" : char}
               </span>
             ))

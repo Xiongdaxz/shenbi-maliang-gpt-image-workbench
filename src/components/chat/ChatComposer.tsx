@@ -3,6 +3,7 @@ import { ArrowUp, BrushCleaning, ImageIcon, Lightbulb, LoaderCircle, Plus, Rotat
 import { ImageLightbox, type ImageLightboxState } from "../ImageLightbox";
 import { MaterialPickerDrawer } from "../MaterialPicker";
 import { ImageCountStepper, QualityPicker, SizePicker } from "../ImageOptionPickers";
+import { CheckerboardImage } from "../CheckerboardImage";
 import { PromptColorSchemeSelect } from "../PromptColorSchemeSelect";
 import { PromptOptimizeStyleSelect } from "../PromptOptimizeStyleSelect";
 import { PromptTemplateComposerPanel } from "./PromptTemplateComposerPanel";
@@ -798,7 +799,7 @@ export function ChatComposer({
                   onClick={() => setPreviewState({ items: previewItems, index })}
                   aria-label={t("composer.previewNamed", { name: preview.name })}
                 >
-                  <img src={preview.url} alt={preview.name} />
+                  <CheckerboardImage src={preview.url} alt={preview.name} />
                 </button>
                 <button type="button" className="composer-preview-remove" onClick={preview.onRemove} aria-label={t("composer.removeNamed", { name: preview.name })}>
                   <X size={15} />

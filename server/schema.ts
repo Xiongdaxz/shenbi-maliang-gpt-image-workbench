@@ -1089,6 +1089,7 @@ export function initAppDb() {
       content_hash text not null default '',
       image_width integer not null default 0,
       image_height integer not null default 0,
+      has_transparency integer,
       created_at text not null,
       foreign key (user_id) references users(id)
     )
@@ -1134,6 +1135,9 @@ export function initAppDb() {
   }
   if (!tableColumnExists(appDb, "assets", "image_height")) {
     appDb.run("alter table assets add column image_height integer not null default 0");
+  }
+  if (!tableColumnExists(appDb, "assets", "has_transparency")) {
+    appDb.run("alter table assets add column has_transparency integer");
   }
   backfillAssetDimensions();
   backfillAssetContentHashes();
@@ -2506,7 +2510,7 @@ export function seedProvider() {
       "http://127.0.0.1:8317",
       "GPT_IMAGE_API_KEY",
       "",
-      "images_api",
+      "auto",
       "/v1/images/generations",
       "/v1/images/edits",
       "/v1/responses",

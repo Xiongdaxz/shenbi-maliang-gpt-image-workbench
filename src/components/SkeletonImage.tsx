@@ -18,11 +18,13 @@ function rememberLoadedImageSource(src: string) {
 export function SkeletonImage({
   src,
   alt,
+  className,
   loading = "lazy",
   fetchPriority = "auto"
 }: {
   src: string;
   alt: string;
+  className?: string;
   loading?: "eager" | "lazy";
   fetchPriority?: "high" | "low" | "auto";
 }) {
@@ -43,6 +45,7 @@ export function SkeletonImage({
       <span className="image-load-skeleton" aria-hidden="true" />
       <img
         ref={imageRef}
+        className={loadedImageSources.has(src) ? className : undefined}
         src={src}
         alt={alt}
         loading={loading}

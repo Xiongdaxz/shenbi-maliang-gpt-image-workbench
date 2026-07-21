@@ -12,6 +12,7 @@ import { ChevronLeft, ChevronRight, Download, Maximize2, RefreshCw, RotateCcw, R
 import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import type { CaseGroupImage, ImageReferenceItem } from "../types";
+import { CheckerboardImage } from "./CheckerboardImage";
 import type { ImagePreviewItem } from "./ImagePreviewModal";
 
 export type PreviewNavigatorMetrics = {
@@ -181,6 +182,7 @@ type ImagePreviewToolbarProps = {
   itemCount: number;
   referenceImages: ImageReferenceItem[];
   sizeLabel: string;
+  transparencyLabel?: string;
   zoomLabel: string;
   onCopyDescription: () => void;
   onGroupImageSelect: (index: number) => void;
@@ -241,6 +243,7 @@ export function ImagePreviewToolbar({
   itemCount,
   referenceImages,
   sizeLabel,
+  transparencyLabel,
   zoomLabel,
   onCopyDescription,
   onGroupImageSelect,
@@ -300,6 +303,7 @@ export function ImagePreviewToolbar({
             ))}
             <span>{t("imagePreview.size", { size: sizeLabel })}</span>
             {fileSizeLabel ? <span>{fileSizeLabel}</span> : null}
+            {transparencyLabel ? <span>{transparencyLabel}</span> : null}
             {item.sourceUsername ? <span>{t("imagePreview.author", { author: item.sourceUsername })}</span> : null}
             {typeof item.useCount === "number" ? <span>{t("imagePreview.useCount", { count: item.useCount })}</span> : null}
             {typeof item.favoriteCount === "number" ? <span>{t("imagePreview.favoriteCount", { count: item.favoriteCount })}</span> : null}
@@ -345,7 +349,7 @@ export function ImagePreviewToolbar({
                         aria-label={t("imagePreview.viewReference", { name: reference.name })}
                         title={reference.name}
                       >
-                        <img src={reference.thumbnailUrl ?? reference.previewUrl ?? reference.url} alt={reference.name} loading="lazy" />
+                        <CheckerboardImage src={reference.thumbnailUrl ?? reference.previewUrl ?? reference.url} alt={reference.name} loading="lazy" />
                       </button>
                     </div>
                   ))}
@@ -390,7 +394,7 @@ export function ReferenceLightbox({ reference, onClose }: ReferenceLightboxProps
         <Download size={20} />
       </a>
       <div className="case-reference-lightbox-frame" onMouseDown={(event) => event.stopPropagation()}>
-        <img src={reference.previewUrl ?? reference.url} alt={reference.name} />
+        <CheckerboardImage src={reference.previewUrl ?? reference.url} alt={reference.name} />
         <span>{reference.name}</span>
       </div>
     </div>

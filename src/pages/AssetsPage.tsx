@@ -7,7 +7,7 @@ import { AssetEditModal } from "../components/AssetEditModal";
 import { AssetUploadModal } from "../components/AssetUploadModal";
 import { FilterModeToggle, FilterTabLabel, FilterTabsScroller, useLibraryFilterDisplayMode } from "../components/HorizontalScrollers";
 import { ImageDownloadMenu } from "../components/ImageDownloadMenu";
-import { ImagePreviewModal } from "../components/ImagePreviewModal";
+import { ImagePreviewModal, type ImageTransparencyStatus } from "../components/ImagePreviewModal";
 import { LibraryEmptyState } from "../components/LibraryEmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { SearchHistoryInput } from "../components/SearchHistoryInput";
@@ -300,6 +300,24 @@ export function AssetsPage({
       })),
     [assetReviewEnabled, previewSourceAssets, t]
   );
+  const activePreviewAsset = previewIndex == null ? null : assetPreviewItems[previewIndex] ?? null;
+  const assetTransparency = useQuery({
+    queryKey: ["asset-transparency", activePreviewAsset?.id ?? ""],
+    queryFn: ({ signal }) => api.assetTransparency(activePreviewAsset!.id, { signal }),
+    enabled: Boolean(activePreviewAsset && activePreviewAsset.hasTransparency == null),
+    staleTime: Infinity,
+    gcTime: 30 * 60_000,
+    retry: false
+  });
+  const transparencyStatus: ImageTransparencyStatus | undefined = activePreviewAsset
+    ? (activePreviewAsset.hasTransparency ?? assetTransparency.data?.hasTransparency) === true
+      ? "transparent"
+      : (activePreviewAsset.hasTransparency ?? assetTransparency.data?.hasTransparency) === false
+        ? "opaque"
+        : assetTransparency.isError || assetTransparency.isSuccess
+          ? "unknown"
+          : "checking"
+    : undefined;
   const assetFilterHintKey = useMemo(
     () => ["asset-filter", spaceFilter, selectedCategoryIds.join(","), ...categories.map((category) => `${category.id}:${category.name}`)].join("\u0000"),
     [categories, selectedCategoryIds, spaceFilter]
@@ -437,6 +455,7 @@ export function AssetsPage({
             <div className="asset-image-frame">
               <button className="asset-image-btn" type="button" onClick={() => setPreviewIndex(index)} aria-label={t("pages.assets.previewAsset", { name: asset.name })}>
                 <SkeletonImage
+                  className={asset.hasTransparency === true ? "image-alpha-checkerboard" : undefined}
                   src={asset.thumbnailUrl ?? asset.previewUrl ?? asset.url}
                   alt={asset.name}
                   loading={eager ? "eager" : "lazy"}
@@ -526,6 +545,7 @@ export function AssetsPage({
           initialImageSource="original"
           wheelMode={imagePreviewWheelMode}
           suppressStableScrollbarGutter
+          transparencyStatus={transparencyStatus}
           onIndexChange={setPreviewIndex}
           onClose={() => {
             setPreviewIndex(null);

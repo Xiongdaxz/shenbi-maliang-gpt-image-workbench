@@ -222,6 +222,7 @@ export type AssetRow = {
   content_hash: string;
   image_width: number;
   image_height: number;
+  has_transparency: number | null;
   created_at: string;
   source_username?: string | null;
 };

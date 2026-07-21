@@ -7,6 +7,7 @@ import { formatImageFileSize } from "../lib/format";
 import { ModalPortal } from "../ui";
 import type { CaseCategory } from "../types";
 import { CaseCategoryMultiSelect } from "./CaseCategoryMultiSelect";
+import { CheckerboardImage } from "./CheckerboardImage";
 
 export function AssetUploadModal({
   categories,
@@ -67,7 +68,7 @@ export function AssetUploadModal({
               <div className="asset-file-list">
                 {previewItems.map(({ file: item, url }, index) => (
                   <div className="asset-file-row" key={`${item.name}-${item.size}-${item.lastModified}-${index}`}>
-                    <img src={url} alt={item.name} />
+                    <CheckerboardImage src={url} alt={item.name} />
                     <span>
                       <strong>{item.name}</strong>
                       <small>{formatImageFileSize(item.size) || t("pages.assets.localImage")}</small>

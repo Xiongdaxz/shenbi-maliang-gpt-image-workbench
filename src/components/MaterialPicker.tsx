@@ -10,6 +10,7 @@ import { useI18n } from "../i18n";
 import { assetSpaceLabel } from "../lib/assets";
 import { cx } from "../lib/cx";
 import type { AssetItem, LibraryAssetCard } from "../types";
+import { CheckerboardImage } from "./CheckerboardImage";
 import { VirtualizedResponsiveGrid } from "./VirtualizedResponsiveGrid";
 
 export const MATERIAL_PICKER_DRAWER_ANIMATION_MS = 240;
@@ -367,7 +368,7 @@ export function MaterialPicker({
                         <Check size={12} />
                       </span>
                     ) : null}
-                    <img
+                    <CheckerboardImage
                       src={asset.thumbnailUrl ?? asset.previewUrl ?? asset.url}
                       alt={asset.name}
                       loading={eager ? "eager" : "lazy"}

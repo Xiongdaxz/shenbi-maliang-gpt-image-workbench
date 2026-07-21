@@ -363,6 +363,7 @@
 | `path` / `mime_type` / `size` | 文件信息 |
 | `content_hash` | 原始图片内容 SHA-256 哈希，用于上传时识别重复素材；旧素材会在启动迁移时尽量补齐 |
 | `image_width` / `image_height` | 图片尺寸 |
+| `has_transparency` | 是否包含透明像素：`1` 透明、`0` 不透明、`NULL` 尚未识别或识别失败；识别成功后持久化复用 |
 | `created_at` | 创建时间 |
 
 相关索引：`assets_user_created_id_idx` 支撑素材库按用户、创建时间和稳定 ID 游标分页；`assets_share_created_id_idx` 支撑共享素材筛选和按时间加载。
@@ -690,7 +691,7 @@
 | `enabled` | 是否启用，`0` 否、`1` 是 |
 | `base_url` | 渠道根地址 |
 | `api_key_env` / `api_key_value` | API Key 来源 |
-| `route_mode` | 路由模式：`images_api`、`responses`、`auto` |
+| `route_mode` | 路由模式：`images_api`、`responses`、`auto`；首次初始化和新建 CPA 渠道时默认为 `auto` |
 | `generation_path` / `edit_path` / `responses_path` | 上游接口路径 |
 | `model` / `responses_model` | 图片模型和 Responses 主模型 |
 | `sizes` / `qualities` | 可选尺寸和质量 JSON |

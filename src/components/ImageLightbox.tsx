@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
 import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
+import { CheckerboardImage } from "./CheckerboardImage";
 
 export type ImageLightboxTarget = {
   url: string;
@@ -93,7 +94,7 @@ export function ImageLightbox({
         </button>
       ) : null}
       <div className="reference-image-frame" onMouseDown={(event) => event.stopPropagation()}>
-        <img src={activeItem.url} alt={activeItem.name} />
+        <CheckerboardImage src={activeItem.url} alt={activeItem.name} />
       </div>
       {canSwitch ? (
         <>
@@ -116,7 +117,7 @@ export function ImageLightbox({
                 aria-label={t("imageLightbox.viewNth", { index: itemIndex + 1 })}
                 aria-pressed={itemIndex === index}
               >
-                <img src={item.thumbnailUrl ?? item.url} alt={item.name} />
+                <CheckerboardImage src={item.thumbnailUrl ?? item.url} alt={item.name} />
               </button>
             ))}
           </div>

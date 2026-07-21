@@ -23,6 +23,7 @@ import { ImageDownloadMenu } from "./ImageDownloadMenu";
 import { ImageLightbox, type ImageLightboxState } from "./ImageLightbox";
 import { EditorSizePicker } from "./ImageOptionPickers";
 import { MaterialPickerDrawer } from "./MaterialPicker";
+import { CheckerboardImage } from "./CheckerboardImage";
 import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import type { SizeOption } from "../lib/imageOptions";
@@ -374,7 +375,7 @@ export function ImageEditorComposer({
                   onClick={() => setPreviewState({ items: previewItems, index })}
                   aria-label={t("composer.previewNamed", { name: preview.name })}
                 >
-                  <img src={preview.url} alt={preview.name} />
+                  <CheckerboardImage src={preview.url} alt={preview.name} />
                 </button>
                 <button type="button" className="composer-preview-remove" onClick={preview.onRemove} aria-label={t("composer.removeNamed", { name: preview.name })}>
                   <X size={15} />

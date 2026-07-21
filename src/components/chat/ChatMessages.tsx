@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProp
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, MoreHorizontal, RefreshCw } from "lucide-react";
 import { AddCaseModal } from "../AddCaseModal";
+import { CheckerboardImage } from "../CheckerboardImage";
 import { ImageLightbox, type ImageLightboxState, type ImageLightboxTarget } from "../ImageLightbox";
 import { ImageDownloadMenu, type ImageDownloadSource } from "../ImageDownloadMenu";
 import { ImagePreviewModal, type ImagePreviewItem } from "../ImagePreviewModal";
@@ -436,7 +437,7 @@ export function ChatMessageThread({
                     onClick={() => setPreviewState({ items: editPreviewItems, index })}
                     aria-label={t("composer.previewNamed", { name: reference.name })}
                   >
-                    <img src={reference.thumbnailUrl ?? reference.previewUrl ?? reference.url} alt={reference.name} />
+                    <CheckerboardImage src={reference.thumbnailUrl ?? reference.previewUrl ?? reference.url} alt={reference.name} />
                   </button>
                 ))}
               </div>
@@ -1039,7 +1040,7 @@ export function ChatMessage({
               onClick={() => openReferencePreview(directReferencePreviewItems, index)}
               aria-label={t("chatMessages.previewSentImage", { name: item.name })}
             >
-              <img src={item.thumbnailUrl ?? item.previewUrl ?? item.url} alt={item.name} />
+              <CheckerboardImage src={item.thumbnailUrl ?? item.previewUrl ?? item.url} alt={item.name} />
             </button>
           ))}
         </div>
@@ -1068,9 +1069,9 @@ export function ChatMessage({
             onClick={() => openReferencePreview(primaryReferencePreviewItems, 0)}
             aria-label={t("chatMessages.previewReferenceImage")}
           >
-            <img src={referenceThumbnailUrl(message)} alt={referenceImagePrompt} />
+            <CheckerboardImage src={referenceThumbnailUrl(message)} alt={referenceImagePrompt} />
             <span className="edit-request-hover-preview" aria-hidden="true">
-              <img src={referencePreviewUrl(message)} alt="" />
+              <CheckerboardImage src={referencePreviewUrl(message)} alt="" />
             </span>
           </button>
           {showSelectedContentLabel ? <strong>{t("chatMessages.selectedContent")}</strong> : null}
@@ -1085,7 +1086,7 @@ export function ChatMessage({
                 onClick={() => openReferencePreview(editMaterialPreviewItems, index)}
                 aria-label={t("chatMessages.previewSentMaterial", { name: item.name })}
               >
-                <img src={item.thumbnailUrl ?? item.previewUrl ?? item.url} alt={item.name} />
+                <CheckerboardImage src={item.thumbnailUrl ?? item.previewUrl ?? item.url} alt={item.name} />
               </button>
             ))}
           </div>

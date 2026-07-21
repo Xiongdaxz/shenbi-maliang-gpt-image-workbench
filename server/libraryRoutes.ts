@@ -211,6 +211,7 @@ function assetCard(row: AssetRow, categories: Array<{ id: string; name: string }
     size: row.size,
     imageWidth: row.image_width,
     imageHeight: row.image_height,
+    hasTransparency: row.has_transparency == null ? null : Boolean(row.has_transparency),
     createdAt: row.created_at,
     sourceUsername: row.source_username ?? "未知用户",
     canEdit: row.user_id === userId,
