@@ -9,6 +9,16 @@ export type ImageTaskBrowserNotificationCopy = {
 
 export type BrowserNotificationPermissionResult = NotificationPermission | "unsupported" | "insecure-context" | "error";
 
+export function imageTaskBrowserNotificationPermissionToastKey(
+  permission: BrowserNotificationPermissionResult
+) {
+  if (permission === "granted") return null;
+  if (permission === "denied") return "toast.imageTaskBrowserNotificationPermissionBlocked";
+  if (permission === "insecure-context") return "toast.imageTaskBrowserNotificationInsecureContext";
+  if (permission === "unsupported") return "toast.imageTaskBrowserNotificationUnsupported";
+  return "toast.imageTaskBrowserNotificationPermissionDenied";
+}
+
 export type ImageTaskBrowserNotificationSettingState = "disabled" | "active" | "permission-blocked";
 
 export type BrowserNotificationInstance = {

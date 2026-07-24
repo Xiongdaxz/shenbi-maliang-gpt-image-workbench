@@ -38,6 +38,7 @@ describe("image task sound catalog preferences", () => {
       expect(imageTaskSoundMessages[locale.code]["settings.sound.catalog.loading"]).toBeTruthy();
       expect(imageTaskSoundMessages[locale.code]["settings.sound.catalog.empty"]).toBeTruthy();
       expect(imageTaskSoundMessages[locale.code]["toast.imageTaskBrowserNotificationInsecureContext"]).toBeTruthy();
+      expect(imageTaskSoundMessages[locale.code]["toast.imageTaskBrowserNotificationPermissionBlocked"]).toBeTruthy();
     }
   });
 });

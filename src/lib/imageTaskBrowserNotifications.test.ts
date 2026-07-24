@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   getImageTaskBrowserNotificationPermission,
+  imageTaskBrowserNotificationPermissionToastKey,
   imageTaskBrowserNotificationPath,
   imageTaskBrowserNotificationSettingState,
   isImageTaskBrowserNotificationSupported,
@@ -70,6 +71,26 @@ describe("image task browser notifications", () => {
     };
     expect(await requestImageTaskBrowserNotificationPermission(pending.api)).toBe("granted");
     expect(requests).toBe(1);
+
+    const denied = fakeApi("denied");
+    denied.api.requestPermission = async () => {
+      requests += 1;
+      return "granted";
+    };
+    expect(await requestImageTaskBrowserNotificationPermission(denied.api)).toBe("denied");
+    expect(requests).toBe(1);
+  });
+
+  test("provides recovery guidance only for browser-blocked permission", () => {
+    expect(imageTaskBrowserNotificationPermissionToastKey("granted")).toBeNull();
+    expect(imageTaskBrowserNotificationPermissionToastKey("denied"))
+      .toBe("toast.imageTaskBrowserNotificationPermissionBlocked");
+    expect(imageTaskBrowserNotificationPermissionToastKey("default"))
+      .toBe("toast.imageTaskBrowserNotificationPermissionDenied");
+    expect(imageTaskBrowserNotificationPermissionToastKey("insecure-context"))
+      .toBe("toast.imageTaskBrowserNotificationInsecureContext");
+    expect(imageTaskBrowserNotificationPermissionToastKey("unsupported"))
+      .toBe("toast.imageTaskBrowserNotificationUnsupported");
   });
 
   test("reports insecure contexts without requesting permission", async () => {

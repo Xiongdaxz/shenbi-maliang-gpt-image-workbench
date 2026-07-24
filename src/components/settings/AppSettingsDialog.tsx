@@ -24,6 +24,7 @@ import {
 } from "../../lib/imageTaskSoundPlayer";
 import {
   getImageTaskBrowserNotificationPermission,
+  imageTaskBrowserNotificationPermissionToastKey,
   imageTaskBrowserNotificationSettingState,
   requestImageTaskBrowserNotificationPermission,
   type BrowserNotificationPermissionResult
@@ -429,12 +430,9 @@ export function AppSettingsDialog({
       setBrowserNotificationPermission(permission);
       if (permission === "granted") {
         onPreferencesChange({ imageTaskBrowserNotificationEnabled: true });
-      } else if (permission === "insecure-context") {
-        showToast(t("toast.imageTaskBrowserNotificationInsecureContext"), "error");
-      } else if (permission === "unsupported") {
-        showToast(t("toast.imageTaskBrowserNotificationUnsupported"), "error");
       } else {
-        showToast(t("toast.imageTaskBrowserNotificationPermissionDenied"), "error");
+        const toastKey = imageTaskBrowserNotificationPermissionToastKey(permission);
+        if (toastKey) showToast(t(toastKey), "error");
       }
     } finally {
       setBrowserNotificationPermissionPending(false);

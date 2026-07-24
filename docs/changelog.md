@@ -2,6 +2,16 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.57 - 2026-07-24
+
+### 中文
+
+- 浏览器通知被网站权限阻止时，设置页会明确提示如何从地址栏重新允许通知，不再重复发起无法生效的授权请求。
+
+### English
+
+- When browser notifications are blocked by site permissions, Settings now explains how to allow them again from the address bar instead of repeating a permission request that cannot succeed.
+
 ## v0.1.56 - 2026-07-24
 
 - 图片任务完成或失败时可播放提示音并发送浏览器系统通知；支持独立选择成功与失败音效、调整音量，并可从通知直接回到对应对话。
