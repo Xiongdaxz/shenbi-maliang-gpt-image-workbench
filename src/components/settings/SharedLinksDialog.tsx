@@ -18,11 +18,12 @@ function absoluteShareUrl(link: SessionShareLink) {
   }
 }
 
-function formatDate(value: string, locale: string) {
+function formatDate(value: string) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat(locale, { year: "numeric", month: "long", day: "numeric" }).format(date);
+  const twoDigits = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}/${twoDigits(date.getMonth() + 1)}/${twoDigits(date.getDate())} ${twoDigits(date.getHours())}:${twoDigits(date.getMinutes())}`;
 }
 
 export function SharedLinksDialog({
@@ -34,7 +35,7 @@ export function SharedLinksDialog({
   onClose: () => void;
   onCloseSettings: () => void;
 }) {
-  const { resolvedLanguage, t } = useI18n();
+  const { t } = useI18n();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -129,8 +130,8 @@ export function SharedLinksDialog({
                         setDeleteAllOpen(true);
                       }}
                     >
-                      <Trash2 size={16} />
-                      {t("sharedLinks.revokeAll")}
+                      <Trash2 size={16} aria-hidden="true" />
+                      <span>{t("sharedLinks.revokeAll")}</span>
                     </button>
                   </div>
                 ) : null}
@@ -156,8 +157,14 @@ export function SharedLinksDialog({
                   <Link2 size={16} />
                   <strong>{link.title}</strong>
                 </button>
-                <span>{t("sharedLinks.chatType")}</span>
-                <span>{formatDate(link.createdAt, resolvedLanguage)}</span>
+                <span
+                  className="shared-link-type"
+                  title={t("shareDialog.snapshotHint", { count: link.messageCount })}
+                >
+                  <span>{t("sharedLinks.chatType")}</span>
+                  <span className="shared-link-message-count">({link.messageCount})</span>
+                </span>
+                <span>{formatDate(link.createdAt)}</span>
                 <span className="archived-chat-actions shared-link-actions">
                   <button type="button" onClick={() => void copyLink(link)} aria-label={t("sharedLinks.copyOne", { title: link.title })} title={t("shareDialog.copy")}>
                     <Copy size={16} />

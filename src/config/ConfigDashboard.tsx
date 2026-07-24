@@ -25,10 +25,11 @@ import {
   CONFIG_SIDE_COLLAPSED_STORAGE_KEY,
   CONFIG_TAB_STORAGE_KEY
 } from "./configNav";
-import { AssetReviewPanel, CaseReviewPanel, StarterCopySettingsPanel } from "./panels/content";
+import { AssetReviewPanel, CaseReviewPanel, ContentCategoryManagementPanel, StarterCopySettingsPanel } from "./panels/content";
 import { CpaPanel, ImageAccountPoolPanel, ImageModePanel, PromptOptimizerPanel, ProvidersPanel, SafetyReviewPanel } from "./panels/generation";
 import { AccountSearchPanel, TeamAccountPanel } from "./panels/members";
 import { ChangelogPanel, StatisticsPanel } from "./panels/overview";
+import { ImageTaskSoundManagementPanel } from "./panels/sounds";
 import { AuditPanel, BackupPanel, BrandingSettingsPanel, DebugSettingsPanel, ModelRequestLogsPanel, ProxyPanel, RequestLogsPanel, SmsSettingsPanel, SmtpSettingsPanel } from "./panels/system";
 
 function configNavLabelKey(value: ConfigTabValue) {
@@ -154,6 +155,12 @@ export function ConfigDashboard() {
         </Tabs.Content>
         <Tabs.Content value="teams">
           <TeamAccountPanel />
+        </Tabs.Content>
+        <Tabs.Content value="contentCategories">
+          <ContentCategoryManagementPanel />
+        </Tabs.Content>
+        <Tabs.Content value="soundManagement">
+          <ImageTaskSoundManagementPanel />
         </Tabs.Content>
         <Tabs.Content value="assetReviews">
           <AssetReviewPanel />

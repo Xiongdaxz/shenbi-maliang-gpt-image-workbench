@@ -1,23 +1,27 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
 import { ScrollJumpButton } from "../components/ScrollJumpButton";
+import { ChatBranchSwitch } from "../components/chat/ChatBranchSwitch";
 import { ConversationView } from "../components/chat/ConversationView";
 import { useChatScrollJump } from "../hooks/useChatScrollJump";
 import { useI18n } from "../i18n";
-import { buildChatRenderState } from "../lib/chatRender";
+import { MAIN_CHAT_BRANCH_ID, buildChatRenderState } from "../lib/chatRender";
 
 export function SharedConversationPage({ authenticated }: { authenticated: boolean }) {
   const { token = "" } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
   const { t } = useI18n();
+  const [activeBranchId, setActiveBranchId] = useState<string | null>(null);
 
   useEffect(() => {
     document.documentElement.classList.add("chat-page-stable-scrollbar");
     return () => document.documentElement.classList.remove("chat-page-stable-scrollbar");
   }, []);
+
+  useEffect(() => setActiveBranchId(null), [token]);
 
   const registration = useQuery({
     queryKey: ["registration-status"],
@@ -31,9 +35,30 @@ export function SharedConversationPage({ authenticated }: { authenticated: boole
     retry: false
   });
   const renderState = useMemo(
-    () => buildChatRenderState(conversation.data?.messages ?? []),
-    [conversation.data?.messages]
+    () => buildChatRenderState(conversation.data?.messages ?? [], activeBranchId),
+    [activeBranchId, conversation.data?.messages]
   );
+  const branchSwitchOptions = useMemo(() => {
+    const switchItem = renderState.items.find((item) => item.type === "thread");
+    if (
+      !switchItem ||
+      switchItem.type !== "thread" ||
+      switchItem.branchId !== MAIN_CHAT_BRANCH_ID ||
+      switchItem.activeVersionIndex === undefined ||
+      switchItem.versions.length <= 1
+    ) {
+      return [];
+    }
+    return switchItem.versions.map((revision, index) => {
+      const titleSeed = revision.user.content.replace(/\s+/g, " ").trim();
+      return {
+        id: revision.branchId || MAIN_CHAT_BRANCH_ID,
+        label: String(index + 1),
+        active: index === switchItem.activeVersionIndex,
+        title: titleSeed ? titleSeed.slice(0, 48) : t("chat.branchTitle", { index: index + 1 })
+      };
+    });
+  }, [renderState.items, t]);
   const { jumpToLoadingOrScrollEdge, messageEndRef, scrollJump } = useChatScrollJump({
     composerPreviewCount: 0,
     imageEditorOpen: false,
@@ -56,15 +81,27 @@ export function SharedConversationPage({ authenticated }: { authenticated: boole
         <div className="shared-conversation-heading">
           <h1>{conversation.data?.share.title || t("sharedConversation.titleFallback")}</h1>
         </div>
-        {!authenticated ? (
-          <div className="shared-auth-actions">
-            <button className="primary-btn" type="button" onClick={() => openAuth("login")}>
-              {t("login.login")}
-            </button>
-            {registrationEnabled ? (
-              <button className="secondary-btn" type="button" onClick={() => openAuth("register")}>
-                {t("login.register")}
-              </button>
+        {branchSwitchOptions.length > 1 || !authenticated ? (
+          <div className="shared-conversation-toolbar">
+            {branchSwitchOptions.length > 1 ? (
+              <ChatBranchSwitch
+                ariaLabel={t("chat.branchSwitch")}
+                options={branchSwitchOptions}
+                optionAriaLabel={(option) => t("chat.switchBranch", { label: option.label })}
+                onSelect={setActiveBranchId}
+              />
+            ) : null}
+            {!authenticated ? (
+              <div className="shared-auth-actions">
+                <button className="primary-btn" type="button" onClick={() => openAuth("login")}>
+                  {t("login.login")}
+                </button>
+                {registrationEnabled ? (
+                  <button className="secondary-btn" type="button" onClick={() => openAuth("register")}>
+                    {t("login.register")}
+                  </button>
+                ) : null}
+              </div>
             ) : null}
           </div>
         ) : null}
@@ -86,6 +123,7 @@ export function SharedConversationPage({ authenticated }: { authenticated: boole
             mode="shared-readonly"
             sharedToken={token}
             downloadBaseName={conversation.data?.share.title}
+            onSelectVersion={(revision) => setActiveBranchId(revision.branchId || MAIN_CHAT_BRANCH_ID)}
           />
         ) : null}
         <div ref={messageEndRef} className="message-scroll-anchor" aria-hidden="true" />

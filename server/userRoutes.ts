@@ -9,7 +9,7 @@ import { publicBranding } from "./branding";
 import { enabledProvidersForCurrentMode } from "./providerRuntime";
 import { imageOriginPromptsByImageIds, imageReferencesByImageIds, publicUser, toProvider } from "./serializers";
 import { imageGenerationSettings } from "./settingsStore";
-import { streamImageJobEvents } from "./imageJobEvents";
+import { replayImageJobEventsFromDb, streamImageJobEvents } from "./imageJobEvents";
 import { cleanupExpiredImageJobCancelIntents, imageJobCancelRequested } from "./imageJobCancellation";
 import { saveUserPreferences } from "./userPreferences";
 import { deleteStoredFilesIfUnreferenced, readStoredFile, secureUserAvatarHistoryPath, secureUserAvatarPath, writeEncryptedFile } from "./secureFiles";
@@ -1112,6 +1112,9 @@ api.get("/sessions/:id/image-jobs", async (c) => {
 api.get("/image-jobs/events", async (c) => {
   const user = await requireUser(c);
   if (!user) return c.json({ error: "未登录" }, 401);
-  return streamImageJobEvents(user.id);
+  return streamImageJobEvents(user.id, {
+    lastEventId: c.req.header("last-event-id"),
+    replay: (cursor) => replayImageJobEventsFromDb(appDb, user.id, cursor)
+  });
 });
 }

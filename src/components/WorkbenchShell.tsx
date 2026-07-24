@@ -23,6 +23,11 @@ import type { AvatarHistoryEntry, ChatSession, ImageJob, User, UserPreferences }
 import { ConfirmDialog, useToast } from "../ui";
 import { useInfinitePageLoader } from "../hooks/useInfinitePageLoader";
 import { useImageJobEvents, type ImageJobEventPayload } from "../hooks/useImageJobEvents";
+import { useImageTaskSounds } from "../hooks/useImageTaskSounds";
+import {
+  DEFAULT_IMAGE_TASK_SOUND_VOLUME
+} from "../lib/imageTaskSounds";
+import { imageTaskBrowserNotificationPath } from "../lib/imageTaskBrowserNotifications";
 import { cursorLibraryQueryOptions } from "../hooks/useCursorLibraryQuery";
 import { ProjectLogo } from "./ProjectLogo";
 import { SearchChatModal } from "./SearchChatModal";
@@ -219,6 +224,23 @@ function userPreferencesToast(preferences: Partial<UserPreferences>, t: Translat
   if (preferences.promptOptimizeStyleGroups) {
     return t("toast.promptStylesSaved");
   }
+  if (typeof preferences.imageTaskBrowserNotificationEnabled === "boolean") {
+    return preferences.imageTaskBrowserNotificationEnabled
+      ? t("toast.imageTaskBrowserNotificationOn")
+      : t("toast.imageTaskBrowserNotificationOff");
+  }
+  if (typeof preferences.imageTaskSoundEnabled === "boolean") {
+    return preferences.imageTaskSoundEnabled ? t("toast.imageTaskSoundOn") : t("toast.imageTaskSoundOff");
+  }
+  if (preferences.imageTaskSoundVolume !== undefined) {
+    return t("toast.imageTaskSoundVolume");
+  }
+  if (preferences.imageTaskSuccessSoundId) {
+    return t("toast.imageTaskSuccessSound");
+  }
+  if (preferences.imageTaskFailureSoundId) {
+    return t("toast.imageTaskFailureSound");
+  }
   if (typeof preferences.editSuggestionsEnabled === "boolean") {
     return preferences.editSuggestionsEnabled ? t("toast.editSuggestionsOn") : t("toast.editSuggestionsOff");
   }
@@ -366,6 +388,28 @@ export function WorkbenchShell({ user }: { user: User }) {
   const location = useLocation();
   const { showToast } = useToast();
   const { resolvedLanguage, t } = useI18n();
+  const imageTaskSoundCatalog = useQuery({
+    queryKey: ["image-task-sounds"],
+    queryFn: api.imageTaskSounds,
+    staleTime: 60_000
+  });
+  const imageTaskSounds = imageTaskSoundCatalog.data?.sounds ?? [];
+  const openImageTaskConversation = useCallback((sessionId: string) => {
+    const targetPath = imageTaskBrowserNotificationPath(sessionId);
+    if (targetPath) navigate(targetPath);
+  }, [navigate]);
+  const handleImageTaskSoundEvent = useImageTaskSounds(user.id, {
+    imageTaskSoundEnabled: user.preferences?.imageTaskSoundEnabled ?? true,
+    imageTaskBrowserNotificationEnabled: user.preferences?.imageTaskBrowserNotificationEnabled ?? false,
+    imageTaskSoundVolume: user.preferences?.imageTaskSoundVolume ?? DEFAULT_IMAGE_TASK_SOUND_VOLUME,
+    imageTaskSuccessSoundId: user.preferences?.imageTaskSuccessSoundId ?? "",
+    imageTaskFailureSoundId: user.preferences?.imageTaskFailureSoundId ?? ""
+  }, imageTaskSounds, {
+    successTitle: t("notification.imageTask.success.title"),
+    successBody: t("notification.imageTask.success.body"),
+    failureTitle: t("notification.imageTask.failure.title"),
+    failureBody: t("notification.imageTask.failure.body")
+  }, openImageTaskConversation);
   const routeTransitionStageRef = useRef<HTMLDivElement | null>(null);
   const routeTransitionAnimationRef = useRef<Animation | null>(null);
   const mainRoutePrefetchAbortRef = useRef<AbortController | null>(null);
@@ -1354,6 +1398,7 @@ export function WorkbenchShell({ user }: { user: User }) {
   }, [queryClient, resolvedLanguage, user.preferences?.editSuggestionTone, user.preferences?.editSuggestionsEnabled]);
 
   const handleImageJobEvent = useCallback((payload: ImageJobEventPayload) => {
+    handleImageTaskSoundEvent(payload);
     const sessionId = payload.sessionId.trim();
     if (!sessionId) return;
     if (payload.status === "succeeded") prefetchImageEditSuggestions(payload.resultImageId);
@@ -1376,6 +1421,7 @@ export function WorkbenchShell({ user }: { user: User }) {
     }
   }, [
     clearSessionGenerationStatus,
+    handleImageTaskSoundEvent,
     markSessionGenerationCompleted,
     markSessionGenerationRunning,
     prefetchImageEditSuggestions,
@@ -2017,6 +2063,8 @@ export function WorkbenchShell({ user }: { user: User }) {
         deleteAllPending={deleteAllChats.isPending}
         deleteAccountPending={deleteAccount.isPending}
         preferencesSaving={saveUserPreferences.isPending}
+        imageTaskSounds={imageTaskSounds}
+        imageTaskSoundsLoading={imageTaskSoundCatalog.isLoading}
         onClose={() => setSettingsOpen(false)}
         onChangePassword={openPasswordDialog}
         onEditProfile={openEditProfileDialog}
@@ -2712,7 +2760,7 @@ function EditProfileDialog({
                 setSelectedAvatarHistoryId("");
               }}
             />
-            {avatarUrl || visibleAvatarUrl || recentAvatarHistoryEntries.length ? (
+            {recentAvatarHistoryEntries.length > 0 ? (
               <div className="edit-profile-avatar-history">
                 <strong>{t("profile.avatarRecord")}</strong>
                 <div className="edit-profile-avatar-history-list" role="list">

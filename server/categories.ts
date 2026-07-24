@@ -1,3 +1,4 @@
+import type { Database } from "bun:sqlite";
 import { appDb, getAll, getOne } from "./db";
 import type { CategoryType } from "./types";
 
@@ -10,7 +11,7 @@ export function defaultTeamId() {
   return DEFAULT_TEAM_ID;
 }
 
-export function makeCategorySlug(name: string, type: CategoryType) {
+export function makeCategorySlug(name: string, type: CategoryType, db: Database = appDb) {
   const base =
     name
       .trim()
@@ -22,7 +23,7 @@ export function makeCategorySlug(name: string, type: CategoryType) {
   const scopedBase = type === "asset" ? `asset-${base}` : base;
   let slug = scopedBase;
   let suffix = 2;
-  while (getOne<{ id: string }>(appDb, "select id from case_categories where slug = ?", slug)) {
+  while (getOne<{ id: string }>(db, "select id from case_categories where slug = ?", slug)) {
     slug = `${scopedBase}-${suffix}`;
     suffix += 1;
   }

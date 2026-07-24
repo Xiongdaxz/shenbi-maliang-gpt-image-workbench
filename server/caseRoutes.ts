@@ -1,5 +1,6 @@
 import type { Hono } from "hono";
-import { UNCATEGORIZED_CASE_CATEGORY_ID, ensureCategoryIds, makeCategorySlug } from "./categories";
+import { UNCATEGORIZED_CASE_CATEGORY_ID, ensureCategoryIds } from "./categories";
+import { CategoryManagementError, createManagedContentCategory } from "./categoryManagement";
 import { generateCaseTitle, resolveCaseCategoryIds, suggestCaseFields } from "./caseSuggestions";
 import { caseUsageSourceFromCaseItem, caseUsageSourceKey, type CaseUsageSource } from "./caseUsage";
 import { appDb, getAll, getOne, run } from "./db";
@@ -11,6 +12,7 @@ import type { AssetRow, ImageRow } from "./types";
 import { approvedCaseSql, makeId, normalizeIdList, normalizeReviewStatus, now, visibleAssetSql, visibleCaseSql, type ReviewStatus } from "./utils";
 import { requireUser } from "./auth";
 import { imageBatchResult, parseImageBatchIds } from "./imageBatch";
+import { invalidateLibraryFacetCache } from "./libraryRoutes";
 
 type CaseItemRow = {
   id: string;
@@ -696,30 +698,14 @@ api.post("/cases/categories", async (c) => {
   const user = await requireUser(c);
   if (!user) return c.json({ error: "未登录" }, 401);
   const body = await c.req.json().catch(() => ({}));
-  const name = String(body.name ?? "").trim();
-  if (!name) return c.json({ error: "请填写风格名称" }, 400);
-  const existing = getOne<{ id: string }>(
-    appDb,
-    "select id from case_categories where type = 'case' and lower(name) = lower(?)",
-    name
-  );
-  if (existing) return c.json({ error: "风格已存在" }, 400);
-
-  const id = makeId("casecat");
-  const slug = makeCategorySlug(name, "case");
-  const sortOrder =
-    (getOne<{ max_sort: number | null }>(appDb, "select max(sort_order) as max_sort from case_categories where type = 'case'")
-      ?.max_sort ?? 0) + 10;
-  run(
-    appDb,
-    "insert into case_categories (id, type, name, slug, sort_order) values (?, ?, ?, ?, ?)",
-    id,
-    "case",
-    name,
-    slug,
-    sortOrder
-  );
-  return c.json({ category: { id, name, slug, items: [] } });
+  try {
+    const category = createManagedContentCategory(appDb, "case", body.name);
+    invalidateLibraryFacetCache("cases");
+    return c.json({ category: { id: category.id, name: category.name, slug: category.slug, items: [] } });
+  } catch (error) {
+    if (error instanceof CategoryManagementError) return c.json({ error: error.message }, error.status);
+    throw error;
+  }
 });
 
 api.post("/cases/from-images", async (c) => {

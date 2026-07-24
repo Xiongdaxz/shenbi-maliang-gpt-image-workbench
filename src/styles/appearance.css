@@ -105,6 +105,36 @@ html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance=
   background: var(--app-surface-soft);
 }
 
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .chat-branch-switch {
+  border-color: var(--app-border-strong);
+  background: color-mix(in srgb, var(--app-surface-raised) 90%, transparent);
+  box-shadow:
+    0 12px 28px color-mix(in srgb, var(--app-text) 12%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--app-text-inverted) 28%, transparent);
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .chat-branch-switch button {
+  color: var(--app-text);
+  background: var(--app-active-bg);
+  box-shadow: inset 0 0 0 1px var(--app-border);
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .chat-branch-switch button:hover {
+  color: var(--app-text);
+  background: var(--app-hover-bg);
+  box-shadow:
+    0 8px 18px color-mix(in srgb, var(--app-text) 10%, transparent),
+    inset 0 0 0 1px var(--app-border-strong);
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .chat-branch-switch button.active {
+  color: var(--button-primary-text);
+  background: var(--button-primary-bg);
+  box-shadow:
+    0 9px 20px color-mix(in srgb, var(--button-primary-bg) 30%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 24%, transparent);
+}
+
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) body {
   background: var(--app-bg);
   color: var(--app-text);

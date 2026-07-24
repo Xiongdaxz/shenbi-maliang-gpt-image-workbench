@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { serveStatic } from "hono/bun";
 import {
@@ -15,6 +15,15 @@ import {
 } from "./constants";
 import { audit } from "./auditLog";
 import { defaultTeamId } from "./categories";
+import {
+  CategoryManagementError,
+  createManagedContentCategory,
+  deleteManagedContentCategory,
+  listManagedContentCategories,
+  mergeManagedContentCategory,
+  renameManagedContentCategory,
+  reorderManagedContentCategories
+} from "./categoryManagement";
 import { appDb, configDb, getAll, getOne, run } from "./db";
 import { globalSwitches, saveGlobalSwitch, type GlobalSwitchType } from "./globalSwitches";
 import { mimeTypeFromPath } from "./imageFiles";
@@ -72,6 +81,11 @@ import { registerCaseRoutes } from "./caseRoutes";
 import { registerChangelogRoutes } from "./changelogRoutes";
 import { registerFileRoutes } from "./fileRoutes";
 import { registerImageRoutes, startInterruptedImageJobRecovery } from "./imageRoutes";
+import {
+  migrateEncryptedImageTaskSounds,
+  migrateLegacyImageTaskSounds,
+  registerImageTaskSoundRoutes
+} from "./imageTaskSounds";
 import { invalidateLibraryFacetCache, registerLibraryRoutes } from "./libraryRoutes";
 import { registerPromptOptimizerRoutes } from "./promptOptimizerRoutes";
 import { registerPromptColorSchemeRoutes } from "./promptColorSchemeRoutes";
@@ -101,6 +115,8 @@ seedCases();
 seedPromptTemplates();
 seedProvider();
 await migrateExistingFilesToSecureStorage();
+await migrateEncryptedImageTaskSounds();
+await migrateLegacyImageTaskSounds();
 
 const api = new Hono();
 
@@ -292,6 +308,8 @@ registerPromptColorSchemeRoutes(api);
 registerPromptTemplateRoutes(api);
 
 registerImageRoutes(api);
+
+registerImageTaskSoundRoutes(api);
 
 registerAssetRoutes(api);
 
@@ -748,6 +766,103 @@ api.delete("/config/users/:id", async (c) => {
   const deleted = await deleteUserAccount(userId);
   if (!deleted) return c.json({ error: "账号不存在" }, 404);
   return c.json({ ok: true });
+});
+
+function requestedContentCategoryType(value: unknown) {
+  const type = String(value ?? "").trim();
+  return type === "case" || type === "asset" ? type : null;
+}
+
+function contentCategoryMutationError(c: Context, error: unknown) {
+  if (error instanceof CategoryManagementError) return c.json({ error: error.message }, error.status);
+  throw error;
+}
+
+api.get("/config/content-categories", (c) => {
+  const blocked = requireConfig(c);
+  if (blocked) return blocked;
+  const type = requestedContentCategoryType(c.req.query("type"));
+  if (!type) return c.json({ error: "分类类型无效" }, 400);
+  return c.json({ categories: listManagedContentCategories(appDb, type) });
+});
+
+api.post("/config/content-categories", async (c) => {
+  const blocked = requireConfig(c);
+  if (blocked) return blocked;
+  const body = await c.req.json().catch(() => ({}));
+  const type = requestedContentCategoryType(body.type);
+  if (!type) return c.json({ error: "分类类型无效" }, 400);
+  try {
+    const category = createManagedContentCategory(appDb, type, body.name);
+    invalidateLibraryFacetCache(type === "case" ? "cases" : "assets");
+    audit("content_category.create", { categoryId: category.id, type, name: category.name });
+    return c.json({ category });
+  } catch (error) {
+    return contentCategoryMutationError(c, error);
+  }
+});
+
+api.patch("/config/content-categories/:categoryId", async (c) => {
+  const blocked = requireConfig(c);
+  if (blocked) return blocked;
+  const body = await c.req.json().catch(() => ({}));
+  try {
+    const category = renameManagedContentCategory(appDb, c.req.param("categoryId"), body.name);
+    invalidateLibraryFacetCache(category.type === "case" ? "cases" : "assets");
+    audit("content_category.rename", { categoryId: category.id, type: category.type, name: category.name });
+    return c.json({ category });
+  } catch (error) {
+    return contentCategoryMutationError(c, error);
+  }
+});
+
+api.put("/config/content-categories/reorder", async (c) => {
+  const blocked = requireConfig(c);
+  if (blocked) return blocked;
+  const body = await c.req.json().catch(() => ({}));
+  const type = requestedContentCategoryType(body.type);
+  if (!type) return c.json({ error: "分类类型无效" }, 400);
+  try {
+    const categories = reorderManagedContentCategories(appDb, type, body.orderedIds);
+    invalidateLibraryFacetCache(type === "case" ? "cases" : "assets");
+    audit("content_category.reorder", { type, orderedIds: categories.map((category) => category.id) });
+    return c.json({ categories });
+  } catch (error) {
+    return contentCategoryMutationError(c, error);
+  }
+});
+
+api.post("/config/content-categories/:categoryId/merge", async (c) => {
+  const blocked = requireConfig(c);
+  if (blocked) return blocked;
+  const body = await c.req.json().catch(() => ({}));
+  try {
+    const result = mergeManagedContentCategory(appDb, c.req.param("categoryId"), String(body.targetId ?? "").trim());
+    invalidateLibraryFacetCache(result.type === "case" ? "cases" : "assets");
+    audit("content_category.merge", {
+      type: result.type,
+      sourceId: result.sourceId,
+      targetId: result.targetId,
+      migratedItemCount: result.migratedItemCount,
+      migratedSuggestionCount: result.migratedSuggestionCount
+    });
+    return c.json(result);
+  } catch (error) {
+    return contentCategoryMutationError(c, error);
+  }
+});
+
+api.delete("/config/content-categories/:categoryId", (c) => {
+  const blocked = requireConfig(c);
+  if (blocked) return blocked;
+  try {
+    const result = deleteManagedContentCategory(appDb, c.req.param("categoryId"));
+    invalidateLibraryFacetCache(result.type === "case" ? "cases" : "assets");
+    audit("content_category.delete", { categoryId: result.id, type: result.type });
+    return c.json(result);
+  } catch (error) {
+    return contentCategoryMutationError(c, error);
+  }
 });
 
 type ConfigAssetReviewRow = AssetRow & {

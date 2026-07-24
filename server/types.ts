@@ -178,8 +178,26 @@ export type UserPreferencesRow = {
   edit_suggestions_enabled: number;
   edit_suggestion_tone: string;
   auto_upload_pasted_assets: number;
+  image_task_sound_enabled: number;
+  image_task_browser_notification_enabled: number;
+  image_task_sound_volume: number;
+  image_task_success_sound_id: string;
+  image_task_failure_sound_id: string;
   prompt_optimize_styles_json: string;
   prompt_optimize_custom_instruction: string;
+  updated_at: string;
+};
+
+export type ImageTaskSoundRow = {
+  id: string;
+  name: string;
+  path: string;
+  original_file_name: string;
+  mime_type: string;
+  size: number;
+  sha256: string;
+  enabled: number;
+  created_at: string;
   updated_at: string;
 };
 

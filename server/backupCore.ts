@@ -3,6 +3,7 @@ import { mkdir, readdir, rename, rm, stat, unlink, writeFile } from "node:fs/pro
 import { once } from "node:events";
 import path from "node:path";
 import type { Writable } from "node:stream";
+import type { Database } from "bun:sqlite";
 import { audit } from "./auditLog";
 import { appDb, configDb, getAll, getOne, run } from "./db";
 import { APP_DB_PATH, CONFIG_DB_PATH, DATA_DIR, IMAGE_MASK_DIR, ROOT, SECURE_FILES_DIR } from "./paths";
@@ -320,7 +321,7 @@ function cleanDataRelativeFilePath(value: string | null | undefined) {
   return cleanPath;
 }
 
-function referencedLegacyFilePaths() {
+export function referencedLegacyFilePaths(appDatabase: Database = appDb, configDatabase: Database = configDb) {
   const paths = new Set<string>();
   const appQueries = [
     "select path from images where path not like 'files/secure/%'",
@@ -331,17 +332,20 @@ function referencedLegacyFilePaths() {
     "select path from user_avatar_history where path <> '' and path not like 'files/secure/%'"
   ];
   for (const sql of appQueries) {
-    for (const row of getAll<{ path: string }>(appDb, sql)) {
+    for (const row of getAll<{ path: string }>(appDatabase, sql)) {
       const cleanPath = cleanDataRelativeFilePath(row.path);
       if (cleanPath) paths.add(cleanPath);
     }
   }
-  for (const row of getAll<{ path: string }>(
-    configDb,
-    "select path from branding_assets where path <> '' and path not like 'files/secure/%'"
-  )) {
-    const cleanPath = cleanDataRelativeFilePath(row.path);
-    if (cleanPath) paths.add(cleanPath);
+  const configQueries = [
+    "select path from branding_assets where path <> '' and path not like 'files/secure/%'",
+    "select path from image_task_sounds where path <> '' and path not like 'files/secure/%'"
+  ];
+  for (const sql of configQueries) {
+    for (const row of getAll<{ path: string }>(configDatabase, sql)) {
+      const cleanPath = cleanDataRelativeFilePath(row.path);
+      if (cleanPath) paths.add(cleanPath);
+    }
   }
   return Array.from(paths).sort();
 }

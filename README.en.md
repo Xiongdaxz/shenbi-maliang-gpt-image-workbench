@@ -192,6 +192,8 @@ This project references the following open-source projects for ChatGPT Web image
 - [chatgpt2api](https://github.com/basketikun/chatgpt2api)
 - [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI)
 
+The repository and release packages do not include image-task notification sounds. Administrators can open Mixkit or another asset site from Sound Management and upload audio locally. Runtime-uploaded third-party audio is outside this project's MIT license, and operators are responsible for confirming the applicable asset license.
+
 ## ⚠️ Disclaimer
 
 This project is intended for learning, research, technical exchange, internal technical validation, private deployment, and customization reference. It does not provide any official model service, account quota, API key, or commercial service commitment.

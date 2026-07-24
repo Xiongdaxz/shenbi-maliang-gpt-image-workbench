@@ -23,6 +23,7 @@ import { isUncategorizedCaseCategory } from "../lib/cases";
 import { buildGalleryCaseItems, caseMaterialFromCaseItem, visibleCaseStyleNames, type GalleryCaseItem } from "../lib/caseMaterials";
 import { cx } from "../lib/cx";
 import { IMAGE_PAGE_SIZE } from "../lib/pagination";
+import { resolvePendingPreviewRequest, type PendingPreviewRequest } from "../lib/paginatedPreviewNavigation";
 import { useInfinitePageLoader } from "../hooks/useInfinitePageLoader";
 import { useCursorLibraryQuery } from "../hooks/useCursorLibraryQuery";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
@@ -256,6 +257,7 @@ export function CasesPage({
   const [editTarget, setEditTarget] = useState<GalleryCaseItem | null>(null);
   const [assetCaseTarget, setAssetCaseTarget] = useState<GalleryCaseItem | null>(null);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [pendingPreviewRequest, setPendingPreviewRequest] = useState<PendingPreviewRequest | null>(null);
   const [promptReferenceOpen, setPromptReferenceOpen] = useState(false);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [filterDisplayMode, setFilterDisplayMode] = useLibraryFilterDisplayMode();
@@ -343,6 +345,7 @@ export function CasesPage({
   const deleteCase = useMutation({
     mutationFn: (caseId: string) => api.deleteCase(caseId),
     onSuccess: (_, caseId) => {
+      setPendingPreviewRequest(null);
       setPreviewIndex((value) => {
         if (value === null) return null;
         const nextItems = visibleItems.filter((item) => item.id !== caseId);
@@ -533,6 +536,14 @@ export function CasesPage({
       ? previewBaseItems.map((item) => (item.groupId || item.id) === (previewTarget.groupId || previewTarget.id) ? previewTarget : item)
       : previewBaseItems;
   }, [previewBaseItems, previewCase.data?.caseItem]);
+  const previewItemCount = Math.max(
+    previewSourceItems.length,
+    cases.data?.pages[0]?.pageInfo.total ?? previewSourceItems.length
+  );
+  const previewNavigationSourceKey = useMemo(
+    () => ["cases", selectedCategoryIds.join(","), mineOnly, favoriteOnly, debouncedKeyword, openCaseId].join("\u0000"),
+    [debouncedKeyword, favoriteOnly, mineOnly, openCaseId, selectedCategoryIds]
+  );
   const caseFilterCounts = useMemo(() => {
     const serverCounts = caseFacets.data;
     if (serverCounts) return { ...serverCounts, favorite: serverCounts.favorite ?? 0, byCategory: new Map(Object.entries(serverCounts.byCategory)) };
@@ -635,6 +646,85 @@ export function CasesPage({
   }, [previewIndex, previewSourceItems.length]);
 
   useEffect(() => {
+    const targetIndex = resolvePendingPreviewRequest(pendingPreviewRequest, {
+      sourceKey: previewNavigationSourceKey,
+      itemCount: previewSourceItems.length,
+      hasNextPage: Boolean(cases.hasNextPage),
+      isFetchingNextPage: cases.isFetchingNextPage,
+      isFetchNextPageError: cases.isFetchNextPageError,
+      errorUpdateCount: cases.errorUpdateCount
+    });
+    if (targetIndex === undefined) return;
+    if (targetIndex !== null) setPreviewIndex(targetIndex);
+    setPendingPreviewRequest(null);
+  }, [
+    cases.hasNextPage,
+    cases.errorUpdateCount,
+    cases.isFetchNextPageError,
+    cases.isFetchingNextPage,
+    pendingPreviewRequest,
+    previewNavigationSourceKey,
+    previewSourceItems.length
+  ]);
+
+  useEffect(() => {
+    if (
+      previewIndex === null ||
+      !cases.hasNextPage ||
+      cases.isFetchNextPageError ||
+      cases.isFetchingNextPage ||
+      previewIndex < previewSourceItems.length - 3
+    ) return;
+    void cases.fetchNextPage();
+  }, [
+    cases.fetchNextPage,
+    cases.hasNextPage,
+    cases.isFetchNextPageError,
+    cases.isFetchingNextPage,
+    previewIndex,
+    previewSourceItems.length
+  ]);
+
+  const selectPreviewIndex = useCallback((index: number | null) => {
+    setPendingPreviewRequest(null);
+    setPreviewIndex(index);
+  }, []);
+
+  const navigatePreviewNext = useCallback(() => {
+    if (previewIndex === null) return;
+    const nextIndex = previewIndex + 1;
+    if (nextIndex < previewSourceItems.length) {
+      selectPreviewIndex(nextIndex);
+      return;
+    }
+    if (!cases.hasNextPage) {
+      setPendingPreviewRequest(null);
+      return;
+    }
+    setPendingPreviewRequest({
+      index: nextIndex,
+      sourceKey: previewNavigationSourceKey,
+      errorUpdateCount: cases.errorUpdateCount
+    });
+    if (!cases.isFetchingNextPage) void cases.fetchNextPage();
+  }, [
+    cases.fetchNextPage,
+    cases.hasNextPage,
+    cases.errorUpdateCount,
+    cases.isFetchingNextPage,
+    previewIndex,
+    previewNavigationSourceKey,
+    previewSourceItems.length,
+    selectPreviewIndex
+  ]);
+
+  const navigatePreviewPrevious = useCallback(() => {
+    setPendingPreviewRequest(null);
+    if (previewIndex === null || previewIndex <= 0) return;
+    setPreviewIndex(previewIndex - 1);
+  }, [previewIndex]);
+
+  useEffect(() => {
     setKeyword((current) => (current === urlKeyword ? current : urlKeyword));
   }, [urlKeyword]);
 
@@ -642,8 +732,8 @@ export function CasesPage({
     if (!openCaseId || !openCase.data?.caseItem) return;
     const deepLinkTargetId = openCase.data.caseItem.groupId || openCase.data.caseItem.id;
     const nextIndex = previewSourceItems.findIndex((item) => (item.groupId || item.id) === deepLinkTargetId);
-    if (nextIndex >= 0) setPreviewIndex(nextIndex);
-  }, [openCase.data?.caseItem, openCaseId, previewSourceItems]);
+    if (nextIndex >= 0) selectPreviewIndex(nextIndex);
+  }, [openCase.data?.caseItem, openCaseId, previewSourceItems, selectPreviewIndex]);
 
   useEffect(() => {
     if (!openCaseId || !openCase.isError || failedOpenCaseRef.current === openCaseId) return;
@@ -772,7 +862,7 @@ export function CasesPage({
           return (
             <article className="case-card" key={item.id}>
               <div className="case-image-frame" title={(item.imageCount ?? 1) > 1 ? t("pages.cases.groupImage") : undefined}>
-                <button className="case-image-btn" type="button" onClick={() => setPreviewIndex(index)}>
+                <button className="case-image-btn" type="button" onClick={() => selectPreviewIndex(index)}>
                   <SkeletonImage
                     src={item.imageThumbnailUrl ?? item.imagePreviewUrl ?? item.imageUrl}
                     alt={item.title}
@@ -887,9 +977,14 @@ export function CasesPage({
           initialImageSource="original"
           wheelMode={imagePreviewWheelMode}
           suppressStableScrollbarGutter
-          onIndexChange={setPreviewIndex}
+          navigationItemCount={previewItemCount}
+          canNavigateNext={previewIndex + 1 < previewItemCount}
+          canNavigatePrevious={previewIndex > 0}
+          onNavigateNext={navigatePreviewNext}
+          onNavigatePrevious={navigatePreviewPrevious}
+          onIndexChange={selectPreviewIndex}
           onClose={() => {
-            setPreviewIndex(null);
+            selectPreviewIndex(null);
             if (openCaseId) clearOpenCase();
           }}
           renderActions={(item) => (

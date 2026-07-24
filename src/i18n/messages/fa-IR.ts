@@ -90,6 +90,8 @@ const messages: Messages = {
   "config.nav.statistics": "آمار",
   "config.nav.users": "کاربران",
   "config.nav.teams": "تیم ها",
+  "config.nav.contentCategories": "مدیریت دسته‌بندی‌ها",
+  "config.nav.soundManagement": "مدیریت صداهای اعلان",
   "config.nav.assetReviews": "بررسی منابع",
   "config.nav.caseReviews": "بررسی الهام",
   "config.nav.starterCopy": "متن شروع",

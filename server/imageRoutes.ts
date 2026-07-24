@@ -155,6 +155,12 @@ function emitJobStatus(
 ) {
   const normalizedSessionId = String(sessionId ?? "").trim();
   if (!normalizedSessionId) return;
+  const storedTimestamp = getOne<{ updated_at: string }>(
+    appDb,
+    "select updated_at from image_jobs where id = ? and status = ?",
+    jobId,
+    status
+  )?.updated_at?.trim();
   emitImageJobEvent(userId, {
     jobId,
     sessionId: normalizedSessionId,
@@ -162,7 +168,7 @@ function emitJobStatus(
     type,
     ...(details.resultImageId !== undefined ? { resultImageId: details.resultImageId } : {}),
     ...(details.error !== undefined ? { error: details.error } : {}),
-    updatedAt: now()
+    updatedAt: storedTimestamp || now()
   });
 }
 

@@ -169,6 +169,62 @@ describe("shared message projection", () => {
     ]);
   });
 
+  test("preserves only localized branch metadata for multi-branch shares", () => {
+    const metadata = safeSharedMessageMetadata(
+      {
+        mode: "edit",
+        jobId: "job_private",
+        branchId: "branch_private",
+        parentBranchId: "main",
+        branchForkMessageId: "msg_private_root",
+        branchRootMessageId: "msg_private_root",
+        revisionRootId: "msg_private_root",
+        editedMessageId: "msg_private_old"
+      },
+      "shared-job-2",
+      {
+        branchId: (value) => ({ main: "main", branch_private: "shared-branch-1" })[value] ?? "",
+        messageId: (value) => ({ msg_private_root: "shared-message-1" })[value] ?? ""
+      }
+    );
+
+    expect(metadata).toEqual({
+      mode: "edit",
+      jobId: "shared-job-2",
+      branchId: "shared-branch-1",
+      parentBranchId: "main",
+      branchForkMessageId: "shared-message-1",
+      branchRootMessageId: "shared-message-1",
+      revisionRootId: "shared-message-1"
+    });
+    expect(JSON.stringify(metadata)).not.toContain("private");
+
+    const baseMessage = {
+      content: "",
+      imageId: null,
+      imageUrl: null,
+      imagePrompt: null,
+      imageKind: null,
+      imageSize: null,
+      imageQuality: null,
+      imageProviderId: null,
+      parentImageId: null,
+      createdAt: "2026-07-17T00:00:00.000Z"
+    };
+    const messages = [
+      { ...baseMessage, id: "shared-message-1", role: "user", metadata: { revisionRootId: "shared-message-1", jobId: "shared-job-1" } },
+      { ...baseMessage, id: "shared-message-2", role: "assistant", metadata: { revisionRootId: "shared-message-1", jobId: "shared-job-1" } },
+      { ...baseMessage, id: "shared-message-3", role: "user", metadata },
+      { ...baseMessage, id: "shared-message-4", role: "assistant", metadata }
+    ] as Message[];
+    const renderState = buildChatRenderState(messages, "main");
+    const thread = renderState.items.find((item) => item.type === "thread");
+    expect(thread?.type).toBe("thread");
+    if (thread?.type === "thread") {
+      expect(thread.versions.map((revision) => revision.user.id)).toEqual(["shared-message-1", "shared-message-3"]);
+    }
+  });
+
   test("treats only boolean hideReference as an authorization flag", () => {
     expect(sharedMessageHidesReferences({ hideReference: true })).toBe(true);
     expect(sharedMessageHidesReferences(JSON.stringify({ hideReference: true }))).toBe(true);

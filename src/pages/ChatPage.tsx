@@ -6,6 +6,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
 import { AddAssetFromImageModal } from "../components/AddAssetFromImageModal";
 import { CaseMaterialPickerModal } from "../components/CaseMaterialPickerModal";
+import { ChatBranchSwitch } from "../components/chat/ChatBranchSwitch";
 import { ChatComposer } from "../components/chat/ChatComposer";
 import { ConversationView } from "../components/chat/ConversationView";
 import { FeatureIntroModal } from "../components/FeatureIntroModal";
@@ -528,6 +529,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
   const [restoreConflict, setRestoreConflict] = useState<RestoreConflictState | null>(null);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [createdShareLink, setCreatedShareLink] = useState<SessionShareLink | null>(null);
+  const [shareAllBranches, setShareAllBranches] = useState(true);
   const currentSessionIdRef = useRef(sessionId);
   currentSessionIdRef.current = sessionId;
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -955,10 +957,12 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
     }
   });
   const createShareLink = useMutation({
-    mutationFn: (request: { sessionId: string; messageIds: string[] }) => api.createSessionShareLink(request.sessionId, request.messageIds),
+    mutationFn: (request: { sessionId: string; messageIds: string[]; includeBranches: boolean; previousIncludeBranches?: boolean }) =>
+      api.createSessionShareLink(request.sessionId, request.messageIds, request.includeBranches),
     onSuccess: ({ shareLink }, request) => {
       queryClient.invalidateQueries({ queryKey: ["session-share-links"] });
       if (currentSessionIdRef.current !== request.sessionId) return;
+      setShareAllBranches(request.includeBranches);
       setCreatedShareLink(shareLink);
       setShareDialogOpen(true);
       void copyTextToClipboard(absoluteShareUrl(shareLink), { requireGrantedPermission: true }).then((copied) => {
@@ -968,6 +972,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
     },
     onError: (shareError, request) => {
       if (currentSessionIdRef.current !== request.sessionId) return;
+      if (request.previousIncludeBranches !== undefined) setShareAllBranches(request.previousIncludeBranches);
       showToast(shareError instanceof Error ? shareError.message : t("shareDialog.createFailed"), "error");
     }
   });
@@ -1494,6 +1499,11 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
   const serverMessages = messages.data?.messages ?? [];
   const serverRenderState = useMemo(() => buildChatRenderState(serverMessages, activeBranchId), [activeBranchId, serverMessages]);
   const shareableMessageIds = useMemo(() => serverRenderState.visibleMessages.map((message) => message.id), [serverRenderState.visibleMessages]);
+  const allShareableMessageIds = useMemo(() => serverMessages.map((message) => message.id), [serverMessages]);
+  const shareBranchCount = useMemo(
+    () => new Set(serverMessages.map((message) => String(message.metadata.branchId ?? "").trim() || MAIN_CHAT_BRANCH_ID)).size,
+    [serverMessages]
+  );
   const selectedBranchId = activeBranchId ?? serverRenderState.activeBranchId;
   const { currentViewSubmitting, loadingTitle, messageList, visibleLoadingMode, visiblePendingUserMessage } = useChatViewState({
     currentScopeBusy,
@@ -2173,10 +2183,16 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
               data-tooltip={t("shareDialog.share")}
               disabled={currentScopeBusy || messages.isLoading || shareLinkPendingForCurrentSession || shareableMessageIds.length === 0}
               onClick={() => {
+                const includeBranches = shareBranchCount > 1;
                 setCreatedShareLink(null);
+                setShareAllBranches(includeBranches);
                 setShareDialogOpen(false);
                 createShareLink.reset();
-                createShareLink.mutate({ sessionId, messageIds: shareableMessageIds });
+                createShareLink.mutate({
+                  sessionId,
+                  messageIds: includeBranches ? allShareableMessageIds : shareableMessageIds,
+                  includeBranches
+                });
               }}
             >
               <Share size={17} />
@@ -2198,21 +2214,12 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
             ) : null}
           </div>
           {branchSwitchOptions.length > 1 ? (
-            <div className="chat-branch-switch" aria-label={t("chat.branchSwitch")}>
-              {branchSwitchOptions.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  className={cx(option.active && "active")}
-                  onClick={() => setActiveBranchId(option.id)}
-                  aria-label={t("chat.switchBranch", { label: option.label })}
-                  aria-pressed={option.active}
-                  title={option.title}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
+            <ChatBranchSwitch
+              ariaLabel={t("chat.branchSwitch")}
+              options={branchSwitchOptions}
+              optionAriaLabel={(option) => t("chat.switchBranch", { label: option.label })}
+              onSelect={setActiveBranchId}
+            />
           ) : null}
         </div>
       ) : null}
@@ -2328,6 +2335,20 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
       <ShareConversationDialog
         open={shareDialogOpen && createdShareLink?.sessionId === sessionId}
         link={createdShareLink}
+        includeAllBranches={shareAllBranches}
+        branchCount={shareBranchCount}
+        pending={shareLinkPendingForCurrentSession}
+        onIncludeAllBranchesChange={(includeBranches) => {
+          if (!sessionId) return;
+          const previousIncludeBranches = shareAllBranches;
+          setShareAllBranches(includeBranches);
+          createShareLink.mutate({
+            sessionId,
+            messageIds: includeBranches ? allShareableMessageIds : shareableMessageIds,
+            includeBranches,
+            previousIncludeBranches
+          });
+        }}
         onClose={() => setShareDialogOpen(false)}
       />
       <CaseMaterialPickerModal

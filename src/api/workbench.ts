@@ -568,6 +568,7 @@ async function translatePromptTemplateStream(
 
 export const api = {
   me: () => request<{ user: User | null }>("/api/auth/me"),
+  imageTaskSounds: () => request<{ sounds: import("../types").ImageTaskSound[] }>("/api/image-task-sounds"),
   branding: () => request<PublicBranding>("/api/branding"),
   loginAssets: () => request<LoginAssets>("/api/login-assets"),
   registrationStatus: () => request<{ enabled: boolean }>("/api/auth/registration-status"),
@@ -708,10 +709,10 @@ export const api = {
     }),
   messages: (sessionId: string, init?: RequestInit) =>
     request<{ messages: Message[] }>(`/api/sessions/${sessionId}/messages`, init),
-  createSessionShareLink: (sessionId: string, messageIds: string[]) =>
+  createSessionShareLink: (sessionId: string, messageIds: string[], includeBranches = false) =>
     request<{ shareLink: SessionShareLink }>(`/api/sessions/${encodeURIComponent(sessionId)}/share-links`, {
       method: "POST",
-      body: JSON.stringify({ messageIds })
+      body: JSON.stringify({ messageIds, includeBranches })
     }),
   sessionShareLinks: (params?: Pick<PageQuery, "limit" | "offset">, init?: RequestInit) =>
     request<PagedResponse<{ links: SessionShareLink[] }>>(

@@ -522,6 +522,183 @@
   padding: 8px 12px;
 }
 
+.settings-sound-list {
+  gap: 6px;
+}
+
+.settings-sound-empty {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px dashed var(--app-border-strong);
+  border-radius: 10px;
+  color: var(--app-muted);
+  background: var(--app-surface-subtle);
+  font-size: 13px;
+}
+
+.settings-sound-empty svg {
+  flex: 0 0 auto;
+}
+
+.settings-sound-volume-row {
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+}
+
+.settings-sound-volume-control {
+  display: grid;
+  grid-template-columns: 18px minmax(130px, 1fr) 40px;
+  align-items: center;
+  gap: 10px;
+  color: var(--app-muted);
+}
+
+.settings-sound-volume-control input {
+  width: 100%;
+  min-width: 0;
+  height: 18px;
+  margin: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
+  direction: ltr;
+  cursor: pointer;
+}
+
+.settings-sound-volume-control input::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--button-primary-bg) 0 var(--settings-sound-volume), var(--app-border-strong) var(--settings-sound-volume) 100%);
+}
+
+.settings-sound-volume-control input::-webkit-slider-thumb {
+  width: 15px;
+  height: 15px;
+  margin-top: -5.5px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--button-primary-bg);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.22);
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.settings-sound-volume-control input::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--app-border-strong);
+}
+
+.settings-sound-volume-control input::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--button-primary-bg);
+}
+
+.settings-sound-volume-control input::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--button-primary-bg);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.22);
+  cursor: pointer;
+}
+
+.settings-sound-volume-control output {
+  color: var(--app-text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+.settings-sound-tone-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.settings-sound-tone-select .custom-select-trigger {
+  min-width: 0;
+}
+
+.settings-sound-tone-menu .settings-sound-tone-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  align-items: stretch;
+  border-radius: 7px;
+}
+
+.settings-sound-tone-menu .settings-sound-tone-option:hover {
+  background: var(--button-default-hover-bg);
+}
+
+.settings-sound-tone-menu .settings-sound-tone-option.active {
+  background: var(--control-selected-bg);
+}
+
+.settings-sound-tone-menu .settings-sound-tone-option > .settings-sound-tone-option-choice {
+  min-height: 38px;
+  background: transparent;
+}
+
+.settings-sound-tone-menu .settings-sound-tone-option > .settings-sound-tone-option-choice:hover,
+.settings-sound-tone-menu .settings-sound-tone-option > .settings-sound-tone-option-choice.active {
+  background: transparent;
+}
+
+.settings-sound-tone-menu .settings-sound-tone-option-choice {
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr);
+  padding-right: 6px;
+}
+
+.settings-sound-tone-menu .settings-sound-tone-preview,
+.settings-sound-tone-menu .settings-sound-tone-selected {
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  align-self: center;
+  justify-self: center;
+  display: grid;
+  grid-template-columns: 1fr;
+  place-items: center;
+  padding: 0;
+  color: var(--app-muted);
+  border-radius: 50%;
+}
+
+.settings-sound-tone-menu .settings-sound-tone-selected {
+  color: var(--app-text);
+}
+
+.settings-sound-tone-menu .settings-sound-tone-preview:hover,
+.settings-sound-tone-menu .settings-sound-tone-preview.playing {
+  background: var(--app-surface-soft);
+  color: var(--app-text);
+}
+
+.settings-sound-tone-stop-icon {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+.settings-sound-tone-play-icon {
+  display: block;
+  transform: translateX(1px);
+}
+
+html[data-locale-dir="rtl"] .settings-content-view.is-sound-section {
+  direction: rtl;
+}
+
 .settings-row > .settings-account-main {
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr);
@@ -931,10 +1108,9 @@
   z-index: 4;
   top: calc(100% + 7px);
   right: 0;
-  width: max-content;
-  min-width: 210px;
+  width: 176px;
   border: 1px solid var(--app-border);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--app-surface-raised);
   box-shadow: var(--app-archived-modal-shadow);
   padding: 6px;
@@ -942,15 +1118,24 @@
 
 .shared-links-more-menu button {
   width: 100%;
-  display: flex;
+  min-height: 36px;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   border: 0;
   border-radius: 8px;
   background: transparent;
   color: var(--app-danger);
-  padding: 9px 10px;
+  padding: 8px 9px;
+  font-size: 13px;
+  line-height: 18px;
   text-align: left;
+}
+
+.shared-links-more-menu button svg {
+  display: block;
+  justify-self: center;
 }
 
 .shared-links-more-menu button:hover {
@@ -963,6 +1148,18 @@
 
 .shared-link-actions {
   gap: 0;
+}
+
+.shared-link-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.shared-link-message-count {
+  color: var(--app-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .shared-link-title {
@@ -1495,6 +1692,18 @@
   .settings-prompt-styles-entry {
     grid-template-columns: 1fr;
     justify-items: stretch;
+  }
+
+  .settings-sound-volume-row {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-sound-volume-control {
+    width: 100%;
+  }
+
+  .settings-sound-tone-row {
+    grid-template-columns: 1fr;
   }
 
   .appearance-mode-control {

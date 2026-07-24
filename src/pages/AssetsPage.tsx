@@ -19,6 +19,7 @@ import { assetSpaceLabel, type AssetUploadMode } from "../lib/assets";
 import { cx } from "../lib/cx";
 import { imageCreatedTime } from "../lib/imageTimeline";
 import { IMAGE_PAGE_SIZE } from "../lib/pagination";
+import { resolvePendingPreviewRequest, type PendingPreviewRequest } from "../lib/paginatedPreviewNavigation";
 import { useInfinitePageLoader } from "../hooks/useInfinitePageLoader";
 import { useCursorLibraryQuery } from "../hooks/useCursorLibraryQuery";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
@@ -79,6 +80,7 @@ export function AssetsPage({
   const [editTarget, setEditTarget] = useState<AssetItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AssetItem | null>(null);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [pendingPreviewRequest, setPendingPreviewRequest] = useState<PendingPreviewRequest | null>(null);
   const [filterDisplayMode, setFilterDisplayMode] = useLibraryFilterDisplayMode();
   const clearOpenAsset = useCallback(() => {
     const nextParams = new URLSearchParams(searchParams);
@@ -178,6 +180,7 @@ export function AssetsPage({
   const deleteAsset = useMutation({
     mutationFn: (assetId: string) => api.deleteAsset(assetId),
     onSuccess: (_, assetId) => {
+      setPendingPreviewRequest(null);
       setPreviewIndex((value) => {
         if (value === null) return null;
         const nextItems = visibleAssets.filter((item) => item.id !== assetId);
@@ -254,6 +257,14 @@ export function AssetsPage({
       ? previewBaseAssets.map((asset) => asset.id === detailedAsset.id ? detailedAsset : asset)
       : previewBaseAssets;
   }, [previewAsset.data?.asset, previewBaseAssets]);
+  const previewItemCount = Math.max(
+    previewSourceAssets.length,
+    assets.data?.pages[0]?.pageInfo.total ?? previewSourceAssets.length
+  );
+  const previewNavigationSourceKey = useMemo(
+    () => ["assets", spaceFilter, selectedCategoryIds.join(","), debouncedKeyword, openAssetId].join("\u0000"),
+    [debouncedKeyword, openAssetId, selectedCategoryIds, spaceFilter]
+  );
   const assetTagFilterCounts = useMemo(() => {
     const serverCounts = assetFacets.data?.tags;
     if (serverCounts) return { all: serverCounts.all, byCategory: new Map(Object.entries(serverCounts.byCategory)) };
@@ -360,14 +371,93 @@ export function AssetsPage({
   }, [previewIndex, previewSourceAssets.length]);
 
   useEffect(() => {
+    const targetIndex = resolvePendingPreviewRequest(pendingPreviewRequest, {
+      sourceKey: previewNavigationSourceKey,
+      itemCount: previewSourceAssets.length,
+      hasNextPage: Boolean(assets.hasNextPage),
+      isFetchingNextPage: assets.isFetchingNextPage,
+      isFetchNextPageError: assets.isFetchNextPageError,
+      errorUpdateCount: assets.errorUpdateCount
+    });
+    if (targetIndex === undefined) return;
+    if (targetIndex !== null) setPreviewIndex(targetIndex);
+    setPendingPreviewRequest(null);
+  }, [
+    assets.hasNextPage,
+    assets.errorUpdateCount,
+    assets.isFetchNextPageError,
+    assets.isFetchingNextPage,
+    pendingPreviewRequest,
+    previewNavigationSourceKey,
+    previewSourceAssets.length
+  ]);
+
+  useEffect(() => {
+    if (
+      previewIndex === null ||
+      !assets.hasNextPage ||
+      assets.isFetchNextPageError ||
+      assets.isFetchingNextPage ||
+      previewIndex < previewSourceAssets.length - 3
+    ) return;
+    void assets.fetchNextPage();
+  }, [
+    assets.fetchNextPage,
+    assets.hasNextPage,
+    assets.isFetchNextPageError,
+    assets.isFetchingNextPage,
+    previewIndex,
+    previewSourceAssets.length
+  ]);
+
+  const selectPreviewIndex = useCallback((index: number | null) => {
+    setPendingPreviewRequest(null);
+    setPreviewIndex(index);
+  }, []);
+
+  const navigatePreviewNext = useCallback(() => {
+    if (previewIndex === null) return;
+    const nextIndex = previewIndex + 1;
+    if (nextIndex < previewSourceAssets.length) {
+      selectPreviewIndex(nextIndex);
+      return;
+    }
+    if (!assets.hasNextPage) {
+      setPendingPreviewRequest(null);
+      return;
+    }
+    setPendingPreviewRequest({
+      index: nextIndex,
+      sourceKey: previewNavigationSourceKey,
+      errorUpdateCount: assets.errorUpdateCount
+    });
+    if (!assets.isFetchingNextPage) void assets.fetchNextPage();
+  }, [
+    assets.fetchNextPage,
+    assets.hasNextPage,
+    assets.errorUpdateCount,
+    assets.isFetchingNextPage,
+    previewIndex,
+    previewNavigationSourceKey,
+    previewSourceAssets.length,
+    selectPreviewIndex
+  ]);
+
+  const navigatePreviewPrevious = useCallback(() => {
+    setPendingPreviewRequest(null);
+    if (previewIndex === null || previewIndex <= 0) return;
+    setPreviewIndex(previewIndex - 1);
+  }, [previewIndex]);
+
+  useEffect(() => {
     setKeyword((current) => (current === urlKeyword ? current : urlKeyword));
   }, [urlKeyword]);
 
   useEffect(() => {
     if (!openAssetId || !openAsset.data?.asset) return;
     const nextIndex = previewSourceAssets.findIndex((asset) => asset.id === openAssetId);
-    if (nextIndex >= 0) setPreviewIndex(nextIndex);
-  }, [openAsset.data?.asset, openAssetId, previewSourceAssets]);
+    if (nextIndex >= 0) selectPreviewIndex(nextIndex);
+  }, [openAsset.data?.asset, openAssetId, previewSourceAssets, selectPreviewIndex]);
 
   useEffect(() => {
     if (!openAssetId || !openAsset.isError || failedOpenAssetRef.current === openAssetId) return;
@@ -453,7 +543,7 @@ export function AssetsPage({
         renderItem={(asset, { index, eager, highPriority }) => (
           <article className="asset-card" key={asset.id}>
             <div className="asset-image-frame">
-              <button className="asset-image-btn" type="button" onClick={() => setPreviewIndex(index)} aria-label={t("pages.assets.previewAsset", { name: asset.name })}>
+              <button className="asset-image-btn" type="button" onClick={() => selectPreviewIndex(index)} aria-label={t("pages.assets.previewAsset", { name: asset.name })}>
                 <SkeletonImage
                   className={asset.hasTransparency === true ? "image-alpha-checkerboard" : undefined}
                   src={asset.thumbnailUrl ?? asset.previewUrl ?? asset.url}
@@ -546,9 +636,14 @@ export function AssetsPage({
           wheelMode={imagePreviewWheelMode}
           suppressStableScrollbarGutter
           transparencyStatus={transparencyStatus}
-          onIndexChange={setPreviewIndex}
+          navigationItemCount={previewItemCount}
+          canNavigateNext={previewIndex + 1 < previewItemCount}
+          canNavigatePrevious={previewIndex > 0}
+          onNavigateNext={navigatePreviewNext}
+          onNavigatePrevious={navigatePreviewPrevious}
+          onIndexChange={selectPreviewIndex}
           onClose={() => {
-            setPreviewIndex(null);
+            selectPreviewIndex(null);
             if (openAssetId) clearOpenAsset();
           }}
           renderActions={(item) => (

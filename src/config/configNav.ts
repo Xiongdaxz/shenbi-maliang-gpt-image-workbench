@@ -27,9 +27,11 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Smartphone,
+  Tags,
   Trash2,
   Upload,
   Users,
+  Volume2,
   WandSparkles
 } from "lucide-react";
 
@@ -39,6 +41,8 @@ export const CONFIG_TAB_VALUES = [
   "statistics",
   "users",
   "teams",
+  "contentCategories",
+  "soundManagement",
   "assetReviews",
   "caseReviews",
   "imageAccounts",
@@ -72,6 +76,8 @@ export const CONFIG_NAV_ITEMS: ConfigNavItem[] = [
   { value: "statistics", label: "数据统计", Icon: Activity },
   { value: "users", label: "用户账号", Icon: Users },
   { value: "teams", label: "团队管理", Icon: Shield },
+  { value: "contentCategories", label: "分类管理", Icon: Tags },
+  { value: "soundManagement", label: "提示音管理", Icon: Volume2 },
   { value: "assetReviews", label: "素材审核", Icon: FolderOpen },
   { value: "caseReviews", label: "灵感审核", Icon: Lightbulb },
   { value: "imageAccounts", label: "账号池", Icon: ShieldCheck },
@@ -100,7 +106,7 @@ export const CONFIG_NAV_CATEGORIES: Array<{
 }> = [
   { value: "overview", label: "概览", items: ["statistics"] },
   { value: "members", label: "组织", items: ["users", "teams"] },
-  { value: "content", label: "内容", items: ["assetReviews", "caseReviews", "starterCopy", "changelog"] },
+  { value: "content", label: "内容", items: ["contentCategories", "soundManagement", "assetReviews", "caseReviews", "starterCopy", "changelog"] },
   { value: "generation", label: "生成", items: ["imageAccounts", "providers", "promptOptimizer", "safetyReview", "imageMode", "cpa"] },
   { value: "system", label: "系统", items: ["branding", "smtp", "sms", "backup", "proxy", "debug", "modelLogs", "requests", "audit"] }
 ];

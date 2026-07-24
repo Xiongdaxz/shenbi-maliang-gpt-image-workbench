@@ -78,12 +78,10 @@
   gap: 0;
 }
 
-.chat-page-top-actions .chat-branch-switch {
+.chat-page-top-actions .chat-branch-switch-shell {
   position: static;
   z-index: auto;
-  top: auto;
-  right: auto;
-  max-width: min(360px, calc(100vw - var(--app-sidebar-width, 260px) - 178px));
+  max-width: min(234px, calc(100vw - var(--app-sidebar-width, 260px) - 178px));
 }
 
 .chat-share-trigger {
@@ -162,15 +160,31 @@
 }
 
 .shared-conversation-heading {
+  flex: 1 1 auto;
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
   pointer-events: auto;
 }
 
+.shared-conversation-toolbar {
+  min-width: 0;
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-left: auto;
+  pointer-events: auto;
+}
+
+.shared-conversation-toolbar .chat-branch-switch-shell {
+  flex: 0 1 auto;
+  max-width: min(234px, 34vw);
+}
+
 .shared-conversation-heading h1 {
-  max-width: min(54vw, 620px);
+  max-width: min(100%, 620px);
   overflow: hidden;
   margin: 0;
   color: var(--app-text);

@@ -1,4 +1,6 @@
+import type { Database } from "bun:sqlite";
 import { appDb, getOne, run } from "./db";
+import { enabledImageTaskSoundIds } from "./imageTaskSounds";
 import type { UserPreferencesRow } from "./types";
 import { now } from "./utils";
 import {
@@ -6,6 +8,15 @@ import {
   sanitizePromptOptimizeStyleGroups,
   type PromptOptimizeStyleGroup
 } from "../src/lib/promptOptimizeStyles";
+import {
+  DEFAULT_IMAGE_TASK_FAILURE_SOUND_ID,
+  DEFAULT_IMAGE_TASK_SOUND_VOLUME,
+  DEFAULT_IMAGE_TASK_SUCCESS_SOUND_ID,
+  normalizeImageTaskSoundId,
+  normalizeImageTaskSoundVolume,
+  resolveImageTaskSoundPreferenceIds,
+  type ImageTaskSoundId
+} from "../src/lib/imageTaskSounds";
 
 export type EditSuggestionTone = "default" | "practical" | "creative" | "detail";
 export type LanguagePreference = "auto" | "zh-CN" | "zh-TW" | "en-US" | "ja-JP" | "ko-KR" | "es-ES" | "fr-FR" | "de-DE" | "pt-BR" | "ru-RU" | "fa-IR";
@@ -24,6 +35,11 @@ export type PublicUserPreferences = {
   editSuggestionsEnabled: boolean;
   editSuggestionTone: EditSuggestionTone;
   autoUploadPastedAssets: boolean;
+  imageTaskSoundEnabled: boolean;
+  imageTaskBrowserNotificationEnabled: boolean;
+  imageTaskSoundVolume: number;
+  imageTaskSuccessSoundId: ImageTaskSoundId;
+  imageTaskFailureSoundId: ImageTaskSoundId;
   promptOptimizeStyleGroups: PromptOptimizeStyleGroup[];
   promptOptimizeCustomInstruction: string;
 };
@@ -44,7 +60,12 @@ export function normalizeImagePreviewOpenMode(value: unknown): ImagePreviewOpenM
   return typeof value === "string" && IMAGE_PREVIEW_OPEN_MODES.has(value as ImagePreviewOpenMode) ? (value as ImagePreviewOpenMode) : "contain";
 }
 
-export function defaultUserPreferences(): PublicUserPreferences {
+export function defaultUserPreferences(availableSoundIds: readonly string[] = []): PublicUserPreferences {
+  const soundIds = resolveImageTaskSoundPreferenceIds(
+    DEFAULT_IMAGE_TASK_SUCCESS_SOUND_ID,
+    DEFAULT_IMAGE_TASK_FAILURE_SOUND_ID,
+    availableSoundIds
+  );
   return {
     language: "auto",
     imagePreviewWheelMode: "pan",
@@ -52,6 +73,11 @@ export function defaultUserPreferences(): PublicUserPreferences {
     editSuggestionsEnabled: true,
     editSuggestionTone: "default",
     autoUploadPastedAssets: true,
+    imageTaskSoundEnabled: true,
+    imageTaskBrowserNotificationEnabled: false,
+    imageTaskSoundVolume: DEFAULT_IMAGE_TASK_SOUND_VOLUME,
+    imageTaskSuccessSoundId: soundIds.successId,
+    imageTaskFailureSoundId: soundIds.failureId,
     promptOptimizeStyleGroups: cloneDefaultPromptOptimizeStyleGroups(),
     promptOptimizeCustomInstruction: ""
   };
@@ -67,9 +93,17 @@ function storedPromptOptimizeStyleGroups(value: string | null | undefined) {
   }
 }
 
-function publicUserPreferences(row: UserPreferencesRow | null | undefined): PublicUserPreferences {
-  const fallback = defaultUserPreferences();
+function publicUserPreferences(
+  row: UserPreferencesRow | null | undefined,
+  availableSoundIds: readonly string[]
+): PublicUserPreferences {
+  const fallback = defaultUserPreferences(availableSoundIds);
   if (!row) return fallback;
+  const soundIds = resolveImageTaskSoundPreferenceIds(
+    row.image_task_success_sound_id,
+    row.image_task_failure_sound_id,
+    availableSoundIds
+  );
   return {
     language: normalizeLanguagePreference(row.language),
     imagePreviewWheelMode: normalizeImagePreviewWheelMode(row.image_preview_wheel_mode),
@@ -77,6 +111,11 @@ function publicUserPreferences(row: UserPreferencesRow | null | undefined): Publ
     editSuggestionsEnabled: Boolean(row.edit_suggestions_enabled),
     editSuggestionTone: normalizeEditSuggestionTone(row.edit_suggestion_tone),
     autoUploadPastedAssets: row.auto_upload_pasted_assets !== 0,
+    imageTaskSoundEnabled: row.image_task_sound_enabled !== 0,
+    imageTaskBrowserNotificationEnabled: row.image_task_browser_notification_enabled !== 0,
+    imageTaskSoundVolume: normalizeImageTaskSoundVolume(row.image_task_sound_volume),
+    imageTaskSuccessSoundId: soundIds.successId,
+    imageTaskFailureSoundId: soundIds.failureId,
     promptOptimizeStyleGroups: storedPromptOptimizeStyleGroups(row.prompt_optimize_styles_json),
     promptOptimizeCustomInstruction: normalizePromptOptimizeCustomInstruction(row.prompt_optimize_custom_instruction)
   };
@@ -88,13 +127,27 @@ function normalizePromptOptimizeCustomInstruction(value: unknown) {
   return Array.from(text).slice(0, 500).join("");
 }
 
-export function userPreferences(userId: string): PublicUserPreferences {
-  const row = getOne<UserPreferencesRow>(appDb, "select * from user_preferences where user_id = ?", userId);
-  return publicUserPreferences(row);
+export function userPreferencesFromDb(
+  db: Database,
+  userId: string,
+  availableSoundIds: readonly string[] = []
+): PublicUserPreferences {
+  const row = getOne<UserPreferencesRow>(db, "select * from user_preferences where user_id = ?", userId);
+  return publicUserPreferences(row, availableSoundIds);
 }
 
-export function saveUserPreferences(userId: string, input: Record<string, unknown>) {
-  const current = userPreferences(userId);
+export function userPreferences(userId: string): PublicUserPreferences {
+  return userPreferencesFromDb(appDb, userId, enabledImageTaskSoundIds());
+}
+
+export function saveUserPreferencesToDb(
+  db: Database,
+  userId: string,
+  input: Record<string, unknown>,
+  availableSoundIds: readonly string[] = []
+) {
+  const storedRow = getOne<UserPreferencesRow>(db, "select * from user_preferences where user_id = ?", userId);
+  const current = userPreferencesFromDb(db, userId, availableSoundIds);
   const language =
     input.language === undefined ? current.language : normalizeLanguagePreference(input.language);
   const imagePreviewWheelMode =
@@ -107,6 +160,25 @@ export function saveUserPreferences(userId: string, input: Record<string, unknow
     input.editSuggestionTone === undefined ? current.editSuggestionTone : normalizeEditSuggestionTone(input.editSuggestionTone);
   const autoUploadPastedAssets =
     typeof input.autoUploadPastedAssets === "boolean" ? input.autoUploadPastedAssets : current.autoUploadPastedAssets;
+  const imageTaskSoundEnabled =
+    typeof input.imageTaskSoundEnabled === "boolean" ? input.imageTaskSoundEnabled : current.imageTaskSoundEnabled;
+  const imageTaskBrowserNotificationEnabled =
+    typeof input.imageTaskBrowserNotificationEnabled === "boolean"
+      ? input.imageTaskBrowserNotificationEnabled
+      : current.imageTaskBrowserNotificationEnabled;
+  const imageTaskSoundVolume =
+    input.imageTaskSoundVolume === undefined ? current.imageTaskSoundVolume : normalizeImageTaskSoundVolume(input.imageTaskSoundVolume);
+  const requestedSoundIds = resolveImageTaskSoundPreferenceIds(
+    input.imageTaskSuccessSoundId,
+    input.imageTaskFailureSoundId,
+    availableSoundIds
+  );
+  const storedSuccessSoundId = input.imageTaskSuccessSoundId === undefined
+    ? storedRow?.image_task_success_sound_id ?? current.imageTaskSuccessSoundId
+    : requestedSoundIds.successId;
+  const storedFailureSoundId = input.imageTaskFailureSoundId === undefined
+    ? storedRow?.image_task_failure_sound_id ?? current.imageTaskFailureSoundId
+    : requestedSoundIds.failureId;
   const promptOptimizeStyleGroups =
     input.promptOptimizeStyleGroups === undefined
       ? current.promptOptimizeStyleGroups
@@ -117,12 +189,14 @@ export function saveUserPreferences(userId: string, input: Record<string, unknow
       : normalizePromptOptimizeCustomInstruction(input.promptOptimizeCustomInstruction);
   const timestamp = now();
   run(
-    appDb,
+    db,
     `insert into user_preferences (
       user_id, language, image_preview_wheel_mode, image_preview_open_mode,
       edit_suggestions_enabled, edit_suggestion_tone, auto_upload_pasted_assets,
+      image_task_sound_enabled, image_task_browser_notification_enabled,
+      image_task_sound_volume, image_task_success_sound_id, image_task_failure_sound_id,
       prompt_optimize_styles_json, prompt_optimize_custom_instruction, updated_at
-    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     on conflict(user_id) do update set
       language = excluded.language,
       image_preview_wheel_mode = excluded.image_preview_wheel_mode,
@@ -130,6 +204,11 @@ export function saveUserPreferences(userId: string, input: Record<string, unknow
       edit_suggestions_enabled = excluded.edit_suggestions_enabled,
       edit_suggestion_tone = excluded.edit_suggestion_tone,
       auto_upload_pasted_assets = excluded.auto_upload_pasted_assets,
+      image_task_sound_enabled = excluded.image_task_sound_enabled,
+      image_task_browser_notification_enabled = excluded.image_task_browser_notification_enabled,
+      image_task_sound_volume = excluded.image_task_sound_volume,
+      image_task_success_sound_id = excluded.image_task_success_sound_id,
+      image_task_failure_sound_id = excluded.image_task_failure_sound_id,
       prompt_optimize_styles_json = excluded.prompt_optimize_styles_json,
       prompt_optimize_custom_instruction = excluded.prompt_optimize_custom_instruction,
       updated_at = excluded.updated_at`,
@@ -140,9 +219,18 @@ export function saveUserPreferences(userId: string, input: Record<string, unknow
     editSuggestionsEnabled ? 1 : 0,
     editSuggestionTone,
     autoUploadPastedAssets ? 1 : 0,
+    imageTaskSoundEnabled ? 1 : 0,
+    imageTaskBrowserNotificationEnabled ? 1 : 0,
+    imageTaskSoundVolume,
+    storedSuccessSoundId,
+    storedFailureSoundId,
     JSON.stringify(promptOptimizeStyleGroups),
     promptOptimizeCustomInstruction,
     timestamp
   );
-  return userPreferences(userId);
+  return userPreferencesFromDb(db, userId, availableSoundIds);
+}
+
+export function saveUserPreferences(userId: string, input: Record<string, unknown>) {
+  return saveUserPreferencesToDb(appDb, userId, input, enabledImageTaskSoundIds());
 }

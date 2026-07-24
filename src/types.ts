@@ -1,6 +1,7 @@
 import type { AppearanceMode } from "./lib/appearance";
 import type { LanguagePreference } from "./i18n";
 import type { PromptOptimizeStyleGroup, PromptTemplateOptimizeStyle } from "./lib/promptOptimizeStyles";
+import type { ImageTaskSoundId } from "./lib/imageTaskSounds";
 
 export type EditSuggestionTone = "default" | "practical" | "creative" | "detail";
 export type ImagePreviewWheelMode = "zoom" | "pan";
@@ -13,8 +14,21 @@ export type UserPreferences = {
   autoUploadPastedAssets: boolean;
   imagePreviewWheelMode: ImagePreviewWheelMode;
   imagePreviewOpenMode: ImagePreviewOpenMode;
+  imageTaskSoundEnabled: boolean;
+  imageTaskBrowserNotificationEnabled: boolean;
+  imageTaskSoundVolume: number;
+  imageTaskSuccessSoundId: ImageTaskSoundId;
+  imageTaskFailureSoundId: ImageTaskSoundId;
   promptOptimizeStyleGroups: PromptOptimizeStyleGroup[];
   promptOptimizeCustomInstruction: string;
+};
+
+export type ImageTaskSound = {
+  id: string;
+  name: string;
+  url: string;
+  mimeType: string;
+  size: number;
 };
 
 export type User = {
@@ -975,6 +989,7 @@ export type LibraryPageInfo = {
   limit: number;
   nextCursor: string | null;
   hasMore: boolean;
+  total?: number;
 };
 
 export type LibraryPage<T> = {

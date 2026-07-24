@@ -761,6 +761,20 @@
   gap: 8px;
 }
 
+.share-dialog-scope-toggle {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.share-dialog-scope-toggle.is-pending {
+  opacity: 0.68;
+  cursor: wait;
+}
+
+.share-dialog-result.is-pending .share-dialog-url-row {
+  opacity: 0.55;
+}
+
 .share-dialog-url-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { Archive, Database, Github, KeyRound, Leaf, Link2, Monitor, Moon, Palette, Pencil, ScrollText, Search, Settings, Smile, Sun, Sunset, Trash2, UserRound, X } from "lucide-react";
+import { Archive, BellRing, Database, Github, KeyRound, Leaf, Link2, Monitor, Moon, Palette, Pencil, ScrollText, Search, Settings, Smile, Sun, Sunset, Trash2, UserRound, Volume1, Volume2, VolumeOff, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api } from "../../api";
 import {
@@ -14,14 +14,29 @@ import { useAppearanceMode } from "../../hooks/useAppearanceMode";
 import { useInfinitePageLoader } from "../../hooks/useInfinitePageLoader";
 import type { AppearanceMode } from "../../lib/appearance";
 import { sanitizePromptOptimizeStyleGroups } from "../../lib/promptOptimizeStyles";
-import type { EditSuggestionTone, ImagePreviewOpenMode, ImagePreviewWheelMode, User, UserPreferences } from "../../types";
+import {
+  DEFAULT_IMAGE_TASK_SOUND_VOLUME,
+  type ImageTaskSoundId
+} from "../../lib/imageTaskSounds";
+import {
+  playImageTaskSound,
+  stopImageTaskSoundPlayback
+} from "../../lib/imageTaskSoundPlayer";
+import {
+  getImageTaskBrowserNotificationPermission,
+  imageTaskBrowserNotificationSettingState,
+  requestImageTaskBrowserNotificationPermission,
+  type BrowserNotificationPermissionResult
+} from "../../lib/imageTaskBrowserNotifications";
+import type { EditSuggestionTone, ImagePreviewOpenMode, ImagePreviewWheelMode, ImageTaskSound, User, UserPreferences } from "../../types";
 import { CustomSelect, useToast } from "../../ui";
 import { MarkdownView } from "../MarkdownView";
 import { PromptColorSchemeSettingsDialog } from "../PromptColorSchemeSettingsDialog";
 import { PromptOptimizeStyleSettingsDialog } from "../PromptOptimizeStyleSettingsDialog";
+import { ImageTaskSoundSelect } from "./ImageTaskSoundSelect";
 import { SharedLinksDialog } from "./SharedLinksDialog";
 
-type SettingsSectionId = "general" | "personalization" | "account" | "data" | "about";
+type SettingsSectionId = "general" | "sound" | "personalization" | "account" | "data" | "about";
 type SettingsSectionDirection = "forward" | "backward";
 
 const PROJECT_REPOSITORY_URL = "https://github.com/Xiongdaxz/shenbi-maliang-gpt-image-workbench";
@@ -29,6 +44,7 @@ const CHANGELOG_PAGE_SIZE = 5;
 
 const settingsSections: Array<{ id: SettingsSectionId; labelKey: string; icon: LucideIcon }> = [
   { id: "general", labelKey: "settings.nav.general", icon: Settings },
+  { id: "sound", labelKey: "settings.nav.soundMenu", icon: BellRing },
   { id: "personalization", labelKey: "settings.nav.personalization", icon: Smile },
   { id: "account", labelKey: "settings.nav.account", icon: UserRound },
   { id: "data", labelKey: "settings.nav.data", icon: Database },
@@ -37,6 +53,7 @@ const settingsSections: Array<{ id: SettingsSectionId; labelKey: string; icon: L
 
 const settingsSectionTitleKeys: Record<SettingsSectionId, string> = {
   general: "settings.nav.general",
+  sound: "settings.nav.sound",
   personalization: "settings.nav.personalization",
   account: "settings.nav.account",
   data: "settings.nav.data",
@@ -77,6 +94,8 @@ type AppSettingsDialogProps = {
   deleteAllPending?: boolean;
   deleteAccountPending?: boolean;
   preferencesSaving?: boolean;
+  imageTaskSounds: ImageTaskSound[];
+  imageTaskSoundsLoading?: boolean;
   onClose: () => void;
   onChangePassword: () => void;
   onEditProfile: () => void;
@@ -97,6 +116,8 @@ export function AppSettingsDialog({
   deleteAllPending,
   deleteAccountPending,
   preferencesSaving,
+  imageTaskSounds,
+  imageTaskSoundsLoading,
   onClose,
   onChangePassword,
   onEditProfile,
@@ -113,6 +134,20 @@ export function AppSettingsDialog({
   const [promptStyleSettingsOpen, setPromptStyleSettingsOpen] = useState(false);
   const [promptColorSchemeSettingsOpen, setPromptColorSchemeSettingsOpen] = useState(false);
   const [sharedLinksOpen, setSharedLinksOpen] = useState(false);
+  const [soundVolumeDraft, setSoundVolumeDraft] = useState(DEFAULT_IMAGE_TASK_SOUND_VOLUME);
+  const [soundEnabledDraft, setSoundEnabledDraft] = useState(true);
+  const [browserNotificationPermission, setBrowserNotificationPermission] = useState<BrowserNotificationPermissionResult>(
+    () => getImageTaskBrowserNotificationPermission()
+  );
+  const [browserNotificationPermissionPending, setBrowserNotificationPermissionPending] = useState(false);
+  const [soundPreviewId, setSoundPreviewId] = useState<ImageTaskSoundId | null>(null);
+  const soundPreviewTokenRef = useRef(0);
+  const soundPreviewIdRef = useRef<ImageTaskSoundId | null>(null);
+  const committedSoundVolumeRef = useRef(DEFAULT_IMAGE_TASK_SOUND_VOLUME);
+  const soundVolumeDraftRef = useRef(DEFAULT_IMAGE_TASK_SOUND_VOLUME);
+  const lastNonZeroSoundVolumeRef = useRef(DEFAULT_IMAGE_TASK_SOUND_VOLUME);
+  const soundEnabledDraftRef = useRef(true);
+  const restoreSoundOnVolumeCommitRef = useRef(false);
   const [changelogSearchInput, setChangelogSearchInput] = useState("");
   const [changelogSearchKeyword, setChangelogSearchKeyword] = useState("");
   const [latestChangelogVersion, setLatestChangelogVersion] = useState("");
@@ -150,6 +185,10 @@ export function AppSettingsDialog({
     })),
     [t]
   );
+  const soundOptions = useMemo(
+    () => imageTaskSounds.map((sound) => ({ value: sound.id, label: sound.name })),
+    [imageTaskSounds]
+  );
   const changelog = useInfiniteQuery({
     queryKey: ["changelog", "paged", changelogSearchKeyword],
     queryFn: ({ pageParam }) => api.changelog({
@@ -186,6 +225,11 @@ export function AppSettingsDialog({
     autoUploadPastedAssets: user.preferences?.autoUploadPastedAssets ?? true,
     imagePreviewWheelMode: user.preferences?.imagePreviewWheelMode ?? "pan" as const,
     imagePreviewOpenMode: user.preferences?.imagePreviewOpenMode ?? "contain" as const,
+    imageTaskSoundEnabled: user.preferences?.imageTaskSoundEnabled ?? true,
+    imageTaskBrowserNotificationEnabled: user.preferences?.imageTaskBrowserNotificationEnabled ?? false,
+    imageTaskSoundVolume: user.preferences?.imageTaskSoundVolume ?? DEFAULT_IMAGE_TASK_SOUND_VOLUME,
+    imageTaskSuccessSoundId: user.preferences?.imageTaskSuccessSoundId ?? "",
+    imageTaskFailureSoundId: user.preferences?.imageTaskFailureSoundId ?? "",
     language: normalizeLanguagePreference(user.preferences?.language ?? language),
     promptOptimizeStyleGroups
   }), [
@@ -196,11 +240,55 @@ export function AppSettingsDialog({
     user.preferences?.editSuggestionsEnabled,
     user.preferences?.imagePreviewOpenMode,
     user.preferences?.imagePreviewWheelMode,
+    user.preferences?.imageTaskFailureSoundId,
+    user.preferences?.imageTaskBrowserNotificationEnabled,
+    user.preferences?.imageTaskSoundEnabled,
+    user.preferences?.imageTaskSoundVolume,
+    user.preferences?.imageTaskSuccessSoundId,
     user.preferences?.language
   ]);
+  const browserNotificationState = imageTaskBrowserNotificationSettingState(
+    preferences.imageTaskBrowserNotificationEnabled,
+    browserNotificationPermission
+  );
+  const browserNotificationPreferenceEnabled = browserNotificationState !== "disabled";
+
+  useEffect(() => {
+    if (preferencesSaving) return;
+    soundVolumeDraftRef.current = preferences.imageTaskSoundVolume;
+    setSoundVolumeDraft(preferences.imageTaskSoundVolume);
+    committedSoundVolumeRef.current = preferences.imageTaskSoundVolume;
+    if (preferences.imageTaskSoundVolume > 0) lastNonZeroSoundVolumeRef.current = preferences.imageTaskSoundVolume;
+  }, [preferences.imageTaskSoundVolume, preferencesSaving]);
+
+  useEffect(() => {
+    if (!preferencesSaving) {
+      soundEnabledDraftRef.current = preferences.imageTaskSoundEnabled;
+      restoreSoundOnVolumeCommitRef.current = false;
+      setSoundEnabledDraft(preferences.imageTaskSoundEnabled);
+    }
+  }, [preferences.imageTaskSoundEnabled, preferencesSaving]);
+
+  useEffect(() => {
+    if (!open) return;
+    const refreshPermission = () => {
+      setBrowserNotificationPermission(getImageTaskBrowserNotificationPermission());
+    };
+    refreshPermission();
+    window.addEventListener("focus", refreshPermission);
+    document.addEventListener("visibilitychange", refreshPermission);
+    return () => {
+      window.removeEventListener("focus", refreshPermission);
+      document.removeEventListener("visibilitychange", refreshPermission);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) {
+      soundPreviewTokenRef.current += 1;
+      soundPreviewIdRef.current = null;
+      setSoundPreviewId(null);
+      stopImageTaskSoundPlayback();
       setActiveSection("general");
       setContentTransitioning(false);
       setSharedLinksOpen(false);
@@ -208,6 +296,12 @@ export function AppSettingsDialog({
       setChangelogSearchKeyword("");
     }
   }, [open]);
+
+  useEffect(() => () => {
+    soundPreviewTokenRef.current += 1;
+    soundPreviewIdRef.current = null;
+    stopImageTaskSoundPlayback();
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setChangelogSearchKeyword(changelogSearchInput.trim()), 250);
@@ -247,6 +341,112 @@ export function AppSettingsDialog({
     setChangelogSearchInput("");
     setChangelogSearchKeyword("");
   };
+  const playSoundPreview = (soundId: ImageTaskSoundId, volume = soundVolumeDraft) => {
+    const token = soundPreviewTokenRef.current + 1;
+    soundPreviewTokenRef.current = token;
+    soundPreviewIdRef.current = soundId;
+    setSoundPreviewId(soundId);
+    const soundUrl = imageTaskSounds.find((sound) => sound.id === soundId)?.url ?? "";
+    const started = playImageTaskSound(soundUrl, volume, () => {
+      if (soundPreviewTokenRef.current !== token) return;
+      soundPreviewIdRef.current = null;
+      setSoundPreviewId(null);
+    });
+    if (!started && soundPreviewTokenRef.current === token) {
+      soundPreviewIdRef.current = null;
+      setSoundPreviewId(null);
+    }
+  };
+  const stopSoundPreview = () => {
+    soundPreviewTokenRef.current += 1;
+    soundPreviewIdRef.current = null;
+    setSoundPreviewId(null);
+    stopImageTaskSoundPlayback();
+  };
+  const commitSoundVolume = (nextVolume: number) => {
+    const restoreSound = nextVolume > 0 && restoreSoundOnVolumeCommitRef.current;
+    restoreSoundOnVolumeCommitRef.current = false;
+    if (nextVolume === committedSoundVolumeRef.current && !restoreSound) return;
+    committedSoundVolumeRef.current = nextVolume;
+    if (nextVolume > 0) lastNonZeroSoundVolumeRef.current = nextVolume;
+    if (nextVolume === 0) {
+      soundEnabledDraftRef.current = false;
+      setSoundEnabledDraft(false);
+    }
+    onPreferencesChange(nextVolume === 0
+      ? { imageTaskSoundEnabled: false, imageTaskSoundVolume: 0 }
+      : restoreSound
+        ? { imageTaskSoundEnabled: true, imageTaskSoundVolume: nextVolume }
+        : { imageTaskSoundVolume: nextVolume });
+  };
+  const changeSoundVolume = (nextVolume: number) => {
+    const restoringFromMuted = soundVolumeDraftRef.current === 0 && nextVolume > 0;
+    soundVolumeDraftRef.current = nextVolume;
+    setSoundVolumeDraft(nextVolume);
+    if (nextVolume === 0) {
+      stopSoundPreview();
+      restoreSoundOnVolumeCommitRef.current = false;
+      soundEnabledDraftRef.current = false;
+      setSoundEnabledDraft(false);
+      return;
+    }
+    lastNonZeroSoundVolumeRef.current = nextVolume;
+    if (restoringFromMuted && !soundEnabledDraftRef.current) {
+      restoreSoundOnVolumeCommitRef.current = true;
+      soundEnabledDraftRef.current = true;
+      setSoundEnabledDraft(true);
+    }
+  };
+  const finishSoundVolumeChange = (nextVolume: number) => {
+    commitSoundVolume(nextVolume);
+    if (nextVolume > 0 && preferences.imageTaskSuccessSoundId) playSoundPreview(preferences.imageTaskSuccessSoundId, nextVolume);
+  };
+  const toggleSoundEnabled = () => {
+    const nextEnabled = !soundEnabledDraftRef.current;
+    if (nextEnabled && soundVolumeDraft === 0) {
+      const restoredVolume = lastNonZeroSoundVolumeRef.current || DEFAULT_IMAGE_TASK_SOUND_VOLUME;
+      soundEnabledDraftRef.current = true;
+      soundVolumeDraftRef.current = restoredVolume;
+      setSoundEnabledDraft(true);
+      setSoundVolumeDraft(restoredVolume);
+      committedSoundVolumeRef.current = restoredVolume;
+      onPreferencesChange({ imageTaskSoundEnabled: true, imageTaskSoundVolume: restoredVolume });
+      return;
+    }
+    soundEnabledDraftRef.current = nextEnabled;
+    setSoundEnabledDraft(nextEnabled);
+    if (!nextEnabled) stopSoundPreview();
+    onPreferencesChange({ imageTaskSoundEnabled: nextEnabled });
+  };
+  const toggleBrowserNotificationEnabled = async () => {
+    if (browserNotificationPreferenceEnabled) {
+      onPreferencesChange({ imageTaskBrowserNotificationEnabled: false });
+      return;
+    }
+    setBrowserNotificationPermissionPending(true);
+    try {
+      const permission = await requestImageTaskBrowserNotificationPermission();
+      setBrowserNotificationPermission(permission);
+      if (permission === "granted") {
+        onPreferencesChange({ imageTaskBrowserNotificationEnabled: true });
+      } else if (permission === "insecure-context") {
+        showToast(t("toast.imageTaskBrowserNotificationInsecureContext"), "error");
+      } else if (permission === "unsupported") {
+        showToast(t("toast.imageTaskBrowserNotificationUnsupported"), "error");
+      } else {
+        showToast(t("toast.imageTaskBrowserNotificationPermissionDenied"), "error");
+      }
+    } finally {
+      setBrowserNotificationPermissionPending(false);
+    }
+  };
+  const toggleSoundPreview = (soundId: ImageTaskSoundId) => {
+    if (soundPreviewIdRef.current === soundId) {
+      stopSoundPreview();
+      return;
+    }
+    playSoundPreview(soundId);
+  };
 
   if (!open) return null;
 
@@ -258,6 +458,8 @@ export function AppSettingsDialog({
   const promptSubStyleCount = preferences.promptOptimizeStyleGroups.reduce((total, group) => total + (group.children?.length ?? 0), 0);
   const colorSchemeList = promptColorSchemes.data?.schemes ?? [];
   const visibleColorSchemes = colorSchemeList.filter((scheme) => scheme.visible);
+  const SoundVolumeIcon = soundVolumeDraft === 0 ? VolumeOff : soundVolumeDraft < 50 ? Volume1 : Volume2;
+  const soundUnavailable = imageTaskSounds.length === 0;
   const visibleColorSchemeCategoryCount = new Set(visibleColorSchemes.map((scheme) => scheme.category?.trim() || t("promptColorScheme.customCategory"))).size;
   const visibleColorSchemeCount = visibleColorSchemes.length;
   const activeAppearanceIndex = Math.max(0, appearanceOptions.findIndex((option) => option.value === appearanceMode));
@@ -295,7 +497,11 @@ export function AppSettingsDialog({
         <div className="settings-content" ref={settingsContentRef}>
           <div
             key={activeSection}
-            className={cx("settings-content-view", contentTransitioning && `is-entering-${sectionDirection}`)}
+            className={cx(
+              "settings-content-view",
+              activeSection === "sound" && "is-sound-section",
+              contentTransitioning && `is-entering-${sectionDirection}`
+            )}
             onAnimationEnd={(event) => {
               if (event.target === event.currentTarget) setContentTransitioning(false);
             }}
@@ -413,6 +619,116 @@ export function AppSettingsDialog({
                   menuClassName="settings-image-preview-menu"
                   menuWidth={340}
                   disabled={preferencesSaving}
+                />
+              </div>
+            </div>
+          ) : activeSection === "sound" ? (
+            <div className="settings-list settings-sound-list">
+              <div className="settings-row settings-preference-row">
+                <div>
+                  <strong>{t("settings.sound.browserNotification.title")}</strong>
+                  <span>{t("settings.sound.browserNotification.desc")}</span>
+                </div>
+                <button
+                  className={cx("settings-switch-control", browserNotificationPreferenceEnabled && "checked")}
+                  type="button"
+                  role="switch"
+                  aria-checked={browserNotificationPreferenceEnabled}
+                  aria-label={t("settings.sound.browserNotification.title")}
+                  disabled={preferencesSaving || browserNotificationPermissionPending}
+                  onClick={() => void toggleBrowserNotificationEnabled()}
+                >
+                  <span className="settings-switch-track" aria-hidden="true">
+                    <span className="settings-switch-thumb" />
+                  </span>
+                </button>
+              </div>
+              {soundUnavailable ? (
+                <div className="settings-sound-empty" role="status">
+                  <VolumeOff size={18} aria-hidden="true" />
+                  <span>{t(imageTaskSoundsLoading ? "settings.sound.catalog.loading" : "settings.sound.catalog.empty")}</span>
+                </div>
+              ) : null}
+              <div className="settings-row settings-preference-row">
+                <div>
+                  <strong>{t("settings.sound.enabled.title")}</strong>
+                  <span>{t("settings.sound.enabled.desc")}</span>
+                </div>
+                <button
+                  className={cx("settings-switch-control", soundEnabledDraft && !soundUnavailable && "checked")}
+                  type="button"
+                  role="switch"
+                  aria-checked={soundEnabledDraft && !soundUnavailable}
+                  aria-label={t("settings.sound.enabled.title")}
+                  disabled={preferencesSaving || soundUnavailable}
+                  onClick={toggleSoundEnabled}
+                >
+                  <span className="settings-switch-track" aria-hidden="true">
+                    <span className="settings-switch-thumb" />
+                  </span>
+                </button>
+              </div>
+              <div className="settings-row settings-sound-volume-row">
+                <div>
+                  <strong>{t("settings.sound.volume.title")}</strong>
+                  <span>{t("settings.sound.volume.desc")}</span>
+                </div>
+                <div className="settings-sound-volume-control">
+                  <SoundVolumeIcon size={17} aria-hidden="true" />
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={soundVolumeDraft}
+                    disabled={preferencesSaving || soundUnavailable}
+                    aria-label={t("settings.sound.volume.title")}
+                    style={{ "--settings-sound-volume": `${soundVolumeDraft}%` } as CSSProperties}
+                    onChange={(event) => {
+                      const nextVolume = Number(event.target.value);
+                      changeSoundVolume(nextVolume);
+                    }}
+                    onPointerDown={stopSoundPreview}
+                    onPointerUp={(event) => finishSoundVolumeChange(Number(event.currentTarget.value))}
+                    onPointerCancel={(event) => commitSoundVolume(Number(event.currentTarget.value))}
+                    onKeyUp={(event) => finishSoundVolumeChange(Number(event.currentTarget.value))}
+                    onBlur={(event) => commitSoundVolume(Number(event.currentTarget.value))}
+                  />
+                  <output>{soundVolumeDraft}%</output>
+                </div>
+              </div>
+              <div className="settings-row settings-sound-tone-row">
+                <div>
+                  <strong>{t("settings.sound.success.title")}</strong>
+                  <span>{t("settings.sound.success.desc")}</span>
+                </div>
+                <ImageTaskSoundSelect
+                  value={preferences.imageTaskSuccessSoundId}
+                  options={soundOptions}
+                  playingSoundId={soundPreviewId}
+                  disabled={preferencesSaving || soundUnavailable}
+                  onChange={(soundId) => {
+                    if (soundId !== preferences.imageTaskSuccessSoundId) onPreferencesChange({ imageTaskSuccessSoundId: soundId });
+                    playSoundPreview(soundId);
+                  }}
+                  onPreviewToggle={toggleSoundPreview}
+                />
+              </div>
+              <div className="settings-row settings-sound-tone-row">
+                <div>
+                  <strong>{t("settings.sound.failure.title")}</strong>
+                  <span>{t("settings.sound.failure.desc")}</span>
+                </div>
+                <ImageTaskSoundSelect
+                  value={preferences.imageTaskFailureSoundId}
+                  options={soundOptions}
+                  playingSoundId={soundPreviewId}
+                  disabled={preferencesSaving || soundUnavailable}
+                  onChange={(soundId) => {
+                    if (soundId !== preferences.imageTaskFailureSoundId) onPreferencesChange({ imageTaskFailureSoundId: soundId });
+                    playSoundPreview(soundId);
+                  }}
+                  onPreviewToggle={toggleSoundPreview}
                 />
               </div>
             </div>

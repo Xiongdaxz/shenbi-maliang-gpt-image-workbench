@@ -176,7 +176,7 @@
     max-width: calc(100vw - 20px);
   }
 
-  .chat-page-top-actions .chat-branch-switch {
+  .chat-page-top-actions .chat-branch-switch-shell {
     max-width: calc(100vw - 156px);
   }
 
@@ -189,7 +189,7 @@
     padding-top: 86px;
   }
 
-  .shared-conversation-heading {
+  .shared-conversation-toolbar {
     gap: 7px;
   }
 

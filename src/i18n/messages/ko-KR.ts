@@ -70,6 +70,8 @@ const messages: Messages = {
   "config.nav.statistics": "통계",
   "config.nav.users": "사용자 계정",
   "config.nav.teams": "팀 관리",
+  "config.nav.contentCategories": "카테고리 관리",
+  "config.nav.soundManagement": "알림음 관리",
   "config.nav.assetReviews": "소재 검토",
   "config.nav.caseReviews": "영감 검토",
   "config.nav.starterCopy": "빈 페이지 문구",

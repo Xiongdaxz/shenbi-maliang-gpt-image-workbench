@@ -555,15 +555,18 @@
   width: min(840px, calc(100vw - var(--app-sidebar-width, 260px)));
 }
 
+.chat-branch-switch-shell {
+  position: relative;
+  min-width: 0;
+  width: fit-content;
+  max-width: min(234px, calc(100vw - 44px));
+}
+
 .chat-branch-switch {
-  position: fixed;
-  top: 18px;
-  right: 22px;
-  z-index: 52;
   width: fit-content;
   height: 36px;
   min-height: 36px;
-  max-width: min(360px, calc(100vw - 44px));
+  max-width: 100%;
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -580,6 +583,21 @@
   backdrop-filter: blur(18px) saturate(1.1);
   -webkit-backdrop-filter: blur(18px) saturate(1.1);
   scrollbar-width: none;
+}
+
+.chat-branch-switch-shell.can-scroll-start .chat-branch-switch {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 24px, #000 100%);
+  mask-image: linear-gradient(to right, transparent, #000 24px, #000 100%);
+}
+
+.chat-branch-switch-shell.can-scroll-end .chat-branch-switch {
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 24px), transparent);
+}
+
+.chat-branch-switch-shell.can-scroll-start.can-scroll-end .chat-branch-switch {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
 }
 
 .chat-branch-switch::-webkit-scrollbar {
@@ -637,7 +655,7 @@
   border: 1px solid #d1d5db;
   background: #fff;
   border-radius: 26px;
-  padding: 11px 10px 8px;
+  padding: 11px 10px 9px;
   box-shadow: 0 14px 44px rgba(15, 23, 42, 0.12);
 }
 

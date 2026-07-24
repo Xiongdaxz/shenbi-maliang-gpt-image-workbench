@@ -25,7 +25,7 @@ import {
   normalizeReviewStatus
 } from "./utils";
 
-type LibraryPageInfo = { limit: number; nextCursor: string | null; hasMore: boolean };
+type LibraryPageInfo = { limit: number; nextCursor: string | null; hasMore: boolean; total?: number };
 type FacetCacheEntry = { expiresAt: number; value: unknown };
 type CategoryRow = { id: string; name: string; slug: string; sort_order?: number };
 
@@ -258,7 +258,7 @@ function caseFilter(c: Context) {
   };
 }
 
-function caseListRows(c: Context, userId: string, limit: number, cursorValue?: string) {
+function caseListRows(c: Context, userId: string, limit: number, cursorValue?: string, includeTotal = false) {
   const filters = caseFilter(c);
   const signature = libraryFilterSignature("cases", filters);
   const cursor = decodeLibraryCursor(cursorValue, { kind: "cases", signature, sort: "desc" });
@@ -291,6 +291,7 @@ function caseListRows(c: Context, userId: string, limit: number, cursorValue?: s
     params.push(like, like, like);
     if (filters.mineOnly) params.push(userId);
   }
+  const countParams = [...params];
   const newerActiveSql = filters.mineOnly ? "newer.user_id = ?" : approvedCaseSql("newer");
   const representativeSql = `and (
     coalesce(case_items.group_id, '') = '' or not exists (
@@ -318,8 +319,23 @@ function caseListRows(c: Context, userId: string, limit: number, cursorValue?: s
            )
        )`
     : "";
-  if (filters.favoriteOnly) params.push(userId);
+  if (filters.favoriteOnly) {
+    params.push(userId);
+    countParams.push(userId);
+  }
   const cursorWhere = libraryCursorWhere(cursor, { createdAt: "case_items.created_at", id: groupKeySql }, "desc");
+  const total = includeTotal && !cursor
+    ? Number(
+        getOne<{ total: number }>(
+          appDb,
+          `select count(distinct ${groupKeySql}) as total
+           from case_items
+           where ${activeSql}${filterClauses.length ? ` and ${filterClauses.join(" and ")}` : ""}
+             ${favoriteSql}`,
+          ...countParams
+        )?.total ?? 0
+      )
+    : undefined;
   const rows = getAll<CaseListRow>(
     appDb,
     `select ${groupKeySql} as id, case_items.id as case_item_id, case_items.created_at as createdAt,
@@ -343,7 +359,7 @@ function caseListRows(c: Context, userId: string, limit: number, cursorValue?: s
     ...cursorWhere.params,
     limit + 1
   );
-  return { filters, signature, rows };
+  return { filters, signature, rows, total };
 }
 
 function caseCategoriesByGroup(groupIds: string[], options: { userId?: string; mineOnly?: boolean } = {}) {
@@ -617,6 +633,17 @@ export function registerLibraryRoutes(api: Hono) {
     }
     const limit = libraryLimit(c.req.query("limit"));
     const cursorWhere = libraryCursorWhere(cursor, { createdAt: "assets.created_at", id: "assets.id" }, "desc");
+    const total = !cursor
+      ? Number(
+          getOne<{ total: number }>(
+            appDb,
+            `select count(*) as total
+             from assets left join users on users.id = assets.user_id
+             where ${filter.where}`,
+            ...filter.params
+          )?.total ?? 0
+        )
+      : undefined;
     const rows = getAll<AssetRow>(
       appDb,
       `select assets.*, users.username as source_username
@@ -633,7 +660,13 @@ export function registerLibraryRoutes(api: Hono) {
       { kind: "assets", signature, sort: "desc" }
     );
     const categories = assetCategoryMap(page.items.map((row) => row.id));
-    return libraryResponse(c, "library-assets", finish, page.items.map((row) => assetCard(row, categories.get(row.id) ?? [], user.id)), page.pageInfo);
+    return libraryResponse(
+      c,
+      "library-assets",
+      finish,
+      page.items.map((row) => assetCard(row, categories.get(row.id) ?? [], user.id)),
+      total === undefined ? page.pageInfo : { ...page.pageInfo, total }
+    );
   });
 
   api.get("/library/assets/facets", async (c) => {
@@ -683,7 +716,7 @@ export function registerLibraryRoutes(api: Hono) {
     const limit = libraryLimit(c.req.query("limit"));
     let loaded;
     try {
-      loaded = caseListRows(c, user.id, limit, c.req.query("cursor"));
+      loaded = caseListRows(c, user.id, limit, c.req.query("cursor"), true);
     } catch (error) {
       return invalidCursorResponse(c, error);
     }
@@ -708,7 +741,7 @@ export function registerLibraryRoutes(api: Hono) {
           engagements.get(caseSourceKey(source)) ?? { useCount: 0, favoriteCount: 0, favorited: false }
         );
       }),
-      page.pageInfo
+      loaded.total === undefined ? page.pageInfo : { ...page.pageInfo, total: loaded.total }
     );
   });
 

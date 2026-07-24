@@ -74,6 +74,8 @@ const messages: Messages = {
   "config.nav.statistics": "Статистика",
   "config.nav.users": "Пользователи",
   "config.nav.teams": "Команды",
+  "config.nav.contentCategories": "Управление категориями",
+  "config.nav.soundManagement": "Управление звуками",
   "config.nav.assetReviews": "Проверка материалов",
   "config.nav.caseReviews": "Проверка вдохновения",
   "config.nav.starterCopy": "Тексты старта",

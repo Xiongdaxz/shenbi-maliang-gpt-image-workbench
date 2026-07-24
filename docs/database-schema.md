@@ -69,13 +69,18 @@
 | `edit_suggestions_enabled` | 对话页图片续改建议开关，`0` 关闭、`1` 开启 |
 | `edit_suggestion_tone` | 图片续改建议倾向：`default` 默认均衡、`practical` 实用优化、`creative` 创意扩展、`detail` 细节修复 |
 | `auto_upload_pasted_assets` | 输入框粘贴图片是否自动保存到素材库，`0` 关闭、`1` 开启；关闭后仅作为本次消息引用素材保存 |
+| `image_task_sound_enabled` | 图片任务成功或失败提示音开关，`0` 关闭、`1` 开启；默认开启 |
+| `image_task_browser_notification_enabled` | 图片任务成功或失败浏览器系统通知开关，`0` 关闭、`1` 开启；默认关闭，开启时还需浏览器通知权限 |
+| `image_task_sound_volume` | 图片任务提示音和试听音量，范围 `0`–`100`；新用户默认 `70`，已有用户保留已保存值 |
+| `image_task_success_sound_id` | 图片任务成功时选择的后台提示音 ID；所选音频不可用时运行时回退到第一个已启用音频，没有可用音频时为空 |
+| `image_task_failure_sound_id` | 图片任务失败时选择的后台提示音 ID；所选音频不可用时优先回退到第二个已启用音频，没有可用音频时为空 |
 | `prompt_optimize_styles_json` | 用户自定义 AI优化风格 JSON，保存主风格、子风格、排序、显示状态和自定义优化指令；为空时使用系统默认风格 |
 | `prompt_optimize_custom_instruction` | 用户在输入区 AI优化风格里的自定义补充指令 |
 | `updated_at` | 更新时间 |
 
 ### app_migrations
 
-应用数据库的一次性迁移记录。当前用于标记已执行过的偏好默认值迁移，避免启动时重复批量更新。
+应用数据库的一次性迁移记录。当前用于标记已执行过的偏好默认值迁移和灵感风格默认项初始化，避免启动时重复批量更新或重新创建已由管理员删除的默认风格。
 
 | 字段 | 说明 |
 | --- | --- |
@@ -177,7 +182,7 @@
 
 ### session_share_links
 
-会话共享链接。创建分享时会先按同一会话的消息 ID 和顺序查找完全一致的已有快照，命中后复用最早创建的原链接；只有可见消息快照发生变化时才新增记录并保存当时的标题。同一会话可保留多条不同快照，公开地址使用随机 UUID `public_token`，删除记录即立即撤销。旧版 HMAC 长链接仍可通过记录 ID校验访问。
+会话共享链接。创建分享时会按分享范围、同一会话的消息 ID 和顺序查找完全一致的已有快照，命中后复用最早创建的原链接；只有分享范围或消息快照发生变化时才新增记录并保存当时的标题。同一会话可保留多条不同快照，公开地址使用随机 UUID `public_token`，删除记录即立即撤销。旧版 HMAC 长链接仍可通过记录 ID校验访问。
 
 | 字段 | 说明 |
 | --- | --- |
@@ -186,13 +191,14 @@
 | `user_id` | 分享创建者 ID |
 | `session_id` | 原会话 ID |
 | `title` | 创建分享时的会话标题快照 |
+| `includes_branches` | 是否包含会话全部分支，`0` 仅当前分支、`1` 全部分支 |
 | `created_at` | 分享时间 |
 
 相关索引：`session_share_links_public_token_idx` 保证公开 UUID 唯一；`session_share_links_user_time_idx` 支撑数据管理按用户、创建时间倒序分页；`session_share_links_session_idx` 支撑删除会话时显式撤销关联链接。
 
 ### session_share_messages
 
-共享链接包含的消息集合。前端提交当前可见分支的已保存消息 ID，后端按数据库时间顺序复核后，以 `sort_order` 冻结这次分享的消息范围；后续新增消息不会进入旧链接。
+共享链接包含的消息集合。前端按所选范围提交当前分支或全部分支的已保存消息 ID，后端按数据库时间顺序复核后，以 `sort_order` 冻结这次分享的消息范围；后续新增消息不会进入旧链接。
 
 | 字段 | 说明 |
 | --- | --- |
@@ -228,7 +234,7 @@
 | `succeeded_on_retry` | 最终是否由自动重试或手动重试后成功，`0` 否、`1` 是 |
 | `created_at` / `updated_at` | 创建和更新时间 |
 
-相关索引：`image_jobs_session_user_status_time_idx` 支撑对话页和侧边栏按会话、用户、状态轮询任务；`image_jobs_user_client_request_idx` 支撑按用户和客户端请求标识查找待取消任务。
+相关索引：`image_jobs_session_user_status_time_idx` 支撑对话页和侧边栏按会话、用户、状态轮询任务；`image_jobs_user_client_request_idx` 支撑按用户和客户端请求标识查找待取消任务；`image_jobs_user_updated_idx` 支撑事件流断线后按用户和更新时间补发任务结果。
 
 ### image_job_cancel_requests
 
@@ -372,6 +378,8 @@
 
 灵感空间和素材标签分类。
 
+普通用户仍可从灵感空间或素材库新增全局分类；后台“分类管理”可以统一改名、排序、合并和删除。隐藏的 `casecat_uncategorized` 是灵感未分类占位项，不进入后台列表且不可修改。
+
 | 字段 | 说明 |
 | --- | --- |
 | `id` | 分类 ID |
@@ -379,6 +387,8 @@
 | `name` | 分类名称 |
 | `slug` | 唯一标识 |
 | `sort_order` | 排序 |
+
+后台删除分类时可选择直接删除或迁移后删除。直接删除灵感风格时，灵感内容保留并关联到内部无风格占位项，前台表现为未选择任何风格且仍可在“全部”中查看；直接删除素材标签时，素材保留且仅解除对应的 `asset_categories` 关系；两种类型都会移除图片中对应的自动推荐分类 ID。迁移后删除会在同一事务内迁移 `case_items` 或 `asset_categories` 关联，去重同一灵感/素材上的目标分类，替换图片中的自动推荐分类 ID，并在完成后删除源分类。分类改名保持 `id` 和 `slug` 不变。
 
 ### case_items
 
@@ -579,6 +589,24 @@
 | `id` | 配置 ID，固定为 `default` |
 | `signing_secret` | 32 字节随机密钥的 Base64URL 文本 |
 | `created_at` / `updated_at` | 创建和更新时间 |
+
+### image_task_sounds
+
+后台维护的全局图片任务提示音目录。仓库和发行包不携带音频；管理员上传的文件以原始音频格式保存在 Git 忽略的 `data/files/image-task-sounds/`，只能通过登录鉴权接口访问，不进入 `public` 或 `dist`。升级时会把早期版本已加密的提示音原地转换为普通音频文件；若检测到旧版 `public/sounds/image-task/maliang-*.mp3`，会在文件安全落盘后保留原 ID 写入本表，再把旧文件移入 `data/legacy-sound-backup/`。全新安装没有旧文件时保持空表。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 提示音 ID；旧音频保留原 `maliang-*` ID，新上传音频使用系统生成 ID |
+| `name` | 前台和后台显示名称，后台改名不会改变 ID |
+| `path` | `data` 下的普通音频文件相对路径，格式为 `files/image-task-sounds/*.{mp3,wav,ogg}` |
+| `original_file_name` | 上传或迁移前的原始文件名，仅用于后台展示 |
+| `mime_type` | 服务端按文件头识别的 `audio/mpeg`、`audio/wav` 或 `audio/ogg` |
+| `size` | 原始音频字节数，单文件最大 5MB |
+| `sha256` | 原始音频 SHA-256，用于重复上传检测和文件响应 ETag |
+| `enabled` | 是否进入前台可选目录，`0` 停用、`1` 启用 |
+| `created_at` / `updated_at` | 创建和更新时间 |
+
+相关索引：`image_task_sounds_sha256_idx` 防止相同音频重复入库；`image_task_sounds_enabled_time_idx` 支撑前台按启用状态和创建顺序加载。
 
 ### branding_assets
 

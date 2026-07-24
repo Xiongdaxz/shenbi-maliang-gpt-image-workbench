@@ -1,6 +1,7 @@
 import type { Context, Hono } from "hono";
 import { createHash } from "node:crypto";
-import { ensureCategoryIds, makeCategorySlug } from "./categories";
+import { ensureCategoryIds } from "./categories";
+import { CategoryManagementError, createManagedContentCategory } from "./categoryManagement";
 import { caseMaterialSourceById } from "./caseMaterialSources";
 import { appDb, getAll, getOne, run } from "./db";
 import { globalSwitchEnabled } from "./globalSwitches";
@@ -499,30 +500,14 @@ api.post("/assets/categories", async (c) => {
   const user = await requireUser(c);
   if (!user) return c.json({ error: "未登录" }, 401);
   const body = await c.req.json().catch(() => ({}));
-  const name = String(body.name ?? "").trim();
-  if (!name) return c.json({ error: "请填写素材标签名称" }, 400);
-  const existing = getOne<{ id: string }>(
-    appDb,
-    "select id from case_categories where type = 'asset' and lower(name) = lower(?)",
-    name
-  );
-  if (existing) return c.json({ error: "素材标签已存在" }, 400);
-
-  const id = makeId("assetcat");
-  const slug = makeCategorySlug(name, "asset");
-  const sortOrder =
-    (getOne<{ max_sort: number | null }>(appDb, "select max(sort_order) as max_sort from case_categories where type = 'asset'")
-      ?.max_sort ?? 0) + 10;
-  run(
-    appDb,
-    "insert into case_categories (id, type, name, slug, sort_order) values (?, ?, ?, ?, ?)",
-    id,
-    "asset",
-    name,
-    slug,
-    sortOrder
-  );
-  return c.json({ category: { id, name, slug, items: [] } });
+  try {
+    const category = createManagedContentCategory(appDb, "asset", body.name);
+    invalidateLibraryFacetCache("assets");
+    return c.json({ category: { id: category.id, name: category.name, slug: category.slug, items: [] } });
+  } catch (error) {
+    if (error instanceof CategoryManagementError) return c.json({ error: error.message }, error.status);
+    throw error;
+  }
 });
 
 api.get("/assets/:assetId", async (c) => {

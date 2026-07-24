@@ -70,6 +70,8 @@ const messages: Messages = {
   "config.nav.statistics": "Estatísticas",
   "config.nav.users": "Usuários",
   "config.nav.teams": "Equipes",
+  "config.nav.contentCategories": "Gerenciar categorias",
+  "config.nav.soundManagement": "Gerenciar sons",
   "config.nav.assetReviews": "Revisão de recursos",
   "config.nav.caseReviews": "Revisão de inspirações",
   "config.nav.starterCopy": "Texto inicial",

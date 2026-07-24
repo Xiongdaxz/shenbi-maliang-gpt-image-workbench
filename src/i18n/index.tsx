@@ -21,6 +21,7 @@ import ptBRMessages from "./messages/pt-BR";
 import ruRUMessages from "./messages/ru-RU";
 import zhCNMessages from "./messages/zh-CN";
 import zhTWMessages from "./messages/zh-TW";
+import imageTaskSoundMessages from "./messages/imageTaskSoundMessages";
 import type { Messages } from "./messages/types";
 
 export type { LanguagePreference, LocaleCode } from "./locales";
@@ -32,17 +33,17 @@ export type Translate = (key: string, params?: TranslationParams) => string;
 const LANGUAGE_STORAGE_KEY = "gpt-image.language";
 
 const messagesByLocale: Record<LocaleCode, Messages> = {
-  "zh-CN": zhCNMessages,
-  "zh-TW": zhTWMessages,
-  "en-US": enUSMessages,
-  "ja-JP": jaJPMessages,
-  "ko-KR": koKRMessages,
-  "es-ES": esESMessages,
-  "fr-FR": frFRMessages,
-  "de-DE": deDEMessages,
-  "pt-BR": ptBRMessages,
-  "ru-RU": ruRUMessages,
-  "fa-IR": faIRMessages
+  "zh-CN": { ...zhCNMessages, ...imageTaskSoundMessages["zh-CN"] },
+  "zh-TW": { ...zhTWMessages, ...imageTaskSoundMessages["zh-TW"] },
+  "en-US": { ...enUSMessages, ...imageTaskSoundMessages["en-US"] },
+  "ja-JP": { ...jaJPMessages, ...imageTaskSoundMessages["ja-JP"] },
+  "ko-KR": { ...koKRMessages, ...imageTaskSoundMessages["ko-KR"] },
+  "es-ES": { ...esESMessages, ...imageTaskSoundMessages["es-ES"] },
+  "fr-FR": { ...frFRMessages, ...imageTaskSoundMessages["fr-FR"] },
+  "de-DE": { ...deDEMessages, ...imageTaskSoundMessages["de-DE"] },
+  "pt-BR": { ...ptBRMessages, ...imageTaskSoundMessages["pt-BR"] },
+  "ru-RU": { ...ruRUMessages, ...imageTaskSoundMessages["ru-RU"] },
+  "fa-IR": { ...faIRMessages, ...imageTaskSoundMessages["fa-IR"] }
 };
 
 type I18nContextValue = {

@@ -1,7 +1,8 @@
 import { Check, Copy, ExternalLink, Link2, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "../i18n";
 import { copyTextToClipboard } from "../lib/clipboard";
+import { cx } from "../lib/cx";
 import type { SessionShareLink } from "../types";
 import { useToast } from "../ui";
 
@@ -17,16 +18,25 @@ export function absoluteShareUrl(link: SessionShareLink) {
 export function ShareConversationDialog({
   open,
   link,
+  includeAllBranches,
+  branchCount,
+  pending,
+  onIncludeAllBranchesChange,
   onClose
 }: {
   open: boolean;
   link: SessionShareLink | null;
+  includeAllBranches: boolean;
+  branchCount: number;
+  pending: boolean;
+  onIncludeAllBranchesChange: (includeAllBranches: boolean) => void;
   onClose: () => void;
 }) {
   const { t } = useI18n();
   const { showToast } = useToast();
   const [copied, setCopied] = useState(false);
   const shareUrl = useMemo(() => (link ? absoluteShareUrl(link) : ""), [link]);
+  useEffect(() => setCopied(false), [link?.id]);
   if (!open || !link) return null;
 
   const copyLink = async () => {
@@ -48,7 +58,7 @@ export function ShareConversationDialog({
             <X size={18} />
           </button>
         </header>
-        <div className="share-dialog-result">
+        <div className={cx("share-dialog-result", pending && "is-pending")}>
           <div className="share-dialog-url-row">
             <Link2 size={16} aria-hidden="true" />
             <div
@@ -63,12 +73,29 @@ export function ShareConversationDialog({
             </div>
           </div>
         </div>
+        {branchCount > 1 ? (
+          <label className={cx("case-reference-toggle", "share-dialog-scope-toggle", includeAllBranches && "active", pending && "is-pending")}>
+            <input
+              type="checkbox"
+              checked={includeAllBranches}
+              disabled={pending}
+              onChange={(event) => onIncludeAllBranchesChange(event.target.checked)}
+            />
+            <span className="case-reference-toggle-check" aria-hidden="true">
+              {includeAllBranches ? <Check size={13} strokeWidth={2.5} /> : null}
+            </span>
+            <span className="case-reference-toggle-copy">
+              <span>{t("shareDialog.allBranches")}</span>
+              <small>{t("shareDialog.allBranchesDescription", { count: branchCount })}</small>
+            </span>
+          </label>
+        ) : null}
         <div className="row-actions">
-          <button className="secondary-btn" type="button" onClick={() => void copyLink()}>
+          <button className="secondary-btn" type="button" disabled={pending} onClick={() => void copyLink()}>
             {copied ? <Check size={15} /> : <Copy size={15} />}
             {copied ? t("shareDialog.copiedShort") : t("shareDialog.copy")}
           </button>
-          <button className="secondary-btn" type="button" onClick={() => window.open(shareUrl, "_blank", "noopener,noreferrer")}>
+          <button className="secondary-btn" type="button" disabled={pending} onClick={() => window.open(shareUrl, "_blank", "noopener,noreferrer")}>
             <ExternalLink size={15} />
             {t("shareDialog.open")}
           </button>

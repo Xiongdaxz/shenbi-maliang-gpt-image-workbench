@@ -86,6 +86,35 @@ export type ConfigChangelogSyncResult = {
 
 type ConfigAssetReviewStatus = "pending" | "approved" | "rejected" | "all";
 type ConfigCaseReviewStatus = "pending" | "approved" | "rejected" | "all";
+export type ConfigContentCategoryType = "case" | "asset";
+
+export type ConfigContentCategory = {
+  id: string;
+  type: ConfigContentCategoryType;
+  name: string;
+  slug: string;
+  sortOrder: number;
+  itemCount: number;
+  suggestionCount: number;
+};
+
+export type ConfigImageTaskSound = {
+  id: string;
+  name: string;
+  url: string;
+  mimeType: string;
+  size: number;
+  originalFileName: string;
+  sha256: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ConfigImageTaskSoundResult = {
+  sounds: ConfigImageTaskSound[];
+  sourceUrl: string;
+};
 
 export type ConfigBrandingResult = {
   settings: BrandingSettings;
@@ -285,6 +314,54 @@ export const configApi = {
       body: JSON.stringify({ password })
     }),
   deleteUser: (id: string) => request<{ ok: boolean }>(`/api/config/users/${id}`, { method: "DELETE" }),
+  contentCategories: (type: ConfigContentCategoryType) =>
+    request<{ categories: ConfigContentCategory[] }>(`/api/config/content-categories?type=${encodeURIComponent(type)}`),
+  createContentCategory: (type: ConfigContentCategoryType, name: string) =>
+    request<{ category: ConfigContentCategory }>("/api/config/content-categories", {
+      method: "POST",
+      body: JSON.stringify({ type, name })
+    }),
+  renameContentCategory: (id: string, name: string) =>
+    request<{ category: ConfigContentCategory }>(`/api/config/content-categories/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name })
+    }),
+  reorderContentCategories: (type: ConfigContentCategoryType, orderedIds: string[]) =>
+    request<{ categories: ConfigContentCategory[] }>("/api/config/content-categories/reorder", {
+      method: "PUT",
+      body: JSON.stringify({ type, orderedIds })
+    }),
+  mergeContentCategory: (id: string, targetId: string) =>
+    request<{
+      sourceId: string;
+      targetId: string;
+      type: ConfigContentCategoryType;
+      migratedItemCount: number;
+      migratedSuggestionCount: number;
+      categories: ConfigContentCategory[];
+    }>(`/api/config/content-categories/${encodeURIComponent(id)}/merge`, {
+      method: "POST",
+      body: JSON.stringify({ targetId })
+    }),
+  deleteContentCategory: (id: string) =>
+    request<{
+      id: string;
+      type: ConfigContentCategoryType;
+      detachedItemCount: number;
+      removedSuggestionCount: number;
+      categories: ConfigContentCategory[];
+      deletedAt: string;
+    }>(`/api/config/content-categories/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  imageTaskSounds: () => request<ConfigImageTaskSoundResult>("/api/config/image-task-sounds"),
+  uploadImageTaskSound: (form: FormData) =>
+    request<ConfigImageTaskSoundResult>("/api/config/image-task-sounds", { method: "POST", body: form }),
+  updateImageTaskSound: (id: string, patch: { name?: string; enabled?: boolean }) =>
+    request<ConfigImageTaskSoundResult>(`/api/config/image-task-sounds/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch)
+    }),
+  deleteImageTaskSound: (id: string) =>
+    request<ConfigImageTaskSoundResult>(`/api/config/image-task-sounds/${encodeURIComponent(id)}`, { method: "DELETE" }),
   assetReviews: (filters?: { status?: ConfigAssetReviewStatus; keyword?: string }) => {
     const params = new URLSearchParams();
     if (filters?.status) params.set("status", filters.status);

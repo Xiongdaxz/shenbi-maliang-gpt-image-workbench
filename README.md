@@ -192,6 +192,8 @@ data/     本地运行数据目录，启动后自动生成
 - [chatgpt2api](https://github.com/basketikun/chatgpt2api)
 - [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI)
 
+项目仓库和发行包不包含图片任务提示音。管理员可在后台“提示音管理”中前往 Mixkit 等素材网站手动下载并上传到本地；运行时上传的第三方音频不属于本项目 MIT 许可证的授权范围，使用者应自行确认素材许可。
+
 ## ⚠️ 免责声明
 
 本项目主要用于学习研究、技术交流、内部技术验证、私有部署和二次开发参考，不提供任何官方模型服务、账号额度、API Key 或商业服务承诺。

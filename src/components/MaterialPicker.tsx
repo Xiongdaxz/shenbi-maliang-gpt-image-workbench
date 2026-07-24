@@ -106,16 +106,27 @@ export function MaterialPicker({
   const [selectedTagKey, setSelectedTagKey] = useState("");
   const materialTagFilterRef = useRef<HTMLDivElement | null>(null);
   const sectionsRef = useRef<HTMLDivElement | null>(null);
-  const pendingScrollAnchorRef = useRef<MaterialPickerScrollAnchor | null>(null);
+  const pendingSharedScrollAnchorRef = useRef<MaterialPickerScrollAnchor | null>(null);
+  const pendingPrivateScrollAnchorRef = useRef<MaterialPickerScrollAnchor | null>(null);
   const selectedCategoryId = selectedTagKey.startsWith("id:") ? selectedTagKey.slice(3) : "";
-  const libraryAssets = useCursorLibraryQuery({
-    queryKey: ["assets", "material-picker", selectedCategoryId, debouncedKeyword],
+  const sharedAssets = useCursorLibraryQuery({
+    queryKey: ["assets", "material-picker", "shared", selectedCategoryId, debouncedKeyword],
     queryFn: ({ cursor, signal }) => api.libraryAssets({
       limit: 30,
       cursor,
       categoryIds: selectedCategoryId ? [selectedCategoryId] : [],
       keyword: debouncedKeyword,
-      space: "all"
+      space: "shared"
+    }, { signal })
+  });
+  const privateAssets = useCursorLibraryQuery({
+    queryKey: ["assets", "material-picker", "private", selectedCategoryId, debouncedKeyword],
+    queryFn: ({ cursor, signal }) => api.libraryAssets({
+      limit: 30,
+      cursor,
+      categoryIds: selectedCategoryId ? [selectedCategoryId] : [],
+      keyword: debouncedKeyword,
+      space: "private"
     }, { signal })
   });
   const categories = useQuery({
@@ -140,9 +151,13 @@ export function MaterialPicker({
       queryClient.invalidateQueries({ queryKey: ["assets"] });
     }
   });
-  const allAssets = useMemo(
-    () => (libraryAssets.data?.pages.flatMap((page) => page.items) ?? []).map(materialCardToAsset),
-    [libraryAssets.data?.pages]
+  const loadedSharedAssets = useMemo(
+    () => (sharedAssets.data?.pages.flatMap((page) => page.items) ?? []).map(materialCardToAsset),
+    [sharedAssets.data?.pages]
+  );
+  const loadedPrivateAssets = useMemo(
+    () => (privateAssets.data?.pages.flatMap((page) => page.items) ?? []).map(materialCardToAsset),
+    [privateAssets.data?.pages]
   );
   const materialTags = useMemo(() => {
     return (categories.data?.categories ?? []).map((category) => ({
@@ -153,9 +168,9 @@ export function MaterialPicker({
     }));
   }, [assetFacets.data, categories.data?.categories]);
   const selectedTag = materialTags.find((tag) => tag.key === selectedTagKey);
-  const filteredAssets = useMemo(() => {
+  const filterAssets = (assets: AssetItem[]) => {
     const normalizedKeyword = keyword.trim().toLowerCase();
-    return allAssets
+    return assets
       .filter((asset) => {
         if (!selectedTag) return true;
         if (selectedTag.categoryId) return asset.categoryIds.includes(selectedTag.categoryId);
@@ -168,10 +183,10 @@ export function MaterialPicker({
           .toLowerCase();
         return haystack.includes(normalizedKeyword);
       });
-  }, [allAssets, categories.data?.reviewEnabled, keyword, selectedTag]);
+  };
   const sections = [
-    { id: "shared", name: t("common.shared"), assets: filteredAssets.filter((asset) => asset.space === "shared" || asset.shared) },
-    { id: "private", name: t("common.mine"), assets: filteredAssets.filter((asset) => asset.canEdit && asset.space === "private") }
+    { id: "shared", name: t("common.shared"), assets: filterAssets(loadedSharedAssets).filter((asset) => asset.space === "shared" || asset.shared) },
+    { id: "private", name: t("common.mine"), assets: filterAssets(loadedPrivateAssets).filter((asset) => asset.canEdit && asset.space === "private") }
   ];
   const totalVisibleAssets = sections.reduce((count, section) => count + section.assets.length, 0);
   const captureScrollAnchor = useCallback((): MaterialPickerScrollAnchor | null => {
@@ -186,20 +201,33 @@ export function MaterialPicker({
     if (!card || !id) return null;
     return { id, offsetTop: card.getBoundingClientRect().top - rootRect.top };
   }, []);
-  const fetchNextMaterialPage = useCallback(() => {
-    pendingScrollAnchorRef.current = captureScrollAnchor();
-    return libraryAssets.fetchNextPage();
-  }, [captureScrollAnchor, libraryAssets.fetchNextPage]);
-  const loadMoreRef = useInfinitePageLoader({
-    fetchNextPage: fetchNextMaterialPage,
-    hasNextPage: Boolean(libraryAssets.hasNextPage),
-    isFetchNextPageError: libraryAssets.isFetchNextPageError,
-    isFetchingNextPage: libraryAssets.isFetchingNextPage,
+  const fetchNextSharedMaterialPage = useCallback(() => {
+    pendingSharedScrollAnchorRef.current = captureScrollAnchor();
+    return sharedAssets.fetchNextPage();
+  }, [captureScrollAnchor, sharedAssets.fetchNextPage]);
+  const sharedLoadMoreRef = useInfinitePageLoader({
+    fetchNextPage: fetchNextSharedMaterialPage,
+    hasNextPage: Boolean(sharedAssets.hasNextPage),
+    isFetchNextPageError: sharedAssets.isFetchNextPageError,
+    isFetchingNextPage: sharedAssets.isFetchingNextPage,
+    rootRef: sectionsRef,
+    rootMargin: "320px"
+  });
+  const fetchNextPrivateMaterialPage = useCallback(() => {
+    pendingPrivateScrollAnchorRef.current = captureScrollAnchor();
+    return privateAssets.fetchNextPage();
+  }, [captureScrollAnchor, privateAssets.fetchNextPage]);
+  const privateLoadMoreRef = useInfinitePageLoader({
+    fetchNextPage: fetchNextPrivateMaterialPage,
+    hasNextPage: Boolean(privateAssets.hasNextPage),
+    isFetchNextPageError: privateAssets.isFetchNextPageError,
+    isFetchingNextPage: privateAssets.isFetchingNextPage,
     rootRef: sectionsRef,
     rootMargin: "320px"
   });
   const materialQuerySignature = `${selectedCategoryId}\u0000${debouncedKeyword}`;
-  const materialPageCount = libraryAssets.data?.pages.length ?? 0;
+  const sharedMaterialPageCount = sharedAssets.data?.pages.length ?? 0;
+  const privateMaterialPageCount = privateAssets.data?.pages.length ?? 0;
   const centerSelectedTag = useCallback(() => {
     const container = materialTagFilterRef.current;
     if (!container) return;
@@ -222,7 +250,8 @@ export function MaterialPicker({
   }, [selectedTagKey]);
 
   useEffect(() => {
-    pendingScrollAnchorRef.current = null;
+    pendingSharedScrollAnchorRef.current = null;
+    pendingPrivateScrollAnchorRef.current = null;
   }, [materialQuerySignature]);
 
   useEffect(() => {
@@ -230,21 +259,38 @@ export function MaterialPicker({
   }, [centerSelectedTag]);
 
   useEffect(() => {
-    if (!libraryAssets.isFetchingNextPage) pendingScrollAnchorRef.current = null;
-  }, [libraryAssets.isFetchingNextPage]);
+    if (!sharedAssets.isFetchingNextPage) pendingSharedScrollAnchorRef.current = null;
+  }, [sharedAssets.isFetchingNextPage]);
+
+  useEffect(() => {
+    if (!privateAssets.isFetchingNextPage) pendingPrivateScrollAnchorRef.current = null;
+  }, [privateAssets.isFetchingNextPage]);
 
   useLayoutEffect(() => {
-    const anchor = pendingScrollAnchorRef.current;
+    const anchor = pendingSharedScrollAnchorRef.current;
     const root = sectionsRef.current;
     if (!anchor || !root) return;
     const card = Array.from(root.querySelectorAll<HTMLElement>("[data-material-picker-item-id]")).find(
       (element) => element.dataset.materialPickerItemId === anchor.id
     );
-    pendingScrollAnchorRef.current = null;
+    pendingSharedScrollAnchorRef.current = null;
     if (!card) return;
     const nextOffsetTop = card.getBoundingClientRect().top - root.getBoundingClientRect().top;
     root.scrollTop += nextOffsetTop - anchor.offsetTop;
-  }, [materialPageCount]);
+  }, [sharedMaterialPageCount]);
+
+  useLayoutEffect(() => {
+    const anchor = pendingPrivateScrollAnchorRef.current;
+    const root = sectionsRef.current;
+    if (!anchor || !root) return;
+    const card = Array.from(root.querySelectorAll<HTMLElement>("[data-material-picker-item-id]")).find(
+      (element) => element.dataset.materialPickerItemId === anchor.id
+    );
+    pendingPrivateScrollAnchorRef.current = null;
+    if (!card) return;
+    const nextOffsetTop = card.getBoundingClientRect().top - root.getBoundingClientRect().top;
+    root.scrollTop += nextOffsetTop - anchor.offsetTop;
+  }, [privateMaterialPageCount]);
 
   useEffect(() => {
     if (!selectedTagKey || materialTags.some((tag) => tag.key === selectedTagKey)) return;
@@ -322,7 +368,7 @@ export function MaterialPicker({
         </div>
       </div>
       <div ref={sectionsRef} className="material-sections">
-        {libraryAssets.isLoading ? <p className="muted">{t("common.loading")}</p> : null}
+        {sharedAssets.isLoading || privateAssets.isLoading ? <p className="muted">{t("common.loading")}</p> : null}
         {sections.map((section) => (
           <section key={section.id}>
             <div className="material-section-head">
@@ -342,7 +388,7 @@ export function MaterialPicker({
                 </button>
               ) : null}
             </div>
-            {!libraryAssets.isLoading && section.assets.length === 0 ? <p className="muted">{totalVisibleAssets === 0 ? t("materialPicker.noMatch") : t("materialPicker.empty")}</p> : null}
+            {!sharedAssets.isLoading && !privateAssets.isLoading && section.assets.length === 0 ? <p className="muted">{totalVisibleAssets === 0 ? t("materialPicker.noMatch") : t("materialPicker.empty")}</p> : null}
             <VirtualizedResponsiveGrid
               items={section.assets}
               getKey={(asset) => asset.id}
@@ -380,9 +426,9 @@ export function MaterialPicker({
                 );
               }}
             />
+            <div ref={section.id === "shared" ? sharedLoadMoreRef : privateLoadMoreRef} className="page-load-sentinel" aria-hidden="true" />
           </section>
         ))}
-        <div ref={loadMoreRef} className="page-load-sentinel" aria-hidden="true" />
       </div>
     </div>
   );

@@ -15,28 +15,41 @@ type ImageJobEventsOptions = {
   onJob: (payload: ImageJobEventPayload) => void;
 };
 
-type StreamEvent = {
+export type StreamEvent = {
+  id?: string;
   event: string;
   data: unknown;
 };
 
 const IMAGE_JOB_EVENTS_URL = "/api/image-jobs/events";
 
-function parseStreamFrame(frame: string): StreamEvent | null {
+export function parseStreamFrame(frame: string): StreamEvent | null {
+  let id: string | undefined;
   let event = "message";
   const dataLines: string[] = [];
   for (const rawLine of frame.replace(/\r\n/g, "\n").split("\n")) {
     const line = rawLine.trimEnd();
-    if (line.startsWith("event:")) event = line.slice(6).trim();
+    if (line.startsWith("id:")) id = line.slice(3).trimStart();
+    else if (line.startsWith("event:")) event = line.slice(6).trim();
     else if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
   }
   const dataText = dataLines.join("\n").trim();
-  if (!dataText) return { event, data: {} };
+  if (!dataText) return { id, event, data: {} };
   try {
-    return { event, data: JSON.parse(dataText) };
+    return { id, event, data: JSON.parse(dataText) };
   } catch {
     return null;
   }
+}
+
+export function nextImageJobEventCursor(current: string, event: StreamEvent) {
+  return event.id === undefined ? current : event.id;
+}
+
+export function imageJobEventStreamHeaders(lastEventId: string) {
+  const headers: Record<string, string> = { Accept: "text/event-stream" };
+  if (lastEventId) headers["Last-Event-ID"] = lastEventId;
+  return headers;
 }
 
 function isImageJobEventPayload(value: unknown): value is ImageJobEventPayload {
@@ -87,6 +100,7 @@ export function useImageJobEvents({ onConnected, onJob }: ImageJobEventsOptions)
     let stopped = false;
     let reconnectTimer = 0;
     let activeController: AbortController | null = null;
+    let lastEventId = "";
 
     const connect = () => {
       const controller = new AbortController();
@@ -95,7 +109,7 @@ export function useImageJobEvents({ onConnected, onJob }: ImageJobEventsOptions)
       const readStream = async () => {
         const response = await fetch(IMAGE_JOB_EVENTS_URL, {
           credentials: "include",
-          headers: { Accept: "text/event-stream" },
+          headers: imageJobEventStreamHeaders(lastEventId),
           signal: controller.signal
         });
         if (!response.ok || !response.body) throw new Error(`SSE stream unavailable: ${response.status}`);
@@ -112,7 +126,10 @@ export function useImageJobEvents({ onConnected, onJob }: ImageJobEventsOptions)
             const frame = buffer.slice(0, boundary);
             buffer = buffer.slice(boundary + 2);
             const parsed = parseStreamFrame(frame);
-            if (parsed) handleEvent(parsed.event, parsed.data);
+            if (parsed) {
+              lastEventId = nextImageJobEventCursor(lastEventId, parsed);
+              handleEvent(parsed.event, parsed.data);
+            }
             boundary = buffer.indexOf("\n\n");
           }
         }

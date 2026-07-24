@@ -493,6 +493,44 @@ export function migrateImagePreviewWheelDefault(db: Database, timestamp = now())
   })();
 }
 
+export function migrateImageTaskSoundPreferences(db: Database) {
+  if (!tableColumnExists(db, "user_preferences", "image_task_sound_enabled")) {
+    db.run("alter table user_preferences add column image_task_sound_enabled integer not null default 1");
+  }
+  if (!tableColumnExists(db, "user_preferences", "image_task_browser_notification_enabled")) {
+    db.run("alter table user_preferences add column image_task_browser_notification_enabled integer not null default 0");
+  }
+  if (!tableColumnExists(db, "user_preferences", "image_task_sound_volume")) {
+    db.run("alter table user_preferences add column image_task_sound_volume integer not null default 70");
+  }
+  if (!tableColumnExists(db, "user_preferences", "image_task_success_sound_id")) {
+    db.run("alter table user_preferences add column image_task_success_sound_id text not null default ''");
+  }
+  if (!tableColumnExists(db, "user_preferences", "image_task_failure_sound_id")) {
+    db.run("alter table user_preferences add column image_task_failure_sound_id text not null default ''");
+  }
+  const legacySoundIdMigrations = [
+    ["%-2870", "maliang-001"],
+    ["%-946", "maliang-002"],
+    ["%-2358", "maliang-003"],
+    ["%-2309", "maliang-004"],
+    ["%-616", "maliang-005"],
+    ["%-2889", "maliang-006"],
+    ["%-579", "maliang-007"],
+    ["%-2879", "maliang-008"],
+    ["%-2816", "maliang-009"],
+    ["%-2210", "maliang-010"],
+    ["%-1", "maliang-011"],
+    ["%-93", "maliang-012"],
+    ["%-1751", "maliang-013"],
+    ["%-2462", "maliang-014"]
+  ] as const;
+  for (const [legacyPattern, currentId] of legacySoundIdMigrations) {
+    run(db, "update user_preferences set image_task_success_sound_id = ? where image_task_success_sound_id like ?", currentId, legacyPattern);
+    run(db, "update user_preferences set image_task_failure_sound_id = ? where image_task_failure_sound_id like ?", currentId, legacyPattern);
+  }
+}
+
 export function initAppDb() {
   appDb.run("PRAGMA journal_mode = MEMORY");
   appDb.run("PRAGMA foreign_keys = ON");
@@ -596,6 +634,11 @@ export function initAppDb() {
       edit_suggestions_enabled integer not null default 1,
       edit_suggestion_tone text not null default 'default',
       auto_upload_pasted_assets integer not null default 1,
+      image_task_sound_enabled integer not null default 1,
+      image_task_browser_notification_enabled integer not null default 0,
+      image_task_sound_volume integer not null default 70,
+      image_task_success_sound_id text not null default '',
+      image_task_failure_sound_id text not null default '',
       prompt_optimize_styles_json text not null default '',
       prompt_optimize_custom_instruction text not null default '',
       updated_at text not null,
@@ -620,6 +663,7 @@ export function initAppDb() {
   if (!tableColumnExists(appDb, "user_preferences", "auto_upload_pasted_assets")) {
     appDb.run("alter table user_preferences add column auto_upload_pasted_assets integer not null default 1");
   }
+  migrateImageTaskSoundPreferences(appDb);
   if (!tableColumnExists(appDb, "user_preferences", "prompt_optimize_styles_json")) {
     appDb.run("alter table user_preferences add column prompt_optimize_styles_json text not null default ''");
   }
@@ -804,6 +848,7 @@ export function initAppDb() {
       user_id text not null,
       session_id text not null,
       title text not null,
+      includes_branches integer not null default 0,
       created_at text not null,
       foreign key (user_id) references users(id) on delete cascade,
       foreign key (session_id) references sessions(id) on delete cascade
@@ -811,6 +856,9 @@ export function initAppDb() {
   `);
   if (!tableColumnExists(appDb, "session_share_links", "public_token")) {
     appDb.run("alter table session_share_links add column public_token text");
+  }
+  if (!tableColumnExists(appDb, "session_share_links", "includes_branches")) {
+    appDb.run("alter table session_share_links add column includes_branches integer not null default 0");
   }
   const usedSessionShareTokens = new Set(
     getAll<{ public_token: string | null }>(appDb, "select public_token from session_share_links where public_token is not null and public_token <> ''")
@@ -882,6 +930,7 @@ export function initAppDb() {
     }
   }
   appDb.run("create index if not exists image_jobs_user_client_request_idx on image_jobs(user_id, client_request_id)");
+  appDb.run("create index if not exists image_jobs_user_updated_idx on image_jobs(user_id, updated_at, id)");
 
   appDb.run(`
     create table if not exists image_job_cancel_requests (
@@ -1684,6 +1733,23 @@ export function initConfigDb() {
   );
 
   configDb.run(`
+    create table if not exists image_task_sounds (
+      id text primary key,
+      name text not null,
+      path text not null,
+      original_file_name text not null default '',
+      mime_type text not null,
+      size integer not null default 0,
+      sha256 text not null,
+      enabled integer not null default 1,
+      created_at text not null,
+      updated_at text not null
+    )
+  `);
+  configDb.run("create unique index if not exists image_task_sounds_sha256_idx on image_task_sounds(sha256) where sha256 <> ''");
+  configDb.run("create index if not exists image_task_sounds_enabled_time_idx on image_task_sounds(enabled, created_at, id)");
+
+  configDb.run(`
     create table if not exists branding_assets (
       id text primary key,
       type text not null,
@@ -2454,35 +2520,50 @@ export function seedPromptReferenceLinks() {
   initializeDefaults();
 }
 
-export function seedCases() {
+export function seedCases(db: Database = appDb, timestamp = now()) {
   const categories = [
-    { slug: UNCATEGORIZED_CASE_CATEGORY_SLUG, name: UNCATEGORIZED_CASE_CATEGORY_NAME, sort: 0, id: UNCATEGORIZED_CASE_CATEGORY_ID },
     { slug: "poster", name: "海报", sort: 10 },
     { slug: "rednote", name: "小红书攻略", sort: 20 },
     { slug: "portrait", name: "人物肖像", sort: 30 },
     { slug: "ecommerce", name: "电商图", sort: 40 },
     { slug: "interior", name: "室内设计", sort: 50 }
   ];
-
-  for (const category of categories) {
-    const id = category.id ?? `casecat_${category.slug}`;
+  const migrationId = "case_category_defaults_initialized_20260723";
+  db.transaction(() => {
     run(
-      appDb,
-      "insert or ignore into case_categories (id, type, name, slug, sort_order) values (?, ?, ?, ?, ?)",
-      id,
-      "case",
-      category.name,
-      category.slug,
-      category.sort
+      db,
+      "insert or ignore into case_categories (id, type, name, slug, sort_order) values (?, 'case', ?, ?, 0)",
+      UNCATEGORIZED_CASE_CATEGORY_ID,
+      UNCATEGORIZED_CASE_CATEGORY_NAME,
+      UNCATEGORIZED_CASE_CATEGORY_SLUG
     );
-  }
-  run(
-    appDb,
-    "update case_categories set name = ?, sort_order = ? where id = ?",
-    UNCATEGORIZED_CASE_CATEGORY_NAME,
-    0,
-    UNCATEGORIZED_CASE_CATEGORY_ID
-  );
+    run(
+      db,
+      "update case_categories set type = 'case', name = ?, sort_order = 0 where id = ?",
+      UNCATEGORIZED_CASE_CATEGORY_NAME,
+      UNCATEGORIZED_CASE_CATEGORY_ID
+    );
+    if (getOne<{ id: string }>(db, "select id from app_migrations where id = ?", migrationId)) return;
+    const existingNamedCount =
+      getOne<{ total: number }>(
+        db,
+        "select count(*) as total from case_categories where type = 'case' and id <> ?",
+        UNCATEGORIZED_CASE_CATEGORY_ID
+      )?.total ?? 0;
+    if (existingNamedCount === 0) {
+      for (const category of categories) {
+        run(
+          db,
+          "insert or ignore into case_categories (id, type, name, slug, sort_order) values (?, 'case', ?, ?, ?)",
+          `casecat_${category.slug}`,
+          category.name,
+          category.slug,
+          category.sort
+        );
+      }
+    }
+    run(db, "insert into app_migrations (id, created_at) values (?, ?)", migrationId, timestamp);
+  })();
 }
 
 export function seedPromptTemplates() {

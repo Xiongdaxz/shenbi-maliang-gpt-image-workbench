@@ -1,9 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
-  ArrowDown,
-  ArrowUp,
   Archive,
   Bot,
   Bug,
@@ -11,6 +9,7 @@ import {
   Database,
   Download,
   FolderOpen,
+  GripVertical,
   ImageIcon,
   KeyRound,
   Lightbulb,
@@ -19,7 +18,6 @@ import {
   Mail,
   Network,
   PanelLeft,
-  Pencil,
   ScrollText,
   Plus,
   RefreshCw,
@@ -29,7 +27,6 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Smartphone,
-  Trash2,
   Upload,
   Users,
   WandSparkles
@@ -69,7 +66,12 @@ import type {
   StarterDailyCopy,
   Team
 } from "../../types";
-import type { ConfigAssetReviewItem, ConfigCaseReviewItem } from "../../api/config";
+import type {
+  ConfigAssetReviewItem,
+  ConfigCaseReviewItem,
+  ConfigContentCategory,
+  ConfigContentCategoryType
+} from "../../api/config";
 import { ConfirmDialog, CustomSelect, PromptDialog, useToast } from "../../ui";
 import {
   ConfigHeader,
@@ -121,6 +123,463 @@ function caseReviewStatusLabel(status: ConfigCaseReviewItem["reviewStatus"]) {
   if (status === "approved") return "已通过";
   if (status === "rejected") return "未通过";
   return "已通过";
+}
+
+function contentCategoryTypeLabel(type: ConfigContentCategoryType) {
+  return type === "case" ? "灵感风格" : "素材标签";
+}
+
+function contentCategoryItemLabel(type: ConfigContentCategoryType) {
+  return type === "case" ? "条灵感" : "个素材";
+}
+
+function CategoryMergeDialog({
+  source,
+  categories,
+  pending,
+  onCancel,
+  onConfirm
+}: {
+  source: ConfigContentCategory | null;
+  categories: ConfigContentCategory[];
+  pending: boolean;
+  onCancel: () => void;
+  onConfirm: (targetId: string) => void;
+}) {
+  const targets = useMemo(() => categories.filter((category) => category.id !== source?.id), [categories, source?.id]);
+  const [targetId, setTargetId] = useState("");
+
+  useEffect(() => {
+    setTargetId(source ? targets[0]?.id ?? "" : "");
+  }, [source, targets]);
+
+  if (!source) return null;
+  const target = targets.find((category) => category.id === targetId);
+  const typeLabel = contentCategoryTypeLabel(source.type);
+
+  return (
+    <div
+      className="modal-backdrop"
+      onClick={(event) => {
+        if (event.target === event.currentTarget && !pending) onCancel();
+      }}
+    >
+      <section className="case-modal content-category-merge-modal" role="dialog" aria-modal="true" aria-label={`合并${typeLabel}`}>
+        <header>
+          <h3>合并{typeLabel}</h3>
+          <button type="button" onClick={onCancel} disabled={pending}>关闭</button>
+        </header>
+        <div className="content-category-merge-body">
+          <p>
+            将“{source.name}”的 {source.itemCount} {contentCategoryItemLabel(source.type)}和 {source.suggestionCount} 张图片的自动推荐记录迁移到目标项，
+            然后删除原{typeLabel}。此操作不会删除灵感或素材。
+          </p>
+          <label>
+            <span>合并到</span>
+            <CustomSelect
+              value={targetId}
+              options={targets.map((category) => ({
+                value: category.id,
+                label: `${category.name} · ${category.itemCount} ${contentCategoryItemLabel(category.type)}`
+              }))}
+              onChange={setTargetId}
+              menuWidth={320}
+            />
+          </label>
+          {target ? <small>合并后统一使用“{target.name}”，原名称将不再出现在筛选和新增选择中。</small> : null}
+          <div className="row-actions">
+            <button className="secondary-btn" type="button" onClick={onCancel} disabled={pending}>取消</button>
+            <button className="danger-btn" type="button" onClick={() => onConfirm(targetId)} disabled={pending || !targetId}>
+              {pending ? "合并中" : "确认合并"}
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CategoryDeleteDialog({
+  source,
+  categories,
+  deletePending,
+  migratePending,
+  onCancel,
+  onDelete,
+  onMigrate
+}: {
+  source: ConfigContentCategory | null;
+  categories: ConfigContentCategory[];
+  deletePending: boolean;
+  migratePending: boolean;
+  onCancel: () => void;
+  onDelete: () => void;
+  onMigrate: (targetId: string) => void;
+}) {
+  const targets = useMemo(() => categories.filter((category) => category.id !== source?.id), [categories, source?.id]);
+  const [targetId, setTargetId] = useState("");
+  const pending = deletePending || migratePending;
+
+  useEffect(() => {
+    setTargetId("");
+  }, [source?.id]);
+
+  if (!source) return null;
+  const typeLabel = contentCategoryTypeLabel(source.type);
+  const directDeleteEffect = source.type === "case"
+    ? `${source.itemCount} ${contentCategoryItemLabel(source.type)}会保留，并清除这个风格`
+    : `${source.itemCount} ${contentCategoryItemLabel(source.type)}会保留，仅解除这个标签`;
+
+  return (
+    <div
+      className="modal-backdrop"
+      onClick={(event) => {
+        if (event.target === event.currentTarget && !pending) onCancel();
+      }}
+    >
+      <section className="case-modal content-category-delete-modal" role="dialog" aria-modal="true" aria-label={`删除${typeLabel}`}>
+        <header>
+          <h3>删除{typeLabel}</h3>
+          <button type="button" onClick={onCancel} disabled={pending}>关闭</button>
+        </header>
+        <div className="content-category-delete-body">
+          <p>
+            删除“{source.name}”不会删除灵感或素材本身。直接删除时，{directDeleteEffect}；
+            {source.suggestionCount} 张图片中的自动推荐记录会同时移除。
+          </p>
+          {targets.length ? (
+            <label>
+              <span>迁移到其他{typeLabel}（可选）</span>
+              <CustomSelect
+                value={targetId}
+                placeholder={`请选择目标${typeLabel}`}
+                options={targets.map((category) => ({
+                  value: category.id,
+                  label: `${category.name} · ${category.itemCount} ${contentCategoryItemLabel(category.type)}`
+                }))}
+                onChange={setTargetId}
+                menuWidth={320}
+              />
+              <small>主动选择目标后，才能使用“迁移后删除”，内容关联和自动推荐记录会一并转到目标项。</small>
+            </label>
+          ) : (
+            <small>当前没有可迁移的其他{typeLabel}，只能直接删除。</small>
+          )}
+          <div className="row-actions">
+            <button className="secondary-btn" type="button" onClick={onCancel} disabled={pending}>取消</button>
+            <button className="danger-btn" type="button" onClick={onDelete} disabled={pending}>
+              {deletePending ? "删除中" : "直接删除"}
+            </button>
+            {targets.length ? (
+              <button className="primary-btn" type="button" onClick={() => onMigrate(targetId)} disabled={pending || !targetId}>
+                {migratePending ? "迁移中" : "迁移后删除"}
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+export function ContentCategoryManagementPanel() {
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
+  const [activeType, setActiveType] = useState<ConfigContentCategoryType>("case");
+  const [keyword, setKeyword] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<ConfigContentCategory | null>(null);
+  const [mergeTarget, setMergeTarget] = useState<ConfigContentCategory | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ConfigContentCategory | null>(null);
+  const [draggingCategoryId, setDraggingCategoryId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: string; position: "before" | "after" } | null>(null);
+  const caseCategories = useQuery({
+    queryKey: ["config-content-categories", "case"],
+    queryFn: () => configApi.contentCategories("case")
+  });
+  const assetCategories = useQuery({
+    queryKey: ["config-content-categories", "asset"],
+    queryFn: () => configApi.contentCategories("asset")
+  });
+  const activeQuery = activeType === "case" ? caseCategories : assetCategories;
+  const categories = activeQuery.data?.categories ?? [];
+  const visibleCategories = useMemo(() => {
+    const normalizedKeyword = keyword.trim().toLowerCase();
+    if (!normalizedKeyword) return categories;
+    return categories.filter((category) => category.name.toLowerCase().includes(normalizedKeyword));
+  }, [categories, keyword]);
+
+  const refreshCategoryConsumers = (type: ConfigContentCategoryType) => {
+    void queryClient.invalidateQueries({ queryKey: ["config-content-categories", type] });
+    void queryClient.invalidateQueries({ queryKey: [type === "case" ? "case-categories" : "asset-categories"] });
+    void queryClient.invalidateQueries({ queryKey: [type === "case" ? "cases" : "assets"] });
+  };
+  const createCategory = useMutation({
+    mutationFn: ({ type, name }: { type: ConfigContentCategoryType; name: string }) => configApi.createContentCategory(type, name),
+    onSuccess: (_, variables) => {
+      refreshCategoryConsumers(variables.type);
+      setCreateOpen(false);
+      showToast(`${contentCategoryTypeLabel(variables.type)}已新增`);
+    },
+    onError: (error) => showToast(error instanceof Error ? error.message : "新增失败", "error")
+  });
+  const renameCategory = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => configApi.renameContentCategory(id, name),
+    onSuccess: ({ category }) => {
+      refreshCategoryConsumers(category.type);
+      setRenameTarget(null);
+      showToast(`${contentCategoryTypeLabel(category.type)}已改名`);
+    },
+    onError: (error) => showToast(error instanceof Error ? error.message : "改名失败", "error")
+  });
+  const reorderCategories = useMutation({
+    mutationFn: ({ type, orderedIds }: { type: ConfigContentCategoryType; orderedIds: string[] }) =>
+      configApi.reorderContentCategories(type, orderedIds),
+    onSuccess: ({ categories: nextCategories }, variables) => {
+      queryClient.setQueryData(["config-content-categories", variables.type], { categories: nextCategories });
+      refreshCategoryConsumers(variables.type);
+    },
+    onError: (error) => showToast(error instanceof Error ? error.message : "排序失败", "error")
+  });
+  const mergeCategory = useMutation({
+    mutationFn: ({ id, targetId }: { id: string; targetId: string }) => configApi.mergeContentCategory(id, targetId),
+    onSuccess: (result) => {
+      queryClient.setQueryData(["config-content-categories", result.type], { categories: result.categories });
+      refreshCategoryConsumers(result.type);
+      setMergeTarget(null);
+      setDeleteTarget(null);
+      showToast(`已迁移 ${result.migratedItemCount} 个内容关联和 ${result.migratedSuggestionCount} 张图片的自动推荐记录，原分类已删除`);
+    },
+    onError: (error) => showToast(error instanceof Error ? error.message : "合并失败", "error")
+  });
+  const deleteCategory = useMutation({
+    mutationFn: (id: string) => configApi.deleteContentCategory(id),
+    onSuccess: (result) => {
+      queryClient.setQueryData(["config-content-categories", result.type], { categories: result.categories });
+      refreshCategoryConsumers(result.type);
+      setDeleteTarget(null);
+      const contentEffect = result.type === "case"
+        ? `${result.detachedItemCount} 条灵感已保留并清除该风格`
+        : `${result.detachedItemCount} 个素材已解除该标签`;
+      showToast(`${contentCategoryTypeLabel(result.type)}已删除，${contentEffect}`);
+    },
+    onError: (error) => showToast(error instanceof Error ? error.message : "删除失败", "error")
+  });
+
+  const moveCategory = (category: ConfigContentCategory, direction: -1 | 1) => {
+    const index = categories.findIndex((item) => item.id === category.id);
+    const targetIndex = index + direction;
+    if (index < 0 || targetIndex < 0 || targetIndex >= categories.length || reorderCategories.isPending) return;
+    const next = [...categories];
+    [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+    reorderCategories.mutate({ type: activeType, orderedIds: next.map((item) => item.id) });
+  };
+
+  const sortingDisabled = Boolean(keyword.trim()) || reorderCategories.isPending;
+  const resetCategoryDrag = () => {
+    setDraggingCategoryId(null);
+    setDropTarget(null);
+  };
+  const categoryDropTargetAt = (clientX: number, clientY: number) => {
+    const row = document.elementFromPoint(clientX, clientY)?.closest<HTMLTableRowElement>("tr[data-category-id]");
+    const targetId = row?.dataset.categoryId;
+    if (!row || !targetId || !row.closest(".content-category-table")) return null;
+    const bounds = row.getBoundingClientRect();
+    return {
+      id: targetId,
+      position: clientY < bounds.top + bounds.height / 2 ? "before" as const : "after" as const
+    };
+  };
+  const commitCategoryDrag = (sourceId: string, targetId: string, position: "before" | "after") => {
+    if (sourceId === targetId || sortingDisabled) return;
+    const source = categories.find((category) => category.id === sourceId);
+    const targetIndex = categories.findIndex((category) => category.id === targetId);
+    if (!source || targetIndex < 0) return;
+    const next = categories.filter((category) => category.id !== sourceId);
+    const remainingTargetIndex = next.findIndex((category) => category.id === targetId);
+    next.splice(remainingTargetIndex + (position === "after" ? 1 : 0), 0, source);
+    if (next.every((category, index) => category.id === categories[index]?.id)) return;
+    reorderCategories.mutate({ type: activeType, orderedIds: next.map((category) => category.id) });
+  };
+  const handleCategoryPointerDown = (event: ReactPointerEvent<HTMLTableRowElement>, categoryId: string) => {
+    if (sortingDisabled || event.button !== 0) return;
+    if (event.target instanceof Element && event.target.closest(".content-category-action-btn")) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDraggingCategoryId(categoryId);
+    setDropTarget(null);
+  };
+  const handleCategoryPointerMove = (event: ReactPointerEvent<HTMLTableRowElement>) => {
+    if (!draggingCategoryId || sortingDisabled) return;
+    event.preventDefault();
+    const target = categoryDropTargetAt(event.clientX, event.clientY);
+    if (!target || target.id === draggingCategoryId) {
+      setDropTarget(null);
+      return;
+    }
+    setDropTarget((current) => current?.id === target.id && current.position === target.position ? current : target);
+  };
+  const handleCategoryPointerUp = (event: ReactPointerEvent<HTMLTableRowElement>, sourceId: string) => {
+    if (draggingCategoryId !== sourceId || sortingDisabled) return;
+    const target = categoryDropTargetAt(event.clientX, event.clientY);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    resetCategoryDrag();
+    if (target) commitCategoryDrag(sourceId, target.id, target.position);
+  };
+
+  return (
+    <section className="config-card content-category-management-card">
+      <ConfigHeader
+        title="分类管理"
+        desc="统一维护灵感空间风格与素材库标签；前台仍可新增。"
+      />
+      <div className="content-category-toolbar">
+        <div className="provider-filter-tabs" role="tablist" aria-label="分类类型">
+          <button type="button" role="tab" className={activeType === "case" ? "active" : ""} onClick={() => setActiveType("case")}>
+            灵感风格 <span data-config-no-translate="true">{caseCategories.data?.categories.length ?? 0}</span>
+          </button>
+          <button type="button" role="tab" className={activeType === "asset" ? "active" : ""} onClick={() => setActiveType("asset")}>
+            素材标签 <span data-config-no-translate="true">{assetCategories.data?.categories.length ?? 0}</span>
+          </button>
+        </div>
+        <input
+          className="asset-review-search"
+          value={keyword}
+          onChange={(event) => setKeyword(event.target.value)}
+          placeholder={`搜索${contentCategoryTypeLabel(activeType)}`}
+        />
+        <button className="primary-btn" type="button" onClick={() => setCreateOpen(true)}>
+          <Plus size={16} /> 新增{contentCategoryTypeLabel(activeType)}
+        </button>
+      </div>
+      <div className="table-wrap content-category-table-wrap">
+        <table className="content-category-table">
+          <thead>
+            <tr>
+              <th>顺序</th>
+              <th>名称</th>
+              <th>关联内容</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visibleCategories.map((category) => {
+              const index = categories.findIndex((item) => item.id === category.id);
+              return (
+                <tr
+                  key={category.id}
+                  data-category-id={category.id}
+                  className={cx(
+                    !sortingDisabled && "content-category-row-sortable",
+                    draggingCategoryId === category.id && "content-category-row-dragging",
+                    dropTarget?.id === category.id && `content-category-drop-${dropTarget.position}`
+                  )}
+                  onPointerDown={(event) => handleCategoryPointerDown(event, category.id)}
+                  onPointerMove={handleCategoryPointerMove}
+                  onPointerUp={(event) => handleCategoryPointerUp(event, category.id)}
+                  onPointerCancel={resetCategoryDrag}
+                >
+                  <td>
+                    <div className="content-category-order-cell">
+                      <button
+                        className="ghost-btn content-category-drag-handle"
+                        type="button"
+                        aria-label={`拖动${category.name}排序`}
+                        title={keyword.trim() ? "清除搜索后可拖动排序" : reorderCategories.isPending ? "正在保存排序" : "整行均可拖动；聚焦此处也可使用上下方向键"}
+                        disabled={sortingDisabled}
+                        onKeyDown={(event) => {
+                          if (sortingDisabled || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
+                          event.preventDefault();
+                          moveCategory(category, event.key === "ArrowUp" ? -1 : 1);
+                        }}
+                      >
+                        <GripVertical size={20} aria-hidden="true" />
+                      </button>
+                      <span className="content-category-order">{index + 1}</span>
+                    </div>
+                  </td>
+                  <td><strong title={category.name}>{category.name}</strong></td>
+                  <td>{category.itemCount} {contentCategoryItemLabel(category.type)}</td>
+                  <td>
+                    <div className="content-category-row-actions">
+                      <button className="secondary-btn content-category-action-btn" type="button" onClick={() => setRenameTarget(category)}>
+                        改名
+                      </button>
+                      <button
+                        className="secondary-btn content-category-action-btn"
+                        type="button"
+                        title="合并到其他分类"
+                        disabled={categories.length < 2}
+                        onClick={() => setMergeTarget(category)}
+                      >
+                        合并
+                      </button>
+                      <button
+                        className="danger-btn content-category-action-btn"
+                        type="button"
+                        title="删除或迁移后删除"
+                        onClick={() => setDeleteTarget(category)}
+                      >
+                        删除
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {activeQuery.isLoading ? <tr><td colSpan={4}>分类加载中...</td></tr> : null}
+            {activeQuery.error ? <tr><td colSpan={4} className="form-error">{activeQuery.error.message}</td></tr> : null}
+            {!activeQuery.isLoading && !activeQuery.error && visibleCategories.length === 0 ? (
+              <tr><td colSpan={4}>{keyword.trim() ? "暂无匹配分类" : `暂无${contentCategoryTypeLabel(activeType)}`}</td></tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+      <PromptDialog
+        open={createOpen}
+        title={`新增${contentCategoryTypeLabel(activeType)}`}
+        label="名称"
+        confirmText={createCategory.isPending ? "保存中" : "新增"}
+        onCancel={() => setCreateOpen(false)}
+        onSubmit={(name) => {
+          if (!createCategory.isPending) createCategory.mutate({ type: activeType, name: name.trim() });
+        }}
+      />
+      <PromptDialog
+        open={Boolean(renameTarget)}
+        title={`修改${renameTarget ? contentCategoryTypeLabel(renameTarget.type) : "分类"}名称`}
+        label="名称"
+        defaultValue={renameTarget?.name ?? ""}
+        confirmText={renameCategory.isPending ? "保存中" : "保存"}
+        onCancel={() => setRenameTarget(null)}
+        onSubmit={(name) => {
+          if (renameTarget && !renameCategory.isPending) renameCategory.mutate({ id: renameTarget.id, name: name.trim() });
+        }}
+      />
+      <CategoryMergeDialog
+        source={mergeTarget}
+        categories={categories}
+        pending={mergeCategory.isPending}
+        onCancel={() => setMergeTarget(null)}
+        onConfirm={(targetId) => {
+          if (mergeTarget && !mergeCategory.isPending) mergeCategory.mutate({ id: mergeTarget.id, targetId });
+        }}
+      />
+      <CategoryDeleteDialog
+        source={deleteTarget}
+        categories={categories}
+        deletePending={deleteCategory.isPending}
+        migratePending={mergeCategory.isPending}
+        onCancel={() => setDeleteTarget(null)}
+        onDelete={() => {
+          if (deleteTarget && !deleteCategory.isPending) deleteCategory.mutate(deleteTarget.id);
+        }}
+        onMigrate={(targetId) => {
+          if (deleteTarget && !mergeCategory.isPending) mergeCategory.mutate({ id: deleteTarget.id, targetId });
+        }}
+      />
+    </section>
+  );
 }
 
 function ReviewPromptPreview({ text }: { text?: string | null }) {

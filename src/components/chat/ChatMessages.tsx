@@ -1003,7 +1003,7 @@ export function ChatMessage({
       observer?.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [message.content, message.role, userTextExpanded]);
+  }, [message.content, message.id, message.role, userTextExpanded]);
 
   const copyImage = async () => {
     if (!message.imageUrl || copyingImage) return;

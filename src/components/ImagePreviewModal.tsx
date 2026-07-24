@@ -51,6 +51,11 @@ type ImagePreviewModalProps<TItem extends ImagePreviewItem> = {
   showItemThumbnails?: boolean;
   suppressStableScrollbarGutter?: boolean;
   transparencyStatus?: ImageTransparencyStatus;
+  navigationItemCount?: number;
+  canNavigateNext?: boolean;
+  canNavigatePrevious?: boolean;
+  onNavigateNext?: () => void;
+  onNavigatePrevious?: () => void;
   onIndexChange: (index: number) => void;
   onClose: () => void;
   renderActions?: (item: TItem) => ReactNode;
@@ -104,6 +109,11 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
   showItemThumbnails = false,
   suppressStableScrollbarGutter = false,
   transparencyStatus,
+  navigationItemCount,
+  canNavigateNext,
+  canNavigatePrevious,
+  onNavigateNext,
+  onNavigatePrevious,
   onIndexChange,
   onClose,
   renderActions
@@ -155,8 +165,9 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
       } as TItem
     : previewItem;
   const previewOpen = Boolean(previewDisplayItem);
-  const hasPreviewPrev = items.length > 1;
-  const hasPreviewNext = items.length > 1;
+  const previewItemCount = Math.max(items.length, navigationItemCount ?? 0);
+  const hasPreviewPrev = canNavigatePrevious ?? items.length > 1;
+  const hasPreviewNext = canNavigateNext ?? items.length > 1;
   const previewSizeLabel = previewImageSize ? `${previewImageSize.width} x ${previewImageSize.height}` : "--";
   const previewFileSizeLabel = formatImageFileSize(previewDisplayItem?.imageFileSize);
   const referenceImages = previewDisplayItem?.referenceImages ?? [];
@@ -737,12 +748,12 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
           onNavigatorPointerDown={handlePreviewNavigatorPointerDown}
           onNavigatorPointerMove={handlePreviewNavigatorPointerMove}
           onNavigatorPointerUp={finishPreviewNavigatorDrag}
-          onNext={() => onIndexChange((index + 1) % items.length)}
+          onNext={() => onNavigateNext ? onNavigateNext() : onIndexChange((index + 1) % items.length)}
           onPointerCancel={cancelPreviewDrag}
           onPointerDown={handlePreviewPointerDown}
           onPointerMove={handlePreviewPointerMove}
           onPointerUp={finishPreviewDrag}
-          onPrev={() => onIndexChange((index - 1 + items.length) % items.length)}
+          onPrev={() => onNavigatePrevious ? onNavigatePrevious() : onIndexChange((index - 1 + items.length) % items.length)}
           onWheel={handlePreviewWheel}
         />
         {itemThumbnailsVisible ? (
@@ -755,7 +766,7 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
           groupImages={previewGroupImages}
           activeGroupImageIndex={normalizedGroupImageIndex}
           item={previewDisplayItem}
-          itemCount={items.length}
+          itemCount={previewItemCount}
           referenceImages={referenceImages}
           sizeLabel={previewSizeLabel}
           transparencyLabel={transparencyLabel}

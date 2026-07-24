@@ -24,6 +24,7 @@ type SessionShareLinkRow = {
   user_id: string;
   session_id: string;
   title: string;
+  includes_branches: number;
   created_at: string;
   message_count?: number | null;
 };
@@ -390,18 +391,52 @@ export function sharedAssistantReferencesHidden(
   return Boolean(jobId && hiddenReferenceJobIds.has(jobId));
 }
 
-export function safeSharedMessageMetadata(value: string | null | Record<string, unknown>, localJobId = "") {
+type SharedBranchMetadataScope = {
+  branchId: (value: string) => string;
+  messageId: (value: string) => string;
+};
+
+export function safeSharedMessageMetadata(
+  value: string | null | Record<string, unknown>,
+  localJobId = "",
+  branchScope?: SharedBranchMetadataScope
+) {
   const raw = parsedSharedMessageMetadata(value);
   const metadata: Record<string, unknown> = {};
   const mode = String(raw.mode ?? "").trim();
   if (mode === "generation" || mode === "edit") metadata.mode = mode;
   if (localJobId) metadata.jobId = localJobId;
   if (raw.hideReference === true) metadata.hideReference = true;
+  if (branchScope) {
+    for (const key of ["branchId", "parentBranchId"] as const) {
+      const localId = branchScope.branchId(String(raw[key] ?? "").trim());
+      if (localId) metadata[key] = localId;
+    }
+    for (const key of ["branchForkMessageId", "branchRootMessageId", "revisionRootId"] as const) {
+      const localId = branchScope.messageId(String(raw[key] ?? "").trim());
+      if (localId) metadata[key] = localId;
+    }
+  }
   return metadata;
 }
 
-function safeScopedMetadata() {
+function safeScopedMetadata(rows: ReadonlyArray<Pick<SharedMessageRow, "id" | "share_sort_order">>, includeBranches: boolean) {
   const jobs = new Map<string, string>();
+  const branches = new Map<string, string>([["main", "main"]]);
+  const messageIds = new Map(rows.map((row) => [row.id, localMessageId(row.share_sort_order)]));
+  const branchScope: SharedBranchMetadataScope | undefined = includeBranches
+    ? {
+        branchId: (value) => {
+          if (!value) return "";
+          const existing = branches.get(value);
+          if (existing) return existing;
+          const localId = `shared-branch-${branches.size}`;
+          branches.set(value, localId);
+          return localId;
+        },
+        messageId: (value) => messageIds.get(value) ?? ""
+      }
+    : undefined;
   return (row: SharedMessageRow) => {
     const raw = safeJson<Record<string, unknown>>(row.metadata, {});
     const actualJobId = typeof raw.jobId === "string" ? raw.jobId.trim() : "";
@@ -410,7 +445,7 @@ function safeScopedMetadata() {
       localJobId = jobs.get(actualJobId) ?? `shared-job-${jobs.size + 1}`;
       jobs.set(actualJobId, localJobId);
     }
-    return safeSharedMessageMetadata(raw, localJobId);
+    return safeSharedMessageMetadata(raw, localJobId, branchScope);
   };
 }
 
@@ -516,7 +551,7 @@ function sharedMessages(share: SessionShareLinkRow, token: string) {
   for (const reference of imageReferences) {
     imageReferenceMap.set(reference.image_id, [...(imageReferenceMap.get(reference.image_id) ?? []), reference]);
   }
-  const metadataFor = safeScopedMetadata();
+  const metadataFor = safeScopedMetadata(rows, share.includes_branches === 1);
 
   return rows.map((row) => {
     const baseUrl = sharedMessageBaseUrl(token, row.share_sort_order);
@@ -779,8 +814,10 @@ export function registerSessionShareRoutes(api: Hono) {
     if (!user) return c.json({ error: "未登录" }, 401);
     if (!sameOriginMutation(c)) return c.json({ error: "请求来源无效" }, 403);
     const body = await c.req.json().catch(() => ({}));
-    const requested = requestedMessageIds((body as Record<string, unknown>).messageIds);
+    const requestBody = body as Record<string, unknown>;
+    const requested = requestedMessageIds(requestBody.messageIds);
     if ("error" in requested) return c.json({ error: requested.error }, 400);
+    const includeBranches = requestBody.includeBranches === true;
     const sessionId = c.req.param("sessionId");
     expireStaleImageJobs(user.id, sessionId);
 
@@ -821,10 +858,12 @@ export function registerSessionShareRoutes(api: Hono) {
                 (select count(*) from session_share_messages sm where sm.share_id = l.id) as message_count
          from session_share_links l
          where l.user_id = ? and l.session_id = ?
+           and l.includes_branches = ?
            and (select count(*) from session_share_messages sm where sm.share_id = l.id) = ?
          order by l.created_at asc, l.rowid asc`,
         user.id,
         sessionId,
+        includeBranches ? 1 : 0,
         rows.length
       );
       const requestedIds = rows.map((row) => row.id);
@@ -843,12 +882,13 @@ export function registerSessionShareRoutes(api: Hono) {
       const timestamp = now();
       run(
         appDb,
-        "insert into session_share_links (id, public_token, user_id, session_id, title, created_at) values (?, ?, ?, ?, ?, ?)",
+        "insert into session_share_links (id, public_token, user_id, session_id, title, includes_branches, created_at) values (?, ?, ?, ?, ?, ?, ?)",
         id,
         publicToken,
         user.id,
         sessionId,
         session.title,
+        includeBranches ? 1 : 0,
         timestamp
       );
       rows.forEach((row, index) => {
@@ -867,6 +907,7 @@ export function registerSessionShareRoutes(api: Hono) {
           user_id: user.id,
           session_id: sessionId,
           title: session.title,
+          includes_branches: includeBranches ? 1 : 0,
           created_at: timestamp,
           message_count: rows.length
         } satisfies SessionShareLinkRow,
@@ -879,6 +920,7 @@ export function registerSessionShareRoutes(api: Hono) {
       shareId: creation.row.id,
       sessionId: creation.row.session_id,
       messageCount: creation.row.message_count,
+      includeBranches: creation.row.includes_branches === 1,
       reused: creation.reused
     });
     return c.json({ shareLink: publicShareLink(creation.row, c) });
