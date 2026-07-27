@@ -5,7 +5,6 @@ import {
   ArrowDown,
   ArrowUp,
   Archive,
-  Bot,
   Bug,
   Check,
   Database,
@@ -42,6 +41,7 @@ import { DEFAULT_SITE_NAME } from "../../lib/branding";
 import { copyTextToClipboard } from "../../lib/clipboard";
 import { cx } from "../../lib/cx";
 import { formatImageFileSize } from "../../lib/format";
+import { recoverableLanguageModelAssignmentsPayload } from "../../lib/languageModelAssignments";
 import type {
   BackupRun,
   BackupSettings,
@@ -55,6 +55,8 @@ import type {
   ImageAccountImportPreviewItem,
   ImageAccountImportSource,
   ImageGenerationMode,
+  LanguageModelAssignment,
+  LanguageModelUsageKey,
   GlobalSwitchType,
   ModelRequestLog,
   PromptOptimizerProvider,
@@ -95,6 +97,7 @@ import {
   isGeneratedProviderId,
   isGeneratedProviderName
 } from "../shared";
+import { useConfigCopy } from "../configCopy";
 
 const accountStatusLabels: Record<ImageAccount["status"], string> = {
   normal: "可用",
@@ -1846,6 +1849,7 @@ function promptOptimizerModelSelectOptions(models: string[], currentModel: strin
   return values.map((value) => ({
     value,
     label: value,
+    labelNoTranslate: true,
     description: value === current && !modelSet.has(value) ? "当前配置" : undefined
   }));
 }
@@ -1884,7 +1888,6 @@ function PromptOptimizerDialog({
 }) {
   const { showToast } = useToast();
   const [form, setForm] = useState<PromptOptimizerProvider>(() => normalizePromptOptimizerProvider(provider));
-  const [testMessage, setTestMessage] = useState("");
   const patch = (patchValue: Partial<PromptOptimizerProvider>) => setForm((value) => ({ ...value, ...patchValue }));
   const patchConnection = (patchValue: Partial<PromptOptimizerProvider>) =>
     patch({
@@ -1919,7 +1922,6 @@ function PromptOptimizerDialog({
     onSuccess: (data) => {
       applyModelList(data.models, data.defaultModel, `已获取 ${data.models.length} 个模型`);
       patch({ availabilityCheckedAt: data.availabilityCheckedAt });
-      setTestMessage("");
     },
     onError: (error) => {
       const message = error instanceof Error ? error.message : "模型列表获取失败";
@@ -1932,12 +1934,10 @@ function PromptOptimizerDialog({
     onSuccess: (data) => {
       applyModelList(data.models, data.defaultModel, data.message);
       patch({ availabilityCheckedAt: data.availabilityCheckedAt });
-      setTestMessage(`${data.message}，耗时 ${data.durationMs}ms`);
     },
     onError: (error) => {
       const message = error instanceof Error ? error.message : "供应商测试失败";
       patch({ availabilityStatus: "abnormal", availabilityError: message, availabilityCheckedAt: new Date().toISOString() });
-      setTestMessage(message);
       showToast(message, "error");
     }
   });
@@ -1945,19 +1945,18 @@ function PromptOptimizerDialog({
     <div className="modal-backdrop">
       <section className="case-modal provider-dialog">
         <header>
-          <h3>{mode === "create" ? "新增优化模型" : "编辑优化模型"}</h3>
+          <div className="prompt-optimizer-dialog-title">
+            <h3>{mode === "create" ? "新增模型供应商" : "编辑模型供应商"}</h3>
+            <PromptOptimizerAvailabilityTag provider={normalizedForm} />
+          </div>
           <button type="button" onClick={onClose}>
             关闭
           </button>
         </header>
         <div className="provider-form provider-dialog-form">
-          <label>
+          <label className="wide">
             名称
             <input value={form.name} onChange={(event) => patch({ name: event.target.value })} autoFocus />
-          </label>
-          <label>
-            配置 ID
-            <input value={form.id} readOnly className="readonly-input" />
           </label>
           <label>
             Base URL
@@ -2019,31 +2018,25 @@ function PromptOptimizerDialog({
             重试次数
             <input type="number" min={0} max={10} step={1} value={form.retryCount} onChange={(event) => patch({ retryCount: Number(event.target.value) })} />
           </label>
-          <div className="switch-row">
-            <span>流式返回</span>
-            <SwitchControl checked={form.streamEnabled} label={form.streamEnabled ? "流式" : "普通"} onChange={(streamEnabled) => patch({ streamEnabled })} />
+          <div className="prompt-optimizer-switches">
+            <div className="switch-row">
+              <span>流式返回</span>
+              <SwitchControl checked={form.streamEnabled} label={form.streamEnabled ? "流式" : "普通"} onChange={(streamEnabled) => patch({ streamEnabled })} />
+            </div>
+            <div className="switch-row">
+              <span>启用状态</span>
+              <SwitchControl checked={form.enabled} label={form.enabled ? "启用" : "停用"} onChange={(enabled) => patch({ enabled })} />
+            </div>
+            <div className="switch-row">
+              <span>思考模式</span>
+              <SwitchControl checked={form.thinkingEnabled} label={form.thinkingEnabled ? "开启" : "关闭"} onChange={(thinkingEnabled) => patch({ thinkingEnabled })} />
+            </div>
           </div>
-          <div className="switch-row">
-            <span>思考模式</span>
-            <SwitchControl checked={form.thinkingEnabled} label={form.thinkingEnabled ? "开启" : "关闭"} onChange={(thinkingEnabled) => patch({ thinkingEnabled })} />
-          </div>
-          <div className="switch-row">
-            <span>启用状态</span>
-            <SwitchControl checked={form.enabled} label={form.enabled ? "启用" : "停用"} onChange={(enabled) => patch({ enabled })} />
-          </div>
-          <div className="prompt-optimizer-protocol">
-            <Bot size={17} />
-            <span>OpenAI Chat Completions 兼容：POST Base URL + Endpoint Path，支持普通 JSON 或 SSE 流式读取；DeepSeek 接口会发送 thinking 参数，Max Tokens 为 0 时不限制；重试只处理网络错误、429 和 5xx 等临时失败。</span>
-          </div>
-          <div className="prompt-optimizer-test-actions">
+          <div className="row-actions">
             <button className="secondary-btn" type="button" onClick={() => testProvider.mutate()} disabled={fetchModels.isPending || testProvider.isPending}>
               <Network size={16} />
               测试供应商
             </button>
-            <PromptOptimizerAvailabilityTag provider={normalizedForm} />
-            {testMessage ? <span>{testMessage}</span> : null}
-          </div>
-          <div className="row-actions">
             <button className="secondary-btn" type="button" onClick={onClose}>
               取消
             </button>
@@ -2059,11 +2052,277 @@ function PromptOptimizerDialog({
   );
 }
 
+type LanguageModelAssignmentDraft = Pick<LanguageModelAssignment, "usageKey" | "providerId" | "model">;
+type LanguageModelSelectionDraft = Pick<LanguageModelAssignment, "providerId" | "model">;
+type LanguageModelAssignmentsSavePayload = {
+  globalDefault: LanguageModelSelectionDraft;
+  assignments: LanguageModelAssignmentDraft[];
+};
+type LanguageModelAssignmentsSaveOperation = {
+  revision: number;
+  payload: LanguageModelAssignmentsSavePayload;
+};
+
+type LanguageModelChoice = LanguageModelSelectionDraft & {
+  value: string;
+  providerName: string;
+};
+
+function languageModelChoiceValue(providerId: string, model: string) {
+  return JSON.stringify([providerId, model]);
+}
+
+function languageModelChoices(providers: PromptOptimizerProvider[], selections: LanguageModelSelectionDraft[]) {
+  const extraModelsByProvider = new Map<string, string[]>();
+  for (const selection of selections) {
+    const providerId = selection.providerId.trim();
+    const model = selection.model.trim();
+    if (!providerId || !model) continue;
+    extraModelsByProvider.set(providerId, [...(extraModelsByProvider.get(providerId) ?? []), model]);
+  }
+  return providers
+    .filter((provider) => provider.enabled)
+    .flatMap((provider) => promptOptimizerModelValues([
+      provider.model,
+      ...provider.availableModels,
+      ...(extraModelsByProvider.get(provider.id) ?? [])
+    ]).map((model) => ({
+      value: languageModelChoiceValue(provider.id, model),
+      providerId: provider.id,
+      providerName: provider.name,
+      model
+    })));
+}
+
+const LANGUAGE_MODEL_ASSIGNMENT_GROUPS: Array<{
+  title: string;
+  description: string;
+  items: Array<{
+    usageKey: LanguageModelUsageKey;
+    label: string;
+    description: string;
+    recommendation: string;
+  }>;
+}> = [
+  {
+    title: "创作增强",
+    description: "面向提示词创作、表单处理和图片续改的内容生成任务。",
+    items: [
+      { usageKey: "prompt.optimize", label: "对话提示词优化", description: "对话输入框里的 AI 提示词优化。", recommendation: "质量优先" },
+      { usageKey: "template.optimize", label: "表单提示词优化", description: "站内表单和导出网页的 AI 优化。", recommendation: "质量优先" },
+      { usageKey: "template.translate", label: "表单提示词翻译", description: "站内表单和导出网页的中英翻译。", recommendation: "速度优先" },
+      { usageKey: "image.edit_suggestions", label: "图片续改建议", description: "图片完成前预生成及按需刷新的续改建议。", recommendation: "低延迟优先" }
+    ]
+  },
+  {
+    title: "自动命名",
+    description: "为用户和内容生成简短、易识别的名称。",
+    items: [
+      { usageKey: "title.chat", label: "对话标题", description: "根据首条提示词生成对话标题。", recommendation: "低延迟优先" },
+      { usageKey: "title.case", label: "灵感标题", description: "加入灵感空间时生成推荐标题。", recommendation: "低延迟优先" },
+      { usageKey: "title.asset", label: "素材名称", description: "保存到素材库时生成素材名称。", recommendation: "低延迟优先" },
+      { usageKey: "identity.username", label: "注册昵称", description: "为新注册用户生成昵称和候选昵称。", recommendation: "低成本优先" }
+    ]
+  },
+  {
+    title: "内容理解",
+    description: "从管理员维护的候选分类中判断匹配项。",
+    items: [
+      { usageKey: "classify.case_style", label: "灵感风格判断", description: "自动选择最多三个灵感风格。", recommendation: "稳定输出优先" },
+      { usageKey: "classify.asset_tag", label: "素材标签判断", description: "自动选择最多三个素材标签。", recommendation: "稳定输出优先" }
+    ]
+  },
+  {
+    title: "系统服务",
+    description: "后台定时任务和生成前的治理能力。",
+    items: [
+      { usageKey: "starter.copy.generate", label: "每日文案生成", description: "每天生成空白页中文互动文案。", recommendation: "成本优先" },
+      { usageKey: "starter.copy.translate", label: "每日文案翻译", description: "生成或补齐空白页英文文案。", recommendation: "成本优先" },
+      { usageKey: "safety.review", label: "安全审核", description: "在生图和图生图请求前审核提示词。", recommendation: "准确性优先" }
+    ]
+  }
+];
+
+function LanguageModelAssignmentsPanel({ providers }: { providers: PromptOptimizerProvider[] }) {
+  const queryClient = useQueryClient();
+  const copy = useConfigCopy();
+  const { showToast } = useToast();
+  const query = useQuery({ queryKey: ["config-language-model-assignments"], queryFn: configApi.languageModelAssignments });
+  const [globalDefaultDraft, setGlobalDefaultDraft] = useState<LanguageModelSelectionDraft>({ providerId: "", model: "" });
+  const [drafts, setDrafts] = useState<LanguageModelAssignmentDraft[]>([]);
+  const saveRevisionRef = useRef(0);
+  const save = useMutation({
+    scope: { id: "language-model-assignments-auto-save" },
+    mutationFn: ({ payload }: LanguageModelAssignmentsSaveOperation) => configApi.saveLanguageModelAssignments(payload),
+    onSuccess: (data, operation) => {
+      if (operation.revision !== saveRevisionRef.current) return;
+      queryClient.setQueryData(["config-language-model-assignments"], data);
+      showToast("场景分配已保存");
+    },
+    onError: (error, operation) => {
+      if (operation.revision !== saveRevisionRef.current) return;
+      showToast(error instanceof Error ? error.message : "场景分配保存失败", "error");
+      queryClient.invalidateQueries({ queryKey: ["config-language-model-assignments"] });
+    }
+  });
+
+  useEffect(() => {
+    if (!query.data) return;
+    const globalDefault = query.data.globalDefault ?? query.data.defaultProvider;
+    setGlobalDefaultDraft({ providerId: globalDefault?.providerId ?? "", model: globalDefault?.model ?? "" });
+    setDrafts(query.data.assignments.map(({ usageKey, providerId, model }) => ({ usageKey, providerId, model })));
+  }, [query.data]);
+
+  const draftByUsageKey = useMemo(() => new Map(drafts.map((draft) => [draft.usageKey, draft])), [drafts]);
+  const choices = languageModelChoices(providers, [globalDefaultDraft, ...drafts]);
+  const choiceByValue = new Map(choices.map((choice) => [choice.value, choice]));
+  const modelOptions = choices.map((choice) => ({
+    value: choice.value,
+    label: choice.model,
+    labelNoTranslate: true,
+    group: choice.providerName,
+    groupNoTranslate: true
+  }));
+  const globalDefaultValue = globalDefaultDraft.providerId && globalDefaultDraft.model
+    ? languageModelChoiceValue(globalDefaultDraft.providerId, globalDefaultDraft.model)
+    : "";
+  const effectiveGlobalDefaultModel = choiceByValue.has(globalDefaultValue)
+    ? globalDefaultDraft.model
+    : query.data?.globalDefault?.resolvedModel || globalDefaultDraft.model;
+  const followGlobalDefaultLabel = effectiveGlobalDefaultModel
+    ? `${copy("跟随全局默认")} · ${effectiveGlobalDefaultModel}`
+    : copy("跟随全局默认");
+  const globalDefaultProvider = providers.find((provider) => provider.id === globalDefaultDraft.providerId);
+  const globalDefaultOptions = choiceByValue.has(globalDefaultValue) || !globalDefaultValue
+    ? modelOptions
+    : [
+        {
+          value: globalDefaultValue,
+          label: "配置失效",
+          description: `${globalDefaultProvider?.name || globalDefaultDraft.providerId} / ${globalDefaultDraft.model || "空模型"}`,
+          descriptionNoTranslate: true
+        },
+        ...modelOptions
+      ];
+
+  function persist(nextGlobalDefault: LanguageModelSelectionDraft, nextDrafts: LanguageModelAssignmentDraft[]) {
+    const payload = recoverableLanguageModelAssignmentsPayload(
+      nextGlobalDefault,
+      {
+        providerId: query.data?.globalDefault?.resolvedProviderId ?? query.data?.defaultProvider?.providerId ?? "",
+        model: query.data?.globalDefault?.resolvedModel ?? query.data?.defaultProvider?.model ?? ""
+      },
+      nextDrafts,
+      choices
+    );
+    if (!payload) return;
+    const revision = saveRevisionRef.current + 1;
+    saveRevisionRef.current = revision;
+    save.mutate({
+      revision,
+      payload
+    });
+  }
+
+  function selectGlobalDefault(value: string) {
+    const choice = choiceByValue.get(value);
+    if (!choice) return;
+    const nextGlobalDefault = { providerId: choice.providerId, model: choice.model };
+    setGlobalDefaultDraft(nextGlobalDefault);
+    persist(nextGlobalDefault, drafts);
+  }
+
+  function selectAssignment(usageKey: LanguageModelUsageKey, value: string) {
+    const choice = value ? choiceByValue.get(value) : null;
+    const nextDrafts = drafts.map((draft) => draft.usageKey === usageKey
+      ? { usageKey, providerId: choice?.providerId ?? "", model: choice?.model ?? "" }
+      : draft);
+    setDrafts(nextDrafts);
+    persist(globalDefaultDraft, nextDrafts);
+  }
+
+  return (
+    <section className="config-card language-model-assignment-card">
+      <ConfigHeader title="场景分配" desc="为每个语言模型使用场景选择模型；未单独配置时跟随全局默认。" />
+      <div className="language-model-default-summary">
+        <div>
+          <span>全局默认</span>
+          <small>未单独配置的场景会使用这里选择的模型。</small>
+        </div>
+        <CustomSelect
+          ariaLabel="全局默认"
+          className="language-model-default-select"
+          value={globalDefaultValue}
+          options={globalDefaultOptions}
+          onChange={selectGlobalDefault}
+          disabled={query.isLoading || Boolean(query.error) || modelOptions.length === 0}
+          placeholder="暂无启用模型"
+          menuWidth={380}
+        />
+      </div>
+      {query.isLoading ? <div className="settings-empty">场景分配加载中...</div> : null}
+      {!query.isLoading ? (
+        <div className="language-model-assignment-groups">
+          {LANGUAGE_MODEL_ASSIGNMENT_GROUPS.map((group) => (
+            <section className="language-model-assignment-group" key={group.title}>
+              <header>
+                <h2>{group.title}</h2>
+                <p>{group.description}</p>
+              </header>
+              <div className="language-model-assignment-list">
+                {group.items.map((item) => {
+                  const draft = draftByUsageKey.get(item.usageKey) ?? { usageKey: item.usageKey, providerId: "", model: "" };
+                  const value = draft.providerId && draft.model ? languageModelChoiceValue(draft.providerId, draft.model) : "";
+                  const selectedProvider = providers.find((provider) => provider.id === draft.providerId);
+                  const options = [
+                    { value: "", label: followGlobalDefaultLabel, labelNoTranslate: true },
+                    ...(!value || choiceByValue.has(value) ? [] : [{
+                      value,
+                      label: "配置失效",
+                      description: `${selectedProvider?.name || draft.providerId} / ${draft.model || "空模型"}`,
+                      descriptionNoTranslate: true
+                    }]),
+                    ...modelOptions
+                  ];
+                  return (
+                    <div className="language-model-assignment-row" key={item.usageKey}>
+                      <div className="language-model-assignment-copy">
+                        <div className="language-model-assignment-title-line">
+                          <strong>{item.label}</strong>
+                        </div>
+                        <p>
+                          {item.description}
+                          <small>推荐：{item.recommendation}</small>
+                        </p>
+                      </div>
+                      <CustomSelect
+                        ariaLabel={item.label}
+                        className="language-model-assignment-select"
+                        value={value}
+                        options={options}
+                        onChange={(nextValue) => selectAssignment(item.usageKey, nextValue)}
+                        disabled={Boolean(query.error) || modelOptions.length === 0}
+                        menuWidth={380}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : null}
+      {query.error ? <div className="form-error">{query.error.message}</div> : null}
+    </section>
+  );
+}
+
 export function PromptOptimizerPanel() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const providersQuery = useQuery({ queryKey: ["config-prompt-optimizer-providers"], queryFn: configApi.promptOptimizerProviders });
   const [providers, setProviders] = useState<PromptOptimizerProvider[]>([]);
+  const [activeModelTab, setActiveModelTab] = useState<"providers" | "assignments">("providers");
   const [dialog, setDialog] = useState<{ mode: "create" | "edit"; provider: PromptOptimizerProvider } | null>(null);
   const [removeTarget, setRemoveTarget] = useState<PromptOptimizerProvider | null>(null);
   const [switchTarget, setSwitchTarget] = useState<PromptOptimizerProvider | null>(null);
@@ -2077,6 +2336,7 @@ export function PromptOptimizerPanel() {
       setSwitchTarget(null);
       showToast(variables.message);
       queryClient.invalidateQueries({ queryKey: ["config-prompt-optimizer-providers"] });
+      queryClient.invalidateQueries({ queryKey: ["config-language-model-assignments"] });
     }
   });
 
@@ -2111,19 +2371,30 @@ export function PromptOptimizerPanel() {
       dialog?.mode === "create"
         ? [...providers, provider]
         : providers.map((item) => (item.id === originalId ? { ...provider, id: originalId } : item));
-    persist(nextProviders, dialog?.mode === "create" ? "优化模型已新增" : "优化模型已保存");
+    persist(nextProviders, dialog?.mode === "create" ? "模型供应商已新增" : "模型供应商已保存");
   }
 
   const enabledCount = providers.filter((provider) => provider.enabled).length;
   return (
     <>
+      <div className="model-config-tabs" role="tablist" aria-label="模型配置分类">
+        <button className={activeModelTab === "providers" ? "active" : ""} type="button" role="tab" aria-selected={activeModelTab === "providers"} onClick={() => setActiveModelTab("providers")}>
+          供应商配置
+        </button>
+        <button className={activeModelTab === "assignments" ? "active" : ""} type="button" role="tab" aria-selected={activeModelTab === "assignments"} onClick={() => setActiveModelTab("assignments")}>
+          场景分配
+        </button>
+      </div>
+      {activeModelTab === "assignments" ? (
+        <LanguageModelAssignmentsPanel providers={providers} />
+      ) : (
       <section className="config-card">
-        <ConfigHeader title="模型配置" desc="独立维护 AI 优化提示词使用的 OpenAI Chat Completions 兼容语言模型，不复用图片渠道。" />
+        <ConfigHeader title="供应商配置" desc="维护 OpenAI Chat Completions 兼容语言模型供应商；供应商默认模型用于配置测试，并作为场景分配的可选模型。" />
         <div className="provider-toolbar">
           <div className="prompt-optimizer-summary">
-            <strong>{providers.length}</strong>
+            <strong data-config-no-translate="true">{providers.length}</strong>
             <span>供应商</span>
-            <strong>{enabledCount}</strong>
+            <strong data-config-no-translate="true">{enabledCount}</strong>
             <span>已启用</span>
           </div>
           <button className="primary-btn" type="button" onClick={() => setDialog({ mode: "create", provider: emptyPromptOptimizerProvider(providers.map((provider) => provider.id)) })}>
@@ -2137,7 +2408,7 @@ export function PromptOptimizerPanel() {
               <tr>
                 <th>供应商</th>
                 <th>地址</th>
-                <th>模型</th>
+                <th>默认模型</th>
                 <th>参数</th>
                 <th>启用</th>
                 <th>操作</th>
@@ -2200,21 +2471,21 @@ export function PromptOptimizerPanel() {
         ) : null}
         <ConfirmDialog
           open={Boolean(removeTarget)}
-          title="删除优化模型"
+          title="删除模型供应商"
           description={removeTarget ? `确认删除「${removeTarget.name}」？` : ""}
           confirmText="删除"
           destructive
           onCancel={() => setRemoveTarget(null)}
-          onConfirm={() => removeTarget && persist(providers.filter((provider) => provider.id !== removeTarget.id), "优化模型已删除")}
+          onConfirm={() => removeTarget && persist(providers.filter((provider) => provider.id !== removeTarget.id), "模型供应商已删除")}
         />
         <ConfirmDialog
           open={Boolean(switchTarget)}
-          title={switchTarget?.enabled ? "停用优化模型" : "启用优化模型"}
+          title={switchTarget?.enabled ? "停用模型供应商" : "启用模型供应商"}
           description={
             switchTarget?.enabled
-              ? `确认停用「${switchTarget.name}」？前台不会再使用它优化提示词。`
+              ? `确认停用「${switchTarget.name}」？使用它的场景会回退到全局默认模型。`
               : switchTarget
-                ? `确认启用「${switchTarget.name}」？排序最靠前的启用模型会被前台使用。`
+                ? `确认启用「${switchTarget.name}」？它将可用于场景分配；只有尚未设置全局默认或当前默认失效时，排序最靠前的启用供应商才作为回退。`
                 : ""
           }
           confirmText={switchTarget?.enabled ? "停用" : "启用"}
@@ -2224,11 +2495,12 @@ export function PromptOptimizerPanel() {
             if (!switchTarget) return;
             persist(
               providers.map((provider) => provider.id === switchTarget.id ? { ...provider, enabled: !provider.enabled } : provider),
-              switchTarget.enabled ? "优化模型已停用" : "优化模型已启用"
+              switchTarget.enabled ? "模型供应商已停用" : "模型供应商已启用"
             );
           }}
         />
       </section>
+      )}
     </>
   );
 }

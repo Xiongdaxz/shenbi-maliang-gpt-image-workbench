@@ -3,6 +3,7 @@ import { audit, logModelRequest } from "./auditLog";
 import { requireConfig } from "./auth";
 import { appDb, configDb, getAll, getOne, run } from "./db";
 import { globalSwitchEnabled, saveGlobalSwitch } from "./globalSwitches";
+import { resolveLanguageModelProvider } from "./languageModelAssignments";
 import {
   fetchPromptOptimizerWithRetry,
   normalizePromptOptimizerRetryCount,
@@ -385,13 +386,6 @@ async function requestSafetyReviewModel(provider: PromptOptimizerProviderRow, me
   }
 }
 
-function activeSafetyReviewProvider() {
-  return getOne<PromptOptimizerProviderRow>(
-    configDb,
-    "select * from prompt_optimizer_providers where enabled = 1 order by sort_order asc, created_at asc limit 1"
-  );
-}
-
 function safetyReviewUserMessage(scene: SafetyReviewScene, prompt: string) {
   return [
     `审核场景：${scene}`,
@@ -456,12 +450,12 @@ export async function reviewConversationPrompt(input: {
   const startedAt = Date.now();
   let provider: PromptOptimizerProviderRow | null = null;
   try {
-    provider = activeSafetyReviewProvider();
+    provider = resolveLanguageModelProvider("safety.review");
     if (!provider) throw new Error("请先在配置页启用模型配置");
     const content = await requestSafetyReviewModel(provider, [
       { role: "system", content: SAFETY_REVIEW_SYSTEM_PROMPT },
       { role: "user", content: safetyReviewUserMessage(input.scene, input.prompt) }
-    ], { userId: input.userId, jobId: input.jobId, source: input.scene });
+    ], { userId: input.userId, jobId: input.jobId, source: "safety.review" });
     const result = parseSafetyReviewResult(content);
     const action = result.decision === "block" ? "block" : result.decision === "review" ? "record" : "allow";
     const logId = insertSafetyReviewLog({

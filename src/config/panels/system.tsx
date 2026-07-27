@@ -1459,6 +1459,9 @@ const MODEL_REQUEST_PURPOSE_OPTIONS = [
   { value: "template.optimize", label: "表单优化" },
   { value: "template.translate", label: "表单翻译" },
   { value: "title.generate", label: "标题生成" },
+  { value: "identity.username", label: "昵称生成" },
+  { value: "category.classify", label: "自动分类" },
+  { value: "suggestion.generate", label: "续改建议" },
   { value: "starter.copy", label: "每日文案" },
   { value: "safety.review", label: "安全审核" }
 ];
@@ -1483,6 +1486,22 @@ function modelRequestUserLabel(item: ModelRequestLog) {
 function modelRequestSourceLabel(source: string) {
   const value = source.trim();
   if (!value) return "";
+  const usageLabels: Record<string, string> = {
+    "prompt.optimize": "自由提示词优化",
+    "template.optimize": "表单提示词优化",
+    "template.translate": "表单提示词翻译",
+    "image.edit_suggestions": "图片续改建议",
+    "title.chat": "对话标题",
+    "title.case": "灵感标题",
+    "title.asset": "素材名称",
+    "identity.username": "注册昵称",
+    "classify.case_style": "灵感风格判断",
+    "classify.asset_tag": "素材标签判断",
+    "starter.copy.generate": "每日文案生成",
+    "starter.copy.translate": "每日文案翻译",
+    "safety.review": "安全审核"
+  };
+  if (usageLabels[value]) return usageLabels[value];
   if (value === "chat-title" || value === "对话标题自动生成失败") return "对话标题";
   if (value === "asset-name" || value === "素材名称自动生成失败") return "素材名称";
   if (value === "config") return "配置";

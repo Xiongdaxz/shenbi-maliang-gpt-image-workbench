@@ -1,6 +1,17 @@
 import { Database } from "bun:sqlite";
-import { describe, expect, test } from "bun:test";
-import { referencedLegacyFilePaths } from "./backupCore";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { referencedLegacyFilePaths, secureBackupFileEntries } from "./backupCore";
+
+const temporaryDirectories: string[] = [];
+
+afterEach(async () => {
+  while (temporaryDirectories.length) {
+    await rm(temporaryDirectories.pop()!, { recursive: true, force: true });
+  }
+});
 
 function createAppDb() {
   const db = new Database(":memory:");
@@ -44,6 +55,30 @@ describe("backup referenced files", () => {
       ]);
     } finally {
       appDb.close();
+      configDb.close();
+    }
+  });
+
+  test("backs up referenced encrypted prompt sounds while excluding orphan remnants", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "gpt-image-backup-secure-"));
+    temporaryDirectories.push(root);
+    const secureDir = path.join(root, "data", "files", "secure");
+    const backupDir = path.join(root, "backups");
+    const configDb = createConfigDb();
+    await mkdir(path.join(secureDir, "image-task-sounds"), { recursive: true });
+    await writeFile(path.join(secureDir, "account-secret.bin"), "account-secret");
+    await writeFile(path.join(secureDir, "image-task-sounds", "referenced.gaud"), "referenced-sound");
+    await writeFile(path.join(secureDir, "image-task-sounds", "orphan.gaud"), "orphan-sound");
+    configDb.query("insert into image_task_sounds (path) values (?)")
+      .run("files/secure/image-task-sounds/referenced.gaud");
+
+    try {
+      const entries = await secureBackupFileEntries(backupDir, secureDir, configDb);
+      expect(entries.map((entry) => entry.archivePath)).toEqual([
+        "files/secure/account-secret.bin",
+        "files/secure/image-task-sounds/referenced.gaud"
+      ]);
+    } finally {
       configDb.close();
     }
   });

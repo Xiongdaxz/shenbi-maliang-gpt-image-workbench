@@ -798,6 +798,7 @@ export function ChangelogPanel() {
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [syncItems, setSyncItems] = useState<ConfigChangelogSyncItem[]>([]);
   const [selectedSyncVersions, setSelectedSyncVersions] = useState<string[]>([]);
+  const [syncIncludeEnglish, setSyncIncludeEnglish] = useState(false);
   const save = useMutation({
     mutationFn: ({
       mode,
@@ -828,14 +829,15 @@ export function ChangelogPanel() {
     }
   });
   const previewSync = useMutation({
-    mutationFn: configApi.previewChangelogSync,
+    mutationFn: (includeEnglish: boolean) => configApi.previewChangelogSync(includeEnglish),
     onSuccess: (result) => {
       setSyncItems(result.entries);
       setSelectedSyncVersions(result.entries.filter((item) => item.action !== "unchanged").map((item) => item.version));
     }
   });
   const syncMarkdown = useMutation({
-    mutationFn: configApi.syncChangelog,
+    mutationFn: ({ versions, includeEnglish }: { versions: string[]; includeEnglish: boolean }) =>
+      configApi.syncChangelog(versions, includeEnglish),
     onSuccess: (result) => {
       setSyncDialogOpen(false);
       showToast(`已同步 ${result.selected} 条记录，新增 ${result.inserted} 条，更新 ${result.updated} 条`);
@@ -854,8 +856,9 @@ export function ChangelogPanel() {
     syncMarkdown.reset();
     setSyncItems([]);
     setSelectedSyncVersions([]);
+    setSyncIncludeEnglish(false);
     setSyncDialogOpen(true);
-    previewSync.mutate();
+    previewSync.mutate(false);
   }
 
   function closeSyncDialog() {
@@ -922,10 +925,18 @@ export function ChangelogPanel() {
         <ChangelogSyncDialog
           items={syncItems}
           selectedVersions={selectedSyncVersions}
+          includeEnglish={syncIncludeEnglish}
           loading={previewSync.isPending}
           syncing={syncMarkdown.isPending}
           error={previewSync.error ?? syncMarkdown.error}
           onClose={closeSyncDialog}
+          onIncludeEnglishChange={(includeEnglish) => {
+            setSyncIncludeEnglish(includeEnglish);
+            setSyncItems([]);
+            setSelectedSyncVersions([]);
+            previewSync.reset();
+            previewSync.mutate(includeEnglish);
+          }}
           onToggle={(version) => {
             setSelectedSyncVersions((current) =>
               current.includes(version) ? current.filter((item) => item !== version) : [...current, version]
@@ -939,7 +950,10 @@ export function ChangelogPanel() {
               && selectableVersions.every((version) => selectedSyncVersions.includes(version));
             setSelectedSyncVersions(allSelected ? [] : selectableVersions);
           }}
-          onSubmit={() => syncMarkdown.mutate(selectedSyncVersions)}
+          onSubmit={() => syncMarkdown.mutate({
+            versions: selectedSyncVersions,
+            includeEnglish: syncIncludeEnglish
+          })}
         />
       ) : null}
       <ConfirmDialog
@@ -960,20 +974,24 @@ export function ChangelogPanel() {
 function ChangelogSyncDialog({
   items,
   selectedVersions,
+  includeEnglish,
   loading,
   syncing,
   error,
   onClose,
+  onIncludeEnglishChange,
   onToggle,
   onToggleAll,
   onSubmit
 }: {
   items: ConfigChangelogSyncItem[];
   selectedVersions: string[];
+  includeEnglish: boolean;
   loading: boolean;
   syncing: boolean;
   error: Error | null;
   onClose: () => void;
+  onIncludeEnglishChange: (includeEnglish: boolean) => void;
   onToggle: (version: string) => void;
   onToggleAll: () => void;
   onSubmit: () => void;
@@ -1005,7 +1023,16 @@ function ChangelogSyncDialog({
                   <span>内容一致 {items.filter((item) => item.action === "unchanged").length}</span>
                   <span>已选 {selectedVersions.length}</span>
                 </div>
-                <div className="row-actions">
+                <div className="row-actions changelog-sync-toolbar-actions">
+                  <div className="changelog-sync-english-control">
+                    <span>同步英文日志</span>
+                    <SwitchControl
+                      checked={includeEnglish}
+                      disabled={loading || syncing}
+                      label={includeEnglish ? "已开启" : "已关闭"}
+                      onChange={onIncludeEnglishChange}
+                    />
+                  </div>
                   <button className="secondary-btn" type="button" onClick={onToggleAll} disabled={syncing || changedCount === 0}>
                     {allSelected ? "取消全选" : changedCount > 0 ? "全选待同步" : "暂无可同步项"}
                   </button>

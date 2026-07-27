@@ -112,10 +112,12 @@ describe("image task sound storage", () => {
     const dataDir = path.join(root, "data");
     const dataPath = (relativePath: string) => path.join(dataDir, relativePath.replaceAll("/", path.sep));
     const encryptedPath = "files/secure/image-task-sounds/maliang-001.gaud";
+    const orphanEncryptedPath = "files/secure/image-task-sounds/orphan.gaud";
     const plainPath = "files/image-task-sounds/maliang-001.mp3";
     const buffer = fakeMp3();
     await mkdir(path.dirname(dataPath(encryptedPath)), { recursive: true });
     await writeFile(dataPath(encryptedPath), Buffer.from("encrypted-placeholder"));
+    await writeFile(dataPath(orphanEncryptedPath), Buffer.from("orphan-encrypted-placeholder"));
     const db = new Database(":memory:");
     databases.push(db);
     createSoundTable(db);
@@ -151,6 +153,7 @@ describe("image task sound storage", () => {
     expect(first).toEqual({ migratedIds: ["maliang-001"], failed: [] });
     expect(await readFile(dataPath(plainPath))).toEqual(buffer);
     expect(await stat(dataPath(encryptedPath)).catch(() => null)).toBeNull();
+    expect(await stat(dataPath(orphanEncryptedPath)).catch(() => null)).toBeNull();
     expect(db.query(`select name, path, mime_type as mimeType, size, sha256, enabled,
       created_at as createdAt, updated_at as updatedAt from image_task_sounds where id = ?`).get("maliang-001"))
       .toEqual({
@@ -173,9 +176,11 @@ describe("image task sound storage", () => {
     const dataDir = path.join(root, "data");
     const dataPath = (relativePath: string) => path.join(dataDir, relativePath.replaceAll("/", path.sep));
     const encryptedPath = "files/secure/image-task-sounds/maliang-001.gaud";
+    const orphanEncryptedPath = "files/secure/image-task-sounds/orphan.gaud";
     const plainPath = "files/image-task-sounds/maliang-001.mp3";
     await mkdir(path.dirname(dataPath(encryptedPath)), { recursive: true });
     await writeFile(dataPath(encryptedPath), Buffer.from("encrypted-placeholder"));
+    await writeFile(dataPath(orphanEncryptedPath), Buffer.from("orphan-encrypted-placeholder"));
     const db = new Database(":memory:");
     databases.push(db);
     createSoundTable(db);
@@ -199,6 +204,7 @@ describe("image task sound storage", () => {
     });
     expect(result.failed).toEqual([{ id: "maliang-001", error: "simulated plain write failure" }]);
     expect((await stat(dataPath(encryptedPath))).isFile()).toBe(true);
+    expect(await stat(dataPath(orphanEncryptedPath)).catch(() => null)).toBeNull();
     expect(await stat(dataPath(plainPath)).catch(() => null)).toBeNull();
     expect(db.query("select name, path, enabled from image_task_sounds where id = ?").get("maliang-001"))
       .toEqual({ name: "保留设置", path: encryptedPath, enabled: 0 });

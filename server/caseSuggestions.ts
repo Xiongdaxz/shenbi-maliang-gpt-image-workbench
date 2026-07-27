@@ -17,6 +17,7 @@ function caseStyleOptions() {
 
 export function generateCaseTitle(prompt: string) {
   return generatePromptSummaryTitle(prompt, {
+    usageKey: "title.case",
     fallbackTitle: "新的灵感",
     logLabel: "灵感标题自动生成失败",
     systemPrompt: CASE_TITLE_SYSTEM_PROMPT

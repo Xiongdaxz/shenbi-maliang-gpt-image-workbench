@@ -139,7 +139,7 @@
 | `copies_json` | 当日中文候选文案 JSON 数组 |
 | `copies_en_json` | 当日英文候选文案 JSON 数组，非中文界面优先读取 |
 | `source` | 文案来源，当前为 `ai` |
-| `provider_name` / `model` | 生成文案使用的模型配置名称和模型 |
+| `provider_name` / `model` | 生成中文文案使用的供应商名称和模型；英文翻译可能使用独立场景分配，以模型请求日志为准 |
 | `status` | 生成状态：`success` 成功、`failed` 失败 |
 | `error` | 失败信息 |
 | `generated_at` | 生成时间 |
@@ -430,6 +430,17 @@
 | `is_cover` | 是否封面图，`0` 否、`1` 是 |
 | `created_at` | 创建时间 |
 
+### case_asset_suggestion_cache
+
+从灵感图片加入素材库时的自动标签推荐缓存。缓存按稳定灵感 ID 保存，并把来源图片、提示词和当前素材标签列表纳入指纹；来源或候选标签变化后会自动重新生成。只有非空推荐会保存；空推荐不缓存，用户下次打开时可结合新增标签重新判断。
+
+| 字段 | 说明 |
+| --- | --- |
+| `case_item_id` | 稳定灵感条目或灵感组 ID，主键 |
+| `source_fingerprint` | 来源类型、来源 ID、提示词和当前素材标签列表的摘要 |
+| `category_ids_json` | 推荐的素材标签 ID JSON 数组，可为空数组 |
+| `updated_at` | 最近生成时间 |
+
 ### case_prompt_usage_events
 
 灵感提示词被使用的记录。
@@ -592,7 +603,7 @@
 
 ### image_task_sounds
 
-后台维护的全局图片任务提示音目录。仓库和发行包不携带音频；管理员上传的文件以原始音频格式保存在 Git 忽略的 `data/files/image-task-sounds/`，只能通过登录鉴权接口访问，不进入 `public` 或 `dist`。升级时会把早期版本已加密的提示音原地转换为普通音频文件；若检测到旧版 `public/sounds/image-task/maliang-*.mp3`，会在文件安全落盘后保留原 ID 写入本表，再把旧文件移入 `data/legacy-sound-backup/`。全新安装没有旧文件时保持空表。
+后台维护的全局图片任务提示音目录。仓库和发行包不携带音频；管理员上传的文件以原始音频格式保存在 Git 忽略的 `data/files/image-task-sounds/`，只能通过登录鉴权接口访问，不进入 `public` 或 `dist`。升级时会把早期版本已加密的提示音原地转换为普通音频文件，成功转换后删除加密源文件，并清理 `data/files/secure/image-task-sounds/` 下没有数据库引用的 `.gaud` 残留；迁移失败但仍由数据库引用的旧加密文件会继续进入数据备份，只有无引用残留会被排除。若检测到旧版 `public/sounds/image-task/maliang-*.mp3`，会在文件安全落盘后保留原 ID 写入本表，再把旧文件移入 `data/legacy-sound-backup/`。全新安装没有旧文件时保持空表。
 
 | 字段 | 说明 |
 | --- | --- |
@@ -745,7 +756,7 @@
 
 ### prompt_optimizer_providers
 
-提示词模板优化使用的语言模型配置，独立于图片渠道。
+语言模型供应商配置，供提示词优化、翻译、命名、分类、每日文案和安全审核等文本模型场景复用，独立于图片渠道。
 
 | 字段 | 说明 |
 | --- | --- |
@@ -753,18 +764,29 @@
 | `enabled` | 是否启用，`0` 否、`1` 是 |
 | `base_url` / `endpoint_path` | Chat Completions 兼容接口地址 |
 | `api_key_env` / `api_key_value` | API Key 来源 |
-| `model` | 语言模型名称 |
+| `model` | 供应商默认语言模型；用于配置测试，以及没有单独场景分配时的运行时默认值 |
 | `models_json` | 从供应商 `/models` 接口获取并缓存的可选模型列表，保存后配置页可直接展示 |
 | `availability_status` | 供应商可用状态：`unknown` 未测试、`normal` 正常、`abnormal` 异常 |
 | `availability_error` | 最近一次获取模型或测试供应商失败时的错误信息 |
 | `availability_checked_at` | 最近一次获取模型或测试供应商的检查时间 |
 | `stream_enabled` | 是否用 SSE 流式读取并返回前端，`0` 否、`1` 是 |
-| `thinking_enabled` | DeepSeek 思考模式开关，`0` 关闭、`1` 开启，默认开启 |
+| `thinking_enabled` | DeepSeek 思考模式开关，`0` 关闭、`1` 开启，默认开启；每日文案生成和翻译遵循该开关，开启时请求超时为 300 秒，关闭时为 60 秒 |
 | `temperature` | 采样温度；为空时不向上游传该参数，使用模型默认值 |
 | `max_tokens` | 最大输出 Token，`0` 表示不限制、不向上游传 `max_tokens` |
 | `retry_count` | 文本模型请求遇到网络错误、`429` 或 `5xx` 等临时失败时的重试次数，默认 `2`，范围 `0` 到 `10` |
-| `sort_order` | 排序，最靠前的启用配置会被使用 |
+| `sort_order` | 排序；尚未保存全局默认或全局默认失效时，最靠前的启用配置及其默认模型作为兼容回退 |
 | `created_at` / `updated_at` | 创建和更新时间 |
+
+### language_model_assignments
+
+语言模型全局默认和场景分配。`global.default` 保存管理员在按供应商分组的模型列表中选择的全局默认；具体场景没有对应记录时跟随该默认。全局默认尚未保存或配置失效时，兼容回退到排序最靠前的启用供应商及其默认模型；场景分配失效时回退到解析后的全局默认，同时保留原记录供后台重新选择。
+
+| 字段 | 说明 |
+| --- | --- |
+| `usage_key` | 主键；`global.default` 表示全局默认，其余场景为 `prompt.optimize`、`template.optimize`、`template.translate`、`image.edit_suggestions`、`title.chat`、`title.case`、`title.asset`、`identity.username`、`classify.case_style`、`classify.asset_tag`、`starter.copy.generate`、`starter.copy.translate`、`safety.review` |
+| `provider_id` | 选用的 `prompt_optimizer_providers.id`；不设数据库外键，以便供应商变更后保留失效分配并在后台提示 |
+| `model` | 选中的模型名称；配置页按供应商分组展示供应商默认模型和缓存模型，已有的列表外模型仍可保留并解析 |
+| `updated_at` | 更新时间 |
 
 ### safety_review_settings
 
@@ -986,7 +1008,7 @@ CPA 同步执行记录。
 | 字段 | 说明 |
 | --- | --- |
 | `id` | 日志 ID |
-| `purpose` | 调用场景：`config.models` 获取模型、`config.test` 供应商测试、`prompt.optimize` 提示词优化、`prompt.translate` 提示词翻译、`template.optimize` 表单优化、`template.translate` 表单翻译、`title.generate` 标题生成、`starter.copy` 每日文案、`safety.review` 安全审核 |
+| `purpose` | 调用类型：`config.models` 获取模型、`config.test` 供应商测试、`prompt.optimize` 提示词优化、`prompt.translate` 提示词翻译、`template.optimize` 表单优化、`template.translate` 表单翻译、`title.generate` 标题生成、`identity.username` 昵称生成、`category.classify` 自动分类、`suggestion.generate` 续改建议、`starter.copy` 每日文案、`safety.review` 安全审核 |
 | `provider_id` / `provider_name` | 模型供应商信息 |
 | `model` | 实际请求模型 |
 | `endpoint` | 实际请求地址 |
@@ -1000,5 +1022,5 @@ CPA 同步执行记录。
 | `error` | 截断后的错误摘要，不包含请求/响应正文 |
 | `user_id` | 请求用户；系统任务或配置测试为空 |
 | `job_id` | 关联业务 ID，例如提示词模板 ID 或图片任务 ID |
-| `source` | 来源模块，例如 `config`、`prompt-optimizer`、`prompt-template`、`prompt-template-export`、`starter-copy`、`image_generation` |
+| `source` | 来源模块或稳定的语言模型场景键，例如 `config`、`prompt-optimizer`、`prompt-template`、`prompt-template-export`、`title.chat`、`classify.asset_tag`、`starter.copy.translate` |
 | `created_at` | 创建时间 |

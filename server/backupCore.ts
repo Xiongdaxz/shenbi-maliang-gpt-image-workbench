@@ -301,6 +301,43 @@ async function listBackupFileEntries(
   return files;
 }
 
+function encryptedImageTaskSoundBackupPath(value: string | null | undefined) {
+  const relativePath = String(value ?? "").trim().replaceAll("\\", "/");
+  return /^files\/secure\/image-task-sounds\/[a-zA-Z0-9_-]+\.gaud$/.test(relativePath)
+    ? relativePath
+    : "";
+}
+
+async function referencedEncryptedImageTaskSoundEntries(sourceDir: string, backupDir: string, database: Database) {
+  const entries: TarFileEntry[] = [];
+  const paths = new Set(
+    getAll<{ path: string }>(database, "select path from image_task_sounds where path like 'files/secure/image-task-sounds/%'")
+      .map((row) => encryptedImageTaskSoundBackupPath(row.path))
+      .filter(Boolean)
+  );
+  for (const archivePath of paths) {
+    const relativePath = archivePath.slice("files/secure/".length);
+    const sourcePath = path.join(sourceDir, relativePath);
+    if (!sameOrInside(sourceDir, sourcePath) || sameOrInside(backupDir, sourcePath)) continue;
+    const info = await stat(sourcePath).catch(() => null);
+    if (!info?.isFile() || isBackupArtifact(sourcePath)) continue;
+    entries.push({ sourcePath, archivePath });
+  }
+  return entries.sort((a, b) => a.archivePath.localeCompare(b.archivePath));
+}
+
+export async function secureBackupFileEntries(
+  backupDir: string,
+  sourceDir = SECURE_FILES_DIR,
+  database: Database = configDb
+) {
+  const regularEntries = await listBackupFileEntries(sourceDir, "files/secure", backupDir, {
+    skipDirectoryNames: new Set(["image-task-sounds"])
+  });
+  const referencedSoundEntries = await referencedEncryptedImageTaskSoundEntries(sourceDir, backupDir, database);
+  return [...regularEntries, ...referencedSoundEntries].sort((a, b) => a.archivePath.localeCompare(b.archivePath));
+}
+
 async function createTarArchive(entries: TarFileEntry[], targetPath: string) {
   const output = createWriteStream(targetPath);
 
@@ -379,7 +416,7 @@ async function prepareBackupStaging(
   const appSnapshotPath = path.join(stagingDir, "app.db");
   const configSnapshotPath = path.join(stagingDir, "config.db");
   const manifestPath = path.join(stagingDir, "manifest.json");
-  const secureEntries = await listBackupFileEntries(SECURE_FILES_DIR, "files/secure", backupDir);
+  const secureEntries = await secureBackupFileEntries(backupDir);
   const maskEntries = await listBackupFileEntries(IMAGE_MASK_DIR, "files/image-masks", backupDir);
   const legacyEntries = await referencedLegacyFileEntries(backupDir);
   const fileEntries = [...secureEntries, ...maskEntries, ...legacyEntries];
@@ -399,6 +436,7 @@ async function prepareBackupStaging(
     excludes: [
       "data/config.toml",
       "data/debug",
+      "unreferenced files/secure/image-task-sounds remnants",
       "unreferenced legacy files",
       "backup directory"
     ]

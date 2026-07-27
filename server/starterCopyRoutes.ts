@@ -10,6 +10,12 @@ import {
   promptOptimizerHeaders,
   type PromptOptimizerProviderRow
 } from "./promptOptimizerRoutes";
+import { resolveLanguageModelProvider, type LanguageModelUsageKey } from "./languageModelAssignments";
+import {
+  starterCopyRequestError,
+  starterCopyRequestTimeoutMs,
+  starterCopyThinkingMode
+} from "./starterCopyRequestTimeout";
 import { normalizePath, now, safeJson } from "./utils";
 
 type StarterCopySettingsRow = {
@@ -47,7 +53,6 @@ const MIN_STARTER_COPY_COUNT = 0;
 const MAX_STARTER_COPY_COUNT = 100;
 const MAX_STARTER_COPY_GENERATION_ATTEMPTS = 5;
 const MAX_STARTER_COPY_TRANSLATION_BATCH_SIZE = 20;
-const REQUEST_TIMEOUT_MS = 60 * 1000;
 const COPY_RELEVANCE_KEYWORDS = [
   "图",
   "海报",
@@ -156,11 +161,8 @@ function starterEnglishCopies(row: StarterDailyCopyRow) {
   return starterCopyList(row.copies_en_json);
 }
 
-function starterCopyProvider() {
-  return getOne<PromptOptimizerProviderRow>(
-    configDb,
-    "select * from prompt_optimizer_providers where enabled = 1 order by sort_order asc, created_at asc limit 1"
-  );
+function starterCopyProvider(usageKey: "starter.copy.generate" | "starter.copy.translate") {
+  return resolveLanguageModelProvider(usageKey);
 }
 
 function publicStarterDailyCopy(row: StarterDailyCopyRow | null, locale: "zh" | "en" = "zh") {
@@ -227,7 +229,7 @@ function nextShanghaiRunDelay(date = new Date()) {
   return Math.max(1000, targetUtcMs - date.getTime());
 }
 
-function timeoutSignal(ms = REQUEST_TIMEOUT_MS) {
+function timeoutSignal(ms: number) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), ms);
   return { controller, timeoutId };
@@ -300,12 +302,11 @@ async function readStreamingChatCompletion(response: Response) {
   return content.trim();
 }
 
-function shouldSendDeepSeekThinkingMode(provider: PromptOptimizerProviderRow) {
-  return [provider.name, provider.base_url, provider.endpoint_path, provider.model]
-    .some((value) => String(value ?? "").toLowerCase().includes("deepseek"));
-}
-
-async function requestPromptModelText(provider: PromptOptimizerProviderRow, messages: PromptModelMessage[]) {
+async function requestPromptModelText(
+  provider: PromptOptimizerProviderRow,
+  messages: PromptModelMessage[],
+  usageKey: Extract<LanguageModelUsageKey, "starter.copy.generate" | "starter.copy.translate">
+) {
   const envKey = String(provider.api_key_env ?? "").trim();
   const endpoint = normalizePath(provider.base_url, provider.endpoint_path || "/chat/completions");
   const streamEnabled = Boolean(provider.stream_enabled);
@@ -316,12 +317,12 @@ async function requestPromptModelText(provider: PromptOptimizerProviderRow, mess
     temperature: provider.temperature == null ? 0.86 : Number(provider.temperature),
     ...(streamEnabled ? { stream: true } : {})
   };
-  if (shouldSendDeepSeekThinkingMode(provider)) {
-    requestBody.thinking = { type: (provider.thinking_enabled ?? 1) === 0 ? "disabled" : "enabled" };
-  }
+  const thinkingMode = starterCopyThinkingMode(provider);
+  if (thinkingMode) requestBody.thinking = { type: thinkingMode };
   if (maxTokens > 0) requestBody.max_tokens = maxTokens;
 
-  const { controller, timeoutId } = timeoutSignal();
+  const requestTimeoutMs = starterCopyRequestTimeoutMs(thinkingMode === "enabled");
+  const { controller, timeoutId } = timeoutSignal(requestTimeoutMs);
   const startedAt = Date.now();
   let attemptCount = 0;
   let statusCode: number | null = null;
@@ -365,7 +366,7 @@ async function requestPromptModelText(provider: PromptOptimizerProviderRow, mess
         statusCode,
         durationMs: Date.now() - startedAt,
         success: true,
-        source: "starter-copy"
+        source: usageKey
       });
       return content;
     }
@@ -384,10 +385,11 @@ async function requestPromptModelText(provider: PromptOptimizerProviderRow, mess
       statusCode,
       durationMs: Date.now() - startedAt,
       success: true,
-      source: "starter-copy"
+      source: usageKey
     });
     return content;
   } catch (error) {
+    const requestError = starterCopyRequestError(error, controller.signal.aborted, requestTimeoutMs);
     logModelRequest({
       purpose: "starter.copy",
       providerId: provider.id,
@@ -401,10 +403,10 @@ async function requestPromptModelText(provider: PromptOptimizerProviderRow, mess
       statusCode,
       durationMs: Date.now() - startedAt,
       success: false,
-      error,
-      source: "starter-copy"
+      error: requestError,
+      source: usageKey
     });
-    throw error;
+    throw requestError;
   } finally {
     clearTimeout(timeoutId);
   }
@@ -613,7 +615,7 @@ async function generateCopyBatchWithProvider(provider: PromptOptimizerProviderRo
         }
       })
     }
-  ]);
+  ], "starter.copy.generate");
   return parseGeneratedCopies(content, copyCount, existingCopies);
 }
 
@@ -641,7 +643,7 @@ async function translateCopyBatchWithProvider(provider: PromptOptimizerProviderR
         copies
       })
     }
-  ]);
+  ], "starter.copy.translate");
   return parseTranslatedCopies(content, copies.length);
 }
 
@@ -761,7 +763,7 @@ async function ensureStarterCopyEnglish(
 ) {
   if (!starterCopyNeedsEnglish(row)) return row ?? null;
   const sourceRow = row as StarterDailyCopyRow;
-  const resolvedProvider = provider ?? starterCopyProvider();
+  const resolvedProvider = provider ?? starterCopyProvider("starter.copy.translate");
   if (!resolvedProvider) {
     const message = "英文版本待生成：请先在配置页启用提示词优化模型";
     run(
@@ -829,11 +831,13 @@ export async function generateStarterCopies({ force = false }: { force?: boolean
           error: ""
         });
       }
-      const provider = starterCopyProvider();
+      const provider = starterCopyProvider("starter.copy.generate");
       if (!provider) throw new Error("请先在配置页启用提示词优化模型");
 
       const copies = await generateCopiesWithProvider(provider, copyCount, starterCopyHistory(date));
-      const copiesEn = await translateCopiesWithProvider(provider, copies);
+      const translationProvider = starterCopyProvider("starter.copy.translate");
+      if (!translationProvider) throw new Error("请先在配置页启用提示词优化模型");
+      const copiesEn = await translateCopiesWithProvider(translationProvider, copies);
       return upsertStarterCopyRecord({
         date,
         copies,

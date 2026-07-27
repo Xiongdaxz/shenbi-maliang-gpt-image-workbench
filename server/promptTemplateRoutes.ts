@@ -15,6 +15,7 @@ import {
   promptOptimizerHeaders,
   type PromptOptimizerProviderRow
 } from "./promptOptimizerRoutes";
+import { resolveLanguageModelProvider } from "./languageModelAssignments";
 import type { AssetRow } from "./types";
 import { readStoredFile } from "./secureFiles";
 import { mimeTypeFromPath } from "./imageFiles";
@@ -2419,6 +2420,7 @@ function ensureDefaultPromptTemplatesForUser(userId: string) {
 
 async function optimizePromptWithProvider({
   provider,
+  translationProvider,
   template,
   formValues,
   basePrompt,
@@ -2431,6 +2433,7 @@ async function optimizePromptWithProvider({
   logContext
 }: {
   provider: PromptOptimizerProviderRow;
+  translationProvider: PromptOptimizerProviderRow;
   template: ReturnType<typeof publicPromptTemplate>;
   formValues: unknown;
   basePrompt: string;
@@ -2531,14 +2534,14 @@ async function optimizePromptWithProvider({
   const optimizedPrompt = parsedOptimized.prompt || basePrompt;
   const negativePrompt = fixedNegativePrompt || (aiNegativeEnabled ? parsedOptimized.negativePrompt : "");
   const translated = await translatePromptTextWithProvider({
-    provider,
+    provider: translationProvider,
     prompt: optimizedPrompt,
     negativePrompt,
     onPreview,
     logContext: { ...logContext, purpose: "template.translate" }
   });
   const translatedBasePrompt = await translatePromptTextWithProvider({
-    provider,
+    provider: translationProvider,
     prompt: basePrompt,
     logContext: { ...logContext, purpose: "template.translate" }
   });
@@ -2615,6 +2618,7 @@ function streamPromptTemplateOptimizeResponse({
   row,
   userId,
   provider,
+  translationProvider,
   template,
   formValues,
   language,
@@ -2629,6 +2633,7 @@ function streamPromptTemplateOptimizeResponse({
   row: PromptTemplateRow;
   userId: string;
   provider: PromptOptimizerProviderRow;
+  translationProvider: PromptOptimizerProviderRow;
   template: ReturnType<typeof publicPromptTemplate>;
   formValues: unknown;
   language: string;
@@ -2651,6 +2656,7 @@ function streamPromptTemplateOptimizeResponse({
       try {
         const optimized = await optimizePromptWithProvider({
           provider,
+          translationProvider,
           template,
           formValues,
           basePrompt,
@@ -3712,10 +3718,7 @@ export function registerPromptTemplateRoutes(api: Hono) {
     const record = body as Record<string, unknown>;
     const prompt = String(record.prompt ?? record.text ?? "").trim();
     if (!prompt) return c.json({ error: "输入内容为空，请先输入提示词" }, 400);
-    const provider = getOne<PromptOptimizerProviderRow>(
-      configDb,
-      "select * from prompt_optimizer_providers where enabled = 1 order by sort_order asc, created_at asc limit 1"
-    );
+    const provider = resolveLanguageModelProvider("prompt.optimize");
     if (!provider) return c.json({ error: "请先在配置页启用提示词优化模型" }, 400);
     const styleGroups = userPreferences(user.id).promptOptimizeStyleGroups;
     const optimizeStyle = normalizePromptOptimizeStyle(record.optimizeStyle, styleGroups);
@@ -4023,11 +4026,10 @@ export function registerPromptTemplateRoutes(api: Hono) {
     if (!row) return exportJsonResponse({ error: "表单不存在" }, 404);
     const basePrompt = String(record.basePrompt ?? "").trim();
     if (!basePrompt) return exportJsonResponse({ error: "基础提示词为空，请先填写表单内容" }, 400);
-    const provider = getOne<PromptOptimizerProviderRow>(
-      configDb,
-      "select * from prompt_optimizer_providers where enabled = 1 order by sort_order asc, created_at asc limit 1"
-    );
+    const provider = resolveLanguageModelProvider("template.optimize");
     if (!provider) return exportJsonResponse({ error: "请先在配置页启用提示词优化模型" }, 400);
+    const translationProvider = resolveLanguageModelProvider("template.translate");
+    if (!translationProvider) return exportJsonResponse({ error: "请先在配置页启用表单翻译模型" }, 400);
     const styleGroups = userPreferences(access.userId).promptOptimizeStyleGroups;
     const template = publicPromptTemplate(row, access.userId, styleGroups);
     const output = template.output as Record<string, unknown>;
@@ -4041,6 +4043,7 @@ export function registerPromptTemplateRoutes(api: Hono) {
         row,
         userId: access.userId,
         provider,
+        translationProvider,
         template,
         formValues,
         language: "zh",
@@ -4057,6 +4060,7 @@ export function registerPromptTemplateRoutes(api: Hono) {
     try {
       optimized = await optimizePromptWithProvider({
         provider,
+        translationProvider,
         template,
         formValues,
         basePrompt,
@@ -4101,10 +4105,7 @@ export function registerPromptTemplateRoutes(api: Hono) {
     const negativePrompt = String(record.negativePrompt ?? "").trim();
     const signature = String(record.signature ?? "").trim();
     if (!prompt) return exportJsonResponse({ error: "待翻译提示词为空" }, 400);
-    const provider = getOne<PromptOptimizerProviderRow>(
-      configDb,
-      "select * from prompt_optimizer_providers where enabled = 1 order by sort_order asc, created_at asc limit 1"
-    );
+    const provider = resolveLanguageModelProvider("template.translate");
     if (!provider) return exportJsonResponse({ error: "请先在配置页启用提示词优化模型" }, 400);
     return withExportCors(streamPromptTemplateTranslationResponse({
       provider,
@@ -4127,11 +4128,10 @@ export function registerPromptTemplateRoutes(api: Hono) {
     const language = "zh";
     const basePrompt = String(record.basePrompt ?? "").trim();
     if (!basePrompt) return c.json({ error: "基础提示词为空，请先填写表单内容" }, 400);
-    const provider = getOne<PromptOptimizerProviderRow>(
-      configDb,
-      "select * from prompt_optimizer_providers where enabled = 1 order by sort_order asc, created_at asc limit 1"
-    );
+    const provider = resolveLanguageModelProvider("template.optimize");
     if (!provider) return c.json({ error: "请先在配置页启用提示词优化模型" }, 400);
+    const translationProvider = resolveLanguageModelProvider("template.translate");
+    if (!translationProvider) return c.json({ error: "请先在配置页启用表单翻译模型" }, 400);
     const styleGroups = userPreferences(user.id).promptOptimizeStyleGroups;
     const template = publicPromptTemplate(row, user.id, styleGroups);
     const output = template.output as Record<string, unknown>;
@@ -4145,6 +4145,7 @@ export function registerPromptTemplateRoutes(api: Hono) {
         row,
         userId: user.id,
         provider,
+        translationProvider,
         template,
         formValues,
         language,
@@ -4161,6 +4162,7 @@ export function registerPromptTemplateRoutes(api: Hono) {
     try {
       optimized = await optimizePromptWithProvider({
         provider,
+        translationProvider,
         template,
         formValues,
         basePrompt,
@@ -4198,10 +4200,7 @@ export function registerPromptTemplateRoutes(api: Hono) {
     const negativePrompt = String(record.negativePrompt ?? "").trim();
     const signature = String(record.signature ?? "").trim();
     if (!prompt) return c.json({ error: "待翻译提示词为空" }, 400);
-    const provider = getOne<PromptOptimizerProviderRow>(
-      configDb,
-      "select * from prompt_optimizer_providers where enabled = 1 order by sort_order asc, created_at asc limit 1"
-    );
+    const provider = resolveLanguageModelProvider("template.translate");
     if (!provider) return c.json({ error: "请先在配置页启用提示词优化模型" }, 400);
     return streamPromptTemplateTranslationResponse({ provider, templateId: row.id, userId: user.id, prompt, negativePrompt, signature, source: "prompt-template" });
   });

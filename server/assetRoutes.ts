@@ -24,11 +24,16 @@ import {
   normalizeAssetUploadMode,
   normalizeIdList,
   now,
+  parseJsonArray,
   visibleAssetSql
 } from "./utils";
 import { requireUser } from "./auth";
 import { imageBatchResult, parseImageBatchIds } from "./imageBatch";
 import { suggestAssetCategoryIds } from "./assetSuggestions";
+import {
+  CaseAssetSuggestionRateLimitError,
+  caseAssetSuggestionService
+} from "./caseAssetSuggestions";
 
 const DEFAULT_ASSET_NAME_MAX_LENGTH = 18;
 
@@ -70,9 +75,9 @@ function defaultAssetNameFromPrompt(prompt: string) {
 
 async function generateAssetNameFromPrompt(prompt: string) {
   return generatePromptSummaryTitle(prompt, {
+    usageKey: "title.asset",
     fallbackTitle: defaultAssetNameFromPrompt(prompt),
     logLabel: "素材名称自动生成失败",
-    logSource: "asset-name",
     maxLength: DEFAULT_ASSET_NAME_MAX_LENGTH,
     systemPrompt: "你是素材库命名助手。请把生图提示词精简成一个中文素材名称，让用户一眼知道素材主体、用途或场景。名称应简短清晰，4到16个字。只输出名称，不要扩展名、引号、标点、说明或 Markdown。",
     userLabel: "生图提示词",
@@ -703,6 +708,64 @@ api.post("/assets/from-image", async (c) => {
       allowAiName: true
     })
   );
+});
+
+api.post("/cases/:caseItemId/asset-suggestions", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return c.json({ error: "未登录" }, 401);
+  const source = caseMaterialSourceById(c.req.param("caseItemId"), user.id);
+  if (!source) return c.json({ error: "灵感不存在或来源不可用" }, 404);
+  let suggestionPrompt = source.prompt || source.title;
+  let existingCategoryIds: string[] = [];
+  if (source.image) {
+    suggestionPrompt = imageOriginPromptsByImageIds([source.image.id]).get(source.image.id) ?? source.image.prompt;
+    existingCategoryIds = parseJsonArray(source.image.suggested_asset_category_ids_json, []);
+  } else if (source.asset) {
+    existingCategoryIds = getAll<{ category_id: string }>(
+      appDb,
+      `select asset_categories.category_id
+       from asset_categories
+       join case_categories on case_categories.id = asset_categories.category_id
+       where asset_categories.asset_id = ? and case_categories.type = 'asset'
+       order by case_categories.sort_order asc`,
+      source.asset.id
+    ).map((row) => row.category_id);
+  }
+  if (existingCategoryIds.length > 0) {
+    return c.json({
+      caseItemId: source.caseItemId,
+      categoryIds: existingCategoryIds,
+      generated: false
+    });
+  }
+  try {
+    const suggestion = await caseAssetSuggestionService.suggest({
+      caseItemId: source.caseItemId,
+      sourceFingerprintInput: JSON.stringify([source.sourceType, source.sourceId, suggestionPrompt]),
+      prompt: suggestionPrompt,
+      userId: user.id
+    });
+    if (source.image?.user_id === user.id) {
+      run(
+        appDb,
+        "update images set suggested_asset_category_ids_json = ? where id = ? and user_id = ?",
+        JSON.stringify(suggestion.categoryIds),
+        source.image.id,
+        user.id
+      );
+    }
+    return c.json({
+      caseItemId: source.caseItemId,
+      categoryIds: suggestion.categoryIds,
+      generated: suggestion.generated
+    });
+  } catch (error) {
+    if (error instanceof CaseAssetSuggestionRateLimitError) {
+      c.header("Retry-After", String(error.retryAfterSeconds));
+      return c.json({ error: error.message }, 429);
+    }
+    throw error;
+  }
 });
 
 api.post("/assets/from-images", async (c) => {

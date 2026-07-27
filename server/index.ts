@@ -87,6 +87,7 @@ import {
   registerImageTaskSoundRoutes
 } from "./imageTaskSounds";
 import { invalidateLibraryFacetCache, registerLibraryRoutes } from "./libraryRoutes";
+import { registerLanguageModelAssignmentRoutes } from "./languageModelAssignments";
 import { registerPromptOptimizerRoutes } from "./promptOptimizerRoutes";
 import { registerPromptColorSchemeRoutes } from "./promptColorSchemeRoutes";
 import { registerPromptReferenceLinkRoutes } from "./promptReferenceLinkRoutes";
@@ -320,6 +321,8 @@ registerSearchRoutes(api);
 registerChangelogRoutes(api);
 
 registerPromptOptimizerRoutes(api);
+
+registerLanguageModelAssignmentRoutes(api);
 
 registerSafetyReviewRoutes(api);
 

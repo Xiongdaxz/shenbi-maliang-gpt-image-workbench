@@ -136,7 +136,7 @@ export function registerChangelogRoutes(api: Hono) {
   api.get("/config/changelog/sync-preview", async (c) => {
     const blocked = requireConfig(c);
     if (blocked) return blocked;
-    const preview = await previewChangelogSync();
+    const preview = await previewChangelogSync(c.req.query("includeEnglish") === "true");
     if (!preview.sourceFound) return c.json({ error: "未找到 docs/changelog.md" }, 404);
     return c.json({ entries: preview.entries });
   });
@@ -145,18 +145,20 @@ export function registerChangelogRoutes(api: Hono) {
     const blocked = requireConfig(c);
     if (blocked) return blocked;
     const body = await c.req.json().catch(() => ({}));
+    const includeEnglish = Boolean(body && typeof body === "object" && body.includeEnglish === true);
     const rawVersions: unknown[] = body && typeof body === "object" && Array.isArray(body.versions) ? body.versions : [];
     const versions: string[] = Array.from(
       new Set(rawVersions.map((version: unknown) => normalizeVersion(version)).filter((version: string) => Boolean(version)))
     );
     if (versions.length === 0) return c.json({ error: "请至少选择一条更新记录" }, 400);
 
-    const result = await syncSelectedChangelogFromMarkdown(versions);
+    const result = await syncSelectedChangelogFromMarkdown(versions, includeEnglish);
     if (!result.sourceFound) return c.json({ error: "未找到 docs/changelog.md" }, 404);
     audit("changelog.sync", {
       selected: result.selected,
       inserted: result.inserted,
-      updated: result.updated
+      updated: result.updated,
+      includeEnglish
     });
     return c.json(result);
   });

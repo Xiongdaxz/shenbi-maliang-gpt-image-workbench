@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { copyFile, mkdir, readFile, rename, rmdir, stat, unlink, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, rename, rmdir, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Database } from "bun:sqlite";
 import type { Hono } from "hono";
@@ -278,6 +278,39 @@ async function removeDirectoryIfEmpty(directory: string) {
   await rmdir(directory).catch(() => undefined);
 }
 
+async function cleanupUnusedEncryptedImageTaskSounds(options: {
+  db: Database;
+  dataPath: (relativePath: string) => string;
+  recordAudit: boolean;
+}) {
+  const relativeDirectory = "files/secure/image-task-sounds";
+  const referencedPaths = new Set(
+    soundRows(options.db)
+      .map((row) => row.path.replaceAll("\\", "/"))
+      .filter(encryptedSoundPath)
+  );
+  const deletedPaths: string[] = [];
+  const failed: Array<{ path: string; error: string }> = [];
+  const directory = options.dataPath(relativeDirectory);
+  const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const relativePath = `${relativeDirectory}/${entry.name}`;
+    if (!encryptedSoundPath(relativePath) || referencedPaths.has(relativePath)) continue;
+    try {
+      await unlink(options.dataPath(relativePath));
+      deletedPaths.push(relativePath);
+    } catch (error) {
+      failed.push({ path: relativePath, error: error instanceof Error ? error.message : "清理失败" });
+    }
+  }
+  await removeDirectoryIfEmpty(directory);
+  if (options.recordAudit && (deletedPaths.length > 0 || failed.length > 0)) {
+    audit("image_task_sound.storage_cleanup", { deletedPaths, failed, storage: "encrypted" });
+  }
+  return { deletedPaths, failed };
+}
+
 export async function migrateEncryptedImageTaskSounds(options: EncryptedSoundMigrationOptions = {}) {
   const db = options.db ?? configDb;
   const readSoundFile = options.readSoundFile ?? readStoredFile;
@@ -324,6 +357,12 @@ export async function migrateEncryptedImageTaskSounds(options: EncryptedSoundMig
       failed.push({ id: row.id, error: error instanceof Error ? error.message : "迁移失败" });
     }
   }
+
+  await cleanupUnusedEncryptedImageTaskSounds({
+    db,
+    dataPath,
+    recordAudit: options.recordAudit ?? db === configDb
+  });
 
   if (options.recordAudit ?? db === configDb) {
     if (migratedIds.length > 0 || failed.length > 0) {

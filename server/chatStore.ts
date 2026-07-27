@@ -66,9 +66,9 @@ function enrichedShortChatTitle(prompt: string, title: string) {
 
 export async function generateChatTitleFromPrompt(prompt: string) {
   const title = await generatePromptSummaryTitle(prompt, {
+    usageKey: "title.chat",
     fallbackTitle: DEFAULT_CHAT_TITLE,
     logLabel: "对话标题自动生成失败",
-    logSource: "chat-title",
     maxLength: null,
     systemPrompt: "你是对话标题整理助手。请把用户的生图或图片编辑提示词整理成一个中文对话标题，让用户一眼知道这段对话要生成或修改什么内容。标题应概括画面主题、类型、用途或场景，保持简短清晰；英文产品名不要截断。用户输入很短时不要原样照抄，例如“小狗”应扩展成“小狗主题创作”“可爱小狗形象”或更贴合语义的标题；即使用户只输入一个字，也要补出可识别的主题或用途。标题一般 4 到 14 个中文字符，避免空泛的“图片生成”“新的对话”。只输出标题，不要引号、标点、说明或 Markdown。"
   });

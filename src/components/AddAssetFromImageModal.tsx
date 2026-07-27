@@ -10,6 +10,8 @@ import { ModalPortal } from "../ui";
 import type { CaseCategory, CaseMaterialItem, WorkImage } from "../types";
 import { CaseCategoryMultiSelect } from "./CaseCategoryMultiSelect";
 
+type CaseAssetSuggestionsResult = Awaited<ReturnType<typeof api.suggestCaseAssetCategories>>;
+
 function initialAssetName(image: WorkImage | CaseMaterialItem) {
   const imageSuggestion = image as Partial<WorkImage>;
   return imageSuggestion.suggestedAssetName?.trim() || imageSuggestion.suggestedCaseTitle?.trim() || ("title" in image ? image.title.trim() : "");
@@ -103,22 +105,42 @@ export function AddAssetFromImageModal({
   }, [image, queryClient]);
 
   useEffect(() => {
-    if (!isWorkImage(image)) return;
     if (initialAssetCategoryIds(image).length > 0) return;
     const requestKey = image.id;
     if (!requestKey || categorySuggestionRequestRef.current === requestKey) return;
     categorySuggestionRequestRef.current = requestKey;
     let cancelled = false;
     setCategorySuggestionPending(true);
-    api.suggestImageAssetCategories(image.id)
+    const suggestionRequest = isWorkImage(image)
+      ? api.suggestImageAssetCategories(image.id).then((result) => ({
+          categoryIds: initialAssetCategoryIds(result.image),
+          image: result.image
+        }))
+      : (() => {
+          const queryKey = ["case-asset-suggestions", image.caseItemId, image.prompt, image.title] as const;
+          const cached = queryClient.getQueryData<CaseAssetSuggestionsResult>(queryKey);
+          const request = cached
+            ? Promise.resolve(cached)
+            : api.suggestCaseAssetCategories(image.caseItemId).then((result) => {
+                if (result.categoryIds.length > 0) queryClient.setQueryData(queryKey, result);
+                return result;
+              });
+          return request.then((result) => ({
+            categoryIds: result.categoryIds,
+            image: null
+          }));
+        })();
+    suggestionRequest
       .then((result) => {
         if (cancelled) return;
         if (!categoryTouchedRef.current) {
-          setCategoryIds(initialAssetCategoryIds(result.image));
+          setCategoryIds(result.categoryIds);
         }
-        setName((value) => value.trim() ? value : initialAssetName(result.image));
-        queryClient.invalidateQueries({ queryKey: ["images"] });
-        if (result.image.sessionId) queryClient.invalidateQueries({ queryKey: ["messages", result.image.sessionId] });
+        if (result.image) {
+          setName((value) => value.trim() ? value : initialAssetName(result.image));
+          queryClient.invalidateQueries({ queryKey: ["images"] });
+          if (result.image.sessionId) queryClient.invalidateQueries({ queryKey: ["messages", result.image.sessionId] });
+        }
       })
       .catch(() => {
         if (!cancelled) categorySuggestionRequestRef.current = "";

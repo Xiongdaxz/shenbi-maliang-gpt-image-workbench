@@ -216,6 +216,14 @@ textarea {
   translate: 0 -100%;
 }
 
+.custom-select-group-label {
+  padding: 7px 10px 3px;
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
 .custom-select-menu button {
   min-height: 40px;
   border: 0;

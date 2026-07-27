@@ -2,6 +2,24 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.58 - 2026-07-27
+
+### 中文
+
+- 后台语言模型配置新增全局默认与场景分配，可为提示词优化、表单翻译、自动命名、内容分类、每日文案和安全审核分别选择供应商与模型；供应商暂时停用时会安全回退并保留原分配。
+- 从灵感图片加入素材库时会自动推荐匹配的素材标签；非空结果可复用，空结果会在下次打开时重新判断，新增标签后也会自动刷新推荐。
+- 空白页每日文案支持为中文生成和英文翻译分别选择模型；启用思考模式时允许更长处理时间，并在超时时显示更明确的提示。
+- 后台从 Markdown 同步更新日志时可选择是否包含英文内容，预览和最终写入保持一致，默认仍只同步中文。
+- 提示音升级与数据备份更稳妥：有效的旧提示音和迁移失败文件会继续保留，无引用的加密残留会自动清理并从备份中排除。
+
+### English
+
+- Language-model settings now provide a global default and per-scenario assignments for prompt optimization, form translation, automatic naming, content classification, daily copy, and safety review; temporarily disabled providers fall back safely without losing their assignments.
+- Adding an inspiration image to the asset library now recommends matching asset tags automatically; non-empty results are reused, empty results are checked again next time, and newly added tags refresh the recommendation.
+- Daily blank-page copy can use separate models for Chinese generation and English translation; thinking mode allows more processing time and reports clearer timeout guidance.
+- Markdown changelog sync can optionally include English content, with the preview and final write using the same selection while Chinese-only sync remains the default.
+- Sound upgrades and data backups are safer: valid legacy sounds and failed migration files remain protected, while unreferenced encrypted remnants are cleaned up and excluded from backups.
+
 ## v0.1.57 - 2026-07-24
 
 ### 中文

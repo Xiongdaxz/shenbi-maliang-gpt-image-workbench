@@ -965,6 +965,11 @@ export const api = {
       `/api/images/${encodeURIComponent(imageId)}/asset-suggestions`,
       { method: "POST" }
     ),
+  suggestCaseAssetCategories: (caseItemId: string) =>
+    request<{ caseItemId: string; categoryIds: string[]; generated: boolean }>(
+      `/api/cases/${encodeURIComponent(caseItemId)}/asset-suggestions`,
+      { method: "POST" }
+    ),
   suggestImageCaseFields: (imageId: string) =>
     request<{ image: WorkImage; title: string; categoryIds: string[]; generated: boolean }>(
       `/api/images/${encodeURIComponent(imageId)}/case-suggestions`,

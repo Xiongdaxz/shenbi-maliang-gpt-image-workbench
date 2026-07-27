@@ -1253,6 +1253,15 @@ export function initAppDb() {
   appDb.run("create unique index if not exists case_group_images_group_asset_idx on case_group_images(group_id, asset_id) where asset_id is not null");
 
   appDb.run(`
+    create table if not exists case_asset_suggestion_cache (
+      case_item_id text primary key,
+      source_fingerprint text not null,
+      category_ids_json text not null,
+      updated_at text not null
+    )
+  `);
+
+  appDb.run(`
     create table if not exists case_prompt_usage_events (
       id text primary key,
       case_item_id text not null,
@@ -1955,6 +1964,15 @@ export function initConfigDb() {
     promptOptimizerTimestamp,
     promptOptimizerTimestamp
   );
+
+  configDb.run(`
+    create table if not exists language_model_assignments (
+      usage_key text primary key,
+      provider_id text not null,
+      model text not null,
+      updated_at text not null
+    )
+  `);
 
   configDb.run(`
     create table if not exists safety_review_settings (

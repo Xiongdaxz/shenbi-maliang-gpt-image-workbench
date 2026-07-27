@@ -1,4 +1,3 @@
-import { configDb, getOne } from "./db";
 import {
   fetchPromptOptimizerWithRetry,
   normalizePromptOptimizerRetryCount,
@@ -7,6 +6,7 @@ import {
   type PromptOptimizerProviderRow
 } from "./promptOptimizerRoutes";
 import { logModelRequest } from "./auditLog";
+import { resolveLanguageModelProvider, type LanguageModelUsageKey } from "./languageModelAssignments";
 import type { EditSuggestionTone } from "./userPreferences";
 import { normalizePath, safeJson } from "./utils";
 import { DEFAULT_LOCALE, LOCALE_CODES, type LocaleCode } from "../src/i18n/locales";
@@ -17,7 +17,7 @@ type PromptModelMessage = {
 };
 
 type ModelRequestLogContext = {
-  purpose: "title.generate";
+  purpose: "title.generate" | "identity.username" | "category.classify" | "suggestion.generate";
   userId?: string;
   jobId?: string;
   source?: string;
@@ -26,7 +26,7 @@ type ModelRequestLogContext = {
 type PromptSummaryTitleOptions = {
   fallbackTitle: string;
   logLabel: string;
-  logSource?: string;
+  usageKey: "title.chat" | "title.case" | "title.asset";
   maxLength?: number | null;
   systemPrompt: string;
   temperature?: number;
@@ -34,6 +34,7 @@ type PromptSummaryTitleOptions = {
 };
 
 type PromptCategorySelectionOptions = {
+  usageKey: "classify.case_style" | "classify.asset_tag";
   systemPrompt: string;
   userHeading: string;
   logLabel: string;
@@ -55,7 +56,7 @@ const PROMPT_TITLE_TIMEOUT_MS = 60 * 1000;
 const USERNAME_GENERATION_TIMEOUT_MS = 8 * 1000;
 const PROMPT_CATEGORY_SELECTION_TIMEOUT_MS = 20 * 1000;
 const PROMPT_EDIT_SUGGESTION_TIMEOUT_MS = 20 * 1000;
-const MAX_CASE_STYLE_SELECTION_COUNT = 2;
+const MAX_CASE_STYLE_SELECTION_COUNT = 3;
 const EDIT_SUGGESTION_COUNT = 3;
 export type PromptEditSuggestionLocale = LocaleCode;
 export const FALLBACK_PROMPT_EDIT_SUGGESTIONS: PromptEditSuggestion[] = [
@@ -505,11 +506,8 @@ function shouldSendDeepSeekThinkingMode(provider: PromptOptimizerProviderRow) {
     .some((value) => String(value ?? "").toLowerCase().includes("deepseek"));
 }
 
-function activePromptProvider() {
-  return getOne<PromptOptimizerProviderRow>(
-    configDb,
-    "select * from prompt_optimizer_providers where enabled = 1 order by sort_order asc, created_at asc limit 1"
-  );
+function activePromptProvider(usageKey: LanguageModelUsageKey) {
+  return resolveLanguageModelProvider(usageKey);
 }
 
 async function requestPromptModelText(
@@ -945,7 +943,7 @@ function fallbackChineseUsernameCandidates(seed: string, count: number) {
 
 export async function generateChineseUsername(seed = "") {
   const fallback = fallbackChineseUsername(seed);
-  const provider = activePromptProvider();
+  const provider = activePromptProvider("identity.username");
   if (!provider) return fallback;
   try {
     const content = await requestPromptModelText(
@@ -958,7 +956,8 @@ export async function generateChineseUsername(seed = "") {
         { role: "user", content: `为新注册用户生成一个中文用户名。尽量给我2个汉字。参考种子：${seed || "new-user"}` }
       ],
       0.85,
-      USERNAME_GENERATION_TIMEOUT_MS
+      USERNAME_GENERATION_TIMEOUT_MS,
+      { purpose: "identity.username", source: "identity.username" }
     );
     return normalizeGeneratedUsername(content, fallback);
   } catch (error) {
@@ -970,7 +969,7 @@ export async function generateChineseUsername(seed = "") {
 export async function generateChineseUsernameCandidates(seed = "", count = 6) {
   const candidateCount = Math.max(1, Math.min(12, Math.floor(count)));
   const fallback = fallbackChineseUsernameCandidates(seed, candidateCount);
-  const provider = activePromptProvider();
+  const provider = activePromptProvider("identity.username");
   if (!provider) return fallback;
   try {
     const content = await requestPromptModelText(
@@ -983,7 +982,8 @@ export async function generateChineseUsernameCandidates(seed = "", count = 6) {
         { role: "user", content: `为用户生成${candidateCount}个可选择的中文用户名。尽量给我2个汉字。参考种子：${seed || "new-user"}` }
       ],
       0.9,
-      USERNAME_GENERATION_TIMEOUT_MS
+      USERNAME_GENERATION_TIMEOUT_MS,
+      { purpose: "identity.username", source: "identity.username" }
     );
     return uniqueModernChineseUsernames([...parseGeneratedUsernameCandidates(content), ...fallback]).slice(0, candidateCount);
   } catch (error) {
@@ -995,7 +995,7 @@ export async function generateChineseUsernameCandidates(seed = "", count = 6) {
 export async function generatePromptSummaryTitle(prompt: string, options: PromptSummaryTitleOptions) {
   const maxLength = options.maxLength === null ? null : options.maxLength ?? 18;
   const fallback = fallbackTitleFromPrompt(prompt, options.fallbackTitle, maxLength);
-  const provider = activePromptProvider();
+  const provider = activePromptProvider(options.usageKey);
   if (!provider) return fallback;
   try {
     const content = await requestPromptModelText(
@@ -1006,7 +1006,7 @@ export async function generatePromptSummaryTitle(prompt: string, options: Prompt
       ],
       options.temperature ?? 0.35,
       PROMPT_TITLE_TIMEOUT_MS,
-      { purpose: "title.generate", source: options.logSource || "prompt-title" }
+      { purpose: "title.generate", source: options.usageKey }
     );
     return normalizeGeneratedTitle(content, prompt, options.fallbackTitle, maxLength) || fallback;
   } catch (error) {
@@ -1018,7 +1018,7 @@ export async function generatePromptSummaryTitle(prompt: string, options: Prompt
 async function generatePromptCategoryIds(prompt: string, options: PromptCategoryOption[], selectionOptions: PromptCategorySelectionOptions) {
   const normalizedPrompt = prompt.replace(/\s+/g, " ").trim();
   if (!normalizedPrompt || options.length === 0) return [];
-  const provider = activePromptProvider();
+  const provider = activePromptProvider(selectionOptions.usageKey);
   if (!provider) return [];
   const optionLines = options
     .map((option) => `- ${option.id} | ${option.name}${option.slug ? ` | ${option.slug}` : ""}`)
@@ -1038,7 +1038,8 @@ async function generatePromptCategoryIds(prompt: string, options: PromptCategory
         }
       ],
       0.1,
-      PROMPT_CATEGORY_SELECTION_TIMEOUT_MS
+      PROMPT_CATEGORY_SELECTION_TIMEOUT_MS,
+      { purpose: "category.classify", source: selectionOptions.usageKey }
     );
     return normalizeGeneratedCategoryIds(content, options, selectionOptions.maxCount);
   } catch (error) {
@@ -1049,8 +1050,9 @@ async function generatePromptCategoryIds(prompt: string, options: PromptCategory
 
 export async function generatePromptCaseStyleIds(prompt: string, options: PromptCategoryOption[]) {
   return generatePromptCategoryIds(prompt, options, {
+    usageKey: "classify.case_style",
     systemPrompt:
-      "你是灵感空间风格分类助手。只能从候选风格中选择最匹配的 1 到 2 个 id；不要创造新风格。用户没有明确主题或无法判断时返回空数组。只输出 JSON，格式为 {\"ids\":[\"候选风格id\"]}，不要解释。",
+      "你是灵感空间风格分类助手。只能从候选风格中选择最匹配的 0 到 3 个 id；不要创造新风格，也不要为了凑数强行选择。用户没有明确主题或无法判断时返回空数组。只输出 JSON，格式为 {\"ids\":[\"候选风格id\"]}，不要解释。",
     userHeading: "候选风格",
     logLabel: "灵感风格自动判断失败",
     maxCount: MAX_CASE_STYLE_SELECTION_COUNT
@@ -1059,6 +1061,7 @@ export async function generatePromptCaseStyleIds(prompt: string, options: Prompt
 
 export async function generatePromptAssetCategoryIds(prompt: string, options: PromptCategoryOption[]) {
   return generatePromptCategoryIds(prompt, options, {
+    usageKey: "classify.asset_tag",
     systemPrompt:
       "你是素材库标签分类助手。候选项是素材标签，不是灵感空间风格。只能从候选素材标签中选择最匹配的 0 到 3 个 id；不要创造新标签，也不要为了凑数强行选择。优先根据图片主体、可复用素材类型、商业用途或明确出现的对象判断，例如 Logo、商标、公司名、人物、模特、箱包、表情包、宣传片。只有候选标签能明确描述这张图时才选择；没有明确匹配时返回空数组。只输出 JSON，格式为 {\"ids\":[\"候选标签id\"]}，不要解释。",
     userHeading: "候选素材标签",
@@ -1098,7 +1101,7 @@ export async function generatePromptEditSuggestions({
     [initialPrompt, ...editHistory, currentPrompt].filter(Boolean).join("\n"),
     suggestionLocale
   );
-  const provider = activePromptProvider();
+  const provider = activePromptProvider("image.edit_suggestions");
   if (!provider) return fallback;
   try {
     const content = await requestPromptModelText(
@@ -1127,7 +1130,8 @@ export async function generatePromptEditSuggestions({
         }
       ],
       0.72,
-      PROMPT_EDIT_SUGGESTION_TIMEOUT_MS
+      PROMPT_EDIT_SUGGESTION_TIMEOUT_MS,
+      { purpose: "suggestion.generate", source: "image.edit_suggestions" }
     );
     return normalizeGeneratedEditSuggestions(content, suggestionLocale);
   } catch (error) {

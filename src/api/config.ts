@@ -15,6 +15,8 @@ import type {
   ImageAccountImportSummary,
   ChangelogEntry,
   ImageGenerationMode,
+  LanguageModelAssignment,
+  LanguageModelAssignmentsResult,
   ModelRequestLog,
   PromptOptimizerProvider,
   ProviderConfig,
@@ -406,12 +408,14 @@ export const configApi = {
   },
   changelog: () =>
     request<{ entries: ChangelogEntry[] }>("/api/config/changelog"),
-  previewChangelogSync: () =>
-    request<{ entries: ConfigChangelogSyncItem[] }>("/api/config/changelog/sync-preview"),
-  syncChangelog: (versions: string[]) =>
+  previewChangelogSync: (includeEnglish = false) =>
+    request<{ entries: ConfigChangelogSyncItem[] }>(
+      `/api/config/changelog/sync-preview${includeEnglish ? "?includeEnglish=true" : ""}`
+    ),
+  syncChangelog: (versions: string[], includeEnglish = false) =>
     request<ConfigChangelogSyncResult>("/api/config/changelog/sync", {
       method: "POST",
-      body: JSON.stringify({ versions })
+      body: JSON.stringify({ versions, includeEnglish })
     }),
   createChangelogEntry: (payload: ChangelogPayload) =>
     request<{ entries: ChangelogEntry[] }>("/api/config/changelog", {
@@ -493,6 +497,16 @@ export const configApi = {
     request<{ ok: boolean }>("/api/config/prompt-optimizer-providers", {
       method: "PUT",
       body: JSON.stringify({ providers })
+    }),
+  languageModelAssignments: () =>
+    request<LanguageModelAssignmentsResult>("/api/config/language-model-assignments"),
+  saveLanguageModelAssignments: (payload: {
+    globalDefault: Pick<LanguageModelAssignment, "providerId" | "model">;
+    assignments: Array<Pick<LanguageModelAssignment, "usageKey" | "providerId" | "model">>;
+  }) =>
+    request<LanguageModelAssignmentsResult>("/api/config/language-model-assignments", {
+      method: "PUT",
+      body: JSON.stringify(payload)
     }),
   promptOptimizerProviderModels: (provider: PromptOptimizerProvider) =>
     request<PromptOptimizerProviderModelsResult>("/api/config/prompt-optimizer-providers/models", {

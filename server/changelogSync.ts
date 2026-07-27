@@ -4,6 +4,7 @@ import { configDb, getOne, run } from "./db";
 import { ROOT } from "./paths";
 import type { ChangelogEntryRow } from "./types";
 import { makeId, now } from "./utils";
+import { changelogContentForSync } from "../src/lib/changelog";
 
 const CHANGELOG_PATH = path.join(ROOT, "docs", "changelog.md");
 const CHANGELOG_HEADING = /^##\s+(.+?)\s+[-–—]\s+(\d{4}-\d{2}-\d{2})\s*$/;
@@ -70,9 +71,15 @@ async function readMarkdownChangelog() {
   return { sourceFound: true, entries: parseChangelogMarkdown(markdown) };
 }
 
-export async function previewChangelogSync() {
+function syncableEntries(entries: MarkdownChangelogEntry[], includeEnglish: boolean) {
+  return entries
+    .map((entry) => ({ ...entry, content: changelogContentForSync(entry.content, includeEnglish) }))
+    .filter((entry) => Boolean(entry.content));
+}
+
+export async function previewChangelogSync(includeEnglish = false) {
   const { sourceFound, entries } = await readMarkdownChangelog();
-  const previewEntries: ChangelogSyncPreviewEntry[] = entries.map((entry) => {
+  const previewEntries: ChangelogSyncPreviewEntry[] = syncableEntries(entries, includeEnglish).map((entry) => {
     const existing = getOne<ChangelogEntryRow>(
       configDb,
       "select release_date, content from changelog_entries where version = ? limit 1",
@@ -88,14 +95,17 @@ export async function previewChangelogSync() {
   return { sourceFound, entries: previewEntries };
 }
 
-export async function syncSelectedChangelogFromMarkdown(selectedVersions: string[]): Promise<ChangelogSyncResult> {
+export async function syncSelectedChangelogFromMarkdown(
+  selectedVersions: string[],
+  includeEnglish = false
+): Promise<ChangelogSyncResult> {
   const { sourceFound, entries } = await readMarkdownChangelog();
   if (!sourceFound) {
     return { sourceFound: false, parsed: 0, selected: 0, inserted: 0, updated: 0 };
   }
 
   const selected = new Set(selectedVersions.map((version) => version.trim()).filter(Boolean));
-  const entriesToSync = entries.filter((entry) => selected.has(entry.version));
+  const entriesToSync = syncableEntries(entries, includeEnglish).filter((entry) => selected.has(entry.version));
 
   let inserted = 0;
   let updated = 0;

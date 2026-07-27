@@ -170,6 +170,50 @@ export type PromptOptimizerProvider = {
   updatedAt: string;
 };
 
+export type LanguageModelUsageKey =
+  | "prompt.optimize"
+  | "template.optimize"
+  | "template.translate"
+  | "image.edit_suggestions"
+  | "title.chat"
+  | "title.case"
+  | "title.asset"
+  | "identity.username"
+  | "classify.case_style"
+  | "classify.asset_tag"
+  | "starter.copy.generate"
+  | "starter.copy.translate"
+  | "safety.review";
+
+export type LanguageModelAssignment = {
+  usageKey: LanguageModelUsageKey;
+  providerId: string;
+  model: string;
+  status: "inherited" | "configured" | "invalid";
+  resolvedProviderId: string;
+  resolvedProviderName: string;
+  resolvedModel: string;
+  updatedAt: string;
+};
+
+export type LanguageModelAssignmentsResult = {
+  globalDefault?: {
+    providerId: string;
+    model: string;
+    status: "inherited" | "configured" | "invalid";
+    resolvedProviderId: string;
+    resolvedProviderName: string;
+    resolvedModel: string;
+    updatedAt: string;
+  };
+  defaultProvider: {
+    providerId: string;
+    providerName: string;
+    model: string;
+  } | null;
+  assignments: LanguageModelAssignment[];
+};
+
 export type SafetyReviewFailurePolicy = "allow" | "block";
 
 export type SafetyReviewSettings = {

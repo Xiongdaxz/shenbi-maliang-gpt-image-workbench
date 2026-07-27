@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Info, X } from "lucide-react";
 import { useI18n } from "./i18n";
@@ -9,6 +9,10 @@ export type SelectOption = {
   label: string;
   description?: string;
   icon?: ReactNode;
+  labelNoTranslate?: boolean;
+  descriptionNoTranslate?: boolean;
+  group?: string;
+  groupNoTranslate?: boolean;
 };
 
 type CustomSelectProps = {
@@ -23,6 +27,7 @@ type CustomSelectProps = {
   menuWidth?: number;
   menuAutoWidth?: boolean;
   menuAutoWidthPadding?: number;
+  ariaLabel?: string;
 };
 
 export function ModalPortal({ children }: { children: ReactNode }) {
@@ -41,7 +46,8 @@ export function CustomSelect({
   menuPlacement = "bottom",
   menuWidth,
   menuAutoWidth = false,
-  menuAutoWidthPadding = 0
+  menuAutoWidthPadding = 0,
+  ariaLabel
 }: CustomSelectProps) {
   const [open, setOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState({ top: 0, left: 0, width: 0 });
@@ -99,13 +105,19 @@ export function CustomSelect({
         type="button"
         className="custom-select-trigger"
         disabled={disabled}
+        aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
         <span className="custom-select-value">
           {selected?.icon ? <span className="custom-select-icon" aria-hidden="true">{selected.icon}</span> : null}
-          <span className={!selected ? "custom-select-label placeholder" : "custom-select-label"}>{selected?.label ?? placeholder ?? t("common.selectPlaceholder")}</span>
+          <span
+            className={!selected ? "custom-select-label placeholder" : "custom-select-label"}
+            data-config-no-translate={selected?.labelNoTranslate ? "true" : undefined}
+          >
+            {selected?.label ?? placeholder ?? t("common.selectPlaceholder")}
+          </span>
         </span>
         <ChevronDown size={16} className={open ? "open" : ""} />
       </button>
@@ -118,30 +130,43 @@ export function CustomSelect({
               aria-labelledby={labelId}
               style={{ top: menuStyle.top, left: menuStyle.left, width: menuStyle.width }}
             >
-              {options.map((option) => {
+              {options.map((option, index) => {
                 const active = option.value === value;
+                const showGroup = Boolean(option.group && option.group !== options[index - 1]?.group);
                 return (
-                  <button
-                    type="button"
-                    key={option.value}
-                    role="option"
-                    aria-selected={active}
-                    title={option.label}
-                    className={active ? "active" : ""}
-                    onClick={() => {
-                      onChange(option.value);
-                      setOpen(false);
-                    }}
-                  >
-                    <span className="custom-select-option-main">
-                      {option.icon ? <span className="custom-select-icon" aria-hidden="true">{option.icon}</span> : null}
-                      <span className="custom-select-option-text">
-                        <strong>{option.label}</strong>
-                        {option.description ? <small>{option.description}</small> : null}
+                  <Fragment key={option.value}>
+                    {showGroup ? (
+                      <div
+                        className="custom-select-group-label"
+                        role="presentation"
+                        data-config-no-translate={option.groupNoTranslate ? "true" : undefined}
+                      >
+                        {option.group}
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      title={option.label}
+                      className={active ? "active" : ""}
+                      onClick={() => {
+                        onChange(option.value);
+                        setOpen(false);
+                      }}
+                    >
+                      <span className="custom-select-option-main">
+                        {option.icon ? <span className="custom-select-icon" aria-hidden="true">{option.icon}</span> : null}
+                        <span className="custom-select-option-text">
+                          <strong data-config-no-translate={option.labelNoTranslate ? "true" : undefined}>{option.label}</strong>
+                          {option.description ? (
+                            <small data-config-no-translate={option.descriptionNoTranslate ? "true" : undefined}>{option.description}</small>
+                          ) : null}
+                        </span>
                       </span>
-                    </span>
-                    {active ? <Check size={16} /> : null}
-                  </button>
+                      {active ? <Check size={16} /> : null}
+                    </button>
+                  </Fragment>
                 );
               })}
               {options.length === 0 ? <div className="custom-select-empty">{t("common.selectPlaceholder")}</div> : null}
