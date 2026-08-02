@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, Image, Images, Layers3, LifeBuoy, Search, Settings2, Sparkles, WandSparkles } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
+import { api } from "../api";
 import { MarkdownView } from "../components/MarkdownView";
 import { PageHeader } from "../components/PageHeader";
 import { useI18n, type Translate, type TranslationParams } from "../i18n";
@@ -142,10 +144,17 @@ export function HelpCenterPage({ user }: { user: User }) {
         ? helpCenterOverrides[resolvedLanguage as keyof typeof helpCenterOverrides]
         : null;
   const t: Translate = useCallback((key, params) => {
-    const message = helpMessages?.[key];
+    const message = helpMessages?.[key] ?? helpCenterPrimaryOverrides["en-US"][key];
     return message ? formatHelpMessage(message, params) : baseT(key, params);
   }, [baseT, helpMessages]);
   const displayName = user.username.trim() || user.account.trim();
+  const browserOrigin = window.location.origin.replace(/\/+$/, "");
+  const installLinks = useQuery({
+    queryKey: ["ai-client-install-links", browserOrigin],
+    queryFn: api.aiClientInstallLinks,
+    staleTime: 60_000
+  });
+  const publicOrigin = installLinks.data?.publicBaseUrl ?? "";
   const homeTitle = displayName
     ? resolvedLanguage.startsWith("zh")
       ? `${displayName}，${t("help.home.title")}`
@@ -181,9 +190,11 @@ export function HelpCenterPage({ user }: { user: User }) {
       title: t(article.titleKey),
       summary: t(article.summaryKey),
       keywords: t(article.keywordsKey),
-      body: t(article.bodyKey)
+      body: article.id === "install-and-use-codex-plugin" && !publicOrigin
+        ? t(installLinks.isError ? "aiClientInstall.addressUnavailable" : "aiClientInstall.loadingAddress")
+        : t(article.bodyKey, { origin: publicOrigin })
     })),
-    [t]
+    [installLinks.isError, publicOrigin, t]
   );
   const visibleArticles = useMemo(() => {
     if (searchTerm) {

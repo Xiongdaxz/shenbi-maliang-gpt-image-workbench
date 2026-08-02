@@ -10,5 +10,7 @@ describe("config copy locale fallback", () => {
     expect(translateConfigCopy("创作增强", "ja-JP")).toBe("Creative enhancement");
     expect(translateConfigCopy("每天生成空白页中文互动文案。", "de-DE"))
       .toBe("Generate Chinese interactive copy for the blank page each day.");
+    expect(translateConfigCopy("插件 / MCP Access Token（天）", "de-DE"))
+      .toBe("Plugin / MCP Access Token (days)");
   });
 });

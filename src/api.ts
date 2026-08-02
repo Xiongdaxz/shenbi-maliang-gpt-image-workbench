@@ -2,6 +2,8 @@ export { ApiError } from "./api/client";
 export { configApi } from "./api/config";
 export {
   api,
+  type ExternalMcpConnection,
+  type AiClientInstallLinks,
   type EditImagePayload,
   type GenerateImagePayload,
   type LoginAssets,

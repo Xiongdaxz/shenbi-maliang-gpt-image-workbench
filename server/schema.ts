@@ -19,6 +19,11 @@ import {
 import { imageEditMaskDebugEnabled } from "./configFile";
 import { appDb, configDb, getAll, getOne, run, tableColumnExists } from "./db";
 import { DEFAULT_GLOBAL_SWITCH_ENABLED, GLOBAL_SWITCH_TYPES, type GlobalSwitchType } from "./globalSwitches";
+import {
+  DEFAULT_EXTERNAL_MCP_ACCESS_TOKEN_TTL_DAYS,
+  DEFAULT_EXTERNAL_MCP_REFRESH_TOKEN_TTL_DAYS,
+  migrateExternalMcpSettingsStorage
+} from "./externalMcpSettings";
 import { readImageDimensions } from "./imageDimensions";
 import { absoluteDataPath } from "./paths";
 import { decryptBuffer } from "./secureFiles";
@@ -1262,6 +1267,234 @@ export function initAppDb() {
   `);
 
   appDb.run(`
+    create table if not exists oauth_clients (
+      id text primary key,
+      application_type text not null default 'native',
+      client_name text not null,
+      client_uri text not null default '',
+      software_id text not null default '',
+      software_version text not null default '',
+      device_name text not null default '',
+      device_type text not null default '',
+      user_agent text not null default '',
+      redirect_uris_json text not null,
+      grant_types_json text not null default '["authorization_code"]',
+      response_types_json text not null default '["code"]',
+      token_endpoint_auth_method text not null default 'none',
+      created_at text not null,
+      updated_at text not null
+    )
+  `);
+  if (!tableColumnExists(appDb, "oauth_clients", "application_type")) {
+    appDb.run("alter table oauth_clients add column application_type text not null default 'native'");
+  }
+  if (!tableColumnExists(appDb, "oauth_clients", "client_uri")) {
+    appDb.run("alter table oauth_clients add column client_uri text not null default ''");
+  }
+  if (!tableColumnExists(appDb, "oauth_clients", "software_id")) {
+    appDb.run("alter table oauth_clients add column software_id text not null default ''");
+  }
+  if (!tableColumnExists(appDb, "oauth_clients", "software_version")) {
+    appDb.run("alter table oauth_clients add column software_version text not null default ''");
+  }
+  if (!tableColumnExists(appDb, "oauth_clients", "device_name")) {
+    appDb.run("alter table oauth_clients add column device_name text not null default ''");
+  }
+  if (!tableColumnExists(appDb, "oauth_clients", "device_type")) {
+    appDb.run("alter table oauth_clients add column device_type text not null default ''");
+  }
+  if (!tableColumnExists(appDb, "oauth_clients", "user_agent")) {
+    appDb.run("alter table oauth_clients add column user_agent text not null default ''");
+  }
+
+  appDb.run(`
+    create table if not exists oauth_grants (
+      id text primary key,
+      user_id text not null,
+      client_id text not null,
+      scope text not null,
+      user_label text not null default '',
+      last_access_at text,
+      last_access_ip text not null default '',
+      last_access_public_ip text not null default '',
+      last_access_region text not null default '',
+      last_access_geo_at text,
+      last_user_agent text not null default '',
+      last_refresh_at text,
+      last_refresh_error text not null default '',
+      last_refresh_error_at text,
+      credential_version integer not null default 1,
+      revoked_at text,
+      created_at text not null,
+      updated_at text not null,
+      foreign key (user_id) references users(id) on delete cascade,
+      foreign key (client_id) references oauth_clients(id) on delete cascade
+    )
+  `);
+  if (!tableColumnExists(appDb, "oauth_grants", "last_access_at")) {
+    appDb.run("alter table oauth_grants add column last_access_at text");
+  }
+  if (!tableColumnExists(appDb, "oauth_grants", "user_label")) {
+    appDb.run("alter table oauth_grants add column user_label text not null default ''");
+  }
+  if (!tableColumnExists(appDb, "oauth_grants", "last_access_ip")) {
+    appDb.run("alter table oauth_grants add column last_access_ip text not null default ''");
+  }
+  if (!tableColumnExists(appDb, "oauth_grants", "last_access_public_ip")) {
+    appDb.run("alter table oauth_grants add column last_access_public_ip text not null default ''");
+  }
+  if (!tableColumnExists(appDb, "oauth_grants", "last_access_region")) {
+    appDb.run("alter table oauth_grants add column last_access_region text not null default ''");
+  }
+  if (!tableColumnExists(appDb, "oauth_grants", "last_access_geo_at")) {
+    appDb.run("alter table oauth_grants add column last_access_geo_at text");
+  }
+  if (!tableColumnExists(appDb, "oauth_grants", "last_user_agent")) {
+    appDb.run("alter table oauth_grants add column last_user_agent text not null default ''");
+  }
+  if (!tableColumnExists(appDb, "oauth_grants", "last_refresh_at")) {
+    appDb.run("alter table oauth_grants add column last_refresh_at text");
+  }
+  if (!tableColumnExists(appDb, "oauth_grants", "last_refresh_error")) {
+    appDb.run("alter table oauth_grants add column last_refresh_error text not null default ''");
+  }
+  if (!tableColumnExists(appDb, "oauth_grants", "last_refresh_error_at")) {
+    appDb.run("alter table oauth_grants add column last_refresh_error_at text");
+  }
+  if (!tableColumnExists(appDb, "oauth_grants", "credential_version")) {
+    appDb.run("alter table oauth_grants add column credential_version integer not null default 1");
+  }
+  appDb.run("create unique index if not exists oauth_grants_user_client_idx on oauth_grants(user_id, client_id)");
+
+  appDb.run(`
+    create table if not exists oauth_authorization_requests (
+      id text primary key,
+      user_id text not null,
+      client_id text not null,
+      redirect_uri text not null,
+      scope text not null,
+      state text not null default '',
+      code_challenge text not null,
+      code_challenge_method text not null default 'S256',
+      resource text not null,
+      expires_at text not null,
+      consumed_at text,
+      created_at text not null,
+      foreign key (user_id) references users(id) on delete cascade,
+      foreign key (client_id) references oauth_clients(id) on delete cascade
+    )
+  `);
+  appDb.run("create index if not exists oauth_authorization_requests_expiry_idx on oauth_authorization_requests(expires_at)");
+
+  appDb.run(`
+    create table if not exists oauth_authorization_codes (
+      id text primary key,
+      code_hash text not null unique,
+      request_id text not null,
+      grant_id text not null,
+      user_id text not null,
+      client_id text not null,
+      redirect_uri text not null,
+      scope text not null,
+      code_challenge text not null,
+      resource text not null,
+      expires_at text not null,
+      consumed_at text,
+      created_at text not null,
+      foreign key (request_id) references oauth_authorization_requests(id) on delete cascade,
+      foreign key (grant_id) references oauth_grants(id) on delete cascade,
+      foreign key (user_id) references users(id) on delete cascade,
+      foreign key (client_id) references oauth_clients(id) on delete cascade
+    )
+  `);
+  appDb.run("create index if not exists oauth_authorization_codes_expiry_idx on oauth_authorization_codes(expires_at)");
+
+  appDb.run(`
+    create table if not exists oauth_access_tokens (
+      id text primary key,
+      token_hash text not null unique,
+      family_id text not null,
+      grant_id text not null,
+      user_id text not null,
+      client_id text not null,
+      scope text not null,
+      resource text not null,
+      expires_at text not null,
+      revoked_at text,
+      created_at text not null,
+      foreign key (grant_id) references oauth_grants(id) on delete cascade,
+      foreign key (user_id) references users(id) on delete cascade,
+      foreign key (client_id) references oauth_clients(id) on delete cascade
+    )
+  `);
+  appDb.run("create index if not exists oauth_access_tokens_user_expiry_idx on oauth_access_tokens(user_id, expires_at)");
+  appDb.run("create index if not exists oauth_access_tokens_expiry_idx on oauth_access_tokens(expires_at)");
+  appDb.run("create index if not exists oauth_access_tokens_family_idx on oauth_access_tokens(family_id)");
+
+  appDb.run(`
+    create table if not exists oauth_refresh_tokens (
+      id text primary key,
+      token_hash text not null unique,
+      family_id text not null,
+      parent_token_id text,
+      grant_id text not null,
+      user_id text not null,
+      client_id text not null,
+      scope text not null,
+      resource text not null,
+      expires_at text not null,
+      consumed_at text,
+      revoked_at text,
+      created_at text not null,
+      foreign key (parent_token_id) references oauth_refresh_tokens(id),
+      foreign key (grant_id) references oauth_grants(id) on delete cascade,
+      foreign key (user_id) references users(id) on delete cascade,
+      foreign key (client_id) references oauth_clients(id) on delete cascade
+    )
+  `);
+  appDb.run("create index if not exists oauth_refresh_tokens_user_expiry_idx on oauth_refresh_tokens(user_id, expires_at)");
+  appDb.run("create index if not exists oauth_refresh_tokens_expiry_idx on oauth_refresh_tokens(expires_at)");
+  appDb.run("create index if not exists oauth_refresh_tokens_family_idx on oauth_refresh_tokens(family_id)");
+  appDb.run("create index if not exists oauth_refresh_tokens_parent_idx on oauth_refresh_tokens(parent_token_id)");
+  appDb.run(`
+    update oauth_grants
+    set last_refresh_at = (
+      select max(oauth_refresh_tokens.consumed_at)
+      from oauth_refresh_tokens
+      where oauth_refresh_tokens.grant_id = oauth_grants.id
+        and oauth_refresh_tokens.consumed_at is not null
+    )
+    where last_refresh_at is null
+      and exists(
+        select 1
+        from oauth_refresh_tokens
+        where oauth_refresh_tokens.grant_id = oauth_grants.id
+          and oauth_refresh_tokens.consumed_at is not null
+      )
+  `);
+
+  appDb.run(`
+    create table if not exists mcp_image_uploads (
+      id text primary key,
+      user_id text not null,
+      upload_token_hash text not null unique,
+      asset_id text,
+      original_name text not null default '',
+      mime_type text not null default '',
+      size integer not null default 0,
+      status text not null default 'pending',
+      expires_at text not null,
+      used_at text,
+      created_at text not null,
+      updated_at text not null,
+      foreign key (user_id) references users(id) on delete cascade,
+      foreign key (asset_id) references assets(id) on delete set null
+    )
+  `);
+  appDb.run("create index if not exists mcp_image_uploads_user_expiry_idx on mcp_image_uploads(user_id, expires_at)");
+  appDb.run("create index if not exists mcp_image_uploads_status_expiry_updated_idx on mcp_image_uploads(status, expires_at, updated_at)");
+
+  appDb.run(`
     create table if not exists case_prompt_usage_events (
       id text primary key,
       case_item_id text not null,
@@ -1742,6 +1975,24 @@ export function initConfigDb() {
   );
 
   configDb.run(`
+    create table if not exists external_mcp_signing_settings (
+      id text primary key,
+      signing_secret text not null,
+      created_at text not null,
+      updated_at text not null
+    )
+  `);
+  const externalMcpSecretTimestamp = now();
+  run(
+    configDb,
+    "insert or ignore into external_mcp_signing_settings (id, signing_secret, created_at, updated_at) values (?, ?, ?, ?)",
+    "default",
+    randomBytes(32).toString("base64url"),
+    externalMcpSecretTimestamp,
+    externalMcpSecretTimestamp
+  );
+
+  configDb.run(`
     create table if not exists image_task_sounds (
       id text primary key,
       name text not null,
@@ -1791,6 +2042,41 @@ export function initConfigDb() {
       updated_at text not null
     )
   `);
+
+  configDb.run(`
+    create table if not exists site_settings (
+      id text primary key,
+      public_base_url text not null default '',
+      updated_at text not null
+    )
+  `);
+  run(
+    configDb,
+    "insert or ignore into site_settings (id, public_base_url, updated_at) values (?, ?, ?)",
+    "default",
+    "",
+    now()
+  );
+
+  configDb.run(`
+    create table if not exists external_mcp_settings (
+      id text primary key,
+      access_token_ttl_days integer not null default ${DEFAULT_EXTERNAL_MCP_ACCESS_TOKEN_TTL_DAYS},
+      refresh_token_ttl_days integer not null default ${DEFAULT_EXTERNAL_MCP_REFRESH_TOKEN_TTL_DAYS},
+      updated_at text not null
+    )
+  `);
+  migrateExternalMcpSettingsStorage(configDb);
+  run(
+    configDb,
+    `insert or ignore into external_mcp_settings
+      (id, access_token_ttl_days, refresh_token_ttl_days, updated_at)
+     values (?, ?, ?, ?)`,
+    "default",
+    DEFAULT_EXTERNAL_MCP_ACCESS_TOKEN_TTL_DAYS,
+    DEFAULT_EXTERNAL_MCP_REFRESH_TOKEN_TTL_DAYS,
+    now()
+  );
 
   configDb.run(`
     create table if not exists smtp_settings (

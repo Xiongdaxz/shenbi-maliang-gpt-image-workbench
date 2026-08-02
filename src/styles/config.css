@@ -710,6 +710,116 @@
   gap: 18px;
 }
 
+.branding-entry-switches {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.branding-entry-switches .global-switch-row {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.branding-site-settings {
+  min-height: 0;
+}
+
+.branding-site-load-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.branding-site-load-error span {
+  flex: 1 1 260px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.branding-site-load-error .secondary-btn {
+  flex: 0 0 auto;
+}
+
+.provider-form.branding-runtime-settings-form {
+  grid-template-columns: minmax(360px, 1.6fr) minmax(180px, 0.7fr) minmax(300px, 1fr);
+  align-items: start;
+  gap: 14px 18px;
+}
+
+.branding-runtime-field {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+}
+
+.branding-runtime-field > label {
+  color: #111827;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.branding-runtime-field > small {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.branding-runtime-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.branding-runtime-control input,
+.branding-runtime-field > input {
+  width: 100%;
+  min-width: 0;
+}
+
+.branding-runtime-control .primary-btn {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding-inline: 13px;
+}
+
+.branding-runtime-settings-form input:disabled {
+  cursor: not-allowed;
+  color: #6b7280;
+  background: #f3f4f6;
+}
+
+.branding-runtime-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 7px;
+  min-width: 0;
+}
+
+.branding-runtime-status strong {
+  overflow-wrap: anywhere;
+  color: #111827;
+}
+
+.branding-site-override-note {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 3px;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #92400e;
+  padding: 9px 11px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .branding-top-grid {
   display: grid;
   grid-template-columns: minmax(320px, 0.72fr) minmax(0, 1fr);
@@ -957,6 +1067,8 @@
 }
 
 @media (max-width: 900px) {
+  .branding-entry-switches,
+  .provider-form.branding-runtime-settings-form,
   .branding-top-grid,
   .branding-preview-shell {
     grid-template-columns: 1fr;

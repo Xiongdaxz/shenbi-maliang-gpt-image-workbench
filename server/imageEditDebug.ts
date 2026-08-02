@@ -2,6 +2,7 @@ import path from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import sharp from "sharp";
 import { readImageDimensions } from "./imageDimensions";
+import { SAFE_IMAGE_MAX_PIXELS } from "./imageValidation";
 import { IMAGE_EDIT_DEBUG_DIR } from "./paths";
 import { debugSettings } from "./settingsStore";
 import type { ImageReferenceSourceAsset, ImageRow, ProviderRow } from "./types";
@@ -41,7 +42,7 @@ function fileFromDataUrl(dataUrl: string) {
 }
 
 async function maskAlphaStats(buffer: Buffer) {
-  const { data, info } = await sharp(buffer, { limitInputPixels: false })
+  const { data, info } = await sharp(buffer, { limitInputPixels: SAFE_IMAGE_MAX_PIXELS, sequentialRead: true })
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });

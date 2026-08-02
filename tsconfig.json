@@ -17,5 +17,5 @@
     "jsx": "react-jsx",
     "types": ["bun"]
   },
-  "include": ["src", "server", "vite.config.ts", "tailwind.config.ts"]
+  "include": ["src", "server", "scripts/package-maliang-codex-plugin.ts", "vite.config.ts", "tailwind.config.ts"]
 }

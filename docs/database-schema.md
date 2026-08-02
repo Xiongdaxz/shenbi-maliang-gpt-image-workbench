@@ -98,6 +98,139 @@
 | `expires_at` | 过期时间 |
 | `created_at` | 创建时间 |
 
+### oauth_clients
+
+神笔马良 Remote MCP 的 OAuth 2.0 动态注册客户端。客户端是公开 PKCE 客户端，不保存 Client Secret。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | OAuth `client_id`，随机 UUID |
+| `application_type` | 动态注册客户端类型：`native` 的 loopback 回调使用授权页后台衔接，WorkBuddy 官方私有回调使用标准浏览器 303 交给操作系统唤起客户端；`web` 使用标准浏览器 303 重定向且回调必须为 HTTPS；旧记录默认为 `native` |
+| `client_name` | 授权确认页和插件管理中展示的客户端名称 |
+| `client_uri` | 客户端动态注册时提供的应用主页；未提供时为空 |
+| `software_id` / `software_version` | 客户端提供的软件标识和版本；版本未显式提供时可从 User-Agent 推断 |
+| `device_name` | 客户端提供的设备名称；Codex、Claude Code、TRAE Work、WorkBuddy 和标准 MCP 安装智能体都会读取本机真实主机名，并通过动态注册字段、固定 MCP 请求头或授权后的 `maliang_report_device` 上报。服务端不再用操作系统类型或客户端名称冒充设备名称 |
+| `device_type` | 设备操作系统类型；优先采用动态注册字段、MCP 固定请求头或 `maliang_report_device` 上报的 Windows、macOS、Linux、iOS、Android 等实际类型，首次授权时仍可由浏览器 User-Agent 补充 |
+| `user_agent` | 动态注册请求的 User-Agent，用于向用户展示设备和应用来源 |
+| `redirect_uris_json` | 精确允许的回调地址 JSON；接受 HTTPS、loopback HTTP，以及仅限 `native` 客户端的 `workbuddy://workbuddy/mcp/{connectorId}/oauth/callback`。WorkBuddy 的 `{connectorId}` 只允许单个安全路径段，并限制为 `custom-mcp:` 或 `connector:` 前缀；Token 交换仍须与授权码记录中的回调地址逐字一致 |
+| `grant_types_json` | 注册允许的授权类型；必须包含 `authorization_code`，`refresh_token` 可选。动态注册未提供 `grant_types` 时只按 `authorization_code` 处理；Token 端严格按已保存能力签发和刷新 |
+| `response_types_json` | 允许的响应类型，当前为 `code` |
+| `token_endpoint_auth_method` | 当前固定为 `none`，配合 PKCE S256 |
+| `created_at` / `updated_at` | 创建和更新时间 |
+
+### oauth_grants
+
+用户对某个 MCP OAuth 客户端的授权关系；同一用户和客户端只有一条记录，可撤销后重新授权。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 授权关系 ID |
+| `user_id` / `client_id` | 授权用户和 OAuth 客户端 |
+| `scope` | 空格分隔的授权范围，当前支持 `profile:read`、`images:generate` |
+| `user_label` | 用户为该连接设置的备注名称；为空时展示客户端原始名称 |
+| `last_access_at` | 该授权最近一次成功换取/刷新令牌，或访问 Remote MCP、图片接口的时间；尚未完成客户端连接时为空 |
+| `last_access_ip` | 最近一次成功换取/刷新令牌或访问接口时的原始客户端地址；由服务端连接地址或受信代理头解析，可能是内网地址 |
+| `last_access_public_ip` | 最近一次访问对应的已确认客户端公网 IP；仅采用公网 TCP 来源地址，或在 `APP_TRUST_PROXY` 开启时采用可信代理头；内网来源不使用马良服务器出口 IP 补全 |
+| `last_access_region` | 根据 `last_access_public_ip` 解析的国家、地区和城市摘要 |
+| `last_access_geo_at` | 公网 IP 与地区最近一次成功解析时间，用于控制刷新频率 |
+| `last_user_agent` | 最近一次成功访问时客户端提交的 User-Agent，用于补充客户端版本等详情 |
+| `last_refresh_at` | 最近一次成功使用 Refresh Token 并完成令牌轮换的时间；用于标记客户端刷新能力已经实际验证 |
+| `last_refresh_error` / `last_refresh_error_at` | 最近一次可归属到该授权关系的刷新失败摘要和时间；后续刷新成功时清空，不保存原始 Token |
+| `credential_version` | 授权凭据代次；每次失效或重新授权递增，使旧 Token 之外的短期签名结果链接也永久失效 |
+| `revoked_at` | 撤销时间；为空表示授权有效 |
+| `created_at` / `updated_at` | 创建和更新时间 |
+
+相关唯一索引：`oauth_grants_user_client_idx` 保证同一用户和客户端只存在一个授权关系。
+
+“已连接设备”只展示至少成功签发过一次 Access Token 或 Refresh Token 的授权关系。用户允许授权后、客户端尚未换取 Token 时，短期授权关系不会显示；Authorization Code 过期后仍未签发过任何 Token，则在读取设备列表时自动删除该无用授权关系。动态注册后 24 小时内既未发起授权、也未形成授权关系的孤立 `oauth_clients` 会自动清理，避免匿名注册长期堆积；仍在授权流程或已经连接的客户端不会被此清理影响。同一客户端重新授权时，旧 Access Token、Refresh Token 和尚未消费的 Authorization Code 不会自动重新激活；权限范围变化时会额外立即撤销仍有效的旧凭据，不能继续保留旧权限。
+
+设备列表不直接把动态注册的 `client_id` 当作物理设备 ID。服务端在设备已上报真实主机名后，使用“客户端家族 + 规范化系统 + 规范化主机名”计算稳定的逻辑设备 ID；TRAE、TRAE Work 归为 `trae` 家族，各类 Codex 名称归为 `codex` 家族。同一账号、同一客户端家族和同一主机的多个 `oauth_clients` 聚合为一台设备，未知或占位设备仍按独立 `client_id` 展示，避免误合并。逻辑设备 ID 为运行时派生值，不新增数据库列。
+
+“断开”会保留逻辑设备下的 `oauth_grants`、备注和访问历史，撤销该设备全部活动授权关联的 Access Token、Refresh Token，并永久消费尚未兑换的 Authorization Code；按钮随后变为“恢复”。“恢复”只重新启用仍未过期、且 `revoked_at` 与最近一次设备断开时间精确一致的 Access Token，或未消费的 Refresh Token；过期、已消费或因其他原因提前撤销的凭据不会复活。没有可恢复凭据时保持断开并要求客户端重新授权。“移除”会永久删除该逻辑设备下当前用户的全部授权关系及其关联令牌，仅当对应 OAuth 客户端不再被任何用户授权时才清理 `oauth_clients`。
+
+### oauth_authorization_requests
+
+授权确认页的一次性短期请求，绑定当前网站登录用户、客户端、回调地址、PKCE challenge 和 MCP resource。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 一次性授权请求 ID |
+| `user_id` / `client_id` | 发起授权的用户和客户端 |
+| `redirect_uri` | 已按客户端注册信息精确校验的回调地址 |
+| `scope` / `state` | 请求权限和原样回传的 OAuth state |
+| `code_challenge` / `code_challenge_method` | PKCE challenge；方法固定为 `S256` |
+| `resource` | 受保护的 Remote MCP 资源地址 |
+| `expires_at` | 过期时间，当前请求有效期 10 分钟 |
+| `consumed_at` | 用户允许或拒绝后的消费时间；非空时不可再次使用 |
+| `created_at` | 创建时间 |
+
+### oauth_authorization_codes
+
+授权确认后签发的 5 分钟一次性 Authorization Code。原始 Code 不入库，只保存 SHA-256 摘要。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 授权码记录 ID |
+| `code_hash` | Authorization Code 的 SHA-256 摘要，唯一 |
+| `request_id` / `grant_id` | 来源授权请求和用户授权关系 |
+| `user_id` / `client_id` | 所属用户和客户端 |
+| `redirect_uri` / `scope` / `resource` | 换取 Token 时必须匹配的回调、权限和资源 |
+| `code_challenge` | 换取 Token 时校验的 PKCE S256 challenge |
+| `expires_at` / `consumed_at` | 过期时间和单次消费时间 |
+| `created_at` | 创建时间 |
+
+### oauth_access_tokens
+
+Remote MCP Bearer Access Token，默认有效期 7 天，可在后台设置为 1～365 天。原始 Token 只返回客户端，数据库仅保存 SHA-256 摘要；设置变化只影响之后新签发或刷新的 Token，不改写已有记录。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | Access Token 记录 ID |
+| `token_hash` | Access Token 的 SHA-256 摘要，唯一 |
+| `family_id` | Token 轮换家族 ID；Refresh Token 重放时用于整组撤销 |
+| `grant_id` / `user_id` / `client_id` | 授权关系、用户和客户端 |
+| `scope` / `resource` | Token 权限和限定的 MCP 资源 |
+| `expires_at` / `revoked_at` | 过期和撤销时间 |
+| `created_at` | 创建时间 |
+
+过期 Access Token 会在 OAuth 清理周期按批次删除；Refresh Token 轮换链中的过期节点会先解除后继节点的 `parent_token_id` 引用再按批次删除，因此长期活跃连接也不会无限保留已过期的祖先节点。`oauth_access_tokens_expiry_idx`、`oauth_refresh_tokens_expiry_idx` 和 `oauth_refresh_tokens_parent_idx` 为清理查询提供索引。
+
+### oauth_refresh_tokens
+
+Remote MCP Refresh Token，默认有效期 90 天，可在后台设置为 30～3650 天，并在每次使用时轮换和重新计算有效期。只有动态注册声明 `refresh_token` 的客户端才会获得 Refresh Token。原始 Token 不入库，重复使用已消费 Token 会撤销整个家族。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | Refresh Token 记录 ID |
+| `token_hash` | Refresh Token 的 SHA-256 摘要，唯一 |
+| `family_id` / `parent_token_id` | 轮换家族和上一个 Refresh Token |
+| `grant_id` / `user_id` / `client_id` | 授权关系、用户和客户端 |
+| `scope` / `resource` | Token 权限和限定的 MCP 资源；刷新时只能缩小权限 |
+| `expires_at` | 过期时间 |
+| `consumed_at` | 被正常轮换消费的时间；重复消费视为重放 |
+| `revoked_at` | 主动撤销或重放检测撤销时间 |
+| `created_at` | 创建时间 |
+
+### mcp_image_uploads
+
+AI 客户端改图时使用的一次性本地图片上传记录。上传链接默认 15 分钟有效，原始上传 Token 不入库。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 返回 MCP 客户端的 `uploadId` |
+| `user_id` | 所属马良用户，后续改图必须同用户 |
+| `upload_token_hash` | 一次性上传 Token 的 SHA-256 摘要，唯一 |
+| `asset_id` | 上传成功后创建或复用的用户私有素材 ID |
+| `original_name` / `mime_type` / `size` | 上传文件名、MIME 类型和字节数 |
+| `status` | 持久化为 `pending` 待上传、`uploading` 处理中、`uploaded` 已完成；查询已过期的 `pending` 记录时返回派生状态 `expired` |
+| `expires_at` | 上传链接过期时间 |
+| `used_at` | 首次用于 MCP 改图的时间 |
+| `created_at` / `updated_at` | 创建和更新时间 |
+
+每个账号最多同时保留 8 个未完成且未过期的上传。创建新上传时按最多 250 条一批清理：已过期超过 24 小时的 `pending` / `uploading` 记录，以及完成或使用超过 30 天的 `uploaded` 记录；关联素材仍按素材库自身生命周期保留。
+
+`mcp_image_uploads_user_expiry_idx` 支持账号未完成上传上限检查，`mcp_image_uploads_status_expiry_updated_idx` 支持分批生命周期清理。
+
 ### auth_verification_codes
 
 验证码记录，用于自助注册和找回密码，邮箱和手机号共用。
@@ -601,6 +734,16 @@
 | `signing_secret` | 32 字节随机密钥的 Base64URL 文本 |
 | `created_at` / `updated_at` | 创建和更新时间 |
 
+### external_mcp_signing_settings
+
+神笔马良 Remote MCP 图片结果原图链接的签名配置。签名链接绑定指定用户、图片和 OAuth 授权关系，默认 1 小时失效；连接失效或移除后立即不可再下载。签名密钥不会进入 MCP 工具结果、前端接口或日志。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 配置 ID，固定为 `default` |
+| `signing_secret` | 32 字节随机密钥的 Base64URL 文本 |
+| `created_at` / `updated_at` | 创建和更新时间 |
+
 ### image_task_sounds
 
 后台维护的全局图片任务提示音目录。仓库和发行包不携带音频；管理员上传的文件以原始音频格式保存在 Git 忽略的 `data/files/image-task-sounds/`，只能通过登录鉴权接口访问，不进入 `public` 或 `dist`。升级时会把早期版本已加密的提示音原地转换为普通音频文件，成功转换后删除加密源文件，并清理 `data/files/secure/image-task-sounds/` 下没有数据库引用的 `.gaud` 残留；迁移失败但仍由数据库引用的旧加密文件会继续进入数据备份，只有无引用残留会被排除。若检测到旧版 `public/sounds/image-task/maliang-*.mp3`，会在文件安全落盘后保留原 ID 写入本表，再把旧文件移入 `data/legacy-sound-backup/`。全新安装没有旧文件时保持空表。
@@ -653,6 +796,27 @@
 | `login_background_dark_ids_json` | 暗色登录背景轮播资源 ID JSON 数组；为空或失效时回退默认背景 |
 | `updated_at` | 更新时间 |
 
+### site_settings
+
+全站公开访问地址配置，固定使用 `default` 单行。该地址用于插件安装、Remote MCP/OAuth 元数据和会话分享绝对链接；保存后运行时立即读取，无需重启。地址优先级为 `APP_PUBLIC_URL`、兼容环境变量 `MALIANG_PUBLIC_BASE_URL`、本表 `public_base_url`、当前请求自动识别。`APP_TRUST_PROXY` 仍是环境变量安全配置，不写入数据库。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 固定为 `default` |
+| `public_base_url` | 后台配置的 HTTP(S) origin；留空表示自动识别。公网地址必须使用 HTTPS，本机或私有局域网地址可使用 HTTP；不允许路径、查询参数或锚点 |
+| `updated_at` | 更新时间 |
+
+### external_mcp_settings
+
+Remote MCP OAuth 令牌有效期配置，固定使用 `default` 单行。保存后立即用于新签发和刷新的令牌，无需重启；已签发令牌的现有到期时间保持不变。
+
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 固定为 `default` |
+| `access_token_ttl_days` | Access Token 有效期天数；默认 7，允许 1～365；范围由服务端校验，存储层不固定上限，便于后续调整 |
+| `refresh_token_ttl_days` | Refresh Token 滚动有效期天数；默认 90，允许 30～3650；范围由服务端校验，存储层不固定上限，便于后续调整 |
+| `updated_at` | 更新时间 |
+
 ### global_switch_settings
 
 系统级布尔总开关的唯一运行时来源。迁移时会把旧表里的总开关值写入对应 `type`，补齐默认值后删除旧 `registration_settings` 表。
@@ -677,6 +841,7 @@
 | `proxy_service` | 关闭 | 全局代理；迁移 `proxy_settings.enabled` |
 | `cpa_sync` | 关闭 | CPA 账号同步；迁移 `cpa_accounts.enabled` |
 | `github_entry` | 开启 | 用户设置“关于”中的 GitHub 仓库入口；关闭后隐藏入口并改用更新日志图标 |
+| `ai_client_install_entry` | 开启 | 新对话空白页中的 AI 客户端安装推荐入口；关闭不影响 `/mcp`、`/plugin` 直达安装页 |
 | `debug_image_edit_mask` | 关闭 | 图片编辑 mask 调试；迁移 `debug_settings.image_edit_mask` |
 
 ### smtp_settings
@@ -971,7 +1136,7 @@ CPA 同步执行记录。
 | 字段 | 说明 |
 | --- | --- |
 | `id` | 日志 ID |
-| `action` | 操作类型；当前代码写入 `config.setup`、`config.login`、`config.user_access`、`team.create`、`team.update`、`team.delete`、`user.create`、`user.update`、`user.reset_password`、`user.delete`、`user.self_register`、`user.password_reset`、`registration_settings.save`、`global_switch.save`、`smtp_settings.save`、`smtp_settings.test`、`sms_settings.save`、`sms_settings.test`、`image_account.refresh_usage`、`image_account.create`、`image_account.update`、`image_account.delete`、`image_mode.save`、`provider.save`、`prompt_optimizer.save`、`prompt_optimizer.models`、`prompt_optimizer.test`、`proxy.save`、`debug.save`、`cpa.save`、`cpa.sync`、`backup.settings.save`、`backup.run`、`backup.delete`、`safety_review.save`、`asset.share.approve`、`asset.share.reject`、`case.review.approve`、`case.review.reject`、`changelog.create`、`changelog.update`、`changelog.delete` |
+| `action` | 操作类型；当前代码写入 `config.setup`、`config.login`、`config.user_access`、`team.create`、`team.update`、`team.delete`、`user.create`、`user.update`、`user.reset_password`、`user.delete`、`user.self_register`、`user.password_reset`、`registration_settings.save`、`global_switch.save`、`site_settings.save`、`external_mcp_settings.save`、`smtp_settings.save`、`smtp_settings.test`、`sms_settings.save`、`sms_settings.test`、`image_account.refresh_usage`、`image_account.create`、`image_account.update`、`image_account.delete`、`image_mode.save`、`provider.save`、`prompt_optimizer.save`、`prompt_optimizer.models`、`prompt_optimizer.test`、`proxy.save`、`debug.save`、`cpa.save`、`cpa.sync`、`backup.settings.save`、`backup.run`、`backup.delete`、`safety_review.save`、`asset.share.approve`、`asset.share.reject`、`case.review.approve`、`case.review.reject`、`changelog.create`、`changelog.update`、`changelog.delete` |
 | `detail` | JSON 详情 |
 | `created_at` | 创建时间 |
 

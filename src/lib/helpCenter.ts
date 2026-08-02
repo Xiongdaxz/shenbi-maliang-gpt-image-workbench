@@ -318,6 +318,14 @@ export const HELP_ARTICLES: HelpArticle[] = [
     }
   },
   {
+    id: "install-and-use-codex-plugin",
+    categoryId: "account",
+    titleKey: "help.article.installCodexPlugin.title",
+    summaryKey: "help.article.installCodexPlugin.summary",
+    keywordsKey: "help.article.installCodexPlugin.keywords",
+    bodyKey: "help.article.installCodexPlugin.body"
+  },
+  {
     id: "personal-preferences",
     categoryId: "account",
     titleKey: "help.article.personalPreferences.title",
@@ -405,5 +413,6 @@ export function helpCategoryById(value: string | null | undefined) {
 }
 
 export function helpArticleById(value: string | null | undefined) {
-  return HELP_ARTICLES.find((article) => article.id === value) ?? null;
+  const resolvedValue = value === "install-mcp" ? "install-and-use-codex-plugin" : value;
+  return HELP_ARTICLES.find((article) => article.id === resolvedValue) ?? null;
 }

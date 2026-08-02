@@ -87,6 +87,19 @@ export type BrandingSettingsRow = {
   updated_at: string;
 };
 
+export type SiteSettingsRow = {
+  id: string;
+  public_base_url: string;
+  updated_at: string;
+};
+
+export type ExternalMcpSettingsRow = {
+  id: string;
+  access_token_ttl_days: number;
+  refresh_token_ttl_days: number;
+  updated_at: string;
+};
+
 export type SearchHistoryRow = {
   id: string;
   user_id: string;

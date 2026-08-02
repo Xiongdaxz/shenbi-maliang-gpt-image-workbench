@@ -1,13 +1,14 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
-import { networkInterfaces } from "node:os";
 import type { Context, Hono } from "hono";
 import { audit } from "./auditLog";
 import { requireUser } from "./auth";
 import { expireStaleImageJobs } from "./chatStore";
 import { appDb, configDb, getAll, getOne, run } from "./db";
+import { configuredMaliangPublicBaseUrl, resolveConfiguredMaliangPublicBaseUrl } from "./externalMcpAuth";
 import { getOrCreateImageDerivative, normalizeImageVariant, type ImageVariant } from "./imageDerivatives";
 import { imageExtensionFromMime, mimeTypeFromPath } from "./imageFiles";
 import { pageInfo, paginationFromQuery } from "./pagination";
+import { localLanIpv4, resolvePublicHttpOrigin } from "./publicOrigin";
 import { readStoredFile } from "./secureFiles";
 import { now, safeJson } from "./utils";
 
@@ -225,62 +226,24 @@ function withinShareRateLimit(c: Context, shareId: string, category: ShareRateCa
   return consumeShareRateBucket(key, config);
 }
 
+export function resolveSessionShareConfiguredOrigin(input: {
+  appPublicUrl?: string | null;
+  maliangPublicBaseUrl?: string | null;
+  sitePublicBaseUrl?: string | null;
+}) {
+  return resolveConfiguredMaliangPublicBaseUrl(input);
+}
+
 function configuredPublicOrigin() {
-  const configured = String(Bun.env.APP_PUBLIC_URL ?? "").trim();
-  if (!configured) return "";
-  try {
-    const url = new URL(configured);
-    return url.protocol === "http:" || url.protocol === "https:" ? url.origin : "";
-  } catch {
-    return "";
-  }
+  return configuredMaliangPublicBaseUrl().publicBaseUrl;
 }
 
-function ipv4Parts(value: string) {
-  const parts = value.split(".").map((part) => Number(part));
-  return parts.length === 4 && parts.every((part) => Number.isInteger(part) && part >= 0 && part <= 255) ? parts : null;
-}
-
-function loopbackHostname(hostname: string) {
-  const normalized = hostname.trim().toLowerCase();
-  return normalized === "localhost" || normalized.endsWith(".localhost") || normalized === "127.0.0.1" || normalized === "::1" || normalized === "[::1]";
-}
-
-function localSessionShareLanIpv4() {
-  const virtualAdapterPattern = /(?:loopback|vethernet|virtual|vmware|virtualbox|docker|wsl|hyper-v|tailscale|zerotier)/i;
-  const candidates = Object.entries(networkInterfaces()).flatMap(([adapterName, addresses]) =>
-    (addresses ?? []).flatMap((entry) => {
-      const family = String(entry.family).toLowerCase();
-      const parts = ipv4Parts(entry.address);
-      if (entry.internal || (family !== "ipv4" && family !== "4") || !parts || parts[0] === 127 || (parts[0] === 169 && parts[1] === 254)) return [];
-      let score = 20;
-      if (parts[0] === 192 && parts[1] === 168) score = 40;
-      else if (parts[0] === 10) score = 35;
-      else if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) score = 30;
-      else if (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) score = 25;
-      if (virtualAdapterPattern.test(adapterName)) score -= 100;
-      return [{ address: entry.address, adapterName, score }];
-    })
-  );
-  candidates.sort((left, right) => right.score - left.score || left.adapterName.localeCompare(right.adapterName) || left.address.localeCompare(right.address));
-  return candidates[0]?.address ?? "";
-}
-
-export function resolveSessionSharePublicOrigin(value: string, lanAddress = "") {
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "http:" && url.protocol !== "https:") return "";
-    if (loopbackHostname(url.hostname) && ipv4Parts(lanAddress) && !loopbackHostname(lanAddress)) url.hostname = lanAddress;
-    return url.origin;
-  } catch {
-    return "";
-  }
-}
+export const resolveSessionSharePublicOrigin = resolvePublicHttpOrigin;
 
 function sharePublicOrigin(c: Context) {
   const configured = configuredPublicOrigin();
   if (configured) return configured;
-  const lanAddress = localSessionShareLanIpv4();
+  const lanAddress = localLanIpv4();
   const requestOrigin = String(c.req.header("origin") ?? "").trim();
   const originFromHeader = resolveSessionSharePublicOrigin(requestOrigin, lanAddress);
   return originFromHeader || resolveSessionSharePublicOrigin(c.req.url, lanAddress) || new URL(c.req.url).origin;

@@ -160,6 +160,7 @@ Usually, you only need to replace these runtime files:
 
 - Platform executable: `ShenbiMaliang.exe` on Windows, or `shenbi-maliang` on Linux/macOS.
 - `dist/`
+- `distribution/codex-marketplace/`: templates required for Codex plugin installation and online updates.
 
 If the release notes mention dependency updates, or if startup, upload, or image processing fails with `sharp` / native module errors, also replace:
 

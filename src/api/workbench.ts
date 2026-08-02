@@ -88,6 +88,14 @@ export type ImageCounts = {
   favorite: number;
 };
 
+export type AiClientInstallLinks = {
+  publicBaseUrl: string;
+  install: {
+    href: string;
+    instruction: string;
+  };
+};
+
 export type GenerateImagePayload = {
   clientRequestId: string;
   sessionId?: string;
@@ -566,8 +574,56 @@ async function translatePromptTemplateStream(
   }
 }
 
+export type ExternalMcpConnection = {
+  deviceId: string;
+  clientId: string;
+  clientName: string;
+  clientUri: string;
+  softwareId: string;
+  softwareVersion: string;
+  deviceName: string;
+  deviceType: string;
+  isLocalDevice: boolean;
+  userLabel: string;
+  userAgent: string;
+  lastUserAgent: string;
+  scopes: string[];
+  active: boolean;
+  canRestore: boolean;
+  lastAccessAt: string;
+  lastAccessIp: string;
+  lastAccessRegion: string;
+  lastAccessIpStatus: "available" | "private" | "unavailable";
+  revokedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  accessExpiresAt: string;
+  refreshExpiresAt: string;
+  refreshCapability: "unsupported" | "declared" | "verified";
+  lastRefreshAt: string;
+  lastRefreshError: string;
+  lastRefreshErrorAt: string;
+};
+
 export const api = {
   me: () => request<{ user: User | null }>("/api/auth/me"),
+  aiClientInstallLinks: () => request<AiClientInstallLinks>("/ai-client-install/links.json"),
+  externalMcpConnections: () => request<{
+    resource: string;
+    metadataUrl: string;
+    connections: ExternalMcpConnection[];
+  }>("/api/external-mcp/connections"),
+  updateExternalMcpConnection: (deviceId: string, userLabel: string) =>
+    request<{ ok: boolean; userLabel: string }>(`/api/external-mcp/connections/${encodeURIComponent(deviceId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ userLabel })
+    }),
+  revokeExternalMcpConnection: (deviceId: string) =>
+    request<{ ok: boolean }>(`/api/external-mcp/connections/${encodeURIComponent(deviceId)}`, { method: "DELETE" }),
+  restoreExternalMcpConnection: (deviceId: string) =>
+    request<{ ok: boolean; restored: boolean }>(`/api/external-mcp/connections/${encodeURIComponent(deviceId)}/restore`, { method: "POST" }),
+  removeExternalMcpConnection: (deviceId: string) =>
+    request<{ ok: boolean }>(`/api/external-mcp/connections/${encodeURIComponent(deviceId)}/remove`, { method: "DELETE" }),
   imageTaskSounds: () => request<{ sounds: import("../types").ImageTaskSound[] }>("/api/image-task-sounds"),
   branding: () => request<PublicBranding>("/api/branding"),
   loginAssets: () => request<LoginAssets>("/api/login-assets"),

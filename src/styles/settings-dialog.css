@@ -745,6 +745,441 @@ html[data-locale-dir="rtl"] .settings-content-view.is-sound-section {
   font-size: 14px;
 }
 
+.settings-plugins {
+  display: grid;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.settings-plugins-intro {
+  margin: 0;
+  color: var(--app-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.settings-plugin-list {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: var(--app-input-bg);
+}
+
+.settings-plugin-list:empty {
+  display: none;
+}
+
+.settings-plugin-row {
+  min-height: 64px;
+  display: grid;
+  grid-template-columns: 34px minmax(150px, 1fr) minmax(145px, 180px) 84px 102px;
+  align-items: center;
+  gap: 10px;
+  background: var(--app-input-bg);
+  padding: 8px 10px;
+}
+
+.settings-plugin-row + .settings-plugin-row {
+  border-top: 1px solid var(--app-border-soft);
+}
+
+.settings-plugin-row.is-inactive {
+  background: color-mix(in srgb, var(--app-input-bg) 72%, var(--app-surface-muted));
+}
+
+.settings-plugin-app-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--app-border-soft);
+  border-radius: 8px;
+  background: var(--app-hover-bg);
+  color: var(--app-muted);
+}
+
+.settings-plugin-app {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.settings-plugin-name-btn {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--app-text);
+  padding: 0;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 20px;
+  text-align: left;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.settings-plugin-name-btn:hover,
+.settings-plugin-name-btn:focus-visible {
+  color: var(--button-primary-bg);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.settings-plugin-client-name {
+  overflow: hidden;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-plugin-access {
+  overflow: hidden;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-plugin-status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: 22px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.settings-plugin-statuses {
+  display: flex;
+  min-width: max-content;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 5px;
+}
+
+.settings-plugin-context-tag {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: 22px;
+  border-radius: 999px;
+  background: rgba(65, 132, 79, 0.12);
+  color: #397547;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.settings-plugin-status.is-active {
+  background: rgba(65, 132, 79, 0.12);
+  color: #397547;
+}
+
+.settings-plugin-status.is-inactive {
+  background: var(--app-hover-bg);
+  color: var(--app-muted);
+}
+
+.settings-plugin-actions {
+  display: flex;
+  min-width: max-content;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 5px;
+}
+
+.settings-plugin-action-btn {
+  flex: 0 0 auto;
+  min-height: 28px;
+  border-radius: 999px;
+  padding: 0 11px;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.settings-plugin-state,
+.settings-plugin-empty {
+  min-height: 160px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  border: 1px dashed var(--app-border);
+  border-radius: 12px;
+  color: var(--app-muted);
+  padding: 24px;
+  text-align: center;
+}
+
+.settings-plugin-empty {
+  min-height: 230px;
+  gap: 18px;
+}
+
+.settings-plugin-state.is-error {
+  color: var(--app-danger);
+}
+
+.settings-plugin-empty strong {
+  color: var(--app-text);
+  font-size: 14px;
+}
+
+.settings-plugin-empty-heading {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+}
+
+.settings-plugin-empty p {
+  max-width: 420px;
+  margin: 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.settings-plugin-empty-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--app-border-soft);
+  border-radius: 10px;
+  background: var(--app-hover-bg);
+  color: var(--app-muted);
+}
+
+.settings-plugin-install-entry {
+  width: min(560px, 100%);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.settings-plugin-install-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--app-danger);
+  font-size: 12px;
+}
+
+.settings-plugin-install-command {
+  min-width: 0;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: var(--app-input-bg);
+  color: var(--app-text);
+  padding: 9px 11px 9px 13px;
+  text-align: left;
+}
+
+.settings-plugin-install-command:hover {
+  border-color: var(--app-border-strong);
+  background: var(--app-hover-bg);
+}
+
+.settings-plugin-install-command:focus-visible {
+  outline: 2px solid var(--control-focus-border);
+  outline-offset: 2px;
+}
+
+.settings-plugin-install-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.settings-plugin-install-copy small {
+  color: var(--app-muted);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.settings-plugin-install-copy > span {
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-plugin-install-copy-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--button-primary-bg);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.case-modal.compact-modal.plugin-connection-detail-dialog {
+  width: min(620px, calc(100vw - 32px));
+  max-height: min(760px, calc(100dvh - 32px));
+  overflow: auto;
+  gap: 16px;
+}
+
+.plugin-connection-details {
+  display: grid;
+  gap: 16px;
+}
+
+.plugin-connection-details-summary {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--app-border-soft);
+  border-radius: 12px;
+  background: var(--app-input-bg);
+  padding: 12px;
+}
+
+.plugin-connection-details-summary > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.plugin-connection-details-name {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.plugin-connection-details-name strong {
+  min-width: 0;
+}
+
+.plugin-connection-details-name input {
+  min-width: 0;
+  width: min(280px, 100%);
+  height: 26px;
+  border: 1px solid var(--app-border);
+  border-radius: 7px;
+  outline: none;
+  background: var(--app-input-bg);
+  color: var(--app-text);
+  padding: 0 7px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.plugin-connection-details-name input:focus {
+  border-color: var(--app-border);
+  box-shadow: none;
+}
+
+.plugin-connection-details-name button {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--app-muted);
+  padding: 0;
+}
+
+.plugin-connection-details-name button:hover,
+.plugin-connection-details-name button:focus-visible {
+  background: var(--app-hover-bg);
+  color: var(--app-text);
+}
+
+.plugin-connection-details-summary > div strong,
+.plugin-connection-detail-grid strong {
+  overflow: hidden;
+  color: var(--app-text);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 18px;
+  text-overflow: ellipsis;
+}
+
+.plugin-connection-details-summary > div span,
+.plugin-connection-detail-grid span {
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.plugin-connection-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--app-border-soft);
+  border-radius: 12px;
+}
+
+.plugin-connection-detail-grid > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 11px 12px;
+}
+
+.plugin-connection-detail-grid small {
+  overflow: hidden;
+  color: var(--app-muted);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plugin-connection-detail-grid > div + div {
+  border-left: 1px solid var(--app-border-soft);
+}
+
+.plugin-connection-detail-grid > div:nth-child(3n + 1) {
+  border-left: 0;
+}
+
+.plugin-connection-detail-grid > div:nth-child(n + 4) {
+  border-top: 1px solid var(--app-border-soft);
+}
+
+.plugin-connection-detail-grid > .plugin-connection-detail-wide {
+  grid-column: 1 / -1;
+  border-left: 0;
+}
+
+.plugin-connection-detail-wide strong {
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+}
+
 .settings-about {
   display: grid;
   width: 100%;
@@ -1715,5 +2150,45 @@ html[data-locale-dir="rtl"] .settings-content-view.is-sound-section {
     width: 100%;
     grid-template-columns: auto max-content;
     justify-self: stretch;
+  }
+
+  .settings-plugin-row {
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "icon app status"
+      "access access actions";
+    row-gap: 7px;
+    padding: 9px 10px;
+  }
+
+  .settings-plugin-app-icon { grid-area: icon; }
+  .settings-plugin-app { grid-area: app; }
+  .settings-plugin-access { grid-area: access; }
+  .settings-plugin-statuses { grid-area: status; }
+  .settings-plugin-actions { grid-area: actions; }
+
+  .settings-plugin-install-command {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .settings-plugin-install-copy-action {
+    justify-content: flex-start;
+  }
+
+  .plugin-connection-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .plugin-connection-detail-grid > div + div {
+    border-left: 0;
+  }
+
+  .plugin-connection-detail-grid > div:nth-child(n + 2) {
+    border-top: 1px solid var(--app-border-soft);
+  }
+
+  .plugin-connection-detail-grid > .plugin-connection-detail-wide {
+    grid-column: auto;
   }
 }

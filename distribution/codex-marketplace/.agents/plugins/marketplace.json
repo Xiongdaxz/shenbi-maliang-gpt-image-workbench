@@ -1,0 +1,20 @@
+{
+  "name": "maliang-internal",
+  "interface": {
+    "displayName": "神笔马良内部插件"
+  },
+  "plugins": [
+    {
+      "name": "maliang-image-generator",
+      "source": {
+        "source": "local",
+        "path": "./plugins/maliang-image-generator"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Creative"
+    }
+  ]
+}

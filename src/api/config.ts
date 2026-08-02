@@ -25,6 +25,9 @@ import type {
   RegistrationSettings,
   SafetyReviewLog,
   SafetyReviewSettings,
+  ExternalMcpSettings,
+  SitePublicUrlSource,
+  SiteSettings,
   SmsSettings,
   SmtpSettings,
   StarterCopySettings,
@@ -124,6 +127,20 @@ export type ConfigBrandingResult = {
   defaults: BrandingDefaults;
 };
 
+export type ConfigSiteSettingsResult = {
+  settings: SiteSettings;
+  effective: {
+    publicBaseUrl: string;
+    source: SitePublicUrlSource;
+    environmentOverride: boolean;
+    error: string;
+  };
+};
+
+export type ConfigExternalMcpSettingsResult = {
+  settings: ExternalMcpSettings;
+};
+
 export type ConfigAssetReviewItem = {
   id: string;
   name: string;
@@ -206,6 +223,18 @@ export const configApi = {
       body: JSON.stringify({ enabled })
     }),
   branding: () => request<ConfigBrandingResult>("/api/config/branding"),
+  siteSettings: () => request<ConfigSiteSettingsResult>("/api/config/site-settings"),
+  saveSiteSettings: (publicBaseUrl: string) =>
+    request<ConfigSiteSettingsResult>("/api/config/site-settings", {
+      method: "PUT",
+      body: JSON.stringify({ publicBaseUrl })
+    }),
+  externalMcpSettings: () => request<ConfigExternalMcpSettingsResult>("/api/config/external-mcp-settings"),
+  saveExternalMcpSettings: (settings: Pick<ExternalMcpSettings, "accessTokenTtlDays" | "refreshTokenTtlDays">) =>
+    request<ConfigExternalMcpSettingsResult>("/api/config/external-mcp-settings", {
+      method: "PUT",
+      body: JSON.stringify(settings)
+    }),
   saveBranding: (settings: BrandingSettings) =>
     request<ConfigBrandingResult>("/api/config/branding", {
       method: "PUT",

@@ -87,7 +87,7 @@ export const CONFIG_NAV_ITEMS: ConfigNavItem[] = [
   { value: "smtp", label: "邮件配置", Icon: Mail },
   { value: "sms", label: "短信配置", Icon: Smartphone },
   { value: "starterCopy", label: "空白页文案", Icon: Bot },
-  { value: "branding", label: "品牌设置", Icon: ImageIcon },
+  { value: "branding", label: "站点与品牌", Icon: ImageIcon },
   { value: "imageMode", label: "模式配置", Icon: SlidersHorizontal },
   { value: "cpa", label: "CPA 同步", Icon: RefreshCw },
   { value: "backup", label: "数据备份", Icon: Archive },

@@ -1,0 +1,38 @@
+{
+  "name": "maliang-image-generator",
+  "version": "0.4.8",
+  "description": "登录神笔马良后，在 Codex 中完成文生图、改图和异步任务查询。",
+  "author": {
+    "name": "神笔马良团队"
+  },
+  "license": "MIT",
+  "homepage": "__MALIANG_PUBLIC_BASE_URL__/plugin",
+  "keywords": [
+    "maliang",
+    "image-generation",
+    "image-editing",
+    "remote-mcp"
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
+  "interface": {
+    "displayName": "神笔马良",
+    "shortDescription": "在 Codex 中安全登录马良，完成文生图和改图。",
+    "longDescription": "通过神笔马良账号 OAuth 连接远程 MCP。支持文生图、使用历史图片改图、Codex 本地附件自动安全上传、异步任务查询，以及通过 Codex 托管的本地 MCP 保存原图并直接在任务中显示；账号密码不会进入聊天或插件配置。",
+    "developerName": "神笔马良团队",
+    "category": "Creative",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "用神笔马良根据我的描述生成一张图片。",
+      "把这张图片上传到神笔马良并按我的要求修改。",
+      "检查神笔马良连接状态并继续查询我的图片任务。"
+    ],
+    "brandColor": "#6D5DFB",
+    "composerIcon": "./assets/logo-small.webp",
+    "logo": "./assets/logo.png"
+  },
+  "mcpServers": "./.mcp.json"
+}

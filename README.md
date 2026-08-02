@@ -160,6 +160,7 @@ data/     本地运行数据目录，启动后自动生成
 
 - 平台可执行文件：Windows 为 `ShenbiMaliang.exe`，Linux/macOS 为 `shenbi-maliang`
 - `dist/`
+- `distribution/codex-marketplace/`：Codex 插件安装与在线更新所需的模板
 
 如果新版发布说明提到依赖更新，或者启动、上传、图片处理时出现 `sharp` / 原生模块相关错误，再替换：
 

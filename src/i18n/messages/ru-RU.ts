@@ -86,7 +86,7 @@ const messages: Messages = {
   "config.nav.safetyReview": "Проверка безопасности",
   "config.nav.imageMode": "Режим",
   "config.nav.cpa": "Синхронизация CPA",
-  "config.nav.branding": "Брендинг",
+  "config.nav.branding": "Сайт и бренд",
   "config.nav.smtp": "Почта",
   "config.nav.sms": "SMS",
   "config.nav.backup": "Резервное копирование",

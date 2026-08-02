@@ -80,6 +80,12 @@ import { invalidatePublicBrandingCache, registerBrandingRoutes } from "./brandin
 import { registerCaseRoutes } from "./caseRoutes";
 import { registerChangelogRoutes } from "./changelogRoutes";
 import { registerFileRoutes } from "./fileRoutes";
+import { registerExternalMcpOAuthRoutes } from "./externalMcpOAuth";
+import { EXTERNAL_MCP_CLIENT_IP_HEADER } from "./externalMcpAuth";
+import { registerExternalMcpSettingsRoutes } from "./externalMcpSettingsRoutes";
+import { registerExternalMcpProtocolRoute } from "./externalMcpServer";
+import { registerExternalMcpUploadRoutes } from "./externalMcpUploads";
+import { registerExternalMcpResultRoutes } from "./externalMcpResults";
 import { registerImageRoutes, startInterruptedImageJobRecovery } from "./imageRoutes";
 import {
   migrateEncryptedImageTaskSounds,
@@ -108,6 +114,8 @@ import { normalizePhone as normalizeSmsPhone, saveSmsSettings, sendSmsTest, smsS
 import { validateUsername } from "./usernamePolicy";
 import { registrationSettings, saveRegistrationSettings } from "./registrationSettings";
 import { deleteUserAccount } from "./userDeletion";
+import { registerInternalDistributionRoutes } from "./internalDistributionRoutes";
+import { registerSiteSettingsRoutes } from "./siteSettingsRoutes";
 
 initAppDb();
 initConfigDb();
@@ -297,6 +305,10 @@ registerSessionShareRoutes(api);
 
 registerBrandingRoutes(api);
 
+registerSiteSettingsRoutes(api);
+
+registerExternalMcpSettingsRoutes(api);
+
 registerFileRoutes(api);
 
 registerLibraryRoutes(api);
@@ -329,6 +341,8 @@ registerSafetyReviewRoutes(api);
 registerStarterCopyRoutes(api);
 
 registerBackupRoutes(api);
+
+registerExternalMcpProtocolRoute(api);
 
 api.get("/config/auth/status", (c) => {
   return c.json({
@@ -416,7 +430,7 @@ api.put("/config/global-switches/:type", async (c) => {
   const enabled = Boolean((body as Record<string, unknown>).enabled);
   assertGlobalSwitchCanEnable(type, enabled);
   const setting = saveGlobalSwitch(type, enabled);
-  if (setting.type === "github_entry") invalidatePublicBrandingCache();
+  if (setting.type === "github_entry" || setting.type === "ai_client_install_entry") invalidatePublicBrandingCache();
   if (setting.type === "asset_review") invalidateLibraryFacetCache("assets");
   if (setting.type === "case_review") invalidateLibraryFacetCache("cases");
   audit("global_switch.save", { type: setting.type, enabled: setting.enabled });
@@ -3328,6 +3342,10 @@ api.get("/config/audit", (c) => {
 });
 
 const app = new Hono();
+registerExternalMcpOAuthRoutes(app, api);
+registerExternalMcpUploadRoutes(app);
+registerExternalMcpResultRoutes(app);
+registerInternalDistributionRoutes(app);
 app.route("/api", api);
 app.use("/api/*", async (c) => c.json({ error: "接口不存在" }, 404));
 app.get("/login/:file", async (c) => {
@@ -3375,6 +3393,7 @@ const server = Bun.serve({
   fetch(request, bunServer) {
     const headers = new Headers(request.headers);
     headers.delete(SESSION_SHARE_CLIENT_IP_HEADER);
+    headers.delete(EXTERNAL_MCP_CLIENT_IP_HEADER);
     const clientAddress = resolveSessionShareClientAddress({
       socketAddress: bunServer.requestIP(request)?.address,
       trustProxy,
@@ -3382,7 +3401,10 @@ const server = Bun.serve({
       forwardedFor: request.headers.get("x-forwarded-for"),
       realIp: request.headers.get("x-real-ip")
     });
-    if (clientAddress) headers.set(SESSION_SHARE_CLIENT_IP_HEADER, clientAddress);
+    if (clientAddress) {
+      headers.set(SESSION_SHARE_CLIENT_IP_HEADER, clientAddress);
+      headers.set(EXTERNAL_MCP_CLIENT_IP_HEADER, clientAddress);
+    }
     return app.fetch(new Request(request, { headers }));
   }
 });

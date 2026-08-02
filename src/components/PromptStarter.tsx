@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, WheelEvent as ReactWheelEvent } from "react";
-import { ArrowRight, PartyPopper, RefreshCw } from "lucide-react";
+import { ArrowRight, Cable, PartyPopper, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
@@ -123,6 +123,7 @@ export function PromptStarter({
   caseCategoriesLoaded = false,
   dailyHeadlineIdeas: dailyHeadlineIdeaInput,
   headlineIdeasLoaded = false,
+  onOpenAiClientInstall,
   onOpenIntro,
   onRefreshCases,
   onUseHeadlinePrompt,
@@ -133,6 +134,7 @@ export function PromptStarter({
   caseCategoriesLoaded?: boolean;
   dailyHeadlineIdeas?: string[];
   headlineIdeasLoaded?: boolean;
+  onOpenAiClientInstall?: () => void;
   onOpenIntro?: () => void;
   onRefreshCases?: () => Promise<unknown> | void;
   onUseHeadlinePrompt?: (prompt: string) => void;
@@ -453,7 +455,7 @@ export function PromptStarter({
               <ArrowRight size={18} />
             </button>
           </div>
-          {casePoolCount > 1 || onOpenIntro ? (
+          {casePoolCount > 1 || onOpenIntro || onOpenAiClientInstall ? (
             <div className="starter-case-actions">
               {casePoolCount > 1 ? (
                 <button
@@ -471,6 +473,12 @@ export function PromptStarter({
                 <button className="starter-case-refresh" type="button" onClick={onOpenIntro} aria-label={t("starter.featureIntro")} title={t("starter.featureIntro")}>
                   <PartyPopper size={15} />
                   <span>{t("starter.featureIntro")}</span>
+                </button>
+              ) : null}
+              {onOpenAiClientInstall ? (
+                <button className="starter-case-refresh" type="button" onClick={onOpenAiClientInstall} aria-label={t("starter.aiClientInstall")} title={t("starter.aiClientInstall")}>
+                  <Cable size={15} />
+                  <span>{t("starter.aiClientInstall")}</span>
                 </button>
               ) : null}
             </div>

@@ -82,7 +82,7 @@ const messages: Messages = {
   "config.nav.safetyReview": "安全レビュー",
   "config.nav.imageMode": "モード設定",
   "config.nav.cpa": "CPA 同期",
-  "config.nav.branding": "ブランド設定",
+  "config.nav.branding": "サイトとブランド",
   "config.nav.smtp": "メール設定",
   "config.nav.sms": "SMS 設定",
   "config.nav.backup": "バックアップ",

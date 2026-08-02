@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { Archive, BellRing, Database, Github, KeyRound, Leaf, Link2, Monitor, Moon, Palette, Pencil, ScrollText, Search, Settings, Smile, Sun, Sunset, Trash2, UserRound, Volume1, Volume2, VolumeOff, X } from "lucide-react";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Archive, BellRing, Cable, Check, Copy, Database, Github, KeyRound, Leaf, Link2, Monitor, Moon, Palette, Pencil, ScrollText, Search, Settings, Smile, Sun, Sunset, Trash2, UserRound, Volume1, Volume2, VolumeOff, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { api } from "../../api";
+import { api, type ExternalMcpConnection } from "../../api";
 import {
   languagePreferenceOptions,
   normalizeLanguagePreference,
@@ -10,6 +10,7 @@ import {
   type LanguagePreference
 } from "../../i18n";
 import { cx } from "../../lib/cx";
+import { copyTextToClipboard } from "../../lib/clipboard";
 import { useAppearanceMode } from "../../hooks/useAppearanceMode";
 import { useInfinitePageLoader } from "../../hooks/useInfinitePageLoader";
 import type { AppearanceMode } from "../../lib/appearance";
@@ -30,15 +31,16 @@ import {
   type BrowserNotificationPermissionResult
 } from "../../lib/imageTaskBrowserNotifications";
 import type { EditSuggestionTone, ImagePreviewOpenMode, ImagePreviewWheelMode, ImageTaskSound, User, UserPreferences } from "../../types";
-import { CustomSelect, useToast } from "../../ui";
+import { ConfirmDialog, CustomSelect, useToast } from "../../ui";
 import { MarkdownView } from "../MarkdownView";
 import { PromptColorSchemeSettingsDialog } from "../PromptColorSchemeSettingsDialog";
 import { PromptOptimizeStyleSettingsDialog } from "../PromptOptimizeStyleSettingsDialog";
 import { ImageTaskSoundSelect } from "./ImageTaskSoundSelect";
 import { SharedLinksDialog } from "./SharedLinksDialog";
 
-type SettingsSectionId = "general" | "sound" | "personalization" | "account" | "data" | "about";
+type SettingsSectionId = "general" | "sound" | "personalization" | "account" | "plugins" | "data" | "about";
 type SettingsSectionDirection = "forward" | "backward";
+type PluginConnectionAction = { kind: "revoke" | "restore" | "remove"; connection: ExternalMcpConnection } | null;
 
 const PROJECT_REPOSITORY_URL = "https://github.com/Xiongdaxz/shenbi-maliang-gpt-image-workbench";
 const CHANGELOG_PAGE_SIZE = 5;
@@ -48,6 +50,7 @@ const settingsSections: Array<{ id: SettingsSectionId; labelKey: string; icon: L
   { id: "sound", labelKey: "settings.nav.soundMenu", icon: BellRing },
   { id: "personalization", labelKey: "settings.nav.personalization", icon: Smile },
   { id: "account", labelKey: "settings.nav.account", icon: UserRound },
+  { id: "plugins", labelKey: "settings.nav.plugins", icon: Cable },
   { id: "data", labelKey: "settings.nav.data", icon: Database },
   { id: "about", labelKey: "settings.nav.about", icon: Github }
 ];
@@ -57,6 +60,7 @@ const settingsSectionTitleKeys: Record<SettingsSectionId, string> = {
   sound: "settings.nav.sound",
   personalization: "settings.nav.personalization",
   account: "settings.nav.account",
+  plugins: "settings.nav.plugins",
   data: "settings.nav.data",
   about: "settings.nav.about"
 };
@@ -85,6 +89,31 @@ const imagePreviewOpenOptions: Array<{ value: ImagePreviewOpenMode; labelKey: st
   { value: "contain", labelKey: "settings.general.imagePreview.open.contain", descriptionKey: "settings.general.imagePreview.open.containDesc" },
   { value: "actual", labelKey: "settings.general.imagePreview.open.actual", descriptionKey: "settings.general.imagePreview.open.actualDesc" }
 ];
+
+function formatPluginConnectionTime(value: string, locale: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat(locale, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
+}
+
+function pluginConnectionDisplayName(connection: ExternalMcpConnection) {
+  return connection.userLabel.trim() || connection.deviceName.trim() || connection.clientName;
+}
+
+function pluginConnectionDeviceSummary(connection: ExternalMcpConnection, unavailableLabel: string) {
+  return [
+    connection.deviceName.trim() || unavailableLabel,
+    connection.clientName,
+    connection.deviceType.trim() || unavailableLabel
+  ].join(" · ");
+}
 
 type AppSettingsDialogProps = {
   open: boolean;
@@ -135,6 +164,11 @@ export function AppSettingsDialog({
   const [promptStyleSettingsOpen, setPromptStyleSettingsOpen] = useState(false);
   const [promptColorSchemeSettingsOpen, setPromptColorSchemeSettingsOpen] = useState(false);
   const [sharedLinksOpen, setSharedLinksOpen] = useState(false);
+  const [pluginConnectionAction, setPluginConnectionAction] = useState<PluginConnectionAction>(null);
+  const [pluginConnectionDetails, setPluginConnectionDetails] = useState<ExternalMcpConnection | null>(null);
+  const [pluginConnectionLabelDraft, setPluginConnectionLabelDraft] = useState("");
+  const [pluginConnectionLabelEditing, setPluginConnectionLabelEditing] = useState(false);
+  const [pluginInstallCopied, setPluginInstallCopied] = useState(false);
   const [soundVolumeDraft, setSoundVolumeDraft] = useState(DEFAULT_IMAGE_TASK_SOUND_VOLUME);
   const [soundEnabledDraft, setSoundEnabledDraft] = useState(true);
   const [browserNotificationPermission, setBrowserNotificationPermission] = useState<BrowserNotificationPermissionResult>(
@@ -149,6 +183,7 @@ export function AppSettingsDialog({
   const lastNonZeroSoundVolumeRef = useRef(DEFAULT_IMAGE_TASK_SOUND_VOLUME);
   const soundEnabledDraftRef = useRef(true);
   const restoreSoundOnVolumeCommitRef = useRef(false);
+  const pluginInstallCopiedTimerRef = useRef<number | null>(null);
   const [changelogSearchInput, setChangelogSearchInput] = useState("");
   const [changelogSearchKeyword, setChangelogSearchKeyword] = useState("");
   const [latestChangelogVersion, setLatestChangelogVersion] = useState("");
@@ -156,6 +191,7 @@ export function AppSettingsDialog({
   const { mode: appearanceMode, setMode: setAppearanceMode } = useAppearanceMode();
   const { showToast } = useToast();
   const { language, resolvedLanguage, setLanguage, t } = useI18n();
+  const queryClient = useQueryClient();
   const sharedLinkCount = useQuery({
     queryKey: ["session-share-links", "count"],
     queryFn: ({ signal }) => api.sessionShareLinks({ limit: 1, offset: 0 }, { signal }),
@@ -211,6 +247,88 @@ export function AppSettingsDialog({
     queryFn: api.branding,
     enabled: open
   });
+  const pluginConnections = useQuery({
+    queryKey: ["external-mcp-connections"],
+    queryFn: api.externalMcpConnections,
+    enabled: open && activeSection === "plugins"
+  });
+  const aiClientInstallBaseUrl = window.location.origin.replace(/\/+$/, "");
+  const pluginInstallLinks = useQuery({
+    queryKey: ["ai-client-install-links", aiClientInstallBaseUrl],
+    queryFn: api.aiClientInstallLinks,
+    enabled: open && activeSection === "plugins",
+    staleTime: 60_000
+  });
+  const pluginInstallOption = pluginInstallLinks.data?.install ?? null;
+  const copyPluginInstallInstruction = async () => {
+    if (!pluginInstallOption) {
+      showToast(t("aiClientInstall.addressUnavailable"), "error");
+      return;
+    }
+    const copied = await copyTextToClipboard(pluginInstallOption.instruction);
+    if (!copied) {
+      showToast(t("aiClientInstall.copyFailed"), "error");
+      return;
+    }
+    if (pluginInstallCopiedTimerRef.current) window.clearTimeout(pluginInstallCopiedTimerRef.current);
+    setPluginInstallCopied(true);
+    showToast(t("aiClientInstall.copySuccess"), "success");
+    pluginInstallCopiedTimerRef.current = window.setTimeout(() => setPluginInstallCopied(false), 1800);
+  };
+  useEffect(() => () => {
+    if (pluginInstallCopiedTimerRef.current) window.clearTimeout(pluginInstallCopiedTimerRef.current);
+  }, []);
+  const revokePluginConnection = useMutation({
+    mutationFn: (connection: ExternalMcpConnection) => api.revokeExternalMcpConnection(connection.deviceId),
+    onSuccess: async () => {
+      setPluginConnectionAction(null);
+      await queryClient.invalidateQueries({ queryKey: ["external-mcp-connections"] });
+      showToast(t("settings.plugins.revoked"));
+    },
+    onError: (error) => showToast(error instanceof Error ? error.message : t("settings.plugins.revokeFailed"), "error")
+  });
+  const restorePluginConnection = useMutation({
+    mutationFn: (connection: ExternalMcpConnection) => api.restoreExternalMcpConnection(connection.deviceId),
+    onSuccess: async () => {
+      setPluginConnectionAction(null);
+      await queryClient.invalidateQueries({ queryKey: ["external-mcp-connections"] });
+      showToast(t("settings.plugins.restored"));
+    },
+    onError: (error) => showToast(error instanceof Error ? error.message : t("settings.plugins.restoreFailed"), "error")
+  });
+  const removePluginConnection = useMutation({
+    mutationFn: (connection: ExternalMcpConnection) => api.removeExternalMcpConnection(connection.deviceId),
+    onSuccess: async () => {
+      setPluginConnectionAction(null);
+      await queryClient.invalidateQueries({ queryKey: ["external-mcp-connections"] });
+      showToast(t("settings.plugins.removed"));
+    },
+    onError: (error) => showToast(error instanceof Error ? error.message : t("settings.plugins.removeFailed"), "error")
+  });
+  const updatePluginConnection = useMutation({
+    mutationFn: ({ connection, userLabel }: { connection: ExternalMcpConnection; userLabel: string }) => (
+      api.updateExternalMcpConnection(connection.deviceId, userLabel)
+    ),
+    onSuccess: async ({ userLabel }) => {
+      setPluginConnectionDetails((connection) => connection ? { ...connection, userLabel } : null);
+      setPluginConnectionLabelDraft(userLabel);
+      setPluginConnectionLabelEditing(false);
+      await queryClient.invalidateQueries({ queryKey: ["external-mcp-connections"] });
+      showToast(t("settings.plugins.detailsSaved"));
+    },
+    onError: (error) => showToast(error instanceof Error ? error.message : t("settings.plugins.detailsSaveFailed"), "error")
+  });
+  const commitPluginConnectionLabel = () => {
+    if (!pluginConnectionDetails || updatePluginConnection.isPending) return;
+    const draftLabel = pluginConnectionLabelDraft.trim();
+    const userLabel = draftLabel === pluginConnectionDetails.deviceName.trim() ? "" : draftLabel;
+    if (userLabel === pluginConnectionDetails.userLabel) {
+      setPluginConnectionLabelDraft(pluginConnectionDisplayName(pluginConnectionDetails));
+      setPluginConnectionLabelEditing(false);
+      return;
+    }
+    updatePluginConnection.mutate({ connection: pluginConnectionDetails, userLabel });
+  };
   const promptColorSchemes = useQuery({
     queryKey: ["prompt-color-schemes"],
     queryFn: () => api.promptColorSchemes(),
@@ -293,6 +411,10 @@ export function AppSettingsDialog({
       setActiveSection("general");
       setContentTransitioning(false);
       setSharedLinksOpen(false);
+      setPluginConnectionAction(null);
+      setPluginConnectionDetails(null);
+      setPluginConnectionLabelDraft("");
+      setPluginConnectionLabelEditing(false);
       setChangelogSearchInput("");
       setChangelogSearchKeyword("");
     }
@@ -462,6 +584,26 @@ export function AppSettingsDialog({
   const visibleColorSchemeCount = visibleColorSchemes.length;
   const activeAppearanceIndex = Math.max(0, appearanceOptions.findIndex((option) => option.value === appearanceMode));
   const showGithubEntry = branding.data?.showGithubEntry ?? true;
+  const mostRecentPluginConnectionDeviceId = (pluginConnections.data?.connections ?? []).reduce<{
+    deviceId: string;
+    lastAccessTime: number;
+  } | null>((latest, connection) => {
+    const lastAccessTime = new Date(connection.lastAccessAt).getTime();
+    if (!Number.isFinite(lastAccessTime) || (latest && latest.lastAccessTime >= lastAccessTime)) return latest;
+    return { deviceId: connection.deviceId, lastAccessTime };
+  }, null)?.deviceId ?? "";
+  const detailConnectionName = pluginConnectionDetails ? pluginConnectionDisplayName(pluginConnectionDetails) : "";
+  const detailAuthorizedAt = formatPluginConnectionTime(pluginConnectionDetails?.createdAt ?? "", resolvedLanguage);
+  const detailLastAccessAt = formatPluginConnectionTime(pluginConnectionDetails?.lastAccessAt ?? "", resolvedLanguage)
+    || t("settings.plugins.neverAccessed");
+  const detailRevokedAt = formatPluginConnectionTime(pluginConnectionDetails?.revokedAt ?? "", resolvedLanguage);
+  const detailAccessExpiresAt = formatPluginConnectionTime(pluginConnectionDetails?.accessExpiresAt ?? "", resolvedLanguage);
+  const detailRefreshExpiresAt = formatPluginConnectionTime(pluginConnectionDetails?.refreshExpiresAt ?? "", resolvedLanguage);
+  const detailLastRefreshAt = formatPluginConnectionTime(pluginConnectionDetails?.lastRefreshAt ?? "", resolvedLanguage);
+  const detailLastRefreshErrorAt = formatPluginConnectionTime(pluginConnectionDetails?.lastRefreshErrorAt ?? "", resolvedLanguage);
+  const detailRefreshCapability = pluginConnectionDetails
+    ? t(`settings.plugins.refreshCapability.${pluginConnectionDetails.refreshCapability}`)
+    : "";
 
   return (
     <div
@@ -848,6 +990,122 @@ export function AppSettingsDialog({
                 </button>
               </div>
             </div>
+          ) : activeSection === "plugins" ? (
+            <div className="settings-plugins">
+              <p className="settings-plugins-intro">{t("settings.plugins.description")}</p>
+              {pluginConnections.isLoading ? (
+                <div className="settings-plugin-state">{t("settings.plugins.loading")}</div>
+              ) : null}
+              {pluginConnections.isError ? (
+                <div className="settings-plugin-state is-error">
+                  <span>{t("settings.plugins.loadFailed")}</span>
+                  <button className="secondary-btn" type="button" onClick={() => void pluginConnections.refetch()}>
+                    {t("settings.plugins.retry")}
+                  </button>
+                </div>
+              ) : null}
+              {!pluginConnections.isLoading && !pluginConnections.isError && (pluginConnections.data?.connections.length ?? 0) === 0 ? (
+                <div className="settings-plugin-empty">
+                  <div className="settings-plugin-empty-heading">
+                    <span className="settings-plugin-empty-icon" aria-hidden="true"><Cable size={22} /></span>
+                    <strong>{t("settings.plugins.emptyTitle")}</strong>
+                    <p>{t("settings.plugins.emptyDesc")}</p>
+                  </div>
+                  {pluginInstallLinks.isError ? (
+                    <div className="settings-plugin-install-error">
+                      <span>{t("aiClientInstall.addressUnavailable")}</span>
+                      <button className="secondary-btn" type="button" disabled={pluginInstallLinks.isFetching} onClick={() => void pluginInstallLinks.refetch()}>
+                        {pluginInstallLinks.isFetching ? t("common.loading") : t("aiClientInstall.retry")}
+                      </button>
+                    </div>
+                  ) : pluginInstallLinks.isLoading || !pluginInstallOption ? (
+                    <p>{t("aiClientInstall.loadingAddress")}</p>
+                  ) : (
+                    <div className="settings-plugin-install-entry">
+                      <button
+                        className="settings-plugin-install-command"
+                        type="button"
+                        title={pluginInstallOption.instruction}
+                        onClick={() => void copyPluginInstallInstruction()}
+                      >
+                        <span className="settings-plugin-install-copy">
+                          <small>{t("settings.plugins.installInstruction")}</small>
+                          <span>{pluginInstallOption.instruction}</span>
+                        </span>
+                        <span className="settings-plugin-install-copy-action">
+                          {pluginInstallCopied ? <Check size={15} /> : <Copy size={15} />}
+                          {pluginInstallCopied ? t("aiClientInstall.copied") : t("aiClientInstall.copyForAi")}
+                        </span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+              <div className="settings-plugin-list">
+                {pluginConnections.data?.connections.map((connection) => {
+                  const confirmActionPending = (
+                    revokePluginConnection.isPending || restorePluginConnection.isPending || removePluginConnection.isPending
+                  ) && pluginConnectionAction?.connection.deviceId === connection.deviceId;
+                  const actionPending = confirmActionPending;
+                  const lastAccessLabel = formatPluginConnectionTime(connection.lastAccessAt, resolvedLanguage)
+                    || t("settings.plugins.neverAccessed");
+                  const isMostRecentConnection = connection.deviceId === mostRecentPluginConnectionDeviceId;
+                  return (
+                    <article className={cx("settings-plugin-row", !connection.active && "is-inactive")} key={connection.deviceId}>
+                      <span className="settings-plugin-app-icon" aria-hidden="true"><Monitor size={20} /></span>
+                      <div className="settings-plugin-app">
+                        <button
+                          className="settings-plugin-name-btn"
+                          type="button"
+                          title={pluginConnectionDeviceSummary(connection, t("settings.plugins.clientNotReported"))}
+                          onClick={() => {
+                            setPluginConnectionDetails(connection);
+                            setPluginConnectionLabelDraft(pluginConnectionDisplayName(connection));
+                            setPluginConnectionLabelEditing(false);
+                          }}
+                        >
+                          {pluginConnectionDisplayName(connection)}
+                        </button>
+                        <span className="settings-plugin-client-name">{connection.clientName}</span>
+                      </div>
+                      <span className="settings-plugin-access" title={`${t("settings.plugins.lastAccess")}：${lastAccessLabel}`}>
+                        {t("settings.plugins.lastAccess")} {lastAccessLabel}
+                      </span>
+                      <div className="settings-plugin-statuses">
+                        {isMostRecentConnection ? <span className="settings-plugin-context-tag">{t("settings.plugins.recent")}</span> : null}
+                        {connection.isLocalDevice ? <span className="settings-plugin-context-tag">{t("settings.plugins.localDevice")}</span> : null}
+                      </div>
+                      <div className="settings-plugin-actions">
+                        <button
+                          className="secondary-btn settings-plugin-action-btn"
+                          type="button"
+                          disabled={actionPending}
+                          onClick={() => setPluginConnectionAction({ kind: connection.active ? "revoke" : "restore", connection })}
+                        >
+                          {connection.active
+                            ? (actionPending && pluginConnectionAction?.kind === "revoke"
+                              ? t("settings.plugins.revoking")
+                              : t("settings.plugins.revoke"))
+                            : (actionPending && pluginConnectionAction?.kind === "restore"
+                              ? t("settings.plugins.restoring")
+                              : t("settings.plugins.restore"))}
+                        </button>
+                        <button
+                          className="secondary-btn settings-plugin-action-btn"
+                          type="button"
+                          disabled={actionPending}
+                          onClick={() => setPluginConnectionAction({ kind: "remove", connection })}
+                        >
+                          {actionPending && pluginConnectionAction?.kind === "remove"
+                            ? t("settings.plugins.removing")
+                            : t("settings.plugins.remove")}
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
           ) : activeSection === "data" ? (
             <div className="settings-list">
               <div className="settings-row">
@@ -982,6 +1240,143 @@ export function AppSettingsDialog({
         open={sharedLinksOpen}
         onClose={() => setSharedLinksOpen(false)}
         onCloseSettings={onClose}
+      />
+      <ConfirmDialog
+        open={Boolean(pluginConnectionDetails)}
+        title={t("settings.plugins.detailsTitle")}
+        description={pluginConnectionDetails ? (
+          <div className="plugin-connection-details">
+            <div className="plugin-connection-details-summary">
+              <span className="settings-plugin-app-icon" aria-hidden="true"><Monitor size={17} /></span>
+              <div>
+                <div className="plugin-connection-details-name">
+                  {pluginConnectionLabelEditing ? (
+                    <input
+                      autoFocus
+                      aria-label={t("settings.plugins.editConnectionLabel")}
+                      value={pluginConnectionLabelDraft}
+                      maxLength={80}
+                      disabled={updatePluginConnection.isPending}
+                      onChange={(event) => setPluginConnectionLabelDraft(event.target.value)}
+                      onBlur={commitPluginConnectionLabel}
+                    />
+                  ) : (
+                    <>
+                      <strong>{detailConnectionName}</strong>
+                      <button
+                        type="button"
+                        aria-label={t("settings.plugins.editConnectionLabel")}
+                        title={t("settings.plugins.editConnectionLabel")}
+                        onClick={() => {
+                          setPluginConnectionLabelDraft(detailConnectionName);
+                          setPluginConnectionLabelEditing(true);
+                        }}
+                      >
+                        <Pencil size={13} />
+                      </button>
+                    </>
+                  )}
+                </div>
+                <span>{pluginConnectionDeviceSummary(pluginConnectionDetails, t("settings.plugins.clientNotReported"))}</span>
+              </div>
+              <span className="settings-plugin-statuses">
+                {pluginConnectionDetails.deviceId === mostRecentPluginConnectionDeviceId ? (
+                  <span className="settings-plugin-context-tag">{t("settings.plugins.recent")}</span>
+                ) : null}
+                {pluginConnectionDetails.isLocalDevice ? (
+                  <span className="settings-plugin-context-tag">{t("settings.plugins.localDevice")}</span>
+                ) : null}
+              </span>
+            </div>
+            <div className="plugin-connection-detail-grid">
+              <div>
+                <span>{t("settings.plugins.lastAccessIp")}</span>
+                <strong>{pluginConnectionDetails.lastAccessIp || "-"}</strong>
+                {pluginConnectionDetails.lastAccessRegion ? <small>{pluginConnectionDetails.lastAccessRegion}</small> : null}
+              </div>
+              <div><span>{t("settings.plugins.authorizedAt")}</span><strong>{detailAuthorizedAt || "-"}</strong></div>
+              <div><span>{t("settings.plugins.lastAccess")}</span><strong>{detailLastAccessAt}</strong></div>
+              <div><span>{t("settings.plugins.refreshCapability")}</span><strong>{detailRefreshCapability}</strong></div>
+              <div><span>{t("settings.plugins.accessExpiresAt")}</span><strong>{detailAccessExpiresAt || "-"}</strong></div>
+              <div><span>{t("settings.plugins.refreshExpiresAt")}</span><strong>{detailRefreshExpiresAt || "-"}</strong></div>
+              <div><span>{t("settings.plugins.lastRefreshAt")}</span><strong>{detailLastRefreshAt || t("settings.plugins.notRefreshed")}</strong></div>
+              {pluginConnectionDetails.lastRefreshError ? (
+                <div className="plugin-connection-detail-wide">
+                  <span>{t("settings.plugins.lastRefreshError")}</span>
+                  <strong>{pluginConnectionDetails.lastRefreshError}</strong>
+                  {detailLastRefreshErrorAt ? <small>{detailLastRefreshErrorAt}</small> : null}
+                </div>
+              ) : null}
+              {detailRevokedAt ? <div><span>{t("settings.plugins.revokedAt")}</span><strong>{detailRevokedAt}</strong></div> : null}
+            </div>
+          </div>
+        ) : ""}
+        confirmText={updatePluginConnection.isPending ? t("settings.plugins.detailsSaving") : t("common.save")}
+        cancelText={t("common.cancel")}
+        backdropClassName="modal-backdrop-top"
+        className="plugin-connection-detail-dialog"
+        onConfirm={() => {
+          if (!pluginConnectionDetails || updatePluginConnection.isPending) return;
+          const draftLabel = pluginConnectionLabelDraft.trim();
+          const userLabel = draftLabel === pluginConnectionDetails.deviceName.trim() ? "" : draftLabel;
+          if (userLabel === pluginConnectionDetails.userLabel) {
+            setPluginConnectionDetails(null);
+            return;
+          }
+          updatePluginConnection.mutate({ connection: pluginConnectionDetails, userLabel });
+        }}
+        onCancel={() => {
+          if (updatePluginConnection.isPending) return;
+          setPluginConnectionDetails(null);
+          setPluginConnectionLabelDraft("");
+          setPluginConnectionLabelEditing(false);
+        }}
+      />
+      <ConfirmDialog
+        open={Boolean(pluginConnectionAction)}
+        title={t(pluginConnectionAction?.kind === "remove"
+          ? "settings.plugins.removeTitle"
+          : pluginConnectionAction?.kind === "restore"
+            ? "settings.plugins.restoreTitle"
+            : "settings.plugins.revokeTitle")}
+        description={t(
+          pluginConnectionAction?.kind === "remove"
+            ? "settings.plugins.removeDescription"
+            : pluginConnectionAction?.kind === "restore"
+              ? "settings.plugins.restoreDescription"
+              : "settings.plugins.revokeDescription",
+          { name: pluginConnectionAction?.connection.clientName ?? "" }
+        )}
+        confirmText={pluginConnectionAction?.kind === "remove"
+          ? (removePluginConnection.isPending ? t("settings.plugins.removing") : t("settings.plugins.remove"))
+          : pluginConnectionAction?.kind === "restore"
+            ? (restorePluginConnection.isPending ? t("settings.plugins.restoring") : t("settings.plugins.restore"))
+            : (revokePluginConnection.isPending ? t("settings.plugins.revoking") : t("settings.plugins.revoke"))}
+        cancelText={t("common.cancel")}
+        destructive={pluginConnectionAction?.kind !== "restore"}
+        backdropClassName="modal-backdrop-top"
+        onConfirm={() => {
+          if (
+            !pluginConnectionAction
+            || revokePluginConnection.isPending
+            || restorePluginConnection.isPending
+            || removePluginConnection.isPending
+          ) return;
+          if (pluginConnectionAction.kind === "remove") {
+            removePluginConnection.mutate(pluginConnectionAction.connection);
+          } else if (pluginConnectionAction.kind === "restore") {
+            restorePluginConnection.mutate(pluginConnectionAction.connection);
+          } else {
+            revokePluginConnection.mutate(pluginConnectionAction.connection);
+          }
+        }}
+        onCancel={() => {
+          if (
+            !revokePluginConnection.isPending
+            && !restorePluginConnection.isPending
+            && !removePluginConnection.isPending
+          ) setPluginConnectionAction(null);
+        }}
       />
     </div>
   );

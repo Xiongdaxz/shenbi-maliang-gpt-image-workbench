@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { api } from "./api";
@@ -20,9 +21,30 @@ export default function App() {
   const authMode = searchParams.get("auth") === "register" ? "register" : searchParams.get("auth") === "login" ? "login" : null;
   const { t } = useI18n();
 
+  const safeNextPath = () => {
+    const next = searchParams.get("next") ?? "";
+    if (!next.startsWith("/") || next.startsWith("//")) return "";
+    try {
+      const target = new URL(next, window.location.origin);
+      if (target.origin !== window.location.origin) return "";
+      const allowedPages = ["/", "/cases", "/assets", "/images", "/prompt-templates", "/help"];
+      if (!allowedPages.includes(target.pathname) && target.pathname !== "/oauth/authorize") return "";
+      return `${target.pathname}${target.search}`;
+    } catch {
+      return "";
+    }
+  };
+  const authenticatedNextPath = safeNextPath();
+
   useDocumentBranding(branding.data);
   useAppearanceMode({ enabled: loggedIn, clearOnDisable: true, preferredMode: me.data?.user?.appearanceMode });
   useSyncI18nPreference(me.data?.user?.preferences.language, loggedIn && !me.isLoading);
+
+  useEffect(() => {
+    if (!me.isLoading && loggedIn && authMode && authenticatedNextPath.startsWith("/oauth/authorize")) {
+      window.location.replace(authenticatedNextPath);
+    }
+  }, [authMode, authenticatedNextPath, loggedIn, me.isLoading]);
 
   const cleanSharedLocation = () => {
     const params = new URLSearchParams(location.search);
@@ -30,17 +52,24 @@ export default function App() {
     params.delete("next");
     return `${location.pathname}${params.size > 0 ? `?${params.toString()}` : ""}`;
   };
-  const safeNextPath = () => {
-    const next = searchParams.get("next") ?? "";
-    return ["/", "/cases", "/assets", "/images", "/prompt-templates"].includes(next) ? next : "";
-  };
-
   if (me.isLoading) {
     return (
       <ToastProvider>
         <div className="center-screen">{t("common.loadingEllipsis")}</div>
       </ToastProvider>
     );
+  }
+
+  if (loggedIn && authMode && authenticatedNextPath.startsWith("/oauth/authorize")) {
+    return (
+      <ToastProvider>
+        <div className="center-screen">{t("common.loadingEllipsis")}</div>
+      </ToastProvider>
+    );
+  }
+
+  if (loggedIn && authMode && authenticatedNextPath) {
+    return <Navigate to={authenticatedNextPath} replace />;
   }
 
   if (sharedRoute) {
@@ -50,7 +79,11 @@ export default function App() {
         <ToastProvider>
           <LoginPage
             initialMode={authMode}
-            onAuthenticated={() => navigate(safeNextPath() || cleanSharedLocation(), { replace: true })}
+            onAuthenticated={() => {
+              const next = safeNextPath();
+              if (next.startsWith("/oauth/authorize")) window.location.assign(next);
+              else navigate(next || cleanSharedLocation(), { replace: true });
+            }}
           />
         </ToastProvider>
       );
@@ -65,7 +98,14 @@ export default function App() {
   if (!me.data?.user) {
     return (
       <ToastProvider>
-        <LoginPage />
+        <LoginPage
+          initialMode={authMode ?? "login"}
+          onAuthenticated={() => {
+            const next = safeNextPath();
+            if (next.startsWith("/oauth/authorize")) window.location.assign(next);
+            else navigate(next || location.pathname, { replace: true });
+          }}
+        />
       </ToastProvider>
     );
   }

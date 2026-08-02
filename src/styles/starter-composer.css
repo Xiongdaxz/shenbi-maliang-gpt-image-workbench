@@ -301,6 +301,225 @@
   opacity: 0.78;
 }
 
+.ai-client-install-backdrop {
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.ai-client-install-dialog {
+  width: min(620px, 100%);
+  max-height: min(520px, calc(100vh - 40px));
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--app-border) 86%, transparent);
+  border-radius: 20px;
+  color: var(--app-text);
+  background: var(--app-surface-raised);
+  padding: 18px;
+  box-shadow: 0 28px 90px rgba(15, 23, 42, 0.24);
+  animation: modalIn 160ms ease-out both;
+}
+
+.ai-client-install-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 0 0 14px 2px;
+}
+
+.ai-client-install-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.35;
+}
+
+.ai-client-install-title-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  color: currentColor;
+}
+
+.ai-client-install-close {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  color: var(--app-text);
+  background: transparent;
+  padding: 0;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.ai-client-install-close:hover,
+.ai-client-install-close:focus-visible {
+  background: var(--button-default-hover-bg);
+}
+
+.ai-client-install-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.ai-client-install-card {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 13px;
+  background: var(--app-card-bg);
+  padding: 12px;
+}
+
+.ai-client-install-icon {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--app-preview-bg);
+  box-shadow: inset 0 0 0 1px var(--app-border);
+}
+
+.ai-client-install-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ai-client-install-card-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.ai-client-install-card-copy h4 {
+  margin: 0;
+  color: var(--app-text);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.ai-client-install-card-copy p {
+  margin: 3px 0 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.4;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-client-install-card-copy p.is-error {
+  color: var(--app-danger);
+  font-family: inherit;
+}
+
+.ai-client-install-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ai-client-install-actions button,
+.ai-client-install-actions a {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 10px;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+}
+
+.ai-client-install-actions button {
+  border: 1px solid var(--button-primary-bg);
+  color: var(--button-primary-text);
+  background: var(--button-primary-bg);
+}
+
+.ai-client-install-actions a {
+  border: 1px solid var(--app-border);
+  color: var(--app-text);
+  background: var(--app-card-bg);
+}
+
+.ai-client-install-actions button:hover,
+.ai-client-install-actions button:focus-visible,
+.ai-client-install-actions a:hover,
+.ai-client-install-actions a:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--button-primary-bg) 18%, transparent);
+}
+
+.ai-client-install-actions button:hover,
+.ai-client-install-actions button:focus-visible {
+  border-color: var(--button-primary-hover-bg);
+  background: var(--button-primary-hover-bg);
+}
+
+.ai-client-install-actions button.is-secondary {
+  border-color: var(--app-border);
+  color: var(--app-text);
+  background: var(--app-card-bg);
+}
+
+.ai-client-install-actions button.is-secondary:hover,
+.ai-client-install-actions button.is-secondary:focus-visible {
+  border-color: var(--app-border);
+  background: var(--button-default-hover-bg);
+}
+
+.ai-client-install-actions button:disabled,
+.ai-client-install-actions button:disabled:hover {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+  box-shadow: none;
+}
+
+@media (max-width: 680px) {
+  .ai-client-install-backdrop {
+    align-items: end;
+    padding: 12px;
+  }
+
+  .ai-client-install-dialog {
+    max-height: calc(100vh - 24px);
+    border-radius: 18px;
+    padding: 16px;
+  }
+
+  .ai-client-install-card {
+    align-items: center;
+  }
+
+  .ai-client-install-actions {
+    width: 100%;
+    padding-left: 0;
+  }
+}
+
 .starter-case-strip {
   width: max-content;
   min-width: 0;

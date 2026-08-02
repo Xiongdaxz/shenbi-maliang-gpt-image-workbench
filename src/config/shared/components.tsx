@@ -79,13 +79,13 @@ export function SwitchControl({
   );
 }
 
-export function ConfigHeader({ title, desc }: { title: string; desc: string }) {
+export function ConfigHeader({ title, desc }: { title: string; desc?: string }) {
   const configCopy = useConfigCopy();
 
   return (
     <header className="page-header compact">
       <h1>{configCopy(title)}</h1>
-      <p>{configCopy(desc)}</p>
+      {desc ? <p>{configCopy(desc)}</p> : null}
     </header>
   );
 }

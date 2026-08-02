@@ -5,6 +5,7 @@ import type { Message } from "../src/types";
 import {
   createSessionShareToken,
   normalizeSessionSharePublicToken,
+  resolveSessionShareConfiguredOrigin,
   resolveSessionSharePublicOrigin,
   resolveSessionShareClientAddress,
   safeSharedMessageMetadata,
@@ -67,6 +68,16 @@ describe("session share snapshot reuse", () => {
 });
 
 describe("session share public origin", () => {
+  test("uses the same environment and backend setting priority as install links", () => {
+    expect(resolveSessionShareConfiguredOrigin({
+      sitePublicBaseUrl: "https://site-setting.example.com"
+    })).toBe("https://site-setting.example.com");
+    expect(resolveSessionShareConfiguredOrigin({
+      appPublicUrl: "https://app-env.example.com",
+      sitePublicBaseUrl: "https://site-setting.example.com"
+    })).toBe("https://app-env.example.com");
+  });
+
   test("replaces loopback hosts with the selected LAN address", () => {
     expect(resolveSessionSharePublicOrigin("http://127.0.0.1:8787", "192.168.0.87")).toBe("http://192.168.0.87:8787");
     expect(resolveSessionSharePublicOrigin("http://localhost:8787", "192.168.0.87")).toBe("http://192.168.0.87:8787");

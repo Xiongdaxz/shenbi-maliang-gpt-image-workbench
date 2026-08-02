@@ -24,6 +24,7 @@ tsconfig.tsbuildinfo
 *.sqlite
 *.sqlite3
 *.bak
+/distribution/releases/
 *.zip
 *.rar
 *.7z

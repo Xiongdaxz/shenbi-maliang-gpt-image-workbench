@@ -1,0 +1,19 @@
+{
+  "description": "Check the trusted Shenbi Maliang stable channel before Maliang MCP tool use.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^mcp__maliang__.*$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if command -v node >/dev/null 2>&1 && node -e 'process.exit(Number(process.versions.node.split(\".\")[0]) >= 20 ? 0 : 1)'; then node \"${PLUGIN_ROOT}/hooks/auto-update.mjs\"; elif command -v bun >/dev/null 2>&1; then bun \"${PLUGIN_ROOT}/hooks/auto-update.ts\"; else exit 0; fi",
+            "commandWindows": "cmd.exe /d /s /c \"\"%PLUGIN_ROOT%\\hooks\\auto-update.cmd\"\"",
+            "timeout": 120,
+            "statusMessage": "正在检查神笔马良插件更新"
+          }
+        ]
+      }
+    ]
+  }
+}

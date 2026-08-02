@@ -11,6 +11,7 @@ export const DEFAULT_PUBLIC_BRANDING: PublicBranding = {
   logoUrl: DEFAULT_LOGO_URL,
   faviconUrl: DEFAULT_FAVICON_URL,
   showGithubEntry: true,
+  showAiClientInstallEntry: true,
   loginAssets: DEFAULT_LOGIN_ASSETS
 };
 
@@ -21,6 +22,7 @@ export function normalizePublicBranding(branding?: Partial<PublicBranding> | nul
     logoUrl: branding?.logoUrl || DEFAULT_LOGO_URL,
     faviconUrl: branding?.faviconUrl || DEFAULT_FAVICON_URL,
     showGithubEntry: branding?.showGithubEntry ?? true,
+    showAiClientInstallEntry: branding?.showAiClientInstallEntry ?? true,
     loginAssets: normalizeLoginAssets(branding?.loginAssets ?? DEFAULT_LOGIN_ASSETS)
   };
 }

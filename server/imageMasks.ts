@@ -1,6 +1,7 @@
 import path from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import sharp from "sharp";
+import { SAFE_IMAGE_MAX_PIXELS } from "./imageValidation";
 import { absoluteDataPath, IMAGE_MASK_DIR } from "./paths";
 
 function dataUrlToBuffer(dataUrl: string) {
@@ -28,7 +29,7 @@ function maskExtension(mimeType: string) {
 
 export async function normalizeImageEditMaskDataUrl(dataUrl: string) {
   const { buffer } = dataUrlToBuffer(dataUrl);
-  const { data, info } = await sharp(buffer, { limitInputPixels: false })
+  const { data, info } = await sharp(buffer, { limitInputPixels: SAFE_IMAGE_MAX_PIXELS, sequentialRead: true })
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
@@ -50,7 +51,7 @@ export async function normalizeImageEditMaskDataUrl(dataUrl: string) {
       height: info.height,
       channels
     },
-    limitInputPixels: false
+    limitInputPixels: SAFE_IMAGE_MAX_PIXELS
   })
     .png()
     .toBuffer();

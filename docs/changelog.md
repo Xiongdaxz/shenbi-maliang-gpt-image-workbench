@@ -2,6 +2,24 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.59 - 2026-08-02
+
+### 中文
+
+- 新增统一的 AI 客户端安装页：可把一句安装指令交给 Codex、Claude Code、TRAE Work 或 WorkBuddy 自动选择完整 Codex 插件或 Remote MCP，也可复制最小 JSON 手动接入并保留已有 MCP 配置。
+- Codex 插件现可安全登录后直接生成和编辑图片，支持上传本地 PNG、JPG 或 WebP、持续查询异步任务、把原图保存到本地并在任务中展示；兼容更新会校验来源和完整性，失败时保留当前版本。
+- 用户设置新增“插件”管理，可查看已连接的应用与设备、权限、最近访问和自动刷新状态，并可重命名、断开、恢复或永久移除连接。
+- 后台“站点与品牌”新增公开访问地址和客户端授权有效期设置，安装、授权与分享链接会统一使用正确的外部地址，局域网与反向代理部署提示也更清楚。
+- 新对话空白页与帮助中心新增多语言安装入口和使用指南，管理员可按需隐藏推荐入口；发行包同步携带插件安装与在线更新所需模板。
+
+### English
+
+- A unified AI-client installation page now lets users send one instruction to Codex, Claude Code, TRAE Work, or WorkBuddy so the app can choose the complete Codex plugin or Remote MCP automatically; minimal JSON remains available for manual setup without replacing existing MCP entries.
+- The Codex plugin can now sign in securely to generate and edit images, upload local PNG, JPG, or WebP files, follow asynchronous jobs, save originals locally, and display them in the task; compatible updates verify their source and integrity and keep the current version if an update fails.
+- User Settings now include Plugins, where connected apps and devices, permissions, recent access, and automatic refresh status can be reviewed, with actions to rename, disconnect, restore, or permanently remove a connection.
+- Admin Site & Branding now includes public access URL and client authorization lifetime settings, so installation, authorization, and share links use the correct external address with clearer guidance for LAN and reverse-proxy deployments.
+- The blank conversation page and Help Center now provide multilingual installation entry points and usage guidance, admins can hide the recommendation when needed, and release packages include the templates required for plugin installation and online updates.
+
 ## v0.1.58 - 2026-07-27
 
 ### 中文

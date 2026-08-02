@@ -82,7 +82,7 @@ const messages: Messages = {
   "config.nav.safetyReview": "Sicherheitsprüfung",
   "config.nav.imageMode": "Modus",
   "config.nav.cpa": "CPA-Sync",
-  "config.nav.branding": "Branding",
+  "config.nav.branding": "Website & Branding",
   "config.nav.smtp": "E-Mail",
   "config.nav.sms": "SMS",
   "config.nav.backup": "Backup",

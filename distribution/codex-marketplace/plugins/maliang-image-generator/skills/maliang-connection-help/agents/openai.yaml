@@ -1,0 +1,4 @@
+interface:
+  display_name: "马良连接诊断"
+  short_description: "安装、OAuth 授权、浏览器与 MCP 连接故障诊断"
+  default_prompt: "Use $maliang-connection-help to diagnose and safely complete Shenbi Maliang installation or OAuth authorization."

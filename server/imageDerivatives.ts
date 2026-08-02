@@ -1,6 +1,7 @@
 import sharp from "sharp";
 import { appDb, getAll, getOne, run } from "./db";
 import { readImageDimensions } from "./imageDimensions";
+import { SAFE_IMAGE_MAX_PIXELS } from "./imageValidation";
 import { readStoredFile, writeEncryptedFile } from "./secureFiles";
 import type { ImageDerivativeRow } from "./types";
 import { now } from "./utils";
@@ -126,7 +127,7 @@ function upsertDerivative(source: DerivativeSource, variant: Exclude<ImageVarian
 async function createDerivative(source: DerivativeSource, variant: Exclude<ImageVariant, "original">): Promise<StoredDerivative> {
   const config = DERIVATIVE_CONFIG[variant];
   const sourceBuffer = await readStoredFile(source.path);
-  const buffer = await sharp(sourceBuffer, { limitInputPixels: false })
+  const buffer = await sharp(sourceBuffer, { limitInputPixels: SAFE_IMAGE_MAX_PIXELS, sequentialRead: true })
     .rotate()
     .resize({
       width: config.maxSize,

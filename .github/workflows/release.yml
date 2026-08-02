@@ -107,6 +107,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path "$packageRoot/node_modules" | Out-Null
           Copy-Item -Path "release-bin/${{ matrix.executable }}" -Destination "$packageRoot/${{ matrix.executable }}" -Force
           Copy-Item -Path "dist" -Destination $packageRoot -Recurse -Force
+          New-Item -ItemType Directory -Force -Path "$packageRoot/distribution" | Out-Null
+          Copy-Item -Path "distribution/codex-marketplace" -Destination "$packageRoot/distribution" -Recurse -Force
           Copy-Item -Path "scripts" -Destination $packageRoot -Recurse -Force
           Copy-Item -Path "package.json", "bun.lock", "README.md", "README.en.md", "LICENSE" -Destination $packageRoot -Force
           New-Item -ItemType Directory -Force -Path "$packageRoot/docs" | Out-Null
@@ -172,7 +174,7 @@ jobs:
           $packageRoot = "release/shenbi-maliang-source"
           New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
 
-          $directories = @("server", "src", "public", "scripts", "docs")
+          $directories = @("server", "src", "public", "scripts", "docs", "distribution")
           foreach ($directory in $directories) {
             if (Test-Path $directory) {
               Copy-Item -Path $directory -Destination $packageRoot -Recurse -Force

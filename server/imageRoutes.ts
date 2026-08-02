@@ -66,6 +66,7 @@ import {
   visibleAssetSql
 } from "./utils";
 import { requireUser } from "./auth";
+import { requireImageRouteUser } from "./externalMcpAuth";
 import { markProviderRequestPostProcessFailure } from "./auditLog";
 import {
   deleteImageRecords,
@@ -1882,7 +1883,7 @@ api.delete("/images/:imageId", async (c) => {
 });
 
 api.post("/images/generate", async (c) => {
-  const user = await requireUser(c);
+  const user = await requireImageRouteUser(c);
   if (!user) return c.json({ error: "未登录" }, 401);
   const body = await c.req.json().catch(() => ({}));
   const clientRequestId = requestClientRequestId(body);
@@ -2129,7 +2130,7 @@ api.post("/images/generate", async (c) => {
 });
 
 api.post("/images/edit", async (c) => {
-  const user = await requireUser(c);
+  const user = await requireImageRouteUser(c);
   if (!user) return c.json({ error: "未登录" }, 401);
   const body = await c.req.json().catch(() => ({}));
   const clientRequestId = requestClientRequestId(body);
@@ -2695,7 +2696,7 @@ api.post("/image-jobs/:id/retry", async (c) => {
 });
 
 api.get("/image-jobs/:id", async (c) => {
-  const user = await requireUser(c);
+  const user = await requireImageRouteUser(c);
   if (!user) return c.json({ error: "未登录" }, 401);
   expireStaleImageJobs(user.id);
   const row = getOne<{

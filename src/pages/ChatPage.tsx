@@ -5,6 +5,7 @@ import { Share } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
 import { AddAssetFromImageModal } from "../components/AddAssetFromImageModal";
+import { AiClientInstallDialog } from "../components/AiClientInstallDialog";
 import { CaseMaterialPickerModal } from "../components/CaseMaterialPickerModal";
 import { ChatBranchSwitch } from "../components/chat/ChatBranchSwitch";
 import { ChatComposer } from "../components/chat/ChatComposer";
@@ -522,6 +523,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
   const [assetTarget, setAssetTarget] = useState<AssetModalTarget | null>(null);
   const [casePickerOpen, setCasePickerOpen] = useState(false);
   const [chatIntroOpen, setChatIntroOpen] = useState(false);
+  const [aiClientInstallOpen, setAiClientInstallOpen] = useState(false);
   const [activeBranchId, setActiveBranchId] = useState<string | null>(null);
   const [starterPromptOptimizeRequest, setStarterPromptOptimizeRequest] = useState<{ id: number; prompt: string } | null>(null);
   const [activeSubmitCancellation, setActiveSubmitCancellation] = useState<ActiveSubmitCancellation | null>(null);
@@ -542,6 +544,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
   const cancelledSubmitIdsRef = useRef(new Set<string>());
   const { showToast } = useToast();
   const { resolvedLanguage, t } = useI18n();
+  const closeAiClientInstall = useCallback(() => setAiClientInstallOpen(false), []);
   const appIntroGuide = useGuideSeen(GUIDE_KEYS.appIntro);
   const guideDisplayName = user.username?.trim() || user.account?.trim() || t("chat.friend");
   const guideGreeting = t(getTimeGreetingKey());
@@ -577,6 +580,8 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
   }, [savePromptOptimizeCustomInstruction]);
 
   const providers = useQuery({ queryKey: ["providers"], queryFn: api.providers });
+  const branding = useQuery({ queryKey: ["branding"], queryFn: api.branding });
+  const aiClientInstallEnabled = branding.data?.showAiClientInstallEntry ?? true;
   const assetCategories = useQuery({ queryKey: ["asset-categories"], queryFn: api.assetCategories, enabled: Boolean(assetTarget) });
   const starterCases = useQuery({
     queryKey: ["cases", "starter"],
@@ -591,6 +596,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
     queryClient.setQueryData(["cases", "starter"], result);
     return result;
   }, [queryClient, starterCases.data?.items]);
+  useEffect(() => setAiClientInstallOpen(false), [sessionId]);
   const starterCaseCategories = useMemo(() => [{
     id: "starter",
     name: "starter",
@@ -2231,6 +2237,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
             dailyHeadlineIdeas={starterCopies.data?.copies}
             headlineIdeasLoaded={starterCopies.isFetched}
             user={user}
+            onOpenAiClientInstall={aiClientInstallEnabled ? () => setAiClientInstallOpen(true) : undefined}
             onOpenIntro={() => setChatIntroOpen(true)}
             onRefreshCases={refreshStarterCases}
             onUseHeadlinePrompt={useStarterHeadlinePrompt}
@@ -2440,6 +2447,11 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
           appIntroGuide.markSeen();
           setChatIntroOpen(false);
         }}
+      />
+      <AiClientInstallDialog
+        logoUrl={branding.data?.logoUrl}
+        open={showStarter && aiClientInstallOpen}
+        onClose={closeAiClientInstall}
       />
     </section>
   );

@@ -1,0 +1,4 @@
+interface:
+  display_name: "神笔马良生图与改图"
+  short_description: "登录马良后完成文生图、历史图改图、本地图上传与任务查询"
+  default_prompt: "Use $maliang-image-generator to generate or edit an image with Shenbi Maliang and return the verified result."

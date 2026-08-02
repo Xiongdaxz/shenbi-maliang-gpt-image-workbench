@@ -64,6 +64,7 @@ import type {
   ProxyConfig,
   SafetyReviewLog,
   SafetyReviewSettings,
+  SitePublicUrlSource,
   SmsSettings,
   StatisticsPreset,
   SmtpSettings,
@@ -555,7 +556,15 @@ export function BrandingSettingsPanel() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const query = useQuery({ queryKey: ["config-branding"], queryFn: configApi.branding });
+  const siteSettingsQuery = useQuery({ queryKey: ["config-site-settings"], queryFn: configApi.siteSettings });
+  const externalMcpSettingsQuery = useQuery({
+    queryKey: ["config-external-mcp-settings"],
+    queryFn: configApi.externalMcpSettings
+  });
   const [form, setForm] = useState<BrandingSettings>(emptyBrandingSettings());
+  const [sitePublicBaseUrl, setSitePublicBaseUrl] = useState("");
+  const [accessTokenTtlDays, setAccessTokenTtlDays] = useState("7");
+  const [refreshTokenTtlDays, setRefreshTokenTtlDays] = useState("90");
   const [renameTarget, setRenameTarget] = useState<BrandingAsset | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BrandingAsset | null>(null);
   const assets = query.data?.assets ?? [];
@@ -571,6 +580,32 @@ export function BrandingSettingsPanel() {
       setForm(normalizeBrandingSettings(data.settings));
       showToast("品牌设置已保存");
       refreshBrandingQueries();
+    }
+  });
+  const saveSiteSettingsMutation = useMutation({
+    mutationFn: () => configApi.saveSiteSettings(sitePublicBaseUrl),
+    onSuccess: (data) => {
+      setSitePublicBaseUrl(data.settings.publicBaseUrl);
+      queryClient.setQueryData(["config-site-settings"], data);
+      showToast("站点访问设置已保存");
+    },
+    onError: (error) => {
+      showToast(error instanceof Error ? error.message : "站点访问设置保存失败", "error");
+    }
+  });
+  const saveExternalMcpSettingsMutation = useMutation({
+    mutationFn: () => configApi.saveExternalMcpSettings({
+      accessTokenTtlDays: Number(accessTokenTtlDays),
+      refreshTokenTtlDays: Number(refreshTokenTtlDays)
+    }),
+    onSuccess: (data) => {
+      setAccessTokenTtlDays(String(data.settings.accessTokenTtlDays));
+      setRefreshTokenTtlDays(String(data.settings.refreshTokenTtlDays));
+      queryClient.setQueryData(["config-external-mcp-settings"], data);
+      showToast("Remote MCP 授权设置已保存");
+    },
+    onError: (error) => {
+      showToast(error instanceof Error ? error.message : "Remote MCP 授权设置保存失败", "error");
     }
   });
   const reset = useMutation({
@@ -618,6 +653,17 @@ export function BrandingSettingsPanel() {
     if (query.data?.settings) setForm(normalizeBrandingSettings(query.data.settings));
   }, [query.data?.settings]);
 
+  useEffect(() => {
+    if (siteSettingsQuery.data?.settings) setSitePublicBaseUrl(siteSettingsQuery.data.settings.publicBaseUrl);
+  }, [siteSettingsQuery.data?.settings]);
+
+  useEffect(() => {
+    const settings = externalMcpSettingsQuery.data?.settings;
+    if (!settings) return;
+    setAccessTokenTtlDays(String(settings.accessTokenTtlDays));
+    setRefreshTokenTtlDays(String(settings.refreshTokenTtlDays));
+  }, [externalMcpSettingsQuery.data?.settings]);
+
   const patch = (value: Partial<BrandingSettings>) => setForm((current) => ({ ...current, ...value }));
   const uploadDisabled = upload.isPending || save.isPending || reset.isPending;
   const activeLogo = brandingAssetById(assets, form.activeLogoAssetId);
@@ -626,6 +672,24 @@ export function BrandingSettingsPanel() {
   const darkTitle = brandingAssetById(assets, form.activeLoginTitleDarkAssetId);
   const firstLightBackground = form.loginBackgroundLightAssetIds.map((id) => brandingAssetById(assets, id)).find(Boolean);
   const firstDarkBackground = form.loginBackgroundDarkAssetIds.map((id) => brandingAssetById(assets, id)).find(Boolean);
+  const siteSettingsEffective = siteSettingsQuery.data?.effective;
+  const siteSettingsSourceLabels: Record<SitePublicUrlSource, string> = {
+    APP_PUBLIC_URL: "环境变量 APP_PUBLIC_URL",
+    MALIANG_PUBLIC_BASE_URL: "兼容环境变量 MALIANG_PUBLIC_BASE_URL",
+    site_settings: "后台设置",
+    automatic: "自动检测"
+  };
+  const siteSettingsLoaded = siteSettingsQuery.isSuccess && Boolean(siteSettingsQuery.data);
+  const siteSettingsUnavailableLabel = siteSettingsQuery.isLoading
+    ? "加载中..."
+    : siteSettingsQuery.isError
+      ? "站点访问设置加载失败"
+      : "暂未识别";
+  const siteSettingsEffectiveUrl = siteSettingsEffective?.publicBaseUrl || siteSettingsUnavailableLabel;
+  const siteSettingsSourceLabel = siteSettingsEffective
+    ? siteSettingsSourceLabels[siteSettingsEffective.source]
+    : siteSettingsUnavailableLabel;
+  const externalMcpSettingsLoaded = externalMcpSettingsQuery.isSuccess && Boolean(externalMcpSettingsQuery.data);
 
   function handleUpload(type: BrandingAssetType, file: File) {
     upload.mutate({ type, file });
@@ -772,14 +836,134 @@ export function BrandingSettingsPanel() {
 
   return (
     <section className="config-card branding-settings-card">
-      <ConfigHeader title="品牌设置" desc="配置全站统一的站点名称、Logo、登录页标题图和登录背景；系统默认资源会保留为可选项。" />
-      <GlobalSwitchRow
-        type="github_entry"
-        title="GitHub 入口"
-        desc="控制用户设置“关于”中的 GitHub 仓库入口；关闭后改用更新日志图标。"
-        defaultEnabled
-        invalidateQueryKeys={["branding"]}
-      />
+      <ConfigHeader title="站点与品牌" />
+      <div className="branding-section branding-site-settings">
+        <div className="branding-section-head">
+          <div>
+            <h2>站点与插件 / MCP 授权</h2>
+          </div>
+        </div>
+        {siteSettingsQuery.isError ? (
+          <div className="form-error branding-site-load-error">
+            <span>{siteSettingsQuery.error instanceof Error ? siteSettingsQuery.error.message : "站点访问设置加载失败"}</span>
+            <button
+              className="secondary-btn compact"
+              type="button"
+              disabled={siteSettingsQuery.isFetching}
+              onClick={() => void siteSettingsQuery.refetch()}
+            >
+              重新加载
+            </button>
+          </div>
+        ) : null}
+        {externalMcpSettingsQuery.isError ? (
+          <div className="form-error branding-site-load-error">
+            <span>{externalMcpSettingsQuery.error instanceof Error ? externalMcpSettingsQuery.error.message : "Remote MCP 授权设置加载失败"}</span>
+            <button
+              className="secondary-btn compact"
+              type="button"
+              disabled={externalMcpSettingsQuery.isFetching}
+              onClick={() => void externalMcpSettingsQuery.refetch()}
+            >
+              重新加载
+            </button>
+          </div>
+        ) : null}
+        <div className="provider-form branding-runtime-settings-form">
+          <div className="branding-runtime-field">
+            <label htmlFor="branding-public-base-url">公开访问地址</label>
+            <div className="branding-runtime-control">
+              <input
+                id="branding-public-base-url"
+                value={sitePublicBaseUrl}
+                placeholder="https://image.example.com"
+                disabled={!siteSettingsLoaded || siteSettingsEffective?.environmentOverride}
+                onChange={(event) => setSitePublicBaseUrl(event.target.value)}
+              />
+              <button
+                className="primary-btn compact"
+                type="button"
+                title="保存访问设置"
+                disabled={!siteSettingsLoaded || siteSettingsEffective?.environmentOverride || saveSiteSettingsMutation.isPending}
+                onClick={() => saveSiteSettingsMutation.mutate()}
+              >
+                <Save size={15} />
+                保存
+              </button>
+            </div>
+            <small className="branding-runtime-status">
+              <span>当前生效地址</span>
+              <strong key={`site-effective-${siteSettingsEffectiveUrl}`}>{siteSettingsEffectiveUrl}</strong>
+              <span key={`site-source-${siteSettingsSourceLabel}`}>来源：{siteSettingsSourceLabel}</span>
+            </small>
+          </div>
+          <div className="branding-runtime-field">
+            <label htmlFor="branding-access-token-ttl">
+              插件 / MCP Access Token（天）
+            </label>
+            <input
+              id="branding-access-token-ttl"
+              type="number"
+              min={1}
+              max={365}
+              step={1}
+              value={accessTokenTtlDays}
+              disabled={!externalMcpSettingsLoaded}
+              onChange={(event) => setAccessTokenTtlDays(event.target.value)}
+            />
+            <small>默认 7 天，范围 1～365 天。</small>
+          </div>
+          <div className="branding-runtime-field">
+            <label htmlFor="branding-refresh-token-ttl">插件 / MCP Refresh Token（天）</label>
+            <div className="branding-runtime-control">
+              <input
+                id="branding-refresh-token-ttl"
+                type="number"
+                min={30}
+                max={3650}
+                step={1}
+                value={refreshTokenTtlDays}
+                disabled={!externalMcpSettingsLoaded}
+                onChange={(event) => setRefreshTokenTtlDays(event.target.value)}
+              />
+              <button
+                className="primary-btn compact"
+                type="button"
+                title="保存授权设置"
+                disabled={!externalMcpSettingsLoaded || saveExternalMcpSettingsMutation.isPending}
+                onClick={() => saveExternalMcpSettingsMutation.mutate()}
+              >
+                <Save size={15} />
+                保存
+              </button>
+            </div>
+            <small>默认 90 天，范围 30～3650 天，刷新后滚动续期。</small>
+          </div>
+          {siteSettingsEffective?.error ? <div className="form-error">{siteSettingsEffective.error}</div> : null}
+          {siteSettingsEffective?.environmentOverride ? (
+            <div className="branding-site-override-note">
+              <strong>环境变量正在优先生效</strong>
+              <span>请在部署配置中修改公开访问地址；后台字段已锁定，避免保存不生效的重复配置。</span>
+            </div>
+          ) : null}
+        </div>
+      </div>
+      <div className="branding-entry-switches">
+        <GlobalSwitchRow
+          type="github_entry"
+          title="GitHub 入口"
+          desc="控制用户设置“关于”中的 GitHub 仓库入口；关闭后改用更新日志图标。"
+          defaultEnabled
+          invalidateQueryKeys={["branding"]}
+        />
+        <GlobalSwitchRow
+          type="ai_client_install_entry"
+          title="AI 客户端安装入口"
+          desc="控制新对话空白页中的 AI 客户端推荐入口；关闭后不影响安装页直达地址。"
+          defaultEnabled
+          invalidateQueryKeys={["branding"]}
+        />
+      </div>
       {query.isLoading ? <div className="settings-empty">品牌配置加载中...</div> : null}
       <div className="branding-top-grid">
         <div className="branding-preview-panel">

@@ -102,7 +102,7 @@ const messages: Messages = {
   "config.nav.safetyReview": "بررسی ایمنی",
   "config.nav.imageMode": "حالت",
   "config.nav.cpa": "همگام سازی CPA",
-  "config.nav.branding": "برندسازی",
+  "config.nav.branding": "سایت و برند",
   "config.nav.smtp": "ایمیل",
   "config.nav.sms": "پیامک",
   "config.nav.backup": "پشتیبان گیری",

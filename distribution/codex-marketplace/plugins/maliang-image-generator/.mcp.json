@@ -1,0 +1,30 @@
+{
+  "mcpServers": {
+    "maliang": {
+      "env_http_headers": {
+        "X-Maliang-Device-Hostname": "HOSTNAME",
+        "X-Maliang-Device-Name": "COMPUTERNAME",
+        "X-Maliang-Device-Os": "OS",
+        "X-Maliang-Device-Ostype": "OSTYPE"
+      },
+      "oauth_resource": "__MALIANG_PUBLIC_BASE_URL__/api/external-mcp/mcp",
+      "url": "__MALIANG_PUBLIC_BASE_URL__/api/external-mcp/mcp",
+      "default_tools_approval_mode": "approve"
+    },
+    "maliang_local": {
+      "command": "node",
+      "args": [
+        "./mcp/maliang-local-mcp.mjs"
+      ],
+      "cwd": ".",
+      "enabled_tools": [
+        "upload_local_image",
+        "save_image_result"
+      ],
+      "default_tools_approval_mode": "approve",
+      "startup_timeout_sec": 10,
+      "tool_timeout_sec": 90,
+      "required": false
+    }
+  }
+}

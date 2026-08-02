@@ -110,11 +110,29 @@ export type BrandingSettings = {
 
 export type BrandingDefaults = Omit<BrandingSettings, "siteName" | "updatedAt">;
 
+export type SitePublicUrlSource =
+  | "APP_PUBLIC_URL"
+  | "MALIANG_PUBLIC_BASE_URL"
+  | "site_settings"
+  | "automatic";
+
+export type SiteSettings = {
+  publicBaseUrl: string;
+  updatedAt: string;
+};
+
+export type ExternalMcpSettings = {
+  accessTokenTtlDays: number;
+  refreshTokenTtlDays: number;
+  updatedAt: string;
+};
+
 export type PublicBranding = {
   siteName: string;
   logoUrl: string;
   faviconUrl: string;
   showGithubEntry: boolean;
+  showAiClientInstallEntry: boolean;
   loginAssets: LoginAssets;
 };
 
@@ -258,6 +276,7 @@ export type GlobalSwitchType =
   | "proxy_service"
   | "cpa_sync"
   | "github_entry"
+  | "ai_client_install_entry"
   | "debug_image_edit_mask";
 
 export type GlobalSwitchSetting = {

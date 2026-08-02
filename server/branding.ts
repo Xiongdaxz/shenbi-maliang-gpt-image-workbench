@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { Hono } from "hono";
 import sharp from "sharp";
+import { SAFE_IMAGE_MAX_PIXELS } from "./imageValidation";
 import { LOGIN_ASSET_EXTENSIONS } from "./constants";
 import { audit } from "./auditLog";
 import { requireConfig } from "./auth";
@@ -65,6 +66,7 @@ type PublicBrandingPayload = {
   logoUrl: string;
   faviconUrl: string;
   showGithubEntry: boolean;
+  showAiClientInstallEntry: boolean;
   loginAssets: {
     backgrounds: {
       light: string[];
@@ -444,6 +446,7 @@ export async function publicBranding() {
     logoUrl: logo ? assetUrl(logo, "thumb") : brandingFileUrl(DEFAULT_LOGO_ASSET_ID, "thumb"),
     faviconUrl: favicon ? assetUrl(favicon, "thumb") : brandingFileUrl(DEFAULT_FAVICON_ASSET_ID, "thumb"),
     showGithubEntry: globalSwitchEnabled("github_entry"),
+    showAiClientInstallEntry: globalSwitchEnabled("ai_client_install_entry"),
     loginAssets: {
       backgrounds: {
         light: loginBackgroundUrls(byId, config.settings.loginBackgroundLightAssetIds, "login_background_light"),
@@ -548,7 +551,7 @@ async function readBuiltinAsset(row: BrandingAssetRow, variant: BrandingAssetUrl
   const maxSize = variant === "thumb" ? 512 : 1600;
   const quality = variant === "thumb" ? 75 : 82;
   return {
-    buffer: await sharp(buffer, { limitInputPixels: false })
+    buffer: await sharp(buffer, { limitInputPixels: SAFE_IMAGE_MAX_PIXELS, sequentialRead: true })
       .rotate()
       .resize({ width: maxSize, height: maxSize, fit: "inside", withoutEnlargement: true })
       .webp({ quality })
