@@ -2,6 +2,16 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.60 - 2026-08-03
+
+### 中文
+
+- 图片预览的背景遮罩与底部信息栏更清晰，在不同外观主题下保持稳定可读；打开和关闭预览时也会更可靠地锁定并恢复页面位置，减少背景误滚动或画面跳动。
+
+### English
+
+- Image previews now use a clearer backdrop and bottom information bar with consistent readability across appearance themes; opening and closing a preview also locks and restores the page position more reliably, reducing background scrolling and visual jumps.
+
 ## v0.1.59 - 2026-08-02
 
 ### 中文

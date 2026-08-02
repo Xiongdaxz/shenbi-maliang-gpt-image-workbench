@@ -279,7 +279,14 @@ export function ImagePreviewToolbar({
           </div>
         </div>
       ) : null}
-      <div className="case-preview-toolbar" ref={toolbarRef}>
+      <div
+        className="case-preview-toolbar"
+        ref={toolbarRef}
+        style={{
+          backdropFilter: "var(--case-preview-toolbar-filter)",
+          WebkitBackdropFilter: "var(--case-preview-toolbar-filter)"
+        }}
+      >
         <div className="case-preview-info">
           <h3>{item.title}</h3>
           {item.description ? (

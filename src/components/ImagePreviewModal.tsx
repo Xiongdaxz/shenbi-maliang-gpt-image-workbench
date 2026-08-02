@@ -623,10 +623,10 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
     if (!previewOpen) return;
     const root = document.documentElement;
     const stableScrollbarGutterWasSuppressed = root.classList.contains("image-preview-gutter-suppressed");
-    const previousOverflow = document.body.style.overflow;
+    const previewScrollWasLocked = root.classList.contains("image-preview-scroll-locked");
     const previousPaddingRight = document.body.style.paddingRight;
-    const previousOverscrollBehavior = document.body.style.overscrollBehavior;
-    const previousRootOverflow = root.style.overflow;
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
     const rootLayoutWidth = root.getBoundingClientRect().width;
     const scrollbarWidth = Math.max(
       0,
@@ -639,17 +639,16 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
     if (suppressStableScrollbarGutter) {
       root.classList.add("image-preview-gutter-suppressed");
     }
-    root.style.overflow = "hidden";
-    document.body.style.overflow = "hidden";
-    document.body.style.overscrollBehavior = "contain";
+    root.classList.add("image-preview-scroll-locked");
     return () => {
-      root.style.overflow = previousRootOverflow;
-      document.body.style.overflow = previousOverflow;
       document.body.style.paddingRight = previousPaddingRight;
-      document.body.style.overscrollBehavior = previousOverscrollBehavior;
+      if (!previewScrollWasLocked) {
+        root.classList.remove("image-preview-scroll-locked");
+      }
       if (suppressStableScrollbarGutter && !stableScrollbarGutterWasSuppressed) {
         root.classList.remove("image-preview-gutter-suppressed");
       }
+      window.scrollTo(scrollX, scrollY);
     };
   }, [previewOpen, suppressStableScrollbarGutter]);
 
@@ -706,7 +705,13 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
   const itemThumbnailsVisible = showItemThumbnails && items.length > 1;
 
   const modal = (
-    <div className="case-preview-backdrop">
+    <div
+      className="case-preview-backdrop"
+      style={{
+        backdropFilter: "var(--case-preview-backdrop-filter)",
+        WebkitBackdropFilter: "var(--case-preview-backdrop-filter)"
+      }}
+    >
       <section
         ref={previewModalRef}
         className={cx(

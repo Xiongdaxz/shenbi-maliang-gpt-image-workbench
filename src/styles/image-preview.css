@@ -2,25 +2,31 @@ html.image-preview-gutter-suppressed {
   scrollbar-gutter: auto;
 }
 
+html.image-preview-scroll-locked,
+html.image-preview-scroll-locked body {
+  overflow: clip;
+  overscroll-behavior: none;
+}
+
 .case-preview-backdrop {
+  --case-preview-backdrop-filter: blur(16px) saturate(0.65);
   position: fixed;
   top: 0;
   right: 0;
   bottom: 0;
   left: 0;
-  z-index: 70;
+  z-index: 90;
   display: grid;
   place-items: center;
-  background: rgba(17, 24, 39, 0.26);
+  background: rgba(15, 23, 42, 0.52);
   overscroll-behavior: contain;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: var(--case-preview-backdrop-filter);
+  -webkit-backdrop-filter: var(--case-preview-backdrop-filter);
 }
 
 .case-preview-backdrop.fullscreen {
-  background: rgba(255, 255, 255, 0.58);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  --case-preview-backdrop-filter: blur(18px) saturate(0.6);
+  background: rgba(15, 23, 42, 0.56);
 }
 
 .case-preview-modal {
@@ -616,6 +622,7 @@ img.image-alpha-checkerboard {
 }
 
 .case-preview-toolbar {
+  --case-preview-toolbar-filter: blur(18px) saturate(0.82);
   width: 100%;
   margin: 0;
   box-sizing: border-box;
@@ -629,14 +636,14 @@ img.image-alpha-checkerboard {
   border-bottom: 0;
   border-left: 0;
   border-radius: 0;
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.94);
   padding: 10px clamp(18px, 4vw, 76px);
   overflow: visible;
   color: #6b7280;
   font-size: 13px;
-  box-shadow: 0 -12px 38px rgba(15, 23, 42, 0.14);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 -12px 38px rgba(15, 23, 42, 0.18);
+  backdrop-filter: var(--case-preview-toolbar-filter);
+  -webkit-backdrop-filter: var(--case-preview-toolbar-filter);
 }
 
 .case-preview-divider {

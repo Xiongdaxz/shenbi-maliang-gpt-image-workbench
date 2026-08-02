@@ -1134,7 +1134,7 @@ html[data-appearance="dark"] .case-preview-item-thumbs img {
 
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-preview-toolbar {
   border-color: rgba(244, 241, 234, 0.16);
-  background: rgba(17, 17, 15, 0.70);
+  background: rgba(17, 17, 15, 0.92);
   color: var(--app-muted);
   box-shadow: 0 -16px 42px rgba(0, 0, 0, 0.42);
 }
@@ -1270,7 +1270,7 @@ html[data-appearance="maliang"] .case-preview-navigator {
 
 html[data-appearance="maliang"] .case-preview-toolbar {
   border-color: rgba(120, 94, 78, 0.24);
-  background: rgba(250, 249, 245, 0.70);
+  background: rgba(250, 249, 245, 0.94);
   color: var(--app-muted);
   box-shadow: 0 -16px 42px rgba(67, 52, 43, 0.16);
 }
@@ -1418,7 +1418,7 @@ html[data-appearance="chunyu"] .case-preview-navigator {
 
 html[data-appearance="chunyu"] .case-preview-toolbar {
   border-color: rgba(65, 93, 72, 0.24);
-  background: rgba(251, 252, 247, 0.70);
+  background: rgba(251, 252, 247, 0.94);
   color: var(--app-muted);
   box-shadow: 0 -16px 42px rgba(43, 70, 48, 0.16);
 }
