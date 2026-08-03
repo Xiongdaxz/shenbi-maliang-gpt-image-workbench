@@ -2,6 +2,16 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.62 - 2026-08-03
+
+### 中文
+
+- 修复启用兼容样式压缩后，干净安装环境可能因缺少构建依赖而无法完成前端构建的问题；GitHub 发行构建和自托管源码构建现在可获得一致的依赖环境。
+
+### English
+
+- Fixed clean installations failing to complete the frontend build after compatible CSS minification was enabled; GitHub release builds and self-hosted source builds now receive the same required dependency environment.
+
 ## v0.1.61 - 2026-08-03
 
 ### 中文
