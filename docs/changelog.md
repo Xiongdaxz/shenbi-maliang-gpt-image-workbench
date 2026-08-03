@@ -2,6 +2,16 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.61 - 2026-08-03
+
+### 中文
+
+- 发行构建改用兼容性更好的样式压缩方式，减少部分自托管或源码构建环境中的失败风险，同时保持界面样式输出稳定。
+
+### English
+
+- Release builds now use a more compatible CSS minification path, reducing failures in some self-hosted or source-build environments while keeping interface styling output stable.
+
 ## v0.1.60 - 2026-08-03
 
 ### 中文
