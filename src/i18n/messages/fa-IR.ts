@@ -1368,6 +1368,7 @@ const messages: Messages = {
   "imagePreview.previous": "تصویر قبلی",
   "imagePreview.next": "تصویر بعدی",
   "imagePreview.longNavigator": "ناوبر پیش نمایش تصویر بلند",
+  "imagePreview.wheelZoomHint": "برای بزرگ‌نمایی، {modifier} + چرخ ماوس را نگه دارید",
   "imagePreview.groupThumbnails": "بندانگشتی های گروه",
   "imagePreview.group": "گروه",
   "imagePreview.viewGroupNth": "نمایش تصویر گروه {index}",

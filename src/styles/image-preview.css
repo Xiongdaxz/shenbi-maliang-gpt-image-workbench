@@ -151,14 +151,10 @@ img.image-alpha-checkerboard {
 }
 
 .case-preview-navigator {
-  position: absolute;
-  top: 18px;
-  left: 18px;
-  z-index: 3;
   display: grid;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.68);
-  border-radius: 0;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.68);
   padding: 8px;
   box-shadow: 0 10px 32px rgba(15, 23, 42, 0.16);
@@ -169,7 +165,7 @@ img.image-alpha-checkerboard {
 .case-preview-navigator-track {
   position: relative;
   overflow: hidden;
-  border-radius: 0;
+  border-radius: 4px;
   background: transparent;
   touch-action: none;
 }
@@ -199,7 +195,7 @@ img.image-alpha-checkerboard {
 .case-preview-navigator-window {
   position: absolute;
   border: 2px solid rgba(17, 24, 39, 0.72);
-  border-radius: 0;
+  border-radius: 3px;
   background: rgba(17, 24, 39, 0.10);
   box-shadow:
     0 0 0 999px rgba(17, 24, 39, 0.12),
@@ -389,6 +385,36 @@ img.image-alpha-checkerboard {
   background: rgba(255, 255, 255, 0.78);
   padding: 8px;
   box-shadow: 0 10px 34px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.case-preview-navigator-wrap {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  z-index: 3;
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+}
+
+.case-preview-wheel-zoom-hint {
+  display: block;
+  max-width: 168px;
+  border: 1px solid rgba(255, 255, 255, 0.68);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.68);
+  padding: 5px 8px;
+  color: var(--app-text);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: center;
+  white-space: normal;
+  cursor: default;
+  user-select: none;
+  box-shadow: 0 10px 32px rgba(15, 23, 42, 0.16);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }

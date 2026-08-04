@@ -1073,7 +1073,6 @@ export function AppSettingsDialog({
                       </span>
                       <div className="settings-plugin-statuses">
                         {isMostRecentConnection ? <span className="settings-plugin-context-tag">{t("settings.plugins.recent")}</span> : null}
-                        {connection.isLocalDevice ? <span className="settings-plugin-context-tag">{t("settings.plugins.localDevice")}</span> : null}
                       </div>
                       <div className="settings-plugin-actions">
                         <button
@@ -1282,9 +1281,6 @@ export function AppSettingsDialog({
               <span className="settings-plugin-statuses">
                 {pluginConnectionDetails.deviceId === mostRecentPluginConnectionDeviceId ? (
                   <span className="settings-plugin-context-tag">{t("settings.plugins.recent")}</span>
-                ) : null}
-                {pluginConnectionDetails.isLocalDevice ? (
-                  <span className="settings-plugin-context-tag">{t("settings.plugins.localDevice")}</span>
                 ) : null}
               </span>
             </div>

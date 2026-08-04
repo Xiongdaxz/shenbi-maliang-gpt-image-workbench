@@ -426,12 +426,19 @@
     height: 34px;
   }
 
-  .case-preview-navigator {
+  .case-preview-navigator-wrap {
     top: 10px;
     left: 10px;
     max-width: calc(100vw - 68px);
     box-sizing: border-box;
+  }
+
+  .case-preview-navigator {
     padding: 6px;
+  }
+
+  .case-preview-wheel-zoom-hint {
+    max-width: 100%;
   }
 
   .case-preview-stage {

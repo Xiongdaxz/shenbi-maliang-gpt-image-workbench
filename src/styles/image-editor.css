@@ -571,7 +571,7 @@
   display: grid;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.68);
-  border-radius: 0;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.72);
   padding: 8px;
   box-shadow: 0 10px 32px rgba(15, 23, 42, 0.16);
@@ -582,7 +582,7 @@
 .image-editor-preview-navigator-track {
   position: relative;
   overflow: hidden;
-  border-radius: 0;
+  border-radius: 4px;
   background: transparent;
   touch-action: none;
 }
@@ -612,7 +612,7 @@
 .image-editor-preview-navigator-window {
   position: absolute;
   border: 2px solid rgba(17, 24, 39, 0.72);
-  border-radius: 0;
+  border-radius: 3px;
   background: rgba(17, 24, 39, 0.10);
   box-shadow:
     0 0 0 999px rgba(17, 24, 39, 0.12),

@@ -118,13 +118,6 @@ export function AssetsPage({
     () => (assets.data?.pages.flatMap((page) => page.items) ?? []).map(assetCardToItem),
     [assets.data?.pages]
   );
-  const assetLoadMoreRef = useInfinitePageLoader({
-    fetchNextPage: () => assets.fetchNextPage(),
-    hasNextPage: Boolean(assets.hasNextPage),
-    isFetchNextPageError: assets.isFetchNextPageError,
-    isFetchingNextPage: assets.isFetchingNextPage,
-    rootMargin: "320px"
-  });
   const categories = assetCategories.data?.categories ?? [];
   const assetReviewEnabled = assetCategories.data?.reviewEnabled ?? true;
   const createCategory = useMutation({
@@ -337,7 +330,23 @@ export function AssetsPage({
     () => ["assets", filterDisplayMode, spaceFilter, selectedCategoryIds.join(","), keyword, visibleAssets.length].join("\u0000"),
     [filterDisplayMode, keyword, selectedCategoryIds, spaceFilter, visibleAssets.length]
   );
-  const { jumpToScrollEdge, scrollJump } = useScrollJump({ syncKey: assetScrollJumpKey });
+  const { jumpToScrollEdge, loadingToBottom, scrollJump } = useScrollJump({
+    syncKey: assetScrollJumpKey,
+    loadToBottom: {
+      hasNextPage: Boolean(assets.hasNextPage),
+      isFetchNextPageError: assets.isFetchNextPageError,
+      isFetchingNextPage: assets.isFetchingNextPage
+    }
+  });
+  const assetLoadMoreRef = useInfinitePageLoader({
+    fetchNextPage: () => assets.fetchNextPage(),
+    hasNextPage: Boolean(assets.hasNextPage),
+    isFetchNextPageError: assets.isFetchNextPageError,
+    isFetchingNextPage: assets.isFetchingNextPage,
+    autoLoad: loadingToBottom,
+    rootMargin: "320px",
+    scrollIdleDelayMs: 260
+  });
   const hasAssetFilters = spaceFilter !== "all" || selectedCategoryIds.length > 0 || Boolean(keyword.trim());
 
   const toggleAssetCategory = (categoryId: string) => {

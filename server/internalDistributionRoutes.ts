@@ -843,7 +843,7 @@ export function registerInternalDistributionRoutes(app: Hono) {
         manualMcpConfig: manifest.manualRemoteMcp.config,
         alternateHref: "/install/install.json",
         kind: "install",
-        sections: `<section class="card"><h2>Codex</h2><p>默认由当前智能体安装神笔马良 Codex 插件；如果你明确说明“只安装 MCP”，则只配置 MCP。</p></section><section class="card"><h2>其他 AI 客户端</h2><p>Claude Code、TRAE Work、WorkBuddy 和标准 MCP 客户端均由当前智能体直接写入并加载真实配置，不能只读取配置后停止。</p></section>`
+        sections: `<section class="card"><h2>Codex</h2><p>默认由当前智能体安装神笔马良 Codex 插件；如果你明确说明“只安装 MCP”，则只配置 MCP。</p></section><section class="card"><h2>其他智能体</h2><p>对于 Claude Code、TRAE Work、WorkBuddy 及标准 MCP 客户端，当前智能体会直接安装 MCP Server，写入并加载真实配置，而不是仅检查或读取现有配置。</p></section>`
       }));
     } catch {
       return c.html(pageShell({

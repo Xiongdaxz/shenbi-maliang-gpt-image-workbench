@@ -2597,3 +2597,119 @@ textarea:focus {
   }
 }
 
+.image-zoom-slider {
+  height: 34px;
+  width: 144px;
+  min-width: 144px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--button-default-border);
+  border-radius: 999px;
+  background: var(--button-default-bg);
+  padding: 0 9px;
+  color: var(--app-text);
+  box-sizing: border-box;
+}
+
+.image-zoom-slider input {
+  width: 78px;
+  min-width: 78px;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.image-zoom-slider input:focus,
+.image-zoom-slider input:focus-visible {
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+}
+
+.image-zoom-slider input::-moz-focus-outer {
+  border: 0;
+}
+
+.image-zoom-slider input:disabled {
+  cursor: not-allowed;
+}
+
+.image-zoom-slider input::-webkit-slider-runnable-track {
+  height: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--button-primary-bg) 0 var(--image-zoom-progress),
+    var(--app-border-strong) var(--image-zoom-progress) 100%
+  );
+}
+
+.image-zoom-slider input::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border: 2px solid var(--button-primary-bg);
+  border-radius: 50%;
+  background: var(--app-surface-raised);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.2);
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.image-zoom-slider input:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--button-primary-bg) 24%, transparent),
+    0 1px 4px rgba(15, 23, 42, 0.2);
+}
+
+.image-zoom-slider input::-moz-range-track {
+  height: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--app-border-strong);
+}
+
+.image-zoom-slider input::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--button-primary-bg);
+}
+
+.image-zoom-slider input::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--button-primary-bg);
+  border-radius: 50%;
+  background: var(--app-surface-raised);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.2);
+}
+
+.image-zoom-slider input:focus-visible::-moz-range-thumb {
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--button-primary-bg) 24%, transparent),
+    0 1px 4px rgba(15, 23, 42, 0.2);
+}
+
+.image-zoom-slider-label {
+  min-width: 38px;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.image-zoom-slider:has(input:disabled) {
+  opacity: 0.55;
+}

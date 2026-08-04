@@ -22,6 +22,7 @@ import {
 import { ImageDownloadMenu } from "./ImageDownloadMenu";
 import { ImageLightbox, type ImageLightboxState } from "./ImageLightbox";
 import { EditorSizePicker } from "./ImageOptionPickers";
+import { ImageZoomSlider } from "./ImageZoomSlider";
 import { MaterialPickerDrawer } from "./MaterialPicker";
 import { CheckerboardImage } from "./CheckerboardImage";
 import { useI18n } from "../i18n";
@@ -57,6 +58,9 @@ type ImageEditorTopbarProps = {
   strokeCount: number;
   previewOriginalSizeLabel?: string;
   previewZoomLabel?: string;
+  previewZoomMax?: number;
+  previewZoomMin?: number;
+  previewZoomValue?: number;
   showPreviewControls?: boolean;
   onAdjustBrushSize: (delta: number) => void;
   onBrushSizeChange: (value: number) => void;
@@ -71,6 +75,7 @@ type ImageEditorTopbarProps = {
   onPreviewRotateRight?: () => void;
   onPreviewZoomIn?: () => void;
   onPreviewZoomOut?: () => void;
+  onPreviewZoomChange?: (value: number) => void;
   onRedoStroke: () => void;
   onUndoStroke: () => void;
 };
@@ -89,6 +94,9 @@ export function ImageEditorTopbar({
   strokeCount,
   previewOriginalSizeLabel,
   previewZoomLabel,
+  previewZoomMax,
+  previewZoomMin,
+  previewZoomValue,
   showPreviewControls,
   onAdjustBrushSize,
   onBrushSizeChange,
@@ -103,6 +111,7 @@ export function ImageEditorTopbar({
   onPreviewRotateRight,
   onPreviewZoomIn,
   onPreviewZoomOut,
+  onPreviewZoomChange,
   onRedoStroke,
   onUndoStroke
 }: ImageEditorTopbarProps) {
@@ -126,7 +135,14 @@ export function ImageEditorTopbar({
           <button type="button" className="image-editor-preview-tool" onClick={onPreviewZoomOut} disabled={isSubmitting} aria-label={t("imagePreview.zoomOut")} title={t("imagePreview.zoomOut")}>
             <ZoomOut size={16} />
           </button>
-          <span className="image-editor-preview-zoom">{previewZoomLabel ?? "100%"}</span>
+          <ImageZoomSlider
+            min={previewZoomMin ?? 10}
+            max={previewZoomMax ?? 300}
+            value={previewZoomValue ?? 100}
+            label={previewZoomLabel ?? "100%"}
+            disabled={isSubmitting}
+            onChange={(value) => onPreviewZoomChange?.(value)}
+          />
           <button type="button" className="image-editor-preview-tool" onClick={onPreviewZoomIn} disabled={isSubmitting} aria-label={t("imagePreview.zoomIn")} title={t("imagePreview.zoomIn")}>
             <ZoomIn size={16} />
           </button>

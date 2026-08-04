@@ -50,6 +50,7 @@
 - 输入使用 250ms 防抖；筛选变化后旧请求由 TanStack Query 取消。
 - `VirtualizedResponsiveGrid` 使用 ResizeObserver、passive scroll、requestAnimationFrame 和二分范围查找，只挂载视口上下约一个视口高度内的行。
 - 页面距底部 320px 时预取；选择器以自己的滚动容器作为 observer/virtualization root。
+- 我的图片、灵感空间和素材库的“一键到底”会串行续载游标页，并在每页加入后追随新的列表底部，直到 `nextCursor` 为空；滚轮、触摸、拖拽或翻页键会立即中断连续加载。普通滚动仍沿用距底部预取，但会等滚动停止 260ms 后再提交下一页，避免拖动滚动条期间因列表高度变化产生抖动。“一键到顶”和已加载完成后的再次“一键到底”都会在平滑滚动后收口到真实边界，防止虚拟列表行高回测留下顶部或底部偏移。
 - 第一行缩略图 eager，第一张 high priority，其余 lazy + async decoding。
 - 图片编辑器将 facets 总数与当前已加载卡片数分开：总数展示真实筛选结果，游标仍按 30 条续载；在距已加载边界 8 张时预取下一页，侧栏只挂载当前项前后各 8 个缩略图。
 - 缩略图继续使用 512px WebP q75；预览使用 1600px WebP q82；图片编辑器主画面始终读取当前选中的原图，相邻导航仍使用缩略图并预取预览资源。文件响应保持 private immutable cache、ETag 和 Cookie vary。

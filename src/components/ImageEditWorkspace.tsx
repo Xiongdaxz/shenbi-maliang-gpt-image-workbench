@@ -233,6 +233,7 @@ export function ImageEditWorkspace({
       : displaySize.width > 0 && displaySize.height > 0 && naturalSize.width > 0 && naturalSize.height > 0
       ? Math.min(displaySize.width / naturalSize.width, displaySize.height / naturalSize.height)
       : 1;
+  const previewZoomPercentage = previewZoom * previewBaseScale * 100;
   const previewPanBounds =
     previewDisplaySize && stageSize.width > 0 && stageSize.height > 0
       ? {
@@ -247,7 +248,7 @@ export function ImageEditWorkspace({
       (visibleStageSize.height > 0 && previewDisplaySize.height > visibleStageSize.height + 1))
   );
   const previewUsesHandCursor = !selectionMode && (previewOriginalSizeMode || Math.abs(previewZoom - 1) > 0.001);
-  const previewZoomLabel = `${Math.round(previewZoom * previewBaseScale * 100)}%`;
+  const previewZoomLabel = `${Math.round(previewZoomPercentage)}%`;
   const previewOriginalSizeLabel =
     naturalSize.width > 0 && naturalSize.height > 0 ? `${naturalSize.width}x${naturalSize.height}` : "";
   const originalSizePreviewActive = !selectionMode && previewOriginalSizeMode && naturalSize.width > 0 && naturalSize.height > 0;
@@ -440,12 +441,17 @@ export function ImageEditWorkspace({
   const adjustPreviewZoom = (delta: number) => {
     setPreviewZoom((value) => {
       if (previewOriginalSizeMode) {
-        return Math.max(EDITOR_PREVIEW_MIN_SCALE, Number((value + delta).toFixed(2)));
+        return clampNumber(Number((value + delta).toFixed(2)), EDITOR_PREVIEW_MIN_SCALE, EDITOR_PREVIEW_MAX_SCALE);
       }
       const currentScale = value * previewBaseScale;
       const nextScale = clampNumber(Number((currentScale + delta).toFixed(2)), EDITOR_PREVIEW_MIN_SCALE, EDITOR_PREVIEW_MAX_SCALE);
       return previewBaseScale > 0 ? nextScale / previewBaseScale : nextScale;
     });
+  };
+
+  const setPreviewZoomPercentage = (percentage: number) => {
+    const nextScale = clampNumber(percentage / 100, EDITOR_PREVIEW_MIN_SCALE, EDITOR_PREVIEW_MAX_SCALE);
+    setPreviewZoom(previewBaseScale > 0 ? nextScale / previewBaseScale : nextScale);
   };
 
   const updatePreviewPanFromNavigator = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -1053,6 +1059,9 @@ export function ImageEditWorkspace({
         strokeCount={strokes.length}
         previewOriginalSizeLabel={previewOriginalSizeLabel}
         previewZoomLabel={previewZoomLabel}
+        previewZoomMin={Math.min(EDITOR_PREVIEW_MIN_SCALE * 100, Math.max(1, Math.floor(previewZoomPercentage)))}
+        previewZoomMax={EDITOR_PREVIEW_MAX_SCALE * 100}
+        previewZoomValue={previewZoomPercentage}
         showPreviewControls={!selectionMode}
         onAdjustBrushSize={adjustBrushSize}
         onBrushSizeChange={setBrushSizeValue}
@@ -1067,6 +1076,7 @@ export function ImageEditWorkspace({
         onPreviewRotateRight={() => setPreviewRotation((value) => value + 90)}
         onPreviewZoomIn={() => adjustPreviewZoom(EDITOR_PREVIEW_SCALE_STEP)}
         onPreviewZoomOut={() => adjustPreviewZoom(-EDITOR_PREVIEW_SCALE_STEP)}
+        onPreviewZoomChange={setPreviewZoomPercentage}
         onRedoStroke={redoStroke}
         onUndoStroke={undoStroke}
       />

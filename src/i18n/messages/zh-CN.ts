@@ -1595,6 +1595,7 @@ const messages: Messages = {
   "imagePreview.previous": "上一张",
   "imagePreview.next": "下一张",
   "imagePreview.longNavigator": "长图预览导航",
+  "imagePreview.wheelZoomHint": "按住 {modifier} + 滚轮缩放",
   "imagePreview.groupThumbnails": "组图缩略图",
   "imagePreview.group": "组图",
   "imagePreview.viewGroupNth": "查看组图第 {index} 张",

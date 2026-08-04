@@ -310,13 +310,6 @@ export function ImagesPage({
       ].filter(Boolean)
     }];
   }, [openImage.data?.image, t]);
-  const imageLoadMoreRef = useInfinitePageLoader({
-    fetchNextPage: () => images.fetchNextPage(),
-    hasNextPage: Boolean(images.hasNextPage),
-    isFetchNextPageError: images.isFetchNextPageError,
-    isFetchingNextPage: images.isFetchingNextPage,
-    rootMargin: "320px"
-  });
   const assetCategoryList = assetCategories.data?.categories ?? [];
   const assetReviewEnabled = assetCategories.data?.reviewEnabled ?? true;
   useEffect(() => {
@@ -376,7 +369,23 @@ export function ImagesPage({
     () => ["images", viewMode, timelineSort, keyword, imageList.length, timelineGroups.length, collapsedTimelineGroupKey].join("\u0000"),
     [collapsedTimelineGroupKey, imageList.length, keyword, timelineGroups.length, timelineSort, viewMode]
   );
-  const { jumpToScrollEdge, scrollJump } = useScrollJump({ syncKey: imageScrollJumpKey });
+  const { jumpToScrollEdge, loadingToBottom, scrollJump } = useScrollJump({
+    syncKey: imageScrollJumpKey,
+    loadToBottom: {
+      hasNextPage: Boolean(images.hasNextPage),
+      isFetchNextPageError: images.isFetchNextPageError,
+      isFetchingNextPage: images.isFetchingNextPage
+    }
+  });
+  const imageLoadMoreRef = useInfinitePageLoader({
+    fetchNextPage: () => images.fetchNextPage(),
+    hasNextPage: Boolean(images.hasNextPage),
+    isFetchNextPageError: images.isFetchNextPageError,
+    isFetchingNextPage: images.isFetchingNextPage,
+    autoLoad: loadingToBottom,
+    rootMargin: "320px",
+    scrollIdleDelayMs: 260
+  });
 
   useEffect(() => {
     try {

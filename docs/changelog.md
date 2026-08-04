@@ -2,6 +2,20 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.63 - 2026-08-05
+
+### 中文
+
+- “我的图片”、灵感空间和素材库的一键到底现在会持续加载直到真实列表底部，并能在用户滚动、触摸或拖拽时立即停止；普通翻页也会等滚动稳定后再加载，减少长列表抖动和重复请求。
+- 图片预览和编辑新增可拖动缩放滑杆，长图导航更圆润清晰；滚轮用于平移时会提示按住 Ctrl/⌘ 缩放，原始尺寸与缩放操作在桌面和移动端更紧凑一致。
+- AI 客户端安装说明更明确地引导其他智能体完成 MCP Server 安装和真实配置加载，插件连接页也简化了设备标识，减少容易误解的信息。
+
+### English
+
+- The jump-to-bottom action in My Images, Inspiration, and Assets now keeps loading until the true end of the list and stops immediately on wheel, touch, or pointer interaction; regular pagination also waits for scrolling to settle, reducing jitter and duplicate requests in long lists.
+- Image preview and editing now include a draggable zoom slider and a clearer, rounded long-image navigator; when the wheel pans, a Ctrl/Command zoom hint appears, while original-size and zoom controls stay more compact across desktop and mobile.
+- AI-client installation guidance now more clearly instructs other agents to install the MCP Server and load the real configuration, while Plugin Connections uses simpler device labeling to reduce ambiguity.
+
 ## v0.1.62 - 2026-08-03
 
 ### 中文

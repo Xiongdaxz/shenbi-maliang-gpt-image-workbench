@@ -305,13 +305,6 @@ export function CasesPage({
       items: caseItems.filter((item) => item.categoryIds.includes(category.id) || (item.categoryIds.length === 0 && isUncategorizedCaseCategory(category)))
     }));
   }, [caseCategoriesQuery.data?.categories, cases.data?.pages]);
-  const caseLoadMoreRef = useInfinitePageLoader({
-    fetchNextPage: () => cases.fetchNextPage(),
-    hasNextPage: Boolean(cases.hasNextPage),
-    isFetchNextPageError: cases.isFetchNextPageError,
-    isFetchingNextPage: cases.isFetchingNextPage,
-    rootMargin: "320px"
-  });
   const caseStyleCategories = useMemo(() => categories.filter((category) => !isUncategorizedCaseCategory(category)), [categories]);
   const refreshCaseLibraryAndDetails = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ["cases"] });
@@ -598,7 +591,23 @@ export function CasesPage({
     () => ["cases", filterDisplayMode, mineOnly ? "mine" : "all", favoriteOnly ? "favorite" : "normal", selectedCategoryIds.join(","), keyword, visibleItems.length].join("\u0000"),
     [favoriteOnly, filterDisplayMode, keyword, mineOnly, selectedCategoryIds, visibleItems.length]
   );
-  const { jumpToScrollEdge, scrollJump } = useScrollJump({ syncKey: caseScrollJumpKey });
+  const { jumpToScrollEdge, loadingToBottom, scrollJump } = useScrollJump({
+    syncKey: caseScrollJumpKey,
+    loadToBottom: {
+      hasNextPage: Boolean(cases.hasNextPage),
+      isFetchNextPageError: cases.isFetchNextPageError,
+      isFetchingNextPage: cases.isFetchingNextPage
+    }
+  });
+  const caseLoadMoreRef = useInfinitePageLoader({
+    fetchNextPage: () => cases.fetchNextPage(),
+    hasNextPage: Boolean(cases.hasNextPage),
+    isFetchNextPageError: cases.isFetchNextPageError,
+    isFetchingNextPage: cases.isFetchingNextPage,
+    autoLoad: loadingToBottom,
+    rootMargin: "320px",
+    scrollIdleDelayMs: 260
+  });
   const hasCaseFilters = selectedCategoryIds.length > 0 || mineOnly || favoriteOnly || Boolean(keyword.trim());
   const useCasePrompt = (item: GalleryCaseItem) => {
     resetNewChatComposer();

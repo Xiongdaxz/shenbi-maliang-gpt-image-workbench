@@ -1595,6 +1595,7 @@ const messages: Messages = {
   "imagePreview.previous": "Previous image",
   "imagePreview.next": "Next image",
   "imagePreview.longNavigator": "Long-image preview navigator",
+  "imagePreview.wheelZoomHint": "Hold {modifier} + scroll to zoom",
   "imagePreview.groupThumbnails": "Group thumbnails",
   "imagePreview.group": "Group",
   "imagePreview.viewGroupNth": "View group image {index}",

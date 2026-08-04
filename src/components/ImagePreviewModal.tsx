@@ -387,10 +387,13 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
     previewUserAdjustedRef.current = true;
     setPreviewZoom((value) => {
       const nextZoom = Number((value + delta).toFixed(2));
-      return previewImageSource === "original"
-        ? Math.max(PREVIEW_MIN_ZOOM, nextZoom)
-        : clampNumber(nextZoom, PREVIEW_MIN_ZOOM, PREVIEW_MAX_ZOOM);
+      return clampNumber(nextZoom, PREVIEW_MIN_ZOOM, PREVIEW_MAX_ZOOM);
     });
+  };
+
+  const setPreviewZoomPercentage = (percentage: number) => {
+    previewUserAdjustedRef.current = true;
+    setPreviewZoom(clampNumber(percentage / 100, PREVIEW_MIN_ZOOM, PREVIEW_MAX_ZOOM));
   };
 
   const handlePreviewWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
@@ -740,6 +743,7 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
           previewUsesHandCursor={previewUsesHandCursor}
           previewRotation={previewRotation}
           showNavigator={showPreviewNavigator}
+          showWheelZoomHint={wheelMode === "pan"}
           stageRef={previewStageRef}
           onClick={handlePreviewClick}
           onImageLoad={(event) => {
@@ -776,6 +780,9 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
           sizeLabel={previewSizeLabel}
           transparencyLabel={transparencyLabel}
           zoomLabel={previewZoomLabel}
+          zoomMin={PREVIEW_MIN_ZOOM * 100}
+          zoomMax={PREVIEW_MAX_ZOOM * 100}
+          zoomValue={previewZoom * 100}
           onCopyDescription={() => void copyPreviewDescription()}
           onReferencePreview={setReferencePreview}
           onGroupImageSelect={setPreviewGroupImageIndex}
@@ -786,6 +793,7 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
           onRotateRight={() => setPreviewRotation((value) => value + 90)}
           onZoomIn={() => adjustPreviewZoom(0.1)}
           onZoomOut={() => adjustPreviewZoom(-0.1)}
+          onZoomChange={setPreviewZoomPercentage}
         />
       </section>
       {referencePreview ? (

@@ -14,6 +14,7 @@ import { cx } from "../lib/cx";
 import type { CaseGroupImage, ImageReferenceItem } from "../types";
 import { CheckerboardImage } from "./CheckerboardImage";
 import type { ImagePreviewItem } from "./ImagePreviewModal";
+import { ImageZoomSlider } from "./ImageZoomSlider";
 
 export type PreviewNavigatorMetrics = {
   scale: number;
@@ -39,6 +40,7 @@ type ImagePreviewStageProps = {
   previewUsesHandCursor: boolean;
   previewRotation: number;
   showNavigator: boolean;
+  showWheelZoomHint: boolean;
   stageRef: RefObject<HTMLDivElement | null>;
   onImageLoad: ReactEventHandler<HTMLImageElement>;
   onClick: MouseEventHandler<HTMLDivElement>;
@@ -69,6 +71,7 @@ export function ImagePreviewStage({
   previewUsesHandCursor,
   previewRotation,
   showNavigator,
+  showWheelZoomHint,
   stageRef,
   onImageLoad,
   onClick,
@@ -85,6 +88,8 @@ export function ImagePreviewStage({
   onWheel
 }: ImagePreviewStageProps) {
   const { t } = useI18n();
+  const platform = typeof navigator === "undefined" ? "" : `${navigator.platform} ${navigator.userAgent}`;
+  const zoomModifier = /Mac|iPhone|iPad|iPod/i.test(platform) ? "⌘" : "Ctrl";
   return (
     <div
       className={cx("case-preview-stage", showNavigator && "has-navigator", canPan && "is-pannable", previewUsesHandCursor && "is-zoomed", previewDragging && "is-dragging")}
@@ -122,38 +127,45 @@ export function ImagePreviewStage({
         onLoad={onImageLoad}
       />
       {showNavigator && navigatorMetrics && imageSize ? (
-        <div className={cx("case-preview-navigator", canPan && "is-active")} aria-label={t("imagePreview.longNavigator")}>
-          <div
-            className="case-preview-navigator-track"
-            style={{
-              width: navigatorMetrics.imageWidth,
-              height: navigatorMetrics.imageHeight
-            }}
-            onPointerDown={onNavigatorPointerDown}
-            onPointerMove={onNavigatorPointerMove}
-            onPointerUp={onNavigatorPointerUp}
-            onPointerCancel={onNavigatorPointerCancel}
-          >
-            <img
-              src={item.thumbnailUrl ?? item.previewUrl ?? item.imageUrl}
-              alt=""
-              draggable={false}
+        <div className="case-preview-navigator-wrap">
+          <div className={cx("case-preview-navigator", canPan && "is-active")} aria-label={t("imagePreview.longNavigator")}>
+            <div
+              className="case-preview-navigator-track"
               style={{
-                width: imageSize.width * navigatorMetrics.scale,
-                height: imageSize.height * navigatorMetrics.scale,
-                transform: `translate(-50%, -50%) rotate(${previewRotation}deg)`
+                width: navigatorMetrics.imageWidth,
+                height: navigatorMetrics.imageHeight
               }}
-            />
-            <span
-              className="case-preview-navigator-window"
-              style={{
-                left: navigatorMetrics.rectLeft,
-                top: navigatorMetrics.rectTop,
-                width: navigatorMetrics.rectWidth,
-                height: navigatorMetrics.rectHeight
-              }}
-            />
+              onPointerDown={onNavigatorPointerDown}
+              onPointerMove={onNavigatorPointerMove}
+              onPointerUp={onNavigatorPointerUp}
+              onPointerCancel={onNavigatorPointerCancel}
+            >
+              <img
+                src={item.thumbnailUrl ?? item.previewUrl ?? item.imageUrl}
+                alt=""
+                draggable={false}
+                style={{
+                  width: imageSize.width * navigatorMetrics.scale,
+                  height: imageSize.height * navigatorMetrics.scale,
+                  transform: `translate(-50%, -50%) rotate(${previewRotation}deg)`
+                }}
+              />
+              <span
+                className="case-preview-navigator-window"
+                style={{
+                  left: navigatorMetrics.rectLeft,
+                  top: navigatorMetrics.rectTop,
+                  width: navigatorMetrics.rectWidth,
+                  height: navigatorMetrics.rectHeight
+                }}
+              />
+            </div>
           </div>
+          {showWheelZoomHint ? (
+            <span className="case-preview-wheel-zoom-hint">
+              {t("imagePreview.wheelZoomHint", { modifier: zoomModifier })}
+            </span>
+          ) : null}
         </div>
       ) : null}
       <button
@@ -184,6 +196,9 @@ type ImagePreviewToolbarProps = {
   sizeLabel: string;
   transparencyLabel?: string;
   zoomLabel: string;
+  zoomMax: number;
+  zoomMin: number;
+  zoomValue: number;
   onCopyDescription: () => void;
   onGroupImageSelect: (index: number) => void;
   onOriginalSize: () => void;
@@ -193,6 +208,7 @@ type ImagePreviewToolbarProps = {
   onRotateRight: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
+  onZoomChange: (value: number) => void;
   toolbarRef?: RefObject<HTMLDivElement | null>;
 };
 
@@ -245,6 +261,9 @@ export function ImagePreviewToolbar({
   sizeLabel,
   transparencyLabel,
   zoomLabel,
+  zoomMax,
+  zoomMin,
+  zoomValue,
   onCopyDescription,
   onGroupImageSelect,
   onOriginalSize,
@@ -254,6 +273,7 @@ export function ImagePreviewToolbar({
   onRotateRight,
   onZoomIn,
   onZoomOut,
+  onZoomChange,
   toolbarRef
 }: ImagePreviewToolbarProps) {
   const { t } = useI18n();
@@ -329,17 +349,21 @@ export function ImagePreviewToolbar({
               <button className="case-preview-tool" type="button" onClick={onZoomOut} aria-label={t("imagePreview.zoomOut")} title={t("imagePreview.zoomOut")}>
                 <ZoomOut size={16} />
               </button>
-              <span className="case-preview-zoom">{zoomLabel}</span>
+              <ImageZoomSlider
+                min={zoomMin}
+                max={zoomMax}
+                value={zoomValue}
+                label={zoomLabel}
+                onChange={onZoomChange}
+              />
               <button className="case-preview-tool" type="button" onClick={onZoomIn} aria-label={t("imagePreview.zoomIn")} title={t("imagePreview.zoomIn")}>
                 <ZoomIn size={16} />
               </button>
-              <button className="case-preview-tool text" type="button" onClick={onReset} aria-label={t("imagePreview.reset")} title={t("imagePreview.reset")}>
+              <button className="case-preview-tool" type="button" onClick={onReset} aria-label={t("imagePreview.reset")} title={t("imagePreview.reset")}>
                 <RefreshCw size={15} />
-                {t("imagePreview.resetShort")}
               </button>
-              <button className="case-preview-tool text" type="button" onClick={onOriginalSize} aria-label={t("imagePreview.originalSize")} title={t("imagePreview.originalSize")}>
+              <button className="case-preview-tool" type="button" onClick={onOriginalSize} aria-label={t("imagePreview.originalSize")} title={t("imagePreview.originalSize")}>
                 <Maximize2 size={15} />
-                {t("imagePreview.originalSize")}
               </button>
             </div>
             {actions ? <div className="case-preview-actions">{actions}</div> : null}

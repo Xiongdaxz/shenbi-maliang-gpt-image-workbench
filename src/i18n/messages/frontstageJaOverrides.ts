@@ -392,6 +392,7 @@ export const frontstageJaOverrides: Messages = {
   "imagePreview.previous": "前の画像",
   "imagePreview.next": "次の画像",
   "imagePreview.longNavigator": "長尺画像プレビューナビゲーター",
+  "imagePreview.wheelZoomHint": "{modifier} + ホイールで拡大・縮小",
   "imagePreview.groupThumbnails": "グループサムネイル",
   "imagePreview.group": "グループ",
   "imagePreview.viewGroupNth": "グループ画像 {index} を表示",
