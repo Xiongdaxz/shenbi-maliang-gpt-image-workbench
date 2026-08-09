@@ -509,7 +509,7 @@ export const configApi = {
   deleteImageAccount: (id: string) =>
     request<{ ok: boolean }>(`/api/config/image-accounts/${id}`, { method: "DELETE" }),
   imageMode: () => request<{ imageMode: ImageGenerationMode }>("/api/config/image-mode"),
-  saveImageMode: (imageMode: Pick<ImageGenerationMode, "mode" | "resultRetryCount">) =>
+  saveImageMode: (imageMode: Pick<ImageGenerationMode, "mode" | "resultRetryCount" | "multiImageConcurrency">) =>
     request<{ imageMode: ImageGenerationMode }>("/api/config/image-mode", {
       method: "PUT",
       body: JSON.stringify(imageMode)

@@ -24,6 +24,10 @@ html.image-preview-scroll-locked body {
   -webkit-backdrop-filter: var(--case-preview-backdrop-filter);
 }
 
+.modal-backdrop-preview-child {
+  z-index: 110;
+}
+
 .case-preview-backdrop.fullscreen {
   --case-preview-backdrop-filter: blur(18px) saturate(0.6);
   background: rgba(15, 23, 42, 0.56);
@@ -730,6 +734,24 @@ img.image-alpha-checkerboard {
   background: var(--button-default-hover-bg);
 }
 
+.case-preview-toolbar.has-unified-controls .case-preview-tool {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
+.case-preview-toolbar.has-unified-controls .case-preview-transform-tools {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.case-preview-toolbar.has-unified-controls .case-preview-tool svg {
+  width: 20px;
+  height: 20px;
+}
+
 .case-preview-tool:disabled {
   opacity: 0.55;
   cursor: not-allowed;
@@ -807,6 +829,15 @@ img.image-alpha-checkerboard {
 .case-preview-actions .icon-only {
   width: 34px;
   padding-inline: 0;
+}
+
+.case-preview-toolbar.has-unified-controls .case-preview-actions .secondary-btn,
+.case-preview-toolbar.has-unified-controls .case-preview-actions .danger-btn {
+  min-height: 36px;
+}
+
+.case-preview-toolbar.has-unified-controls .case-preview-actions .icon-only {
+  width: 36px;
 }
 
 .case-reference-lightbox {

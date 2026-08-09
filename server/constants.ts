@@ -8,7 +8,9 @@ export const DEFAULT_RESPONSES_MODEL = "gpt-5.5";
 export const CPA_RESPONSES_MODEL_FALLBACK = "gpt-5.4-mini";
 export const DEFAULT_IMAGE_MODEL = "gpt-image-2";
 export const DEFAULT_REQUEST_SIZE = "auto";
+export const DEFAULT_REQUEST_QUALITY = "high";
 export const DEFAULT_IMAGE_RESULT_RETRY_COUNT = 1;
+export const DEFAULT_MULTI_IMAGE_CONCURRENCY = 2;
 export const DEFAULT_IMAGE_SIZES = ["1024x1024", "1536x2048", "1152x2048", "2048x1536", "2048x1152"];
 export const DEFAULT_IMAGE_QUALITIES = ["low", "medium", "high"];
 export const LOGIN_ASSET_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".avif"]);
@@ -22,6 +24,16 @@ export const STUDIO_LEGACY_USER_AGENT =
 export function requestImageSize(value: unknown) {
   const size = String(value ?? "").trim();
   return size || DEFAULT_REQUEST_SIZE;
+}
+
+export function requestImageQuality(value: unknown, providerDefault: unknown) {
+  const requestedQuality = String(value ?? "").trim();
+  if (requestedQuality && requestedQuality.toLowerCase() !== "auto") return requestedQuality;
+
+  const defaultQuality = String(providerDefault ?? "").trim();
+  if (defaultQuality && defaultQuality.toLowerCase() !== "auto") return defaultQuality;
+
+  return DEFAULT_REQUEST_QUALITY;
 }
 
 export function requestImageCount(value: unknown) {
@@ -40,4 +52,10 @@ export function requestImageResultRetryCount(value: unknown) {
 
 export function resolveImageResultRetryCount(value: unknown) {
   return requestImageResultRetryCount(value) ?? 0;
+}
+
+export function requestMultiImageConcurrency(value: unknown) {
+  const count = Number.parseInt(String(value ?? DEFAULT_MULTI_IMAGE_CONCURRENCY), 10);
+  if (!Number.isFinite(count)) return DEFAULT_MULTI_IMAGE_CONCURRENCY;
+  return Math.max(1, Math.min(10, count));
 }

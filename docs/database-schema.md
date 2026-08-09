@@ -358,7 +358,7 @@ AI 客户端改图时使用的一次性本地图片上传记录。上传链接�
 | `client_request_id` | 客户端请求标识；用于把生成请求、任务与取消意图关联起来 |
 | `error` | 失败信息 |
 | `result_image_id` | 首张结果图片 ID |
-| `request_json` | 请求摘要，图片 data URL 会脱敏 |
+| `request_json` | 请求摘要，图片 data URL 会脱敏；多图任务会保存 `_multiImageConcurrency` 并在首次渠道调用前写入 `_imagePromptPlan` 执行快照，供补图、手动重试和服务恢复复用 |
 | `response_json` | 响应摘要，图片 base64 会替换为占位文本 |
 | `auto_retry_count` | 任务实际发生的自动重试次数；第一次成功为 `0` |
 | `manual_retry_count` | 用户在失败卡片上手动点击重试的次数 |
@@ -391,6 +391,7 @@ AI 客户端改图时使用的一次性本地图片上传记录。上传链接�
 | `user_id` | 用户 ID |
 | `session_id` | 会话 ID |
 | `job_id` | 来源任务 |
+| `job_image_index` | 图片在多图任务中的固定槽位序号；同一任务内唯一，用于并发乱序完成、失败补图和服务恢复 |
 | `path` | 加密文件相对路径 |
 | `prompt` | 生成或编辑提示词 |
 | `suggested_case_title` | 图片生成成功后自动生成的灵感标题建议，用于加入灵感空间时预填 |
@@ -917,6 +918,7 @@ Remote MCP OAuth 令牌有效期配置，固定使用 `default` 单行。保存�
 | `id` | 固定为 `default` |
 | `mode` | 图片模式：`auto`、`cpa`、`chatgpt_web`、`api`；旧值 `studio`、`official`、`studio_legacy`、`studio_responses`、`responses` 会迁移为 `chatgpt_web`，`custom` 会迁移为 `api` |
 | `result_retry_count` | 图片接口调用或结果保存失败后的自动重试次数；默认值为 `1`，`null` 表示不自动重试，范围 `0` 到 `10` |
+| `multi_image_concurrency` | 单个多图任务的最大并发数；默认值为 `2`，范围 `1` 到 `10`，`1` 表示串行；实际并发还会受渠道与官网账号策略限制 |
 | `updated_at` | 更新时间 |
 
 ### prompt_optimizer_providers
@@ -948,7 +950,7 @@ Remote MCP OAuth 令牌有效期配置，固定使用 `default` 单行。保存�
 
 | 字段 | 说明 |
 | --- | --- |
-| `usage_key` | 主键；`global.default` 表示全局默认，其余场景为 `prompt.optimize`、`template.optimize`、`template.translate`、`image.edit_suggestions`、`title.chat`、`title.case`、`title.asset`、`identity.username`、`classify.case_style`、`classify.asset_tag`、`starter.copy.generate`、`starter.copy.translate`、`safety.review` |
+| `usage_key` | 主键；`global.default` 表示全局默认，其余场景为 `prompt.optimize`、`template.optimize`、`template.translate`、`image.prompt_plan`、`image.edit_suggestions`、`title.chat`、`title.case`、`title.asset`、`identity.username`、`classify.case_style`、`classify.asset_tag`、`starter.copy.generate`、`starter.copy.translate`、`safety.review` |
 | `provider_id` | 选用的 `prompt_optimizer_providers.id`；不设数据库外键，以便供应商变更后保留失效分配并在后台提示 |
 | `model` | 选中的模型名称；配置页按供应商分组展示供应商默认模型和缓存模型，已有的列表外模型仍可保留并解析 |
 | `updated_at` | 更新时间 |

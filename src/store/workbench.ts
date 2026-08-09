@@ -41,7 +41,6 @@ export type PendingEditorCancellationReturn = {
   selectedAssets: AssetItem[];
   imageCount: number;
   size: string;
-  quality: string;
   promptInputOptimizeStyle: PromptTemplateOptimizeStyle;
   promptColorSchemeIds: string[];
   promptColorSchemeInjection: string;
@@ -78,7 +77,6 @@ export type ComposerSessionDraft = {
   selectedAssets: AssetItem[];
   imageCount: number;
   size: string;
-  quality: string;
   promptInputOptimizeStyle: PromptTemplateOptimizeStyle;
   promptColorSchemeIds: string[];
   promptColorSchemeId: string;
@@ -160,7 +158,6 @@ function emptyComposerDraft(): ComposerSessionDraft {
     selectedAssets: [],
     imageCount: 1,
     size: "",
-    quality: "",
     promptInputOptimizeStyle: "standard",
     promptColorSchemeIds: [],
     promptColorSchemeId: "",
@@ -174,6 +171,7 @@ function normalizeComposerDraft(value: unknown): ComposerSessionDraft {
     ...emptyComposerDraft(),
     ...(value && typeof value === "object" && !Array.isArray(value) ? value as Partial<ComposerSessionDraft> : {})
   };
+  delete (draft as ComposerSessionDraft & { quality?: unknown }).quality;
   const rawIds = Array.isArray(draft.promptColorSchemeIds)
     ? draft.promptColorSchemeIds
     : String(draft.promptColorSchemeId || "")
@@ -197,7 +195,6 @@ function hasComposerDraftContent(draft: ComposerSessionDraft) {
     || draft.selectedAssets.length > 0
     || draft.imageCount !== 1
     || draft.size
-    || draft.quality
     || draft.promptInputOptimizeStyle !== "standard"
     || draft.promptColorSchemeIds.length > 0
     || draft.promptColorSchemeInjection.trim()

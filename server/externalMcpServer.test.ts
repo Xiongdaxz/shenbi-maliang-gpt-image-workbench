@@ -74,4 +74,48 @@ describe("external MCP internal image requests", () => {
       }]
     });
   });
+
+  test("returns partial resource links while keeping a failed job status", async () => {
+    const result = await buildMaliangImageJobResult(
+      {
+        jobId: "job_partial",
+        status: "failed",
+        error: "图片数量未补全：期望 3 张，实际 1 张，还缺 2 张",
+        imageIds: ["img_partial"]
+      },
+      [{ id: "img_partial", path: "secure/partial.gimg", mime_type: "image/webp" }],
+      [{
+        imageId: "img_partial",
+        downloadUrl: "https://maliang.example/mcp/image-result/token_partial",
+        previewUrl: "https://maliang.example/mcp/image-result/token_partial",
+        expiresAt: "2026-08-28T08:00:00.000Z"
+      }]
+    );
+
+    const instruction = result.content[0]?.type === "text" ? result.content[0].text : "";
+    expect(instruction).toContain("未能全部完成");
+    expect(instruction).toContain("部分结果");
+    expect(instruction).toContain("还缺 2 张");
+    expect(result.content.map((item) => item.type)).toEqual(["text", "resource_link"]);
+    expect(result.structuredContent.status).toBe("failed");
+    expect(result.structuredContent.imageIds).toEqual(["img_partial"]);
+    expect(result.structuredContent.imageResults).toHaveLength(1);
+    expect(result.isError).toBeUndefined();
+  });
+
+  test("marks a failed job as a tool error only when it has no deliverable image", async () => {
+    const result = await buildMaliangImageJobResult(
+      {
+        jobId: "job_failed",
+        status: "failed",
+        error: "上游生成失败",
+        imageIds: []
+      },
+      []
+    );
+
+    expect(result.structuredContent.status).toBe("failed");
+    expect(result.structuredContent.imageResults).toEqual([]);
+    expect(result.isError).toBe(true);
+  });
 });

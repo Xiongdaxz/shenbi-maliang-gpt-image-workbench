@@ -4,10 +4,12 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type WheelEvent as ReactWheelEvent
 } from "react";
+import { Check, Trash2, X } from "lucide-react";
 import {
   ImageEditorComposer,
   ImageEditorRail,
@@ -17,15 +19,30 @@ import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import type { SizeOption } from "../lib/imageOptions";
 import {
+  REMOVE_SELECTED_AREA_PROMPT,
+  formatImageAnnotationDisplayText,
+  imageAnnotationEditorPosition,
+  moveEditableImageAnnotation,
+  removeEditableImageAnnotation,
+  upsertEditableImageAnnotation,
+  type EditableImageAnnotation,
+  type ImageAnnotationDraft,
+  type ImageEditIntent
+} from "../lib/imageAnnotations";
+import {
   BRUSH_MAX_SIZE,
   BRUSH_MIN_SIZE,
   BRUSH_SIZE_STEP,
+  DEFAULT_BRUSH_PREVIEW_ANCHOR,
   SELECTION_DASH_PATTERN_LENGTH,
   SELECTION_DASH_SPEED_MS,
+  brushPreviewMetrics,
+  brushSizeRatioFromDisplayPixels,
   buildSelectionOverlaySnapshot,
   clampRatio,
   renderMaskStroke,
   renderSelectionOverlay,
+  selectionPreviewCanvasSize,
   selectionOverlayKey,
   type SelectionOverlaySnapshot,
   type Stroke
@@ -67,13 +84,22 @@ type ImageEditWorkspaceProps = {
   onPickSize: (image: WorkImage, option: SizeOption) => void;
   onOpenCasePicker: () => void;
   onToggleMaterialPicker: () => void;
-  onSubmitEdit: (payload: { image: WorkImage; prompt: string; maskDataUrl?: string; sourceAssetIds?: string[]; sourceCaseItemIds?: string[] }) => void;
+  onSubmitEdit: (payload: {
+    image: WorkImage;
+    prompt: string;
+    editIntent?: ImageEditIntent;
+    imageAnnotations?: Array<{ xPercent: number; yPercent: number; instruction: string }>;
+    maskDataUrl?: string;
+    sourceAssetIds?: string[];
+    sourceCaseItemIds?: string[];
+  }) => void;
 };
 
 const EDITOR_PREVIEW_MIN_SCALE = 0.1;
 const EDITOR_PREVIEW_MAX_SCALE = 3;
 const EDITOR_PREVIEW_SCALE_STEP = 0.1;
 const EDITOR_PREVIEW_WHEEL_LINE_PX = 16;
+const ANNOTATION_PREVIEW_VERTICAL_INSET = 2;
 
 function clampNumber(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
@@ -136,14 +162,19 @@ export function ImageEditWorkspace({
 }: ImageEditWorkspaceProps) {
   const { t } = useI18n();
   const [activeId, setActiveId] = useState(activeImageId);
-  const [selectionMode, setSelectionMode] = useState(false);
-  const [prompt, setPrompt] = useState(initialPrompt ?? "");
+  const [mode, setMode] = useState<ImageEditIntent>("standard");
+  const [prompt, setPrompt] = useState(() => formatImageAnnotationDisplayText(initialPrompt ?? ""));
   const [brushSize, setBrushSize] = useState(80);
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [redoStrokes, setRedoStrokes] = useState<Stroke[]>([]);
   const [liveStrokeActive, setLiveStrokeActive] = useState(false);
+  const [brushPreviewActive, setBrushPreviewActive] = useState(false);
+  const [brushPreviewAnchor, setBrushPreviewAnchor] = useState<{ x: number; y: number }>(DEFAULT_BRUSH_PREVIEW_ANCHOR);
+  const [annotations, setAnnotations] = useState<EditableImageAnnotation[]>([]);
+  const [annotationDraft, setAnnotationDraft] = useState<ImageAnnotationDraft | null>(null);
+  const [annotationTooltipsVisible, setAnnotationTooltipsVisible] = useState(false);
   const [editorError, setEditorError] = useState("");
   const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
   const [visibleStageSize, setVisibleStageSize] = useState({ width: 0, height: 0 });
@@ -164,7 +195,16 @@ export function ImageEditWorkspace({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const brushCursorRef = useRef<HTMLSpanElement | null>(null);
   const brushSizeRef = useRef(80);
-  const lastBrushCursorPointRef = useRef<{ clientX: number; clientY: number } | null>(null);
+  const annotationLayerRef = useRef<HTMLDivElement | null>(null);
+  const annotationInputRef = useRef<HTMLInputElement | null>(null);
+  const annotationIdRef = useRef(0);
+  const annotationDragRef = useRef<{
+    id: string;
+    pointerId: number;
+    startClientX: number;
+    startClientY: number;
+    moved: boolean;
+  } | null>(null);
   const thumbListRef = useRef<HTMLDivElement | null>(null);
   const activeThumbRef = useRef<HTMLButtonElement | null>(null);
   const thumbWheelThrottleRef = useRef<number | null>(null);
@@ -172,12 +212,17 @@ export function ImageEditWorkspace({
   const previewNavigatorDragRef = useRef<number | null>(null);
   const previewClickHandledRef = useRef(false);
   const previewPointerStartedOnImageRef = useRef(false);
+  const previewOriginalSizeModeRef = useRef(false);
   const pointerActiveRef = useRef(false);
   const strokesRef = useRef<Stroke[]>([]);
   const currentStrokeRef = useRef<Stroke | null>(null);
   const pointerStartRef = useRef<{ x: number; y: number; offsetX: number; offsetY: number; sizeRatio: number } | null>(null);
   const dashOffsetRef = useRef(0);
   const selectionSnapshotRef = useRef<{ key: string; snapshot: SelectionOverlaySnapshot | null } | null>(null);
+
+  const selectionMode = mode === "remove";
+  const annotationMode = mode === "annotation";
+  const modeActive = mode !== "standard";
 
   const activeImage = images.find((image) => image.id === activeId) ?? images[0];
   const activeIndex = Math.max(0, images.findIndex((image) => image.id === activeImage?.id));
@@ -187,6 +232,7 @@ export function ImageEditWorkspace({
       ? { width: activeImage.imageWidth, height: activeImage.imageHeight }
       : null;
   const activeImageDisplayUrl = activeImageOriginalUrl;
+  const activeImageDisplayPrompt = activeImage ? formatImageAnnotationDisplayText(activeImage.prompt) : "";
   const hasSelection = strokes.length > 0 || liveStrokeActive;
   const editorComposerPreviews = [
     ...selectedCaseMaterials.map((caseMaterial) => ({
@@ -206,8 +252,24 @@ export function ImageEditWorkspace({
       onRemove: () => setSelectedAssets(selectedAssets.filter((item) => item.id !== asset.id))
     }))
   ];
+  const annotationComposerExpanded = annotationMode && (editorComposerPreviews.length > 0 || annotations.length > 0);
   const brushProgress = ((brushSize - BRUSH_MIN_SIZE) / (BRUSH_MAX_SIZE - BRUSH_MIN_SIZE)) * 100;
   const brushRangeStyle = { "--brush-progress": `${Math.max(0, Math.min(100, brushProgress))}%` } as CSSProperties;
+  const brushPreview = brushPreviewMetrics(
+    brushPreviewAnchor,
+    brushSizeRatioFromDisplayPixels(brushSize, displaySize.width, displaySize.height),
+    displaySize.width,
+    displaySize.height
+  );
+  const annotationEditor = annotationDraft
+    ? imageAnnotationEditorPosition(
+        annotationDraft.xPercent,
+        annotationDraft.yPercent,
+        displaySize.width,
+        displaySize.height
+      )
+    : null;
+  const annotationDraftFocusKey = annotationDraft ? annotationDraft.id ?? "new" : "";
   const normalizedPreviewRotation = ((previewRotation % 360) + 360) % 360;
   const previewRotatedSideways = normalizedPreviewRotation === 90 || normalizedPreviewRotation === 270;
   const previewBaseSize =
@@ -242,21 +304,28 @@ export function ImageEditWorkspace({
         }
       : { x: { min: 0, max: 0 }, y: { min: 0, max: 0 } };
   const canPreviewPan = Boolean(
-    !selectionMode &&
+    !modeActive &&
     previewDisplaySize &&
     ((visibleStageSize.width > 0 && previewDisplaySize.width > visibleStageSize.width + 1) ||
       (visibleStageSize.height > 0 && previewDisplaySize.height > visibleStageSize.height + 1))
   );
-  const previewUsesHandCursor = !selectionMode && (previewOriginalSizeMode || Math.abs(previewZoom - 1) > 0.001);
+  const previewUsesHandCursor = !modeActive && (previewOriginalSizeMode || Math.abs(previewZoom - 1) > 0.001);
   const previewZoomLabel = `${Math.round(previewZoomPercentage)}%`;
   const previewOriginalSizeLabel =
     naturalSize.width > 0 && naturalSize.height > 0 ? `${naturalSize.width}x${naturalSize.height}` : "";
-  const originalSizePreviewActive = !selectionMode && previewOriginalSizeMode && naturalSize.width > 0 && naturalSize.height > 0;
+  const originalSizePreviewActive = !modeActive && previewOriginalSizeMode && naturalSize.width > 0 && naturalSize.height > 0;
+  const previewResetActive = Boolean(
+    !modeActive &&
+      (previewOriginalSizeMode || Math.abs(previewZoom - 1) > 0.001)
+  );
   const previewCanvasPosition =
     previewBaseSize.width > 0 && previewBaseSize.height > 0 && previewDisplaySize && stageSize.width > 0 && stageSize.height > 0
       ? (() => {
           const rawLeft = stageSize.width / 2 + previewPan.x - previewBaseSize.width / 2;
-          const rawTop = stageSize.height / 2 + previewPan.y - previewBaseSize.height / 2;
+          const previewPanY = annotationComposerExpanded && visibleStageSize.height > 0
+            ? visibleStageSize.height / 2 - stageSize.height / 2
+            : previewPan.y;
+          const rawTop = stageSize.height / 2 + previewPanY - previewBaseSize.height / 2;
           const snapToDevicePixel = originalSizePreviewActive && previewZoom === 1;
           const left = snapToDevicePixel ? Math.round(rawLeft) : rawLeft;
           const top = snapToDevicePixel ? Math.round(rawTop) : rawTop;
@@ -270,7 +339,7 @@ export function ImageEditWorkspace({
           };
         })()
       : null;
-  const previewCanvasStyle = selectionMode
+  const previewCanvasStyle = modeActive
     ? previewCanvasPosition
       ? ({
           left: previewCanvasPosition.left,
@@ -288,18 +357,22 @@ export function ImageEditWorkspace({
         transform: `translate(-50%, -50%) rotate(${previewRotation}deg) scale(${previewZoom})`
       } satisfies CSSProperties);
   const animatePreviewTransform = Boolean(
-    !selectionMode &&
+    !modeActive &&
       previewCanvasPosition &&
       (previewZoom !== 1 || normalizedPreviewRotation !== 0)
   );
-  const originalSizeImageStyle = originalSizePreviewActive
+  const previewImageStyle = originalSizePreviewActive
     ? ({
         width: naturalSize.width,
         height: naturalSize.height
       } satisfies CSSProperties)
+    : annotationComposerExpanded && visibleStageSize.height > 0
+      ? ({
+          maxHeight: `min(calc(100vh - 210px), ${Math.max(0, Math.floor(visibleStageSize.height) - ANNOTATION_PREVIEW_VERTICAL_INSET * 2)}px)`
+        } satisfies CSSProperties)
     : undefined;
   const previewNavigatorMetrics =
-    !selectionMode && canPreviewPan && previewContentSize && previewDisplaySize && visibleStageSize.width > 0 && visibleStageSize.height > 0
+    !modeActive && canPreviewPan && previewContentSize && previewDisplaySize && visibleStageSize.width > 0 && visibleStageSize.height > 0
       ? (() => {
           const maxWidth = 88;
           const maxHeight = 148;
@@ -338,7 +411,7 @@ export function ImageEditWorkspace({
       y: clampRatio((clientY - rect.top) / rect.height),
       offsetX: clientX - rect.left,
       offsetY: clientY - rect.top,
-      sizeRatio: size / Math.min(rect.width, rect.height)
+      sizeRatio: brushSizeRatioFromDisplayPixels(size, rect.width, rect.height)
     };
   }
 
@@ -348,7 +421,7 @@ export function ImageEditWorkspace({
       hideBrushCursor();
       return null;
     }
-    lastBrushCursorPointRef.current = { clientX, clientY };
+    setBrushPreviewAnchor({ x: point.x, y: point.y });
     const cursor = brushCursorRef.current;
     if (cursor) {
       cursor.style.display = "block";
@@ -359,18 +432,20 @@ export function ImageEditWorkspace({
     return point;
   }
 
-  function setBrushSizeValue(value: number, cursorPoint = lastBrushCursorPointRef.current) {
+  function setBrushSizeValue(value: number) {
     const nextSize = Math.max(BRUSH_MIN_SIZE, Math.min(BRUSH_MAX_SIZE, value));
     brushSizeRef.current = nextSize;
     setBrushSize(nextSize);
-    if (selectionMode && !isSubmitting && cursorPoint) {
-      updateBrushCursor(cursorPoint.clientX, cursorPoint.clientY, nextSize);
-    }
     return nextSize;
   }
 
   function adjustBrushSize(delta: number) {
     setBrushSizeValue(brushSizeRef.current + delta);
+  }
+
+  function setBrushSizePreviewActive(active: boolean) {
+    if (active) setBrushPreviewAnchor(DEFAULT_BRUSH_PREVIEW_ANCHOR);
+    setBrushPreviewActive(active);
   }
   const clampPreviewPan = (pan: { x: number; y: number }) => ({
     x: clampNumber(pan.x, previewPanBounds.x.min, previewPanBounds.x.max),
@@ -384,16 +459,16 @@ export function ImageEditWorkspace({
           buildPreviewPanAxisBounds(previewContentSize.width * zoom, stageSize.width, visibleStageSize.width)
         )
       : 0;
-  const previewDefaultPan = () => {
-    const defaultContentSize = previewContentSize ?? (displaySize.width > 0 && displaySize.height > 0 ? displaySize : null);
-    return defaultContentSize && stageSize.width > 0 && stageSize.height > 0 && visibleStageSize.width > 0 && visibleStageSize.height > 0
+  const previewFittedPan = () => {
+    const fittedSize = displaySize.width > 0 && displaySize.height > 0 ? displaySize : null;
+    return fittedSize && stageSize.width > 0 && stageSize.height > 0 && visibleStageSize.width > 0 && visibleStageSize.height > 0
       ? {
           x: buildPreviewCenterPan(
             stageSize.width,
             visibleStageSize.width,
-            buildPreviewPanAxisBounds(defaultContentSize.width, stageSize.width, visibleStageSize.width)
+            buildPreviewPanAxisBounds(fittedSize.width, stageSize.width, visibleStageSize.width)
           ),
-          y: buildPreviewStartPan(defaultContentSize.height, stageSize.height, visibleStageSize.height)
+          y: buildPreviewStartPan(fittedSize.height, stageSize.height, visibleStageSize.height)
         }
       : { x: 0, y: 0 };
   };
@@ -405,15 +480,17 @@ export function ImageEditWorkspace({
         }
       : { x: 0, y: 0 };
   const resetPreviewTransform = () => {
+    previewOriginalSizeModeRef.current = false;
     setPreviewOriginalSizeMode(false);
     setPreviewZoom(1);
     setPreviewRotation(0);
-    setPreviewPan(previewDefaultPan());
+    setPreviewPan(previewFittedPan());
     setPreviewDragging(false);
     previewDragRef.current = null;
     previewNavigatorDragRef.current = null;
   };
   const showPreviewOriginalSize = () => {
+    previewOriginalSizeModeRef.current = true;
     setPreviewOriginalSizeMode(true);
     const nextZoom = 1;
     setPreviewZoom(nextZoom);
@@ -502,7 +579,7 @@ export function ImageEditWorkspace({
       observer.disconnect();
       window.removeEventListener("resize", updateStageSize);
     };
-  }, [activeImage?.id, editorComposerPreviews.length, editorError, materialPickerOpen]);
+  }, [activeImage?.id, editorComposerPreviews.length, editorError, materialPickerOpen, mode]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -515,17 +592,24 @@ export function ImageEditWorkspace({
   }, [activeImage?.id]);
 
   useEffect(() => {
+    if (modeActive) return;
     setPreviewPan((value) => {
       const next = clampPreviewPan(value);
       return next.x === value.x && next.y === value.y ? value : next;
     });
-  }, [previewPanBounds.x.min, previewPanBounds.x.max, previewPanBounds.y.min, previewPanBounds.y.max]);
+  }, [modeActive, previewPanBounds.x.min, previewPanBounds.x.max, previewPanBounds.y.min, previewPanBounds.y.max]);
 
   const drawSelectionOverlay = () => {
     const canvas = canvasRef.current;
     if (!canvas || displaySize.width <= 0 || displaySize.height <= 0) return;
-    if (canvas.width !== displaySize.width) canvas.width = displaySize.width;
-    if (canvas.height !== displaySize.height) canvas.height = displaySize.height;
+    const previewCanvasSize = selectionPreviewCanvasSize(
+      displaySize.width,
+      displaySize.height,
+      naturalSize.width,
+      naturalSize.height
+    );
+    if (canvas.width !== previewCanvasSize.width) canvas.width = previewCanvasSize.width;
+    if (canvas.height !== previewCanvasSize.height) canvas.height = previewCanvasSize.height;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -538,12 +622,11 @@ export function ImageEditWorkspace({
       };
     }
     if (selectionSnapshotRef.current.snapshot) {
-      renderSelectionOverlay(ctx, selectionSnapshotRef.current.snapshot, dashOffsetRef.current);
+      renderSelectionOverlay(ctx, selectionSnapshotRef.current.snapshot, dashOffsetRef.current, previewCanvasSize.scale);
     }
   };
 
   function hideBrushCursor() {
-    lastBrushCursorPointRef.current = null;
     const cursor = brushCursorRef.current;
     if (cursor) cursor.style.display = "none";
   }
@@ -618,9 +701,14 @@ export function ImageEditWorkspace({
 
   useEffect(() => {
     pointerActiveRef.current = false;
-    setSelectionMode(false);
+    setMode("standard");
     resetPreviewTransform();
     hideBrushCursor();
+    setBrushPreviewActive(false);
+    setBrushPreviewAnchor(DEFAULT_BRUSH_PREVIEW_ANCHOR);
+    setAnnotations([]);
+    setAnnotationDraft(null);
+    setAnnotationTooltipsVisible(false);
     setStrokes([]);
     setRedoStrokes([]);
     setLiveStrokeActive(false);
@@ -636,10 +724,12 @@ export function ImageEditWorkspace({
     const image = imageRef.current;
     if (!image) return;
     const updateSize = () => {
-      setDisplaySize({
-        width: Math.max(0, Math.round(image.offsetWidth)),
-        height: Math.max(0, Math.round(image.offsetHeight))
-      });
+      if (!previewOriginalSizeModeRef.current) {
+        setDisplaySize({
+          width: Math.max(0, Math.round(image.offsetWidth)),
+          height: Math.max(0, Math.round(image.offsetHeight))
+        });
+      }
       if (activeImageMetadataSize) {
         setNaturalSize(activeImageMetadataSize);
       } else if (image.naturalWidth > 0 && image.naturalHeight > 0) {
@@ -654,12 +744,25 @@ export function ImageEditWorkspace({
       observer.disconnect();
       window.removeEventListener("resize", updateSize);
     };
-  }, [activeImageDisplayUrl, activeImageMetadataSize?.height, activeImageMetadataSize?.width, selectionMode]);
+  }, [activeImageDisplayUrl, activeImageMetadataSize?.height, activeImageMetadataSize?.width, mode]);
+
+  useEffect(() => {
+    if (!annotationDraft) return;
+    const frame = requestAnimationFrame(() => {
+      annotationInputRef.current?.focus();
+      annotationInputRef.current?.select();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [annotationDraftFocusKey]);
+
+  useEffect(() => {
+    if (annotations.length === 0) setAnnotationTooltipsVisible(false);
+  }, [annotations.length]);
 
   useEffect(() => {
     strokesRef.current = strokes;
     drawSelectionOverlay();
-  }, [displaySize, strokes]);
+  }, [displaySize, naturalSize, strokes]);
 
   useEffect(() => {
     if (!selectionMode || !hasSelection) {
@@ -674,7 +777,7 @@ export function ImageEditWorkspace({
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [selectionMode, hasSelection, displaySize, strokes]);
+  }, [selectionMode, hasSelection, displaySize, naturalSize, strokes]);
 
   useEffect(() => {
     if (!selectionMode || isSubmitting) return;
@@ -698,7 +801,7 @@ export function ImageEditWorkspace({
   }, [isSubmitting, selectionMode]);
 
   useEffect(() => {
-    if (images.length <= 1 || selectionMode || isSubmitting) return;
+    if (images.length <= 1 || modeActive || isSubmitting) return;
 
     function isTypingTarget(target: EventTarget | null) {
       const element = target instanceof HTMLElement ? target : null;
@@ -717,10 +820,10 @@ export function ImageEditWorkspace({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeIndex, images, isSubmitting, selectionMode]);
+  }, [activeIndex, images, isSubmitting, modeActive]);
 
   useEffect(() => {
-    if (images.length <= 1 || selectionMode) return;
+    if (images.length <= 1 || modeActive) return;
     const frame = requestAnimationFrame(() => {
       const list = thumbListRef.current;
       const thumb = activeThumbRef.current;
@@ -734,7 +837,7 @@ export function ImageEditWorkspace({
       });
     });
     return () => cancelAnimationFrame(frame);
-  }, [activeImage?.id, images.length, selectionMode]);
+  }, [activeImage?.id, images.length, modeActive]);
 
   if (!activeImage) return null;
 
@@ -748,7 +851,7 @@ export function ImageEditWorkspace({
     setActiveId(images[nextIndex].id);
   };
   const handleEditorWheel = (event: ReactWheelEvent<HTMLElement>) => {
-    if (images.length <= 1 || selectionMode || isSubmitting) return;
+    if (images.length <= 1 || modeActive || isSubmitting) return;
     const target = event.target instanceof HTMLElement ? event.target : null;
     if (target?.closest("input, textarea, select, [contenteditable='true'], .editor-size-picker, .material-picker")) return;
     const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
@@ -763,7 +866,7 @@ export function ImageEditWorkspace({
     }, 180);
   };
   const handlePreviewWheel = (event: ReactWheelEvent<HTMLElement>) => {
-    if (selectionMode || isSubmitting) return;
+    if (modeActive || isSubmitting) return;
     event.preventDefault();
     event.stopPropagation();
     if (wheelMode === "zoom" || event.ctrlKey || event.metaKey) {
@@ -793,7 +896,7 @@ export function ImageEditWorkspace({
     });
   };
   const handlePreviewPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
-    if (selectionMode || isSubmitting || !canPreviewPan || event.button !== 0) return;
+    if (modeActive || isSubmitting || !canPreviewPan || event.button !== 0) return;
     const target = event.target instanceof HTMLElement ? event.target : null;
     if (!target?.closest(".image-editor-canvas-wrap")) return;
     previewPointerStartedOnImageRef.current = true;
@@ -850,7 +953,7 @@ export function ImageEditWorkspace({
   const finishPreviewDrag = (event: ReactPointerEvent<HTMLElement>) => releasePreviewDrag(event, true);
   const cancelPreviewDrag = (event: ReactPointerEvent<HTMLElement>) => releasePreviewDrag(event, false);
   const handlePreviewClick = (event: ReactMouseEvent<HTMLElement>) => {
-    if (selectionMode || isSubmitting) return;
+    if (modeActive || isSubmitting) return;
     const startedOnImage = previewPointerStartedOnImageRef.current;
     previewPointerStartedOnImageRef.current = false;
     if (previewClickHandledRef.current) {
@@ -863,7 +966,7 @@ export function ImageEditWorkspace({
     else showPreviewOriginalSize();
   };
   const handlePreviewNavigatorPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (selectionMode || isSubmitting || !previewNavigatorMetrics || !canPreviewPan || event.button !== 0) return;
+    if (modeActive || isSubmitting || !previewNavigatorMetrics || !canPreviewPan || event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
     previewNavigatorDragRef.current = event.pointerId;
@@ -885,10 +988,6 @@ export function ImageEditWorkspace({
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
   };
-  const enterSelectionMode = () => {
-    resetPreviewTransform();
-    setSelectionMode(true);
-  };
   const clearSelection = () => {
     pointerActiveRef.current = false;
     currentStrokeRef.current = null;
@@ -901,9 +1000,137 @@ export function ImageEditWorkspace({
     hideBrushCursor();
     drawSelectionOverlay();
   };
-  const exitSelectionMode = () => {
-    setSelectionMode(false);
+  const clearAnnotations = () => {
+    annotationDragRef.current = null;
+    setAnnotations([]);
+    setAnnotationDraft(null);
+    setAnnotationTooltipsVisible(false);
+    setEditorError("");
+  };
+  const enterMode = (nextMode: "annotation" | "remove") => {
+    if (previewOriginalSizeMode || Math.abs(previewZoom - 1) > 0.001 || normalizedPreviewRotation !== 0) {
+      resetPreviewTransform();
+    }
     clearSelection();
+    clearAnnotations();
+    setBrushPreviewActive(false);
+    setBrushPreviewAnchor(DEFAULT_BRUSH_PREVIEW_ANCHOR);
+    setEditorError("");
+    setMode(nextMode);
+  };
+  const exitMode = () => {
+    setMode("standard");
+    clearSelection();
+    clearAnnotations();
+    setBrushPreviewActive(false);
+    setBrushPreviewAnchor(DEFAULT_BRUSH_PREVIEW_ANCHOR);
+    setEditorError("");
+  };
+  const annotationPointFromClient = (clientX: number, clientY: number) => {
+    const layer = annotationLayerRef.current;
+    if (!layer) return null;
+    const rect = layer.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    return {
+      xPercent: clampRatio((clientX - rect.left) / rect.width) * 100,
+      yPercent: clampRatio((clientY - rect.top) / rect.height) * 100
+    };
+  };
+  const openAnnotationDraft = (annotation: EditableImageAnnotation) => {
+    setAnnotationDraft({ ...annotation });
+    setEditorError("");
+  };
+  const saveAnnotationDraft = () => {
+    if (!annotationDraft?.instruction.trim()) return;
+    setAnnotations((current) =>
+      upsertEditableImageAnnotation(current, annotationDraft, () => {
+        annotationIdRef.current += 1;
+        return `annotation-${annotationIdRef.current}`;
+      })
+    );
+    setAnnotationDraft(null);
+    setEditorError("");
+  };
+  const deleteAnnotation = (id: string) => {
+    setAnnotations((current) => removeEditableImageAnnotation(current, id));
+    setAnnotationDraft((current) => (current?.id === id ? null : current));
+  };
+  const updateAnnotationPosition = (id: string, xPercent: number, yPercent: number) => {
+    setAnnotations((current) => moveEditableImageAnnotation(current, id, xPercent, yPercent));
+    setAnnotationDraft((current) =>
+      current?.id === id ? { ...current, xPercent: clampNumber(xPercent, 0, 100), yPercent: clampNumber(yPercent, 0, 100) } : current
+    );
+  };
+  const handleAnnotationLayerClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!annotationMode || isSubmitting || event.target !== event.currentTarget) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const point = annotationPointFromClient(event.clientX, event.clientY);
+    if (!point) return;
+    setAnnotationDraft({ ...point, instruction: "" });
+    setEditorError("");
+  };
+  const handleAnnotationPointerDown = (event: ReactPointerEvent<HTMLButtonElement>, annotation: EditableImageAnnotation) => {
+    if (!annotationMode || isSubmitting || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    annotationDragRef.current = {
+      id: annotation.id,
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      moved: false
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const handleAnnotationPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const drag = annotationDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (!drag.moved && Math.hypot(event.clientX - drag.startClientX, event.clientY - drag.startClientY) < 4) return;
+    drag.moved = true;
+    const point = annotationPointFromClient(event.clientX, event.clientY);
+    if (point) updateAnnotationPosition(drag.id, point.xPercent, point.yPercent);
+  };
+  const finishAnnotationDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const drag = annotationDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    annotationDragRef.current = null;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    if (!drag.moved) {
+      const annotation = annotations.find((item) => item.id === drag.id);
+      if (annotation) openAnnotationDraft(annotation);
+    }
+  };
+  const handleAnnotationKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, annotation: EditableImageAnnotation) => {
+    const arrowDeltas: Record<string, { x: number; y: number }> = {
+      ArrowLeft: { x: -1, y: 0 },
+      ArrowRight: { x: 1, y: 0 },
+      ArrowUp: { x: 0, y: -1 },
+      ArrowDown: { x: 0, y: 1 }
+    };
+    const delta = arrowDeltas[event.key];
+    if (delta) {
+      event.preventDefault();
+      event.stopPropagation();
+      const step = event.shiftKey ? 2 : 0.5;
+      updateAnnotationPosition(annotation.id, annotation.xPercent + delta.x * step, annotation.yPercent + delta.y * step);
+      return;
+    }
+    if (event.key === "Delete" || event.key === "Backspace") {
+      event.preventDefault();
+      event.stopPropagation();
+      deleteAnnotation(annotation.id);
+      return;
+    }
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      event.stopPropagation();
+      openAnnotationDraft(annotation);
+    }
   };
   const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (!selectionMode || isSubmitting) return;
@@ -948,22 +1175,29 @@ export function ImageEditWorkspace({
     event.stopPropagation();
     const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
     if (Math.abs(delta) < 1) return;
-    setBrushSizeValue(
-      brushSizeRef.current + (delta < 0 ? BRUSH_SIZE_STEP : -BRUSH_SIZE_STEP),
-      { clientX: event.clientX, clientY: event.clientY }
-    );
+    const nextSize = setBrushSizeValue(brushSizeRef.current + (delta < 0 ? BRUSH_SIZE_STEP : -BRUSH_SIZE_STEP));
+    updateBrushCursor(event.clientX, event.clientY, nextSize);
   };
-  const finishStroke = (hideCursor = false) => {
+  const finishStroke = (hideCursor = false, commitTap = true) => {
+    const startPoint = pointerStartRef.current;
     pointerActiveRef.current = false;
     pointerStartRef.current = null;
     if (hideCursor) hideBrushCursor();
-    const stroke = currentStrokeRef.current;
+    const stroke =
+      currentStrokeRef.current ??
+      (commitTap && startPoint
+        ? {
+            points: [{ x: startPoint.x, y: startPoint.y }],
+            sizeRatio: startPoint.sizeRatio
+          }
+        : null);
     currentStrokeRef.current = null;
     setLiveStrokeActive(false);
-    if (!stroke || stroke.points.length < 2) {
+    if (!stroke || stroke.points.length === 0) {
       drawSelectionOverlay();
       return;
     }
+    setRedoStrokes([]);
     const next = [...strokesRef.current, stroke];
     strokesRef.current = next;
     setStrokes(next);
@@ -998,7 +1232,7 @@ export function ImageEditWorkspace({
   };
   const buildMaskDataUrl = () => {
     const selectedStrokes = (currentStrokeRef.current ? [...strokesRef.current, currentStrokeRef.current] : strokesRef.current).filter(
-      (stroke) => stroke.points.length > 1
+      (stroke) => stroke.points.length > 0
     );
     if (naturalSize.width <= 0 || naturalSize.height <= 0) throw new Error(t("imageEditor.error.sizeReadFailed"));
     if (selectedStrokes.length === 0) throw new Error(t("imageEditor.error.noSelection"));
@@ -1017,8 +1251,12 @@ export function ImageEditWorkspace({
   };
   const submitFromEditor = () => {
     const trimmedPrompt = prompt.trim();
-    if (!trimmedPrompt) {
+    if (mode === "standard" && !trimmedPrompt) {
       setEditorError(t("imageEditor.error.promptRequired"));
+      return;
+    }
+    if (annotationMode && annotations.length === 0) {
+      setEditorError(t("imageEditor.error.annotationRequired"));
       return;
     }
     try {
@@ -1026,10 +1264,20 @@ export function ImageEditWorkspace({
       setEditorError("");
       onSubmitEdit({
         image: activeImage,
-        prompt: trimmedPrompt,
+        prompt: selectionMode ? REMOVE_SELECTED_AREA_PROMPT : trimmedPrompt,
+        editIntent: mode,
+        ...(annotationMode
+          ? {
+              imageAnnotations: annotations.map(({ xPercent, yPercent, instruction }) => ({
+                xPercent,
+                yPercent,
+                instruction
+              }))
+            }
+          : {}),
         maskDataUrl,
-        sourceAssetIds: selectedAssets.map((asset) => asset.id),
-        sourceCaseItemIds: selectedCaseMaterials.map((item) => item.caseItemId)
+        sourceAssetIds: mode !== "remove" ? selectedAssets.map((asset) => asset.id) : [],
+        sourceCaseItemIds: mode !== "remove" ? selectedCaseMaterials.map((item) => item.caseItemId) : []
       });
     } catch (error) {
       setEditorError(error instanceof Error ? error.message : t("imageEditor.error.submitFailed"));
@@ -1039,7 +1287,8 @@ export function ImageEditWorkspace({
     <div
       className={cx(
         "image-editor-shell",
-        selectionMode && "selecting",
+        selectionMode && "is-remove-mode",
+        annotationMode && "is-annotation-mode",
         images.length <= 1 && "single-image",
         previewDragging && "is-preview-dragging"
       )}
@@ -1052,23 +1301,26 @@ export function ImageEditWorkspace({
         brushSize={brushSize}
         hasSelection={hasSelection}
         isSubmitting={isSubmitting}
+        mode={mode}
         redoStrokeCount={redoStrokes.length}
         selectedSize={selectedSize}
-        selectionMode={selectionMode}
         sizeOptions={sizeOptions}
         strokeCount={strokes.length}
         previewOriginalSizeLabel={previewOriginalSizeLabel}
+        previewResetActive={previewResetActive}
         previewZoomLabel={previewZoomLabel}
         previewZoomMin={Math.min(EDITOR_PREVIEW_MIN_SCALE * 100, Math.max(1, Math.floor(previewZoomPercentage)))}
         previewZoomMax={EDITOR_PREVIEW_MAX_SCALE * 100}
         previewZoomValue={previewZoomPercentage}
-        showPreviewControls={!selectionMode}
+        showPreviewControls={!modeActive}
         onAdjustBrushSize={adjustBrushSize}
         onBrushSizeChange={setBrushSizeValue}
         onClearSelection={clearSelection}
         onClose={onClose}
-        onEnterSelectionMode={enterSelectionMode}
-        onExitSelectionMode={exitSelectionMode}
+        onEnterMode={enterMode}
+        onExitMode={exitMode}
+        onRemoveSubmit={submitFromEditor}
+        onBrushPreviewChange={setBrushSizePreviewActive}
         onPickSize={(option) => onPickSize(activeImage, option)}
         onPreviewOriginalSize={showPreviewOriginalSize}
         onPreviewReset={resetPreviewTransform}
@@ -1081,7 +1333,7 @@ export function ImageEditWorkspace({
         onUndoStroke={undoStroke}
       />
       <div className="image-editor-body">
-        {!selectionMode && images.length > 1 ? (
+        {!modeActive && images.length > 1 ? (
           <ImageEditorRail
             activeImage={activeImage}
             activeIndex={activeIndex}
@@ -1121,13 +1373,15 @@ export function ImageEditWorkspace({
               <img
                 ref={imageRef}
                 src={activeImageDisplayUrl}
-                alt={activeImage.prompt}
+                alt={activeImageDisplayPrompt}
                 className="image-editor-image"
-                style={originalSizeImageStyle}
+                style={previewImageStyle}
                 onLoad={(event) => {
                   const target = event.currentTarget;
                   setNaturalSize(activeImageMetadataSize ?? { width: target.naturalWidth, height: target.naturalHeight });
-                  setDisplaySize({ width: Math.round(target.offsetWidth), height: Math.round(target.offsetHeight) });
+                  if (!previewOriginalSizeModeRef.current) {
+                    setDisplaySize({ width: Math.round(target.offsetWidth), height: Math.round(target.offsetHeight) });
+                  }
                 }}
               />
               <canvas
@@ -1144,21 +1398,127 @@ export function ImageEditWorkspace({
                   if (selectionMode && !isSubmitting) updateBrushCursor(event.clientX, event.clientY);
                 }}
                 onPointerUp={() => finishStroke()}
-                onPointerCancel={() => finishStroke(true)}
-                onPointerLeave={() => finishStroke(true)}
+                onPointerCancel={() => finishStroke(true, false)}
+                onPointerLeave={() => finishStroke(true, false)}
               />
               {selectionMode ? (
-                <span
-                  ref={brushCursorRef}
-                  className="image-editor-brush-cursor"
-                  style={{
-                    width: brushSize,
-                    height: brushSize
-                  }}
-                />
+                <>
+                  <span
+                    ref={brushCursorRef}
+                    className="image-editor-brush-cursor"
+                    style={{
+                      width: brushSize,
+                      height: brushSize
+                    }}
+                  />
+                  {brushPreviewActive ? (
+                    <span
+                      className="image-editor-brush-size-preview"
+                      data-testid="brush-size-preview"
+                      style={{
+                        left: brushPreview.centerX,
+                        top: brushPreview.centerY,
+                        width: brushPreview.diameter,
+                        height: brushPreview.diameter
+                      }}
+                    />
+                  ) : null}
+                </>
+              ) : null}
+              {annotationMode ? (
+                <div
+                  ref={annotationLayerRef}
+                  className={cx("image-editor-annotation-layer", annotationTooltipsVisible && "show-all-tooltips")}
+                  onClick={handleAnnotationLayerClick}
+                >
+                  <span className="visually-hidden">{t("imageEditor.annotationInstruction")}</span>
+                  {annotations.map((annotation, index) => (
+                    <button
+                      key={annotation.id}
+                      type="button"
+                      className={cx("image-editor-annotation-marker", annotationDraft?.id === annotation.id && "active")}
+                      style={{ left: `${annotation.xPercent}%`, top: `${annotation.yPercent}%` }}
+                      aria-label={t("imageEditor.annotationMarkerLabel", { count: index + 1, instruction: annotation.instruction })}
+                      onPointerDown={(event) => handleAnnotationPointerDown(event, annotation)}
+                      onPointerMove={handleAnnotationPointerMove}
+                      onPointerUp={finishAnnotationDrag}
+                      onPointerCancel={finishAnnotationDrag}
+                      onKeyDown={(event) => handleAnnotationKeyDown(event, annotation)}
+                    >
+                      <span className="image-editor-annotation-marker-number">{index + 1}</span>
+                      <span className="image-editor-annotation-tooltip" aria-hidden="true">
+                        {annotation.instruction}
+                      </span>
+                    </button>
+                  ))}
+                  {annotationDraft && !annotationDraft.id ? (
+                    <span
+                      className="image-editor-annotation-marker is-draft"
+                      style={{ left: `${annotationDraft.xPercent}%`, top: `${annotationDraft.yPercent}%` }}
+                      aria-hidden="true"
+                    >
+                      <span className="image-editor-annotation-marker-number">{annotations.length + 1}</span>
+                    </span>
+                  ) : null}
+                  {annotationDraft && annotationEditor ? (
+                    <div
+                      className="image-editor-annotation-input"
+                      style={{ left: annotationEditor.left, top: annotationEditor.top, width: annotationEditor.width }}
+                      onClick={(event) => event.stopPropagation()}
+                      onPointerDown={(event) => event.stopPropagation()}
+                    >
+                      <input
+                        ref={annotationInputRef}
+                        value={annotationDraft.instruction}
+                        maxLength={2000}
+                        placeholder={t("imageEditor.annotationPlaceholder")}
+                        aria-label={t("imageEditor.annotationPlaceholder")}
+                        onChange={(event) => setAnnotationDraft((current) => current ? { ...current, instruction: event.target.value } : current)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            saveAnnotationDraft();
+                          } else if (event.key === "Escape") {
+                            event.preventDefault();
+                            setAnnotationDraft(null);
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="image-editor-annotation-save"
+                        disabled={!annotationDraft.instruction.trim()}
+                        aria-label={t("common.save")}
+                        onClick={saveAnnotationDraft}
+                      >
+                        <Check size={16} />
+                      </button>
+                      {annotationDraft.id ? (
+                        <button
+                          type="button"
+                          className="image-editor-annotation-delete"
+                          aria-label={t("common.delete")}
+                          onClick={() => deleteAnnotation(annotationDraft.id!)}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="image-editor-annotation-cancel"
+                          aria-label={t("common.cancel")}
+                          onClick={() => setAnnotationDraft(null)}
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           </div>
+          {selectionMode && editorError ? <div className="image-editor-mode-error form-error">{editorError}</div> : null}
           {previewNavigatorMetrics ? (
             <div className={cx("image-editor-preview-navigator", canPreviewPan && "is-active")} aria-label={t("imagePreview.tools")}>
               <div
@@ -1196,7 +1556,10 @@ export function ImageEditWorkspace({
           ) : null}
         </main>
       </div>
-      <ImageEditorComposer
+      {!selectionMode ? <ImageEditorComposer
+        annotationCount={annotations.length}
+        annotationMode={annotationMode}
+        annotationTooltipsVisible={annotationTooltipsVisible}
         assets={assets}
         composerWrapRef={composerWrapRef}
         editorError={editorError}
@@ -1206,6 +1569,8 @@ export function ImageEditWorkspace({
         prompt={prompt}
         selectedAssets={selectedAssets}
         onPromptChange={setPrompt}
+        onClearAnnotations={clearAnnotations}
+        onToggleAnnotationTooltips={() => setAnnotationTooltipsVisible((visible) => !visible)}
         onSelectedAssetsChange={setSelectedAssets}
         onSubmit={(event) => {
           event.preventDefault();
@@ -1214,7 +1579,7 @@ export function ImageEditWorkspace({
         onOpenCasePicker={onOpenCasePicker}
         onToggleAsset={toggleAsset}
         onToggleMaterialPicker={onToggleMaterialPicker}
-      />
+      /> : null}
     </div>
   );
 }

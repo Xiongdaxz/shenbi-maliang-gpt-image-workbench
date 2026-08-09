@@ -601,9 +601,6 @@ export function AppSettingsDialog({
   const detailRefreshExpiresAt = formatPluginConnectionTime(pluginConnectionDetails?.refreshExpiresAt ?? "", resolvedLanguage);
   const detailLastRefreshAt = formatPluginConnectionTime(pluginConnectionDetails?.lastRefreshAt ?? "", resolvedLanguage);
   const detailLastRefreshErrorAt = formatPluginConnectionTime(pluginConnectionDetails?.lastRefreshErrorAt ?? "", resolvedLanguage);
-  const detailRefreshCapability = pluginConnectionDetails
-    ? t(`settings.plugins.refreshCapability.${pluginConnectionDetails.refreshCapability}`)
-    : "";
 
   return (
     <div
@@ -1292,7 +1289,6 @@ export function AppSettingsDialog({
               </div>
               <div><span>{t("settings.plugins.authorizedAt")}</span><strong>{detailAuthorizedAt || "-"}</strong></div>
               <div><span>{t("settings.plugins.lastAccess")}</span><strong>{detailLastAccessAt}</strong></div>
-              <div><span>{t("settings.plugins.refreshCapability")}</span><strong>{detailRefreshCapability}</strong></div>
               <div><span>{t("settings.plugins.accessExpiresAt")}</span><strong>{detailAccessExpiresAt || "-"}</strong></div>
               <div><span>{t("settings.plugins.refreshExpiresAt")}</span><strong>{detailRefreshExpiresAt || "-"}</strong></div>
               <div><span>{t("settings.plugins.lastRefreshAt")}</span><strong>{detailLastRefreshAt || t("settings.plugins.notRefreshed")}</strong></div>

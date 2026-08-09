@@ -45,6 +45,7 @@ import type {
   UserPreferences,
   WorkImage
 } from "../types";
+import type { ImageAnnotation, ImageEditIntent } from "../lib/imageAnnotations";
 import { ApiError, request } from "./client";
 import type { AppearanceMode } from "../lib/appearance";
 import type { PromptColorScheme, PromptColorSchemePayload } from "../lib/promptColorSchemes";
@@ -125,6 +126,8 @@ export type EditImagePayload = GenerateImagePayload & {
   sourceInlineImages?: Array<{ id?: string; name?: string; dataUrl: string }>;
   referenceAssetId?: string;
   maskDataUrl?: string;
+  editIntent?: ImageEditIntent;
+  imageAnnotations?: ImageAnnotation[];
   inputFidelity?: "low" | "high";
   input_fidelity?: "low" | "high";
   hideReference?: boolean;

@@ -97,7 +97,13 @@ function messageTimestampMs(message: Message) {
 
 export function isServerEchoOfPending(message: Message, pending: Message) {
   if (message.role !== "user" || pending.role !== "user") return false;
-  if (message.id === pending.id || message.content !== pending.content) return false;
+  if (message.id === pending.id) return false;
+
+  const pendingClientRequestId = messageMetadataString(pending, "clientRequestId");
+  if (pendingClientRequestId) {
+    return messageMetadataString(message, "clientRequestId") === pendingClientRequestId;
+  }
+  if (message.content !== pending.content) return false;
 
   const pendingMode = messageMetadataString(pending, "mode");
   if (pendingMode && messageMetadataString(message, "mode") !== pendingMode) return false;
@@ -124,6 +130,11 @@ export function isServerEchoOfPending(message: Message, pending: Message) {
 
 export function messageChatBranchId(message: Message) {
   return messageMetadataString(message, "branchId") || MAIN_CHAT_BRANCH_ID;
+}
+
+export function messageThreadRenderKey(branchId: string, rootId: string, firstUserMessage?: Message | null) {
+  const clientRequestId = firstUserMessage ? messageMetadataString(firstUserMessage, "clientRequestId") : "";
+  return clientRequestId ? `${branchId}:request:${clientRequestId}` : `${branchId}:${rootId}`;
 }
 
 function messageRevisionRootId(message: Message) {

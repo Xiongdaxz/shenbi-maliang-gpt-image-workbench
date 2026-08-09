@@ -157,6 +157,7 @@ export async function buildMaliangImageJobResult(
   };
   const deliveredIds = new Set(deliveredImageIds);
   const deliveredPresentations = presentations.filter((item) => deliveredIds.has(item.imageId));
+  const deliveredResultCount = deliveredPresentations.length;
   const imagesById = new Map(images.map((image) => [image.id, image]));
   const resourceLinkContent: Extract<MaliangJobContent, { type: "resource_link" }>[] = deliveredPresentations.map((item) => ({
     type: "resource_link",
@@ -166,8 +167,10 @@ export async function buildMaliangImageJobResult(
     description: `原图下载地址，有效期至 ${formatChinaDateTime(item.expiresAt)}（北京时间）`,
     mimeType: imagesById.get(item.imageId)?.mime_type || "image/png"
   }));
-  const deliveryInstruction = deliveredImageIds.length > 0
-    ? `图片任务已成功，${deliveredImageIds.length} 张原图已通过标准 resource_link 内容块返回，并保留在 structuredContent.imageResults 中。为避免超大工具响应被客户端截断，本工具不返回 base64 图片数据。客户端应交付资源链接；需要本地持久化时，使用 downloadUrl 保存原图并引用真实文件。下载链接短期有效，不要回显到对话正文、日志或长期存储。保存能力不可用或保存失败时应报告图片交付未完成。不要只回复 jobId、imageId 或任务状态，也不要把尚未完成的本地保存描述为成功。`
+  const deliveryInstruction = deliveredResultCount > 0
+    ? status === "failed"
+      ? `图片任务未能全部完成，但已有 ${deliveredResultCount} 张原图通过标准 resource_link 内容块返回，并保留在 structuredContent.imageResults 中。客户端应先交付这些部分结果，同时明确报告任务错误；需要本地持久化时，使用 downloadUrl 保存原图并引用真实文件。下载链接短期有效，不要回显到对话正文、日志或长期存储。不要把部分结果描述为整个任务成功。`
+      : `图片任务已成功，${deliveredResultCount} 张原图已通过标准 resource_link 内容块返回，并保留在 structuredContent.imageResults 中。为避免超大工具响应被客户端截断，本工具不返回 base64 图片数据。客户端应交付资源链接；需要本地持久化时，使用 downloadUrl 保存原图并引用真实文件。下载链接短期有效，不要回显到对话正文、日志或长期存储。保存能力不可用或保存失败时应报告图片交付未完成。不要只回复 jobId、imageId 或任务状态，也不要把尚未完成的本地保存描述为成功。`
     : "";
   const content: MaliangJobContent[] = [
     {
@@ -185,7 +188,8 @@ export async function buildMaliangImageJobResult(
       status,
       imageIds: summaryImageIds,
       imageResults: deliveredPresentations
-    }
+    },
+    ...(status === "failed" && deliveredResultCount === 0 ? { isError: true as const } : {})
   };
 }
 
@@ -407,8 +411,13 @@ async function createMaliangMcpServer(api: Hono) {
       updated_at: string;
     }>(appDb, "select * from image_jobs where id = ? and user_id = ?", jobId, context.user.id);
     if (!job) return toolError("图片任务不存在或不属于当前账号。");
-    const images = job.status === "succeeded"
-      ? getAll<ImageRow>(appDb, "select * from images where job_id = ? and user_id = ? order by created_at asc", job.id, context.user.id)
+    const images = job.status === "succeeded" || job.status === "failed"
+      ? getAll<ImageRow>(
+          appDb,
+          "select * from images where job_id = ? and user_id = ? order by coalesce(job_image_index, 2147483647) asc, created_at asc, rowid asc",
+          job.id,
+          context.user.id
+        )
       : [];
     const summary = {
       jobId: job.id,
@@ -429,8 +438,7 @@ async function createMaliangMcpServer(api: Hono) {
       grantVersion: context.grantVersion,
       publicBaseUrl,
     }));
-    const result = await buildMaliangImageJobResult(summary, images, presentations);
-    return { ...result, ...(job.status === "failed" ? { isError: true as const } : {}) };
+    return buildMaliangImageJobResult(summary, images, presentations);
   });
 
   return server;

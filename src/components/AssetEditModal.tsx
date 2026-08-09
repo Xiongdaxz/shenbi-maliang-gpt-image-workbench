@@ -49,7 +49,7 @@ export function AssetEditModal({
 
   return (
     <ModalPortal>
-      <div className="modal-backdrop">
+      <div className="modal-backdrop modal-backdrop-preview-child">
         <section className="case-modal compact-modal asset-category-modal">
           <header>
             <h3>{t("assetEdit.title")}</h3>

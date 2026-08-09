@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, MoreHorizontal, RefreshCw } from "lucide-react";
 import { AddCaseModal } from "../AddCaseModal";
@@ -7,13 +7,16 @@ import { ImageLightbox, type ImageLightboxState, type ImageLightboxTarget } from
 import { ImageDownloadMenu, type ImageDownloadSource } from "../ImageDownloadMenu";
 import { ImagePreviewModal, type ImagePreviewItem } from "../ImagePreviewModal";
 import { EditReferenceArrowIcon, MessageEditIcon } from "../InlineIcons";
+import { RenderingMessage } from "../RenderingMessage";
 import { useI18n } from "../../i18n";
 import { copyTextToClipboard } from "../../lib/clipboard";
 import { sourceSnapshotFromMessage } from "../../lib/chatRequest";
 import { type MessageRevision } from "../../lib/chatRender";
 import { cx } from "../../lib/cx";
+import { formatImageAnnotationMessageDisplayText } from "../../lib/imageAnnotations";
+import { imageResultPlaceholderState } from "../../lib/imageResultPlaceholder";
 import { workImageFromMessage } from "../../lib/workImages";
-import type { Message, MessageSourceReferenceImage, WorkImage } from "../../types";
+import type { ImageJob, Message, MessageSourceReferenceImage, WorkImage } from "../../types";
 import { useToast } from "../../ui";
 
 const USER_MESSAGE_COLLAPSED_LINES = 10;
@@ -78,6 +81,36 @@ function messagePreviewUrl(message: Message) {
 
 function messageThumbnailUrl(message: Message) {
   return message.imageThumbnailUrl ?? message.imagePreviewUrl ?? message.imageUrl ?? "";
+}
+
+function positiveMessageMetadataInteger(message: Message, key: string) {
+  const value = Math.trunc(Number(message.metadata?.[key]));
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function requestedMessageImageCount(userMessage: Message, assistantMessages: Message[]) {
+  const metadataCount = positiveMessageMetadataInteger(userMessage, "n");
+  const assistantTotal = assistantMessages.reduce(
+    (count, message) => Math.max(count, positiveMessageMetadataInteger(message, "imageTotal")),
+    0
+  );
+  const highestImageIndex = assistantMessages.reduce(
+    (count, message) => Math.max(count, positiveMessageMetadataInteger(message, "imageIndex")),
+    0
+  );
+  return Math.max(1, metadataCount, assistantTotal, assistantMessages.length, highestImageIndex);
+}
+
+function messageImageIndex(message: Message) {
+  return positiveMessageMetadataInteger(message, "imageIndex");
+}
+
+function requestedImageAspectRatio(size: unknown) {
+  const match = String(size ?? "").trim().match(/^(\d+)x(\d+)$/i);
+  if (!match) return "4 / 3";
+  const width = Math.max(1, Number(match[1]));
+  const height = Math.max(1, Number(match[2]));
+  return `${width} / ${height}`;
 }
 
 function referencePreviewUrl(message: Message) {
@@ -310,6 +343,7 @@ export function ChatMessageThread({
   onAddAsset,
   onSelectVersion,
   failedJobIds,
+  jobStatuses,
   retryingJobId,
   onRetryJob,
   onSubmitEdit,
@@ -327,6 +361,7 @@ export function ChatMessageThread({
   onAddAsset?: (image: WorkImage) => void;
   onSelectVersion?: (revision: MessageRevision, index: number) => void;
   failedJobIds?: ReadonlySet<string>;
+  jobStatuses?: ReadonlyMap<string, ImageJob["status"]>;
   retryingJobId?: string;
   onRetryJob?: (jobId: string) => void;
   onSubmitEdit?: (payload: { rootId: string; userMessage: Message; assistantMessage: Message | null; prompt: string }) => void;
@@ -373,8 +408,10 @@ export function ChatMessageThread({
 
   if (!revision) return null;
 
+  const editableContent = formatImageAnnotationMessageDisplayText(revision.user.content, revision.user.metadata);
+
   const copyMessage = async () => {
-    const copied = await copyTextToClipboard(revision.user.content);
+    const copied = await copyTextToClipboard(editableContent);
     if (copied) {
       showToast(t("toast.contentCopied"));
       return;
@@ -392,7 +429,7 @@ export function ChatMessageThread({
     setActiveIndex(nextIndex);
   };
   const startEditing = () => {
-    setEditValue(revision.user.content);
+    setEditValue(editableContent);
     setEditing(true);
   };
   const submitEdit = () => {
@@ -404,8 +441,14 @@ export function ChatMessageThread({
   const assistantMessages = revision.assistants.length > 0 ? revision.assistants : revision.assistant ? [revision.assistant] : [];
   const assistantImageMessages = assistantMessages.filter((message) => message.imageUrl && message.imageId);
   const assistantTextMessages = assistantMessages.filter((message) => !message.imageUrl || !message.imageId);
-  const shouldRenderImageGroup = assistantImageMessages.length > 1;
+  const requestedImageCount = requestedMessageImageCount(revision.user, assistantImageMessages);
+  const shouldRenderImageGroup = requestedImageCount > 1 || assistantImageMessages.length > 1;
   const revisionJobId = typeof revision.user.metadata?.jobId === "string" ? revision.user.metadata.jobId.trim() : "";
+  const revisionJobStatus = revisionJobId
+    ? jobStatuses?.get(revisionJobId)
+    : revision.user.metadata?.pending
+      ? "running"
+      : undefined;
   const canRetry = Boolean(capabilities.retry && revisionJobId && failedJobIds?.has(revisionJobId) && onRetryJob);
   const retrying = Boolean(revisionJobId && retryingJobId === revisionJobId);
   const editSourceSnapshot = sourceSnapshotFromMessage(revision.user);
@@ -509,6 +552,10 @@ export function ChatMessageThread({
         <>
           <AssistantImageGroup
             messages={assistantImageMessages}
+            totalCount={requestedImageCount}
+            jobStatus={revisionJobStatus}
+            renderingMode={revision.user.metadata?.mode === "edit" ? "edit" : "generation"}
+            requestedSize={revision.user.metadata?.size}
             onOpenEditor={onOpenEditor}
             onAddAsset={onAddAsset}
             mode={mode}
@@ -554,6 +601,10 @@ export function ChatMessageThread({
 
 function AssistantImageGroup({
   messages,
+  totalCount,
+  jobStatus,
+  renderingMode,
+  requestedSize,
   onOpenEditor,
   onAddAsset,
   mode = "workspace",
@@ -563,6 +614,10 @@ function AssistantImageGroup({
   downloadBaseName
 }: {
   messages: Message[];
+  totalCount: number;
+  jobStatus?: ImageJob["status"];
+  renderingMode: "generation" | "edit";
+  requestedSize?: unknown;
   onOpenEditor?: (image: WorkImage) => void;
   onAddAsset?: (image: WorkImage) => void;
   mode?: ChatMessageMode;
@@ -571,7 +626,23 @@ function AssistantImageGroup({
   sharedResultMessages?: Message[];
   downloadBaseName?: string;
 }) {
-  const imageMessages = messages.filter((message) => message.imageUrl && message.imageId);
+  const normalizedTotalCount = Math.max(2, Math.trunc(totalCount));
+  const slots = useMemo(() => {
+    const next: Array<Message | null> = Array.from({ length: normalizedTotalCount }, () => null);
+    const unassigned: Message[] = [];
+    for (const message of messages.filter((item) => item.imageUrl && item.imageId)) {
+      const index = messageImageIndex(message) - 1;
+      if (index >= 0 && index < next.length && !next[index]) next[index] = message;
+      else unassigned.push(message);
+    }
+    for (const message of unassigned) {
+      const index = next.findIndex((item) => !item);
+      if (index < 0) break;
+      next[index] = message;
+    }
+    return next;
+  }, [messages, normalizedTotalCount]);
+  const imageMessages = slots.filter((message): message is Message => Boolean(message));
   const [activeIndex, setActiveIndex] = useState(0);
   const [caseOpen, setCaseOpen] = useState(false);
   const [copyingImage, setCopyingImage] = useState(false);
@@ -580,26 +651,32 @@ function AssistantImageGroup({
   const [thumbsOverflowing, setThumbsOverflowing] = useState(false);
   const mainImageRef = useRef<HTMLDivElement | null>(null);
   const thumbsRef = useRef<HTMLDivElement | null>(null);
+  const manuallySelectedIndexRef = useRef(false);
   const { showToast } = useToast();
   const { t } = useI18n();
-  const maxIndex = Math.max(0, imageMessages.length - 1);
-  const currentIndex = Math.min(activeIndex, maxIndex);
-  const activeMessage = imageMessages[currentIndex] ?? imageMessages[0];
+  const currentIndex = Math.max(0, Math.min(activeIndex, slots.length - 1));
+  const activeMessage = slots[currentIndex] ?? null;
   const image = activeMessage ? workImageFromMessage(activeMessage) : null;
   const capabilities = resolveChatMessageCapabilities(mode, capabilityOverrides);
   const canOpenEditor = capabilities.editImage && Boolean(image && onOpenEditor);
   const groupImages = imageMessages.map((message) => workImageFromMessage(message)).filter((item): item is WorkImage => Boolean(item));
-  const resultPreviewItems = imageMessages.map((message, index) => ({
+  const resultPreviewItems = imageMessages.map((message) => ({
     url: messagePreviewUrl(message),
     thumbnailUrl: messageThumbnailUrl(message),
-    name: message.content || t("chatMessages.viewNthImage", { index: index + 1 })
+    name: message.content || t("chatMessages.viewNthImage", { index: slots.findIndex((item) => item?.id === message.id) + 1 })
   }));
   const sharedPreviewMessages = mode === "shared-readonly" && sharedResultMessages?.length
     ? sharedResultMessages
     : imageMessages;
   const longImage = isLongAssistantImage(activeMessage);
+  const emptySlotPlaceholderState = imageResultPlaceholderState(false, jobStatus);
+  const activePlaceholderState = imageResultPlaceholderState(Boolean(activeMessage), jobStatus);
+  const placeholderFailed = emptySlotPlaceholderState === "failed";
+  const placeholderRendering = activePlaceholderState === "rendering";
+  const placeholderLabel = placeholderFailed ? t("chat.failedJob") : t("chat.imageUnavailable");
   const imageGroupStyle = {
-    ...(thumbMaxHeight ? { "--image-result-thumb-max-height": `${Math.round(thumbMaxHeight)}px` } : {})
+    ...(thumbMaxHeight ? { "--image-result-thumb-max-height": `${Math.round(thumbMaxHeight)}px` } : {}),
+    "--image-result-placeholder-ratio": requestedImageAspectRatio(requestedSize)
   } as CSSProperties;
 
   const updateThumbLayout = useCallback(() => {
@@ -615,8 +692,13 @@ function AssistantImageGroup({
   }, []);
 
   useEffect(() => {
-    setActiveIndex((value) => Math.min(value, Math.max(0, imageMessages.length - 1)));
-  }, [imageMessages.length]);
+    if (manuallySelectedIndexRef.current) return;
+    setActiveIndex((value) => {
+      if (slots[value]) return value;
+      const firstCompletedIndex = slots.findIndex((message) => Boolean(message));
+      return firstCompletedIndex >= 0 ? firstCompletedIndex : 0;
+    });
+  }, [slots]);
 
   useLayoutEffect(() => {
     updateThumbLayout();
@@ -633,10 +715,8 @@ function AssistantImageGroup({
     updateThumbLayout();
   }, [thumbMaxHeight, updateThumbLayout]);
 
-  if (!activeMessage || !activeMessage.imageUrl) return null;
-
   const copyImage = async () => {
-    if (!activeMessage.imageUrl || copyingImage) return;
+    if (!activeMessage?.imageUrl || copyingImage) return;
     if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
       const copiedUrl = await copyTextToClipboard(activeMessage.imageUrl);
       showToast(copiedUrl ? t("toast.imageCopyUnsupportedUrlCopied") : t("toast.imageCopyUnsupported"), copiedUrl ? "info" : "error");
@@ -660,61 +740,119 @@ function AssistantImageGroup({
 
   return (
     <article className="message assistant-message assistant-image-group-message">
-      <div className={cx("image-result-group", longImage && "image-result-group-long")} style={imageGroupStyle}>
+      <div
+        className={cx(
+          "image-result-group",
+          longImage && "image-result-group-long",
+          placeholderRendering && "is-rendering"
+        )}
+        style={imageGroupStyle}
+      >
         <div className={cx("image-result-thumbs-wrap", thumbsOverflowing && "is-scrollable")}>
           <div className="image-result-thumbs" ref={thumbsRef} aria-label={t("chatMessages.resultThumbnails")}>
-            {imageMessages.map((message, index) => (
+            {slots.map((message, index) => message ? (
               <button
                 key={message.id}
                 type="button"
                 className={cx(index === currentIndex && "active")}
-                onClick={() => setActiveIndex(index)}
+                onClick={() => {
+                  manuallySelectedIndexRef.current = true;
+                  setActiveIndex(index);
+                }}
                 aria-label={t("chatMessages.viewNthImage", { index: index + 1 })}
                 aria-pressed={index === currentIndex}
               >
                 <img src={messageThumbnailUrl(message)} alt="" />
                 <span className="image-result-thumb-index">{index + 1}</span>
               </button>
+            ) : (
+              <button
+                key={`pending-${index}`}
+                type="button"
+                className={cx(
+                  "image-result-thumb-placeholder",
+                  emptySlotPlaceholderState === "rendering"
+                    ? "is-loading"
+                    : placeholderFailed
+                      ? "is-failed"
+                      : "is-unavailable"
+                )}
+                onClick={() => {
+                  manuallySelectedIndexRef.current = true;
+                  setActiveIndex(index);
+                }}
+                aria-label={
+                  emptySlotPlaceholderState === "rendering"
+                    ? t("chat.loading.creatingImage")
+                    : placeholderLabel
+                }
+                aria-pressed={index === currentIndex}
+              >
+                <span className="image-result-thumb-index">{index + 1}</span>
+              </button>
             ))}
           </div>
         </div>
-        <div className={cx("image-result image-result-main", longImage && "image-result-long")} ref={mainImageRef}>
-          <button
-            type="button"
-            className="image-result-open"
-            onClick={() => {
-              if (canOpenEditor && image) {
-                onOpenEditor?.(image);
-                return;
-              }
-              const previewIndex = mode === "shared-readonly"
-                ? Math.max(0, sharedPreviewMessages.findIndex((message) => message.id === activeMessage.id))
-                : currentIndex;
-              setResultPreviewState({ items: resultPreviewItems, index: previewIndex });
-            }}
-            aria-label={canOpenEditor ? t("pages.images.editImage") : t("imageLightbox.preview")}
+        {placeholderRendering ? (
+          <RenderingMessage mode={renderingMode} imageGroupLayout />
+        ) : (
+          <div
+            className={cx("image-result image-result-main", activeMessage && longImage && "image-result-long")}
+            ref={mainImageRef}
           >
-            <img src={messagePreviewUrl(activeMessage)} alt={activeMessage.content} onLoad={updateThumbLayout} />
-          </button>
-          <AssistantImageActions
-            image={image}
-            onOpenEditor={onOpenEditor}
-            onOpenCase={() => setCaseOpen(true)}
-            onAddAsset={onAddAsset}
-            mode={mode}
-            capabilities={capabilities}
-            sharedToken={sharedToken}
-            downloadBaseName={downloadBaseName}
-          />
-        </div>
-        <div className="assistant-image-toolbar assistant-image-group-toolbar">
-          {capabilities.copyImage ? (
-            <button type="button" onClick={() => void copyImage()} disabled={copyingImage} aria-label={t("chatMessages.copyImage")} title={t("chatMessages.copyImage")}>
-              <Copy size={17} />
-            </button>
-          ) : null}
-          <MessageMoreButton createdAt={activeMessage.createdAt} />
-        </div>
+            {activeMessage ? (
+              <>
+                <button
+                  type="button"
+                  className="image-result-open"
+                  onClick={() => {
+                    if (canOpenEditor && image) {
+                      onOpenEditor?.(image);
+                      return;
+                    }
+                    const previewIndex = mode === "shared-readonly"
+                      ? Math.max(0, sharedPreviewMessages.findIndex((message) => message.id === activeMessage.id))
+                      : Math.max(0, imageMessages.findIndex((message) => message.id === activeMessage.id));
+                    setResultPreviewState({ items: resultPreviewItems, index: previewIndex });
+                  }}
+                  aria-label={canOpenEditor ? t("pages.images.editImage") : t("imageLightbox.preview")}
+                >
+                  <img src={messagePreviewUrl(activeMessage)} alt={activeMessage.content} onLoad={updateThumbLayout} />
+                </button>
+                <AssistantImageActions
+                  image={image}
+                  onOpenEditor={onOpenEditor}
+                  onOpenCase={() => setCaseOpen(true)}
+                  onAddAsset={onAddAsset}
+                  mode={mode}
+                  capabilities={capabilities}
+                  sharedToken={sharedToken}
+                  downloadBaseName={downloadBaseName}
+                />
+              </>
+            ) : (
+              <div
+                className={cx(
+                  "image-result-main-placeholder",
+                  placeholderFailed ? "is-failed" : "is-unavailable"
+                )}
+                role="status"
+              >
+                <span>{placeholderLabel}</span>
+              </div>
+            )}
+          </div>
+        )}
+        {activeMessage ? (
+          <div className="assistant-image-toolbar assistant-image-group-toolbar">
+            {capabilities.copyImage ? (
+              <button type="button" onClick={() => void copyImage()} disabled={copyingImage} aria-label={t("chatMessages.copyImage")} title={t("chatMessages.copyImage")}>
+                <Copy size={17} />
+              </button>
+            ) : null}
+            <MessageMoreButton createdAt={activeMessage.createdAt} />
+          </div>
+        ) : null}
       </div>
       {capabilities.addCase && image && caseOpen ? (
         <AddCaseModal
@@ -751,7 +889,7 @@ function AssistantImageGroup({
           onIndexChange={(index) => {
             const selectedMessage = sharedPreviewMessages[index];
             const localIndex = selectedMessage
-              ? imageMessages.findIndex((message) => message.id === selectedMessage.id)
+              ? slots.findIndex((message) => message?.id === selectedMessage.id)
               : -1;
             if (localIndex >= 0) setActiveIndex(localIndex);
             setResultPreviewState((state) => (state ? { ...state, index } : state));
@@ -761,7 +899,12 @@ function AssistantImageGroup({
         <ImageLightbox
           state={resultPreviewState}
           onClose={() => setResultPreviewState(null)}
-          onChangeIndex={(index) => setResultPreviewState((state) => (state ? { ...state, index } : state))}
+          onChangeIndex={(index) => {
+            const selectedMessage = imageMessages[index];
+            const slotIndex = selectedMessage ? slots.findIndex((message) => message?.id === selectedMessage.id) : -1;
+            if (slotIndex >= 0) setActiveIndex(slotIndex);
+            setResultPreviewState((state) => (state ? { ...state, index } : state));
+          }}
         />
       )}
     </article>
@@ -865,6 +1008,9 @@ export function ChatMessage({
   const { t } = useI18n();
   const image = workImageFromMessage(message);
   const capabilities = resolveChatMessageCapabilities(mode, capabilityOverrides);
+  const displayContent = message.role === "user"
+    ? formatImageAnnotationMessageDisplayText(message.content, message.metadata)
+    : message.content;
   const canOpenEditor = capabilities.editImage && Boolean(image && onOpenEditor);
   const hideReference = message.metadata?.hideReference === true;
   const referenceImageUrl = message.referenceImageUrl ?? (message.role === "user" ? message.imageUrl : null);
@@ -948,7 +1094,7 @@ export function ChatMessage({
   const renderUserText = () => (
     <>
       <p ref={userTextRef} className={cx("user-message-text", userTextCollapsed && "is-collapsed")}>
-        {message.content}
+        {displayContent}
       </p>
       {userTextToggleable ? (
         <button
@@ -967,7 +1113,7 @@ export function ChatMessage({
 
   useEffect(() => {
     setUserTextExpanded(false);
-  }, [message.content, message.id]);
+  }, [displayContent, message.id]);
 
   useLayoutEffect(() => {
     if (message.role !== "user") {
@@ -1003,7 +1149,7 @@ export function ChatMessage({
       observer?.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [message.content, message.id, message.role, userTextExpanded]);
+  }, [displayContent, message.id, message.role, userTextExpanded]);
 
   const copyImage = async () => {
     if (!message.imageUrl || copyingImage) return;

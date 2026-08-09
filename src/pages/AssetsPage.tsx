@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FolderOpen, Pencil, Plus, Search, Send, Share2, Trash2, X } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { AssetEditModal } from "../components/AssetEditModal";
 import { AssetUploadModal } from "../components/AssetUploadModal";
-import { FilterModeToggle, FilterTabLabel, FilterTabsScroller, useLibraryFilterDisplayMode } from "../components/HorizontalScrollers";
+import {
+  FilterModeToggle,
+  FilterResultTransition,
+  FilterTabLabel,
+  FilterTabsScroller,
+  SlidingFilterGroup,
+  useLibraryFilterDisplayMode
+} from "../components/HorizontalScrollers";
 import { ImageDownloadMenu } from "../components/ImageDownloadMenu";
 import { ImagePreviewModal, type ImageTransparencyStatus } from "../components/ImagePreviewModal";
 import { LibraryEmptyState } from "../components/LibraryEmptyState";
@@ -111,6 +118,7 @@ export function AssetsPage({
       keyword: debouncedKeyword,
       space: spaceFilter
     }, { signal }),
+    placeholderData: keepPreviousData,
     staleTime: 30_000,
     gcTime: 10 * 60_000
   });
@@ -284,6 +292,12 @@ export function AssetsPage({
       private: baseAssets.filter((asset) => assetMatchesSpace(asset, "private")).length
     };
   }, [assetFacets.data?.spaces, assetItems, assetReviewEnabled, keyword, selectedCategoryIds]);
+  const currentAssetSpaceCountDigits = Math.max(
+    ...Object.values(assetSpaceFilterCounts).map((count) => String(Math.max(0, Math.trunc(count))).length)
+  );
+  const assetSpaceCountDigitsRef = useRef(currentAssetSpaceCountDigits);
+  assetSpaceCountDigitsRef.current = Math.max(assetSpaceCountDigitsRef.current, currentAssetSpaceCountDigits);
+  const assetSpaceCountDigits = assetSpaceCountDigitsRef.current;
   const assetSpaceLabelText = (asset: AssetItem) => {
     if (assetReviewEnabled && asset.shareStatus === "pending") return t("status.pendingReview");
     if (assetReviewEnabled && asset.shareStatus === "rejected") return t("status.rejected");
@@ -326,6 +340,11 @@ export function AssetsPage({
     () => ["asset-filter", spaceFilter, selectedCategoryIds.join(","), ...categories.map((category) => `${category.id}:${category.name}`)].join("\u0000"),
     [categories, selectedCategoryIds, spaceFilter]
   );
+  const assetResultTransitionKey = useMemo(
+    () => ["assets", spaceFilter, selectedCategoryIds.join(","), debouncedKeyword].join("\u0000"),
+    [debouncedKeyword, selectedCategoryIds, spaceFilter]
+  );
+  const activeAssetTagValue = selectedCategoryIds[0] ? `asset-category:${selectedCategoryIds[0]}` : "asset-category:all";
   const assetScrollJumpKey = useMemo(
     () => ["assets", filterDisplayMode, spaceFilter, selectedCategoryIds.join(","), keyword, visibleAssets.length].join("\u0000"),
     [filterDisplayMode, keyword, selectedCategoryIds, spaceFilter, visibleAssets.length]
@@ -484,7 +503,12 @@ export function AssetsPage({
         actions={<FilterModeToggle value={filterDisplayMode} onChange={setFilterDisplayMode} />}
       />
       <div className={cx("library-filter-row asset-filter-row", `filter-mode-${filterDisplayMode}`)}>
-        <div className="asset-space-filter-tabs" role="group" aria-label={t("pages.assets.scope")}>
+        <SlidingFilterGroup
+          className="asset-space-filter-tabs"
+          ariaLabel={t("pages.assets.scope")}
+          activeValue={`asset-space:${spaceFilter}`}
+          countDigits={assetSpaceCountDigits}
+        >
           {[
             { value: "all", label: t("common.all"), count: assetSpaceFilterCounts.all },
             { value: "shared", label: t("common.shared"), count: assetSpaceFilterCounts.shared },
@@ -494,18 +518,28 @@ export function AssetsPage({
               key={item.value}
               type="button"
               className={cx(spaceFilter === item.value && "active")}
+              data-filter-value={`asset-space:${item.value}`}
               onClick={() => setSpaceFilter(item.value as typeof spaceFilter)}
+              aria-pressed={spaceFilter === item.value}
             >
-              <FilterTabLabel count={item.count}>{item.label}</FilterTabLabel>
+              <FilterTabLabel count={item.count} reserveCountSpace>{item.label}</FilterTabLabel>
             </button>
           ))}
-        </div>
+        </SlidingFilterGroup>
         <span className="asset-filter-divider" aria-hidden="true" />
-        <FilterTabsScroller className="asset-filter-tabs" ariaLabel={t("pages.assets.tags")} hintKey={assetFilterHintKey} mode={filterDisplayMode}>
+        <FilterTabsScroller
+          className="asset-filter-tabs"
+          ariaLabel={t("pages.assets.tags")}
+          hintKey={assetFilterHintKey}
+          activeValue={activeAssetTagValue}
+          mode={filterDisplayMode}
+        >
           <button
             type="button"
             className={cx(selectedCategoryIds.length === 0 && "active")}
+            data-filter-value="asset-category:all"
             onClick={() => setSelectedCategoryIds([])}
+            aria-pressed={selectedCategoryIds.length === 0}
           >
             <FilterTabLabel count={assetTagFilterCounts.all}>{t("common.all")}</FilterTabLabel>
           </button>
@@ -514,7 +548,9 @@ export function AssetsPage({
               key={category.id}
               type="button"
               className={cx(selectedCategoryIds.includes(category.id) && "active")}
+              data-filter-value={`asset-category:${category.id}`}
               onClick={() => toggleAssetCategory(category.id)}
+              aria-pressed={selectedCategoryIds.includes(category.id)}
             >
               <FilterTabLabel count={assetTagFilterCounts.byCategory.get(category.id)}>{category.name}</FilterTabLabel>
             </button>
@@ -540,17 +576,18 @@ export function AssetsPage({
           </button>
         </div>
       </div>
-      <VirtualizedResponsiveGrid
-        items={visibleAssets}
-        getKey={(asset) => asset.id}
-        minColumnWidth={156}
-        estimateCardHeight={(width) => width}
-        gap={12}
-        mobileGap={10}
-        className="asset-library-virtual-grid"
-        rowClassName="asset-library-virtual-row"
-        renderItem={(asset, { index, eager, highPriority }) => (
-          <article className="asset-card" key={asset.id}>
+      <FilterResultTransition resultKey={assets.data?.pages[0] ? assetResultTransitionKey : null}>
+        <VirtualizedResponsiveGrid
+          items={visibleAssets}
+          getKey={(asset) => asset.id}
+          minColumnWidth={156}
+          estimateCardHeight={(width) => width}
+          gap={12}
+          mobileGap={10}
+          className="asset-library-virtual-grid"
+          rowClassName="asset-library-virtual-row"
+          renderItem={(asset, { index, eager, highPriority }) => (
+            <article className="asset-card" key={asset.id}>
             <div className="asset-image-frame">
               <button className="asset-image-btn" type="button" onClick={() => selectPreviewIndex(index)} aria-label={t("pages.assets.previewAsset", { name: asset.name })}>
                 <SkeletonImage
@@ -600,9 +637,10 @@ export function AssetsPage({
                 ) : null}
               </div>
             </div>
-          </article>
-        )}
-      />
+            </article>
+          )}
+        />
+      </FilterResultTransition>
       {!assets.isLoading && visibleAssets.length === 0 ? (
         hasAssetFilters ? (
           <LibraryEmptyState
@@ -644,6 +682,7 @@ export function AssetsPage({
           initialImageSource="original"
           wheelMode={imagePreviewWheelMode}
           suppressStableScrollbarGutter
+          unifiedToolbarControls
           transparencyStatus={transparencyStatus}
           navigationItemCount={previewItemCount}
           canNavigateNext={previewIndex + 1 < previewItemCount}
@@ -727,6 +766,7 @@ export function AssetsPage({
         description={t("pages.assets.deleteDescription", { name: deleteTarget?.name ?? "" })}
         confirmText={deleteAsset.isPending ? t("common.deleting") : t("common.delete")}
         destructive
+        backdropClassName="modal-backdrop-top"
         onConfirm={() => {
           if (deleteTarget && !deleteAsset.isPending) deleteAsset.mutate(deleteTarget.id);
         }}

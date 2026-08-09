@@ -55,9 +55,11 @@ describe("image job events", () => {
     const live: ImageJobEventPayload = {
       jobId: "job-live",
       sessionId: "session-1",
-      status: "failed",
+      status: "running",
       type: "edit",
-      error: "failed",
+      requestedImageCount: 4,
+      completedImageCount: 2,
+      completedImageIndices: [1, 3],
       updatedAt: "2026-07-23T10:20:34.000"
     };
     emitImageJobEvent("user-stream", live);

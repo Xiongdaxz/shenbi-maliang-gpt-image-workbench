@@ -9,6 +9,7 @@ type UseChatViewStateOptions = {
   currentScopeSubmitting: boolean;
   currentSubmitScope: string;
   activeBranchId: string;
+  activeClientRequestId: string | null;
   pendingMode: SubmitRequest["mode"];
   pendingSubmitScope: string | null;
   pendingUserMessage: Message | null;
@@ -16,11 +17,69 @@ type UseChatViewStateOptions = {
   serverMessages: Message[];
 };
 
+export function imageJobHasVisibleResult(jobId: string | null | undefined, messages: Message[]) {
+  const normalizedJobId = String(jobId ?? "").trim();
+  if (!normalizedJobId) return false;
+  return messages.some((message) => (
+    message.role === "assistant"
+    && Boolean(message.imageId && message.imageUrl)
+    && String(message.metadata?.jobId ?? "").trim() === normalizedJobId
+  ));
+}
+
+type ResolveActiveImageRequestCountOptions = {
+  activeBranchId: string;
+  activeClientRequestId: string | null;
+  pendingUserMessage: Message | null;
+  runningImageJobs: ImageJob[];
+  serverMessages: Message[];
+};
+
+function messageImageCount(message: Message) {
+  return Math.max(0, Math.trunc(Number(message.metadata?.n)) || 0);
+}
+
+export function resolveActiveImageRequestCount({
+  activeBranchId,
+  activeClientRequestId,
+  pendingUserMessage,
+  runningImageJobs,
+  serverMessages
+}: ResolveActiveImageRequestCountOptions) {
+  const pendingImageCount = pendingUserMessage && messageChatBranchId(pendingUserMessage) === activeBranchId
+    ? messageImageCount(pendingUserMessage)
+    : 0;
+  const normalizedClientRequestId = String(activeClientRequestId ?? "").trim();
+  const requestImageCount = normalizedClientRequestId
+    ? serverMessages.reduce((count, message) => {
+        if (
+          message.role !== "user"
+          || messageChatBranchId(message) !== activeBranchId
+          || String(message.metadata?.clientRequestId ?? "").trim() !== normalizedClientRequestId
+        ) return count;
+        return Math.max(count, messageImageCount(message));
+      }, 0)
+    : 0;
+  const visibleRunningJobIds = new Set(
+    runningImageJobs
+      .filter((job) => (job.branchId?.trim() || MAIN_CHAT_BRANCH_ID) === activeBranchId)
+      .map((job) => job.id)
+  );
+  const runningImageCount = visibleRunningJobIds.size > 0
+    ? serverMessages.reduce((count, message) => {
+        if (message.role !== "user" || !visibleRunningJobIds.has(String(message.metadata?.jobId ?? "").trim())) return count;
+        return Math.max(count, messageImageCount(message));
+      }, 0)
+    : 0;
+  return Math.max(pendingImageCount, requestImageCount, runningImageCount);
+}
+
 export function useChatViewState({
   currentScopeBusy,
   currentScopeSubmitting,
   currentSubmitScope,
   activeBranchId,
+  activeClientRequestId,
   pendingMode,
   pendingSubmitScope,
   pendingUserMessage,
@@ -37,14 +96,22 @@ export function useChatViewState({
     [serverMessages, visiblePendingUserMessage]
   );
   const visibleRunningImageJobs = runningImageJobs.filter((job) => (job.branchId?.trim() || MAIN_CHAT_BRANCH_ID) === activeBranchId);
+  const visibleRunningImageJob = visibleRunningImageJobs[0] ?? null;
+  const activeImageRequestCount = resolveActiveImageRequestCount({
+    activeBranchId,
+    activeClientRequestId,
+    pendingUserMessage: pendingMatchesCurrentView && pendingMatchesActiveBranch ? pendingUserMessage : null,
+    runningImageJobs: visibleRunningImageJobs,
+    serverMessages
+  });
+  const multiImageLoading = activeImageRequestCount > 1;
+  const singleImageResultVisible = !multiImageLoading && imageJobHasVisibleResult(visibleRunningImageJob?.id, serverMessages);
   const visibleLoadingMode: SubmitRequest["mode"] | null =
-    pendingMatchesCurrentView && pendingMatchesActiveBranch && currentScopeSubmitting
+    pendingMatchesCurrentView && pendingMatchesActiveBranch && currentScopeSubmitting && !singleImageResultVisible
       ? pendingMode
-      : visibleRunningImageJobs[0]?.type === "edit"
-        ? "edit"
-        : visibleRunningImageJobs[0]
-          ? "generation"
-          : null;
+      : visibleRunningImageJob && !singleImageResultVisible
+        ? visibleRunningImageJob.type === "edit" ? "edit" : "generation"
+        : null;
   const loadingTitle = visibleLoadingMode === "edit"
     ? t("chat.loading.editingImage")
     : visibleLoadingMode === "generation"
@@ -55,6 +122,7 @@ export function useChatViewState({
     currentViewSubmitting: currentScopeBusy,
     loadingTitle,
     messageList,
+    multiImageLoading,
     visibleLoadingMode,
     visiblePendingUserMessage
   };

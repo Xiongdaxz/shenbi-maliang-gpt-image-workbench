@@ -192,6 +192,7 @@ export type LanguageModelUsageKey =
   | "prompt.optimize"
   | "template.optimize"
   | "template.translate"
+  | "image.prompt_plan"
   | "image.edit_suggestions"
   | "title.chat"
   | "title.case"
@@ -378,6 +379,7 @@ export type ProxyConfig = {
 export type ImageGenerationMode = {
   mode: "auto" | "cpa" | "chatgpt_web" | "api";
   resultRetryCount: number | null;
+  multiImageConcurrency: number;
   updatedAt: string;
 };
 

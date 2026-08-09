@@ -59,17 +59,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     summaryKey: "help.article.createFirstImage.summary",
     keywordsKey: "help.article.createFirstImage.keywords",
     bodyKey: "help.article.createFirstImage.body",
-    action: { to: "/", labelKey: "help.action.goCreate" },
-    visual: {
-      src: "/image/help/workbench-create.png",
-      altKey: "help.visual.workbench.alt",
-      captionKey: "help.visual.workbench.caption",
-      markers: [
-        { x: 34, y: 83, labelKey: "help.visual.workbench.prompt" },
-        { x: 48, y: 92, labelKey: "help.visual.workbench.parameters" },
-        { x: 90, y: 92, labelKey: "help.visual.workbench.send" }
-      ]
-    }
+    action: { to: "/", labelKey: "help.action.goCreate" }
   },
   {
     id: "add-reference-image",
@@ -78,17 +68,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     summaryKey: "help.article.addReferenceImage.summary",
     keywordsKey: "help.article.addReferenceImage.keywords",
     bodyKey: "help.article.addReferenceImage.body",
-    action: { to: "/", labelKey: "help.action.goCreate" },
-    visual: {
-      src: "/image/help/workbench-create.png",
-      altKey: "help.visual.workbench.alt",
-      captionKey: "help.visual.workbench.caption",
-      markers: [
-        { x: 14.5, y: 92, labelKey: "help.visual.workbench.materials" },
-        { x: 34, y: 83, labelKey: "help.visual.workbench.prompt" },
-        { x: 90, y: 92, labelKey: "help.visual.workbench.send" }
-      ]
-    }
+    action: { to: "/", labelKey: "help.action.goCreate" }
   },
   {
     id: "refine-existing-result",
@@ -97,17 +77,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     summaryKey: "help.article.refineExistingResult.summary",
     keywordsKey: "help.article.refineExistingResult.keywords",
     bodyKey: "help.article.refineExistingResult.body",
-    action: { to: "/images", labelKey: "help.action.goImages" },
-    visual: {
-      src: "/image/help/image-editor.png",
-      altKey: "help.visual.editor.alt",
-      captionKey: "help.visual.editor.caption",
-      markers: [
-        { x: 8.5, y: 54, labelKey: "help.visual.editor.history" },
-        { x: 77, y: 48, labelKey: "help.visual.editor.preview" },
-        { x: 57, y: 94, labelKey: "help.visual.editor.describe" }
-      ]
-    }
+    action: { to: "/images", labelKey: "help.action.goImages" }
   },
   {
     id: "shortcuts-and-efficiency",
@@ -142,17 +112,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     summaryKey: "help.article.maskEdit.summary",
     keywordsKey: "help.article.maskEdit.keywords",
     bodyKey: "help.article.maskEdit.body",
-    action: { to: "/images", labelKey: "help.action.goImages" },
-    visual: {
-      src: "/image/help/mask-editor.png",
-      altKey: "help.visual.mask.alt",
-      captionKey: "help.visual.mask.caption",
-      markers: [
-        { x: 79, y: 4.5, labelKey: "help.visual.mask.toolbar" },
-        { x: 52, y: 47, labelKey: "help.visual.mask.area" },
-        { x: 57, y: 93, labelKey: "help.visual.mask.describe" }
-      ]
-    }
+    action: { to: "/images", labelKey: "help.action.goImages" }
   },
   {
     id: "adjust-generation-options",
@@ -161,18 +121,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     summaryKey: "help.article.adjustGenerationOptions.summary",
     keywordsKey: "help.article.adjustGenerationOptions.keywords",
     bodyKey: "help.article.adjustGenerationOptions.body",
-    action: { to: "/", labelKey: "help.action.goCreate" },
-    visual: {
-      src: "/image/help/workbench-create.png",
-      altKey: "help.visual.workbench.alt",
-      captionKey: "help.visual.workbench.caption",
-      markers: [
-        { x: 21, y: 92, labelKey: "help.visual.workbench.size" },
-        { x: 33, y: 92, labelKey: "help.visual.workbench.quality" },
-        { x: 43, y: 92, labelKey: "help.visual.workbench.count" },
-        { x: 55, y: 92, labelKey: "help.visual.workbench.color" }
-      ]
-    }
+    action: { to: "/", labelKey: "help.action.goCreate" }
   },
   {
     id: "edit-result-not-expected",

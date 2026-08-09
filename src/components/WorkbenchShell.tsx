@@ -1414,7 +1414,10 @@ export function WorkbenchShell({ user }: { user: User }) {
     if (!updatedJobCache) {
       queryClient.invalidateQueries({ queryKey: ["session-image-jobs", sessionId] });
     }
-    if (payload.status !== "running") {
+    if (payload.status === "running" && payload.completedImageCount !== undefined) {
+      queryClient.invalidateQueries({ queryKey: ["messages", sessionId] }, { cancelRefetch: false });
+      queryClient.invalidateQueries({ queryKey: ["images"] }, { cancelRefetch: false });
+    } else if (payload.status !== "running") {
       queryClient.invalidateQueries({ queryKey: ["messages", sessionId] });
       queryClient.invalidateQueries({ queryKey: ["images"] });
       queryClient.invalidateQueries({ queryKey: ["cases"] });

@@ -1,13 +1,15 @@
 {
   "name": "gpt-image-workbench",
   "private": true,
-  "version": "0.1.63",
+  "version": "0.1.64",
   "license": "MIT",
   "type": "module",
   "scripts": {
     "dev:web": "vite --host 0.0.0.0",
     "dev:api": "bun --watch server/index.ts",
     "build": "tsc -b && vite build",
+    "test": "bun test",
+    "test:chatgpt-web-bridge": "python -B -m unittest discover -s scripts -p test_chatgpt_web_bridge.py",
     "package:maliang-plugin": "bun scripts/package-maliang-codex-plugin.ts",
     "smoke:mcp": "bun scripts/smoke-external-mcp.ts",
     "start": "bun server/index.ts",

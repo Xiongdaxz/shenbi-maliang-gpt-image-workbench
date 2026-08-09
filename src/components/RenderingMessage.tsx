@@ -34,7 +34,8 @@ const RENDERING_CANVAS_MAX_DPR = 1.5;
 const RENDERING_DOT_LAYER_INSET = 0.03;
 const RENDERING_DOT_LAYER_SCALE = 1.14;
 const RENDERING_DOT_FILL_SCALE = 0.82;
-const RENDERING_DOT_IDLE_SCALE = 0.86;
+const RENDERING_DOT_IDLE_SCALE = 0.64;
+const RENDERING_DOT_FOCUS_SCALE_LIFT = 1.14;
 const RENDERING_DOT_CENTER = (RENDERING_DOT_COUNT - 1) / 2;
 const RENDERING_DOTS = Array.from({ length: RENDERING_DOT_COUNT * RENDERING_DOT_COUNT }, (_, index) => {
   const row = Math.floor(index / RENDERING_DOT_COUNT);
@@ -188,7 +189,7 @@ const getDotVisual = (dot: (typeof RENDERING_DOTS)[number], focusState: Renderin
   const motionEnergy = addWithOverlapLift(waveA.speed * waveA.mask, waveB.speed * waveB.mask);
   const mergeMask = smoothStep((Math.min(waveA.mask, waveB.mask) - 0.18) / 0.82);
   const mergeCore = smoothStep((Math.min(waveA.center, waveB.center) - 0.04) / 0.96);
-  const scale = RENDERING_DOT_IDLE_SCALE + mergeMask * 0.92 + mergeCore * 0.36;
+  const scale = RENDERING_DOT_IDLE_SCALE + mergeMask * RENDERING_DOT_FOCUS_SCALE_LIFT + mergeCore * 0.36;
   const activeOpacity = 0.44 + focusCircle * 0.08 + Math.min(1.6, centerBulge) * 0.14 + motionEnergy * 0.1;
   const opacity = Math.min(0.96, activeOpacity * Math.pow(focusCircle, 1.22));
   const tone = Math.round(188 - Math.min(1, focusEnergy * 0.48 + motionEnergy * 0.42 + circularRim * 0.1) * 38);
@@ -241,7 +242,13 @@ const drawRenderingDots = (
   }
 };
 
-export const RenderingMessage = memo(function RenderingMessage({ mode }: { mode: RenderingMode }) {
+export const RenderingMessage = memo(function RenderingMessage({
+  mode,
+  imageGroupLayout = false
+}: {
+  mode: RenderingMode;
+  imageGroupLayout?: boolean;
+}) {
   const { t } = useI18n();
   const titles = useMemo(
     () => (mode === "edit" ? EDIT_LOADING_TITLE_KEYS : GENERATION_LOADING_TITLE_KEYS).map((key) => t(key)),
@@ -519,16 +526,28 @@ export const RenderingMessage = memo(function RenderingMessage({ mode }: { mode:
     };
   }, [mode]);
 
-  return (
-    <article className="message assistant-message rendering-message" aria-live="polite">
-      <span key={`${mode}-${titleIndex}`} className={cx("rendering-title", titleSettled && "settled")}>
+  const title = (
+    <span
+      key={`${mode}-${titleIndex}`}
+      className={cx("rendering-title", titleSettled && "settled")}
+      aria-live={imageGroupLayout ? "polite" : undefined}
+    >
         {titles[titleIndex] ?? titles[0]}
-      </span>
-      <div ref={cardRef} className={`rendering-card rendering-card-variant-${variant}`}>
+    </span>
+  );
+  const card = (
+    <div ref={cardRef} className={`rendering-card rendering-card-variant-${variant}`}>
         <div className="rendering-dot-field" aria-hidden="true">
           <canvas ref={canvasRef} className="rendering-dot-canvas" />
         </div>
-      </div>
+    </div>
+  );
+
+  if (imageGroupLayout) return <>{title}{card}</>;
+  return (
+    <article className="message assistant-message rendering-message" aria-live="polite">
+      {title}
+      {card}
     </article>
   );
 });

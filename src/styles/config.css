@@ -4378,41 +4378,75 @@ td.compact-actions a:last-child {
 
 .mode-request-policy {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 220px) auto;
-  gap: 12px;
-  align-items: end;
+  gap: 14px;
   margin-bottom: 14px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #fff;
+  border: 1px solid var(--app-border, #e5e7eb);
+  border-radius: 12px;
+  background: var(--app-surface-soft, #f9fafb);
+  padding: 16px;
+}
+
+.mode-request-policy-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+}
+
+.mode-request-policy-head > strong {
+  color: var(--app-text, #111827);
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.mode-request-policy-save {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 8px 14px;
+}
+
+.mode-request-policy-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.mode-request-policy-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(104px, 132px);
+  gap: 18px;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid var(--app-border, #e5e7eb);
+  border-radius: 10px;
+  background: var(--app-card-bg, #fff);
   padding: 14px;
 }
 
-.mode-request-policy > div {
+.mode-request-policy-copy {
   display: grid;
   gap: 5px;
   min-width: 0;
 }
 
-.mode-request-policy strong {
-  color: #111827;
+.mode-request-policy-copy strong {
+  color: var(--app-text, #111827);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
-.mode-request-policy small {
-  color: #6b7280;
+.mode-request-policy-copy small {
+  color: var(--app-muted, #6b7280);
+  font-size: 12px;
+  font-weight: 400;
   line-height: 1.55;
 }
 
-.mode-request-policy label {
-  display: grid;
-  gap: 7px;
-  color: #374151;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.mode-request-policy input {
+.mode-request-policy-field input {
   width: 100%;
+  min-width: 0;
+  min-height: 40px;
 }
 
 @media (max-width: 1180px) {
@@ -4422,9 +4456,34 @@ td.compact-actions a:last-child {
 }
 
 @media (max-width: 720px) {
-  .mode-request-policy,
+  .mode-request-policy-fields,
   .mode-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mode-request-policy-field {
+    grid-template-columns: minmax(0, 1fr) minmax(104px, 140px);
+  }
+}
+
+@media (max-width: 520px) {
+  .mode-request-policy {
+    padding: 14px;
+  }
+
+  .mode-request-policy-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .mode-request-policy-save {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .mode-request-policy-field {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
   }
 }
 

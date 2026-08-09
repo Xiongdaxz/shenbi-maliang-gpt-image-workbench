@@ -1,5 +1,10 @@
 import { configDb, getOne } from "./db";
-import { DEFAULT_IMAGE_RESULT_RETRY_COUNT, requestImageResultRetryCount } from "./constants";
+import {
+  DEFAULT_IMAGE_RESULT_RETRY_COUNT,
+  DEFAULT_MULTI_IMAGE_CONCURRENCY,
+  requestImageResultRetryCount,
+  requestMultiImageConcurrency
+} from "./constants";
 import { globalSwitchEnabled } from "./globalSwitches";
 import type { DebugSettings, ImageGenerationSettings, ProviderRow, ProxySettings } from "./types";
 import { inferChannelFromType, maskSecret, normalizeImageGenerationMode, normalizeProviderChannel } from "./utils";
@@ -43,21 +48,23 @@ export function cpaAccount(includeSecret = false) {
 }
 
 export function imageGenerationSettings(): ImageGenerationSettings {
-  const row = getOne<{ mode: string; result_retry_count: number | null; updated_at: string }>(
+  const row = getOne<{ mode: string; result_retry_count: number | null; multi_image_concurrency: number | null; updated_at: string }>(
     configDb,
-    "select mode, result_retry_count, updated_at from image_generation_settings where id = ? limit 1",
+    "select mode, result_retry_count, multi_image_concurrency, updated_at from image_generation_settings where id = ? limit 1",
     "default"
   );
   if (!row) {
     return {
       mode: "auto",
       resultRetryCount: DEFAULT_IMAGE_RESULT_RETRY_COUNT,
+      multiImageConcurrency: DEFAULT_MULTI_IMAGE_CONCURRENCY,
       updatedAt: ""
     };
   }
   return {
     mode: normalizeImageGenerationMode(row.mode),
     resultRetryCount: requestImageResultRetryCount(row.result_retry_count),
+    multiImageConcurrency: requestMultiImageConcurrency(row.multi_image_concurrency),
     updatedAt: row.updated_at ?? ""
   };
 }

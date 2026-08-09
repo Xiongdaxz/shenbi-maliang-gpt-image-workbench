@@ -2,6 +2,32 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.64 - 2026-08-09
+
+### 中文
+
+- 图片编辑新增评论模式，可在图片具体位置添加、编辑、拖动和删除编号意见，再一次性发送全部修改要求；底部还可补充可选的整体说明。
+- 原“选择”模式升级为“移除”：涂抹需要删除的区域后可从右上角直接发送，调整画笔大小时会在最后操作位置实时预览范围。
+- 评论坐标、移除遮罩和编辑模式会在各图片渠道间保持一致校验；ChatGPT 官网评论编辑也会复用原图和会话上下文，减少局部修改受到额外提示词干扰的问题。
+- 多图生成会识别按图片分组的提示词并拆分为独立请求，可按后台设置并发执行；结果始终按原顺序归位，重试或服务恢复时只补齐缺失图片。
+- 多图任务会在对话中预留完整结果位置并持续更新进度；即使任务最终失败，已经生成的图片仍可查看和交付，不会因部分失败全部丢失。
+- 较长对话新增消息导航，可快速定位不同轮次；切换分支、创建新会话和首张结果到达时的加载状态也更稳定，减少重复消息或残留等待提示。
+- 素材库与灵感空间的筛选切换新增平滑选中效果，并在请求新结果时保留当前内容，减少计数、标签和图片列表闪烁。
+- 后台新增多图任务最大并发数和多图提示词规划模型设置；聊天图片质量改为系统自动选择，减少生成前的重复配置。
+- AI 客户端可从失败的多图任务中接收已完成的部分结果，插件连接详情也会用实际刷新时间更清楚地显示授权刷新状态。
+
+### English
+
+- Image editing now includes a comment mode for placing, editing, dragging, and deleting numbered instructions at precise image locations before submitting them together, with an optional overall note.
+- The former Select mode is now Remove: paint the area to delete and submit directly from the top right, with a live size preview at the last brush position while adjusting the slider.
+- Comment coordinates, removal masks, and edit modes are validated consistently across image channels; ChatGPT Web comment edits also reuse the original image and conversation context, reducing interference from extra prompt text during localized edits.
+- Multi-image generation now recognizes prompts grouped by image and splits them into independent requests that can run with admin-configured concurrency; results retain their original order, and retries or service recovery fill only missing images.
+- Multi-image tasks reserve every requested result position in the conversation and update progress continuously; images that finished successfully remain viewable and deliverable even if the overall task later fails.
+- Longer conversations now include message navigation for quickly locating different turns; loading state is also more stable when switching branches, creating sessions, or receiving the first result, reducing duplicate messages and lingering wait indicators.
+- Asset and inspiration filters now use a smoother active-selection transition and keep current results visible while requesting new ones, reducing flicker in counts, tags, and image lists.
+- Admin settings now include maximum concurrency for multi-image tasks and a model assignment for multi-image prompt planning; chat image quality is selected automatically to reduce repetitive setup before generation.
+- AI clients can receive completed partial results from failed multi-image tasks, while plugin connection details use the actual refresh time to communicate authorization refresh status more clearly.
+
 ## v0.1.63 - 2026-08-05
 
 ### 中文

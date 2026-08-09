@@ -174,7 +174,7 @@ export function AddAssetFromImageModal({
 
   return (
     <ModalPortal>
-      <div className="modal-backdrop">
+      <div className="modal-backdrop modal-backdrop-preview-child">
         <section className="case-modal compact-modal asset-from-image-modal">
           <header>
             <h3>{t("pages.cases.addToAssets")}</h3>

@@ -7,6 +7,7 @@ export const sharingOverrides: Record<SharingLocale, Messages> = {
   "ja-JP": {
     "settings.data.sharedLinks": "共有リンク",
     "shareDialog.share": "共有",
+    "shareDialog.trigger": "チャットを共有",
     "shareDialog.title": "会話を共有",
     "shareDialog.description": "リンクを受け取った人は共有内容を閲覧し、生成結果をダウンロードできます。",
     "shareDialog.currentBranch": "現在のブランチを共有",
@@ -59,6 +60,7 @@ export const sharingOverrides: Record<SharingLocale, Messages> = {
   "ko-KR": {
     "settings.data.sharedLinks": "공유 링크",
     "shareDialog.share": "공유",
+    "shareDialog.trigger": "채팅 공유",
     "shareDialog.title": "대화 공유",
     "shareDialog.description": "링크를 받은 사람은 공유 내용을 보고 생성 결과를 다운로드할 수 있습니다.",
     "shareDialog.currentBranch": "현재 분기 공유",
@@ -111,6 +113,7 @@ export const sharingOverrides: Record<SharingLocale, Messages> = {
   "es-ES": {
     "settings.data.sharedLinks": "Enlaces compartidos",
     "shareDialog.share": "Compartir",
+    "shareDialog.trigger": "Compartir chat",
     "shareDialog.title": "Compartir conversación",
     "shareDialog.description": "Quien tenga el enlace podrá ver el contenido compartido y descargar los resultados generados.",
     "shareDialog.currentBranch": "Compartir la rama actual",
@@ -163,6 +166,7 @@ export const sharingOverrides: Record<SharingLocale, Messages> = {
   "fr-FR": {
     "settings.data.sharedLinks": "Liens partagés",
     "shareDialog.share": "Partager",
+    "shareDialog.trigger": "Partager le chat",
     "shareDialog.title": "Partager la conversation",
     "shareDialog.description": "Toute personne ayant le lien peut voir le contenu partagé et télécharger les résultats générés.",
     "shareDialog.currentBranch": "Partager la branche actuelle",
@@ -215,6 +219,7 @@ export const sharingOverrides: Record<SharingLocale, Messages> = {
   "de-DE": {
     "settings.data.sharedLinks": "Freigabelinks",
     "shareDialog.share": "Teilen",
+    "shareDialog.trigger": "Chat teilen",
     "shareDialog.title": "Unterhaltung teilen",
     "shareDialog.description": "Jeder mit dem Link kann die geteilten Inhalte ansehen und die erzeugten Ergebnisse herunterladen.",
     "shareDialog.currentBranch": "Aktuellen Zweig teilen",
@@ -267,6 +272,7 @@ export const sharingOverrides: Record<SharingLocale, Messages> = {
   "pt-BR": {
     "settings.data.sharedLinks": "Links compartilhados",
     "shareDialog.share": "Compartilhar",
+    "shareDialog.trigger": "Compartilhar conversa",
     "shareDialog.title": "Compartilhar conversa",
     "shareDialog.description": "Quem tiver o link poderá ver o conteúdo compartilhado e baixar os resultados gerados.",
     "shareDialog.currentBranch": "Compartilhar a ramificação atual",
@@ -319,6 +325,7 @@ export const sharingOverrides: Record<SharingLocale, Messages> = {
   "ru-RU": {
     "settings.data.sharedLinks": "Ссылки общего доступа",
     "shareDialog.share": "Поделиться",
+    "shareDialog.trigger": "Поделиться чатом",
     "shareDialog.title": "Поделиться диалогом",
     "shareDialog.description": "Любой, у кого есть ссылка, сможет просмотреть общий контент и скачать созданные результаты.",
     "shareDialog.currentBranch": "Поделиться текущей веткой",
@@ -371,6 +378,7 @@ export const sharingOverrides: Record<SharingLocale, Messages> = {
   "fa-IR": {
     "settings.data.sharedLinks": "پیوندهای اشتراک‌گذاری",
     "shareDialog.share": "اشتراک‌گذاری",
+    "shareDialog.trigger": "اشتراک‌گذاری گفتگو",
     "shareDialog.title": "اشتراک‌گذاری گفتگو",
     "shareDialog.description": "هرکس پیوند را داشته باشد می‌تواند محتوای اشتراک‌گذاری‌شده را ببیند و نتیجه‌های تولیدشده را دانلود کند.",
     "shareDialog.currentBranch": "اشتراک‌گذاری شاخه فعلی",

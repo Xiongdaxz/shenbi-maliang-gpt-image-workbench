@@ -51,6 +51,7 @@ type ImagePreviewModalProps<TItem extends ImagePreviewItem> = {
   showItemThumbnails?: boolean;
   suppressStableScrollbarGutter?: boolean;
   transparencyStatus?: ImageTransparencyStatus;
+  unifiedToolbarControls?: boolean;
   navigationItemCount?: number;
   canNavigateNext?: boolean;
   canNavigatePrevious?: boolean;
@@ -109,6 +110,7 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
   showItemThumbnails = false,
   suppressStableScrollbarGutter = false,
   transparencyStatus,
+  unifiedToolbarControls = false,
   navigationItemCount,
   canNavigateNext,
   canNavigatePrevious,
@@ -256,6 +258,10 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
             : buildPreviewStartPan(previewDefaultDisplaySize.height, previewStageSize.height, previewVisibleStageSize.height)
         }
       : { x: 0, y: 0 };
+  const previewResetActive = Boolean(
+    previewImageSource !== defaultPreviewImageSource ||
+      Math.abs(previewZoom - previewDefaultZoom) > 0.001
+  );
   const canPreviewPan = Boolean(
     previewDisplaySize &&
       previewVisibleStageSize &&
@@ -779,6 +785,8 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
           referenceImages={referenceImages}
           sizeLabel={previewSizeLabel}
           transparencyLabel={transparencyLabel}
+          previewResetActive={previewResetActive}
+          unifiedToolbarControls={unifiedToolbarControls}
           zoomLabel={previewZoomLabel}
           zoomMin={PREVIEW_MIN_ZOOM * 100}
           zoomMax={PREVIEW_MAX_ZOOM * 100}

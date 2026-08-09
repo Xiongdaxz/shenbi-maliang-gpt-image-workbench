@@ -150,6 +150,7 @@ export type ImageRow = {
   user_id: string;
   session_id: string | null;
   job_id: string | null;
+  job_image_index: number | null;
   path: string;
   prompt: string;
   suggested_case_title: string;
@@ -338,6 +339,7 @@ export type ProxySettings = {
 export type ImageGenerationSettings = {
   mode: "auto" | "cpa" | "chatgpt_web" | "api";
   resultRetryCount: number | null;
+  multiImageConcurrency: number;
   updatedAt: string;
 };
 

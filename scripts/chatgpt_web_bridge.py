@@ -26,6 +26,9 @@ DEFAULT_USER_AGENT = (
 )
 CLIENT_VERSION = "prod-be885abbfcfe7b1f511e88b3003d9ee44757fbad"
 CLIENT_BUILD_NUMBER = "5955942"
+DEFAULT_CONVERSATION_MODEL = "gpt-5-6-thinking"
+DEFAULT_THINKING_EFFORT = "max"
+LOCAL_FUNCTION_NAMES = ["local.continue_in_work"]
 CORES = [8, 16, 24, 32]
 DOCUMENT_KEYS = ["_reactListeningo743lnnpvdg", "location"]
 NAVIGATOR_KEYS = [
@@ -37,6 +40,26 @@ NAVIGATOR_KEYS = [
     "pdfViewerEnabled-true",
 ]
 WINDOW_KEYS = ["window", "self", "document", "location", "navigator", "performance", "crypto", "fetch"]
+REMOVE_SELECTED_AREA_PROMPT = "移除选定区域"
+MASK_SCOPE_FALLBACK_INSTRUCTION = (
+    "Apply the edit only within the selected mask area and preserve every unselected part of the source image unchanged. "
+    "Do not render the mask, its color, border, or brush marks as image content."
+)
+MASK_ATTACHMENT_INSTRUCTION = (
+    "The final attached image is the edit mask for the first attached source image. "
+    "Only the transparent area of that mask is selected for editing; do not treat the mask as a reference image or visible content."
+)
+
+
+def ensure_mask_scope_prompt(prompt: str, mask_is_attachment: bool = False) -> str:
+    normalized = prompt.strip()
+    lowered = normalized.lower()
+    instructions: list[str] = []
+    if "未选区域保持原图不变" not in normalized and "preserve every unselected part of the source image unchanged" not in lowered:
+        instructions.append(MASK_SCOPE_FALLBACK_INSTRUCTION)
+    if mask_is_attachment and "final attached image is the edit mask" not in lowered:
+        instructions.append(MASK_ATTACHMENT_INSTRUCTION)
+    return "\n\n".join([normalized, *instructions]).strip()
 
 
 class BridgeError(Exception):
@@ -886,8 +909,9 @@ class ChatGptWebBridge:
 
     def target_headers(self, path: str, extra: dict[str, str] | None = None) -> dict[str, str]:
         headers = dict(self.session.headers)
-        headers["X-OpenAI-Target-Path"] = path
-        headers["X-OpenAI-Target-Route"] = path
+        if self.origin.rstrip("/") != BASE_ORIGIN:
+            headers["X-OpenAI-Target-Path"] = path
+            headers["X-OpenAI-Target-Route"] = path
         if extra:
             headers.update(extra)
         return headers
@@ -954,7 +978,7 @@ class ChatGptWebBridge:
             so_token=str(data.get("so_token") or ""),
         )
 
-    def image_headers(self, path: str, requirements: Requirements, conduit_token: str = "", accept: str = "*/*") -> dict[str, str]:
+    def image_headers(self, path: str, requirements: Requirements, accept: str = "*/*") -> dict[str, str]:
         headers = {
             "Content-Type": "application/json",
             "Accept": accept,
@@ -966,8 +990,6 @@ class ChatGptWebBridge:
             headers["OpenAI-Sentinel-Turnstile-Token"] = requirements.turnstile_token
         if requirements.so_token:
             headers["OpenAI-Sentinel-SO-Token"] = requirements.so_token
-        if conduit_token:
-            headers["X-Conduit-Token"] = conduit_token
         if accept == "text/event-stream":
             headers["X-Oai-Turn-Trace-Id"] = str(uuid.uuid4())
         return self.target_headers(path, headers)
@@ -975,56 +997,63 @@ class ChatGptWebBridge:
     def image_model_slug(self, model: str) -> str:
         model = str(model or "").strip()
         if model == "gpt-image-2":
-            return "gpt-5-3"
+            return DEFAULT_CONVERSATION_MODEL
         if model == "codex-gpt-image-2":
             return model
         return model or "auto"
 
+    def thinking_effort(self, model: str) -> str:
+        configured = str(self.request.get("thinkingEffort") or "").strip()
+        if configured:
+            return configured
+        return DEFAULT_THINKING_EFFORT if self.image_model_slug(model).endswith("-thinking") else ""
+
     def prepare_conversation(
         self,
-        prompt: str,
         requirements: Requirements,
         model: str,
         conversation_id: str = "",
         parent_message_id: str = "",
-        message_id: str = "",
         variant_purpose: str = "",
     ) -> str:
         path = "/backend-api/f/conversation/prepare"
         parent_message_id = parent_message_id or str(uuid.uuid4())
-        message_id = message_id or str(uuid.uuid4())
         payload = {
             "action": "next",
-            "fork_from_shared_post": False,
             "parent_message_id": parent_message_id,
             "model": self.image_model_slug(model),
-            "client_prepare_state": "success",
+            "client_prepare_state": "none",
+            "client_prepare_dispatch": "debounced",
+            "client_prepare_source": "composer_editor_state",
             "timezone_offset_min": -480,
             "timezone": "Asia/Shanghai",
             "conversation_mode": {"kind": "primary_assistant"},
             "system_hints": ["picture_v2"],
-            "partial_query": {
-                "id": message_id,
-                "author": {"role": "user"},
-                "content": {"content_type": "text", "parts": [prompt]},
-            },
             "supports_buffering": True,
             "supported_encodings": ["v1"],
-            "client_contextual_info": {"app_name": "chatgpt.com"},
+            "local_function_names": LOCAL_FUNCTION_NAMES,
+            "client_contextual_info": {
+                "app_name": "chatgpt.com",
+                "has_web_push_capabilities": True,
+                "web_push_notification_permission": "granted",
+            },
         }
+        thinking_effort = self.thinking_effort(model)
+        if thinking_effort:
+            payload["thinking_effort"] = thinking_effort
         if conversation_id:
             payload["conversation_id"] = conversation_id
         if variant_purpose:
             payload["variant_purpose"] = variant_purpose
-        response = self.request_with_retry(
+        response = self.standard_request_with_retry(
             "post",
             self.origin + path,
             headers=self.image_headers(path, requirements),
-            json=payload,
+            data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
             timeout=60,
         )
         ensure_ok(response, path)
-        return str(response.json().get("conduit_token") or "")
+        return parent_message_id
 
     def process_upload_stream(self, file_id: str, use_case: str, file_name: str) -> None:
         path = "/backend-api/files/process_upload_stream"
@@ -1121,6 +1150,12 @@ class ChatGptWebBridge:
     def prompt(self) -> str:
         payload = self.request.get("payload") or {}
         prompt = str(payload.get("prompt") or "").strip()
+        if payload.get("editIntent") == "remove":
+            return prompt or REMOVE_SELECTED_AREA_PROMPT
+        if prompt == REMOVE_SELECTED_AREA_PROMPT:
+            return prompt
+        if payload.get("editIntent") == "annotation":
+            return prompt
         size = str(payload.get("size") or "")
         quality = str(payload.get("quality") or "")
         if size and size not in ("auto", "1024x1024"):
@@ -1184,12 +1219,24 @@ class ChatGptWebBridge:
             result.append(mask)
         return result
 
+    def request_prompt_and_images(self, true_inpaint: bool) -> tuple[str, list[str]]:
+        payload = self.request.get("payload") or {}
+        prompt = self.prompt()
+        is_edit = self.request.get("operation") == "edit"
+        has_mask = isinstance(payload, dict) and bool(str(payload.get("mask") or "").strip())
+        if is_edit and has_mask:
+            prompt = ensure_mask_scope_prompt(prompt, mask_is_attachment=not true_inpaint)
+        if true_inpaint:
+            return prompt, []
+        if is_edit:
+            return prompt, self.input_images(include_mask=True)
+        return prompt, []
+
     def conversation_payload(
         self,
         prompt: str,
         model: str,
         uploads: list[dict[str, Any]],
-        conduit_token: str,
         message_id: str,
         conversation_id: str = "",
         parent_message_id: str = "",
@@ -1247,6 +1294,7 @@ class ChatGptWebBridge:
             "system_hints": ["picture_v2"],
             "supports_buffering": True,
             "supported_encodings": ["v1"],
+            "local_function_names": LOCAL_FUNCTION_NAMES,
             "client_contextual_info": {
                 "is_dark_mode": False,
                 "time_since_loaded": 1200,
@@ -1260,6 +1308,9 @@ class ChatGptWebBridge:
             "paragen_cot_summary_display_override": "allow",
             "force_parallel_switch": "auto",
         }
+        thinking_effort = self.thinking_effort(model)
+        if thinking_effort:
+            body["thinking_effort"] = thinking_effort
         if conversation_id:
             body["conversation_id"] = conversation_id
         if variant_purpose:
@@ -1344,15 +1395,11 @@ class ChatGptWebBridge:
         variant_purpose: str = "",
     ) -> dict[str, Any]:
         operation: dict[str, Any] = {
-            "type": "edit",
+            "type": "transformation",
             "original_file_id": source["original_file_id"],
         }
         if source.get("original_gen_id"):
             operation["original_gen_id"] = source["original_gen_id"]
-        if source.get("conversation_id"):
-            operation["conversation_id"] = source["conversation_id"]
-        if source.get("parent_message_id"):
-            operation["parent_message_id"] = source["parent_message_id"]
         parent_message_id = parent_message_id or "client-created-root"
         body: dict[str, Any] = {
             "action": "next",
@@ -1379,6 +1426,7 @@ class ChatGptWebBridge:
             "system_hints": ["picture_v2"],
             "supports_buffering": True,
             "supported_encodings": ["v1"],
+            "local_function_names": LOCAL_FUNCTION_NAMES,
             "client_contextual_info": {
                 "is_dark_mode": False,
                 "time_since_loaded": 1200,
@@ -1388,10 +1436,15 @@ class ChatGptWebBridge:
                 "screen_height": 1440,
                 "screen_width": 2560,
                 "app_name": "chatgpt.com",
+                "has_web_push_capabilities": True,
+                "web_push_notification_permission": "granted",
             },
             "paragen_cot_summary_display_override": "allow",
             "force_parallel_switch": "auto",
         }
+        thinking_effort = self.thinking_effort(model)
+        if thinking_effort:
+            body["thinking_effort"] = thinking_effort
         if conversation_id:
             body["conversation_id"] = conversation_id
         if variant_purpose:
@@ -1459,7 +1512,6 @@ class ChatGptWebBridge:
         self,
         prompt: str,
         requirements: Requirements,
-        conduit_token: str,
         model: str,
         uploads: list[dict[str, Any]],
         conversation_id: str = "",
@@ -1469,20 +1521,20 @@ class ChatGptWebBridge:
     ) -> tuple[str, list[str], list[str], str]:
         path = "/backend-api/f/conversation"
         message_id = message_id or str(uuid.uuid4())
-        response = self.request_with_retry(
+        body = self.conversation_payload(
+            prompt,
+            model,
+            uploads,
+            message_id,
+            conversation_id,
+            parent_message_id,
+            variant_purpose,
+        )
+        response = self.standard_request_with_retry(
             "post",
             self.origin + path,
-            headers=self.image_headers(path, requirements, conduit_token, "text/event-stream"),
-            json=self.conversation_payload(
-                prompt,
-                model,
-                uploads,
-                conduit_token,
-                message_id,
-                conversation_id,
-                parent_message_id,
-                variant_purpose,
-            ),
+            headers=self.image_headers(path, requirements, "text/event-stream"),
+            data=json.dumps(body, separators=(",", ":")).encode("utf-8"),
             timeout=300,
             stream=True,
         )
@@ -1504,20 +1556,21 @@ class ChatGptWebBridge:
     ) -> tuple[str, list[str], list[str], str]:
         path = "/backend-api/conversation"
         message_id = message_id or str(uuid.uuid4())
-        response = self.request_with_retry(
+        body = self.inpaint_conversation_payload(
+            prompt,
+            model,
+            source,
+            mask_upload,
+            message_id,
+            conversation_id,
+            parent_message_id,
+            variant_purpose,
+        )
+        response = self.standard_request_with_retry(
             "post",
             self.origin + path,
-            headers=self.image_headers(path, requirements, "", "text/event-stream"),
-            json=self.inpaint_conversation_payload(
-                prompt,
-                model,
-                source,
-                mask_upload,
-                message_id,
-                conversation_id,
-                parent_message_id,
-                variant_purpose,
-            ),
+            headers=self.image_headers(path, requirements, "text/event-stream"),
+            data=json.dumps(body, separators=(",", ":")).encode("utf-8"),
             timeout=300,
             stream=True,
         )
@@ -1536,21 +1589,29 @@ class ChatGptWebBridge:
         message_id: str = "",
         variant_purpose: str = "",
     ) -> tuple[str, list[str], list[str], str]:
-        path = "/backend-api/conversation"
+        path = "/backend-api/f/conversation"
         message_id = message_id or str(uuid.uuid4())
-        response = self.request_with_retry(
+        parent_message_id = self.prepare_conversation(
+            requirements,
+            model,
+            conversation_id,
+            parent_message_id,
+            variant_purpose,
+        )
+        body = self.source_reference_conversation_payload(
+            prompt,
+            model,
+            source,
+            message_id,
+            conversation_id,
+            parent_message_id,
+            variant_purpose,
+        )
+        response = self.standard_request_with_retry(
             "post",
             self.origin + path,
-            headers=self.image_headers(path, requirements, "", "text/event-stream"),
-            json=self.source_reference_conversation_payload(
-                prompt,
-                model,
-                source,
-                message_id,
-                conversation_id,
-                parent_message_id,
-                variant_purpose,
-            ),
+            headers=self.image_headers(path, requirements, "text/event-stream"),
+            data=json.dumps(body, separators=(",", ":")).encode("utf-8"),
             timeout=300,
             stream=True,
         )
@@ -1880,21 +1941,10 @@ class ChatGptWebBridge:
         if not self.access_token:
             raise BridgeError("access_token is required")
         payload = self.request.get("payload") or {}
-        prompt = self.prompt()
         true_inpaint = self.can_use_true_inpaint()
         web_context = self.web_conversation_context()
-        if self.request.get("operation") == "edit" and payload.get("mask") and not true_inpaint:
-            prompt = (
-                prompt
-                + "\n\nThe last attached image is an edit mask. Apply changes only inside the transparent/selected mask area and preserve the rest of the source image."
-            )
-        model = str(payload.get("model") or self.request.get("model") or "gpt-image-2")
-        if true_inpaint:
-            images = []
-        elif self.request.get("operation") == "edit":
-            images = self.input_images(include_mask=True)
-        else:
-            images = []
+        prompt, images = self.request_prompt_and_images(true_inpaint)
+        model = str(self.request.get("model") or payload.get("model") or "gpt-image-2")
         uploads = [self.upload_image(image, f"image_{index}.png") for index, image in enumerate(images, start=1)]
         upload_file_ids = {str(item.get("file_id") or "") for item in uploads}
         self.bootstrap()
@@ -2095,7 +2145,7 @@ class ChatGptWebBridge:
                         "same_conversation" if source_conversation_id else "isolated"
                     )
                 try:
-                    endpoint = self.origin + "/backend-api/conversation"
+                    endpoint = self.origin + "/backend-api/f/conversation"
                     request_started_at = time.time() - 2
                     submitted_message_id = str(uuid.uuid4())
                     upload_file_ids.add(source.get("original_file_id", ""))
@@ -2150,23 +2200,20 @@ class ChatGptWebBridge:
                     f"chatgpt_web_official_{self.request.get('operation')}_conversation_"
                     f"{self.last_conversation_debug.get('conversation_placement') or 'isolated'}"
                 )
-                conduit_token = self.prepare_conversation(
-                    prompt,
+                prepared_parent_message_id = self.prepare_conversation(
                     requirements,
                     model,
                     conversation_id_hint,
                     parent_message_id_hint,
-                    submitted_message_id,
                     variant_purpose,
                 )
                 conversation_id, file_ids, sediment_ids, submitted_message_id = self.start_conversation(
                     prompt,
                     requirements,
-                    conduit_token,
                     model,
                     uploads,
                     conversation_id_hint,
-                    parent_message_id_hint,
+                    prepared_parent_message_id,
                     submitted_message_id,
                     variant_purpose,
                 )

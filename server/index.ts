@@ -11,6 +11,7 @@ import {
   IMAGE_JOB_RUNNING_TIMEOUT_MS,
   SESSION_MAX_AGE,
   requestImageResultRetryCount,
+  requestMultiImageConcurrency,
   requestImageSize
 } from "./constants";
 import { audit } from "./auditLog";
@@ -2002,20 +2003,26 @@ api.put("/config/image-mode", async (c) => {
   const mode = normalizeImageGenerationMode(String(body.mode ?? "auto"));
   const hasResultRetryCount = Object.prototype.hasOwnProperty.call(body, "resultRetryCount");
   const resultRetryCount = hasResultRetryCount ? requestImageResultRetryCount(body.resultRetryCount) : current.resultRetryCount;
+  const hasMultiImageConcurrency = Object.prototype.hasOwnProperty.call(body, "multiImageConcurrency");
+  const multiImageConcurrency = hasMultiImageConcurrency
+    ? requestMultiImageConcurrency(body.multiImageConcurrency)
+    : current.multiImageConcurrency;
   const timestamp = now();
   run(
     configDb,
-    `insert into image_generation_settings (id, mode, result_retry_count, updated_at) values (?, ?, ?, ?)
+    `insert into image_generation_settings (id, mode, result_retry_count, multi_image_concurrency, updated_at) values (?, ?, ?, ?, ?)
     on conflict(id) do update set
       mode = excluded.mode,
       result_retry_count = excluded.result_retry_count,
+      multi_image_concurrency = excluded.multi_image_concurrency,
       updated_at = excluded.updated_at`,
     "default",
     mode,
     resultRetryCount,
+    multiImageConcurrency,
     timestamp
   );
-  audit("image_mode.save", { mode, resultRetryCount });
+  audit("image_mode.save", { mode, resultRetryCount, multiImageConcurrency });
   return c.json({ imageMode: imageGenerationSettings() });
 });
 

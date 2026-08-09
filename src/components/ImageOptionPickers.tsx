@@ -64,11 +64,11 @@ export function EditorSizePicker({
     <div className="editor-size-picker" ref={wrapRef}>
       <button type="button" className="editor-text-btn" onClick={() => setOpen((next) => !next)} aria-haspopup="listbox" aria-expanded={open}>
         <span className="size-trigger-icon" aria-hidden="true">
-          {selected ? <span style={sizePreviewStyle(selected.previewRatio, 15)} /> : <Ratio size={15} />}
+          {selected ? <span style={sizePreviewStyle(selected.previewRatio, 20)} /> : <Ratio size={20} />}
         </span>
         <span>{selected ? sizeOptionLabel(selected, t) : t("picker.aspectRatio")}</span>
         {selected ? <small>{selected.ratio}</small> : null}
-        <ChevronDown size={15} className={open ? "open" : ""} />
+        <ChevronDown size={20} className={open ? "open" : ""} />
       </button>
       {open ? (
         <div className="editor-size-menu" role="listbox">

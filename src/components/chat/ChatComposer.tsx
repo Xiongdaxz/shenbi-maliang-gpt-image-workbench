@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { ArrowUp, BrushCleaning, ImageIcon, Lightbulb, LoaderCircle, Plus, RotateCw, Sparkles, Square, Undo2, WandSparkles, X } from "lucide-react";
 import { ImageLightbox, type ImageLightboxState } from "../ImageLightbox";
 import { MaterialPickerDrawer } from "../MaterialPicker";
-import { ImageCountStepper, QualityPicker, SizePicker } from "../ImageOptionPickers";
+import { ImageCountStepper, SizePicker } from "../ImageOptionPickers";
 import { CheckerboardImage } from "../CheckerboardImage";
 import { PromptColorSchemeSelect } from "../PromptColorSchemeSelect";
 import { PromptOptimizeStyleSelect } from "../PromptOptimizeStyleSelect";
@@ -25,7 +25,7 @@ import {
   type PromptOptimizeStyleGroup
 } from "../../lib/promptOptimizeStyles";
 import { useI18n } from "../../i18n";
-import type { QualityOption, SizeOption } from "../../lib/imageOptions";
+import type { SizeOption } from "../../lib/imageOptions";
 import type { ComposerPromptTemplateDraft, ComposerPromptTemplatePanelDraft } from "../../store/workbench";
 import type { AssetItem, CaseMaterialItem, ImageEditSuggestion } from "../../types";
 import { useToast } from "../../ui";
@@ -64,8 +64,6 @@ type ChatComposerProps = {
   promptOptimizeCustomInstruction?: string;
   promptOptimizeStyleGroups: PromptOptimizeStyleGroup[];
   promptTemplateDraft?: ComposerPromptTemplateDraft | null;
-  quality: string;
-  qualityOptions: QualityOption[];
   selectedAssets: AssetItem[];
   selectedCaseMaterials: CaseMaterialItem[];
   size: string;
@@ -77,7 +75,6 @@ type ChatComposerProps = {
   onAutoOptimizePromptRequestHandled?: (id: number) => void;
   onImageCountChange: (value: number) => void;
   onPaste: ClipboardEventHandler<HTMLTextAreaElement>;
-  onQualityChange: (value: string) => void;
   onSelectedAssetsChange: (assets: AssetItem[]) => void;
   onSelectedCaseMaterialsChange: (caseMaterials: CaseMaterialItem[]) => void;
   onSizeChange: (value: string) => void;
@@ -153,8 +150,6 @@ export function ChatComposer({
   promptOptimizeCustomInstruction = "",
   promptOptimizeStyleGroups,
   promptTemplateDraft,
-  quality,
-  qualityOptions,
   selectedAssets,
   selectedCaseMaterials,
   size,
@@ -166,7 +161,6 @@ export function ChatComposer({
   onAutoOptimizePromptRequestHandled,
   onImageCountChange,
   onPaste,
-  onQualityChange,
   onSelectedAssetsChange,
   onSelectedCaseMaterialsChange,
   onSizeChange,
@@ -901,7 +895,6 @@ export function ChatComposer({
             ) : null}
           </div>
           <SizePicker value={size} options={sizeOptions} onChange={onSizeChange} />
-          <QualityPicker value={quality} options={qualityOptions} onChange={onQualityChange} />
           <ImageCountStepper value={imageCount} onChange={onImageCountChange} />
           <span className="composer-prompt-template-style-tooltip composer-prompt-template-color-control" data-tooltip={t("settings.personalization.colorSchemes.title")}>
             <PromptColorSchemeSelect

@@ -27,23 +27,37 @@ function maskExtension(mimeType: string) {
   return "png";
 }
 
-export async function normalizeImageEditMaskDataUrl(dataUrl: string) {
+export async function normalizeImageEditMaskDataUrl(dataUrl: string, sourceImageDataUrl = "") {
   const { buffer } = dataUrlToBuffer(dataUrl);
   const { data, info } = await sharp(buffer, { limitInputPixels: SAFE_IMAGE_MAX_PIXELS, sequentialRead: true })
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
   const channels = info.channels || 4;
+  let hasEditablePixel = false;
+
+  if (sourceImageDataUrl) {
+    const source = dataUrlToBuffer(sourceImageDataUrl);
+    const sourceMetadata = await sharp(source.buffer, { limitInputPixels: SAFE_IMAGE_MAX_PIXELS, sequentialRead: true }).metadata();
+    const sourceWidth = Number(sourceMetadata.width ?? 0);
+    const sourceHeight = Number(sourceMetadata.height ?? 0);
+    if (sourceWidth <= 0 || sourceHeight <= 0) throw new Error("原图尺寸读取失败");
+    if (info.width !== sourceWidth || info.height !== sourceHeight) {
+      throw new Error(`遮罩尺寸必须与原图一致（原图 ${sourceWidth}×${sourceHeight}，遮罩 ${info.width}×${info.height}）`);
+    }
+  }
 
   for (let index = 0; index < data.length; index += channels) {
     const alphaIndex = index + channels - 1;
     const alpha = data[alphaIndex] ?? 255;
     const editable = alpha < 255;
+    hasEditablePixel ||= editable;
     data[index] = editable ? 0 : 255;
     data[index + 1] = editable ? 0 : 255;
     data[index + 2] = editable ? 0 : 255;
     data[alphaIndex] = alpha <= 8 ? 0 : alpha;
   }
+  if (!hasEditablePixel) throw new Error("遮罩中没有可编辑区域，请重新涂抹");
 
   const normalized = await sharp(data, {
     raw: {
@@ -71,6 +85,22 @@ export async function saveImageEditMaskSnapshot(jobId: string, dataUrl: string) 
     path: `files/image-masks/${fileName}`,
     mimeType
   };
+}
+
+type ImageEditMaskSnapshotSaver = typeof saveImageEditMaskSnapshot;
+
+export async function requireImageEditMaskSnapshot(
+  jobId: string,
+  dataUrl: string,
+  saveSnapshot: ImageEditMaskSnapshotSaver = saveImageEditMaskSnapshot
+) {
+  try {
+    const snapshot = await saveSnapshot(jobId, dataUrl);
+    if (!snapshot) throw new Error("empty snapshot");
+    return snapshot;
+  } catch {
+    throw new Error("图片编辑遮罩保存失败，请重试");
+  }
 }
 
 export async function imageEditMaskSnapshotDataUrl(relativePath: string) {

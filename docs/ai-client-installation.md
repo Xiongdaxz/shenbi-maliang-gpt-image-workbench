@@ -81,7 +81,7 @@ WorkBuddy 桌面端的 Remote MCP OAuth 可以使用 `workbuddy://workbuddy/mcp/
 
 ## 图片结果显示
 
-`maliang_get_image_job` 成功后返回轻量的标准 `resource_link` 内容块，并在结构化元数据中提供带签名的原图 `downloadUrl`，不再返回体积较大的 base64 图片数据，避免客户端把工具响应序列化成文本后截断下载信息。链接默认 1 小时有效并绑定当前 OAuth 授权关系，连接失效后立即不可用；`resource_link.description` 使用北京时间方便用户阅读，机器字段 `expiresAt` 继续使用标准 UTC ISO 8601 格式。升级兼容期仍保留 `previewUrl` 字段，但它和 `downloadUrl` 指向同一个原始文件，不再返回 `preview` 派生图。Codex 宿主会先把图片保存到 `$CODEX_HOME/generated_images/<task>/`，最终回复再引用绝对本地路径。`0.4.4` 起，马良插件由 Codex 自动启动 bundled `maliang_local` stdio MCP；成功任务的 `downloadUrl` 与 `imageId` 只通过 Codex 托管的 MCP stdio 交给 `save_image_result`，后者复用 `maliang-helper.mjs` 的同源、大小、签名和格式校验，优先保存到 `$CODEX_HOME/generated_images/maliang/`，最终用绝对本地文件路径直接显示。
+`maliang_get_image_job` 成功后返回轻量的标准 `resource_link` 内容块，并在结构化元数据中提供带签名的原图 `downloadUrl`，不再返回体积较大的 base64 图片数据，避免客户端把工具响应序列化成文本后截断下载信息。多图任务最终失败但已有部分图片时，工具保持 `status=failed` 和错误信息，同时返回已有图片的 `imageIds`、`imageResults` 与 `resource_link`；客户端应交付这些部分结果，但不得把整个任务描述为成功。链接默认 1 小时有效并绑定当前 OAuth 授权关系，连接失效后立即不可用；`resource_link.description` 使用北京时间方便用户阅读，机器字段 `expiresAt` 继续使用标准 UTC ISO 8601 格式。升级兼容期仍保留 `previewUrl` 字段，但它和 `downloadUrl` 指向同一个原始文件，不再返回 `preview` 派生图。Codex 宿主会先把图片保存到 `$CODEX_HOME/generated_images/<task>/`，最终回复再引用绝对本地路径。`0.4.4` 起，马良插件由 Codex 自动启动 bundled `maliang_local` stdio MCP；成功任务和失败任务的部分结果所含 `downloadUrl` 与 `imageId` 只通过 Codex 托管的 MCP stdio 交给 `save_image_result`，后者复用 `maliang-helper.mjs` 的同源、大小、签名和格式校验，优先保存到 `$CODEX_HOME/generated_images/maliang/`，最终用绝对本地文件路径直接显示。
 
 Codex 不要把 `resource_link`、局域网 `downloadUrl` 或兼容字段 `previewUrl` 直接写成 Markdown 图片；局域网 HTTP 地址可能被 URL 安全检查拦截。签名地址只能进入 `maliang_local.save_image_result`，不能进入 Shell 参数、临时文件、日志或浏览器。其他 MCP 客户端可以按自身能力展示 `resource_link` 或受管下载原图。
 
@@ -101,7 +101,7 @@ Remote MCP 运行在马良服务器，不能直接读取 Codex 所在电脑的�
 
 `0.4.2` 在 `0.4.1` 的 MCP 2026-07-28 兼容基础上进一步加固上传、结果链接、DCR 能力执行、本地帮助器同源约束、专用 Marketplace 更新和插件归档缓存。用户复制的安装指令保持不变。
 
-Remote MCP OAuth 使用统一有效期策略：Access Token 默认 7 天，后台可设置 1～365 天；客户端动态注册声明 `refresh_token` 时，额外签发默认 90 天、可设置 30～3650 天的滚动 Refresh Token。Codex 已验证会在需要时自动刷新；其他客户端是否已经实际刷新，以用户设置“插件”连接详情中的“刷新能力”和“最近刷新”为准。服务重启不会主动清除数据库中的授权，配置变化只影响之后新签发或刷新的 Token。
+Remote MCP OAuth 使用统一有效期策略：Access Token 默认 7 天，后台可设置 1～365 天；客户端动态注册声明 `refresh_token` 时，额外签发默认 90 天、可设置 30～3650 天的滚动 Refresh Token。Codex 已验证会在需要时自动刷新；其他客户端是否已经实际刷新，以用户设置“插件”连接详情中的“刷新时间”为准：出现刷新时间即表示客户端已经执行过刷新。服务重启不会主动清除数据库中的授权，配置变化只影响之后新签发或刷新的 Token。
 
 `0.4.3` 禁止缓存授权绑定的图片结果，固定本地帮助器的文件大小与输出目录边界，并对 Node/Bun/PowerShell 自动更新下载执行流式硬限长。用户复制的安装指令仍保持不变。
 

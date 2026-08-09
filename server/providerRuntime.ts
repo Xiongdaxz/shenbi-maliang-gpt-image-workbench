@@ -14,6 +14,7 @@ import {
   STUDIO_LEGACY_USER_AGENT
 } from "./constants";
 import { logProviderRequest } from "./auditLog";
+import { selectAvailableChatGptWebAccount } from "./chatGptWebAccountPool";
 import { configDb, getAll, getOne, run } from "./db";
 import { readImageDimensions } from "./imageDimensions";
 import { ROOT } from "./paths";
@@ -1826,7 +1827,11 @@ function chatGptWebAccountCandidates(provider: ProviderRow, includeAllAccounts =
   return rows.filter((row) => !chatGptWebAccountUnavailableReason(row));
 }
 
-function chooseChatGptWebAccount(provider: ProviderRow, includeAllAccounts = false) {
+function chooseChatGptWebAccount(
+  provider: ProviderRow,
+  includeAllAccounts = false,
+  excludedAccountIds: ReadonlySet<string> = new Set()
+) {
   const candidates = chatGptWebAccountCandidates(provider, includeAllAccounts).sort((left, right) => {
     const priority = Number(right.priority) - Number(left.priority);
     if (priority !== 0) return priority;
@@ -1834,15 +1839,12 @@ function chooseChatGptWebAccount(provider: ProviderRow, includeAllAccounts = fal
   });
   if (candidates.length === 0) return null;
   const mode = normalizeWebAccountMode(provider.web_account_mode);
-  if (mode === "random") {
-    return candidates[Math.floor(Math.random() * candidates.length)] ?? candidates[0];
+  const current = chatGptWebAccountCursor.get(provider.id) ?? 0;
+  const selection = selectAvailableChatGptWebAccount(candidates, mode, current, excludedAccountIds);
+  if (mode === "round_robin" && selection.account) {
+    chatGptWebAccountCursor.set(provider.id, selection.nextCursor);
   }
-  if (mode === "round_robin") {
-    const current = chatGptWebAccountCursor.get(provider.id) ?? 0;
-    chatGptWebAccountCursor.set(provider.id, current + 1);
-    return candidates[current % candidates.length] ?? candidates[0];
-  }
-  return candidates[0];
+  return selection.account;
 }
 
 function chatGptWebSettingsFromAccount(provider: ProviderRow, account: ImageAccountRow): ChatGptWebSettings {
@@ -1870,31 +1872,26 @@ function sourceReferenceAccountId(payload: Record<string, unknown>) {
   return "";
 }
 
-function requireChatGptWebSettings(provider: ProviderRow, preferredSourceAccountId = "") {
-  if (preferredSourceAccountId) {
-    const account = getOne<ImageAccountRow>(configDb, "select * from image_accounts where id = ?", preferredSourceAccountId);
-    if (account && !chatGptWebAccountUnavailableReason(account)) {
-      return chatGptWebSettingsFromAccount(provider, account);
-    }
-  }
-  const selectedAccountIds = normalizeIdList(provider.web_account_ids);
-  if (selectedAccountIds.length > 0) {
-    const account = chooseChatGptWebAccount(provider);
-    if (account) {
-      const settings = chatGptWebSettingsFromAccount(provider, account);
-      if (!settings.accessToken) throw new Error(`官网号池账号「${account.name}」缺少 Access Token`);
-      return settings;
-    }
-    const reasons = selectedChatGptWebAccountRows(provider)
-      .map(chatGptWebAccountUnavailableReason)
-      .filter(Boolean);
-    throw new Error(
-      reasons.length > 0
-        ? `ChatGPT 官网渠道选择的号池账号不可用：${reasons.join("；")}`
-        : "ChatGPT 官网渠道选择的号池账号不存在"
-    );
-  }
-  const settings: ChatGptWebSettings = {
+type ChatGptWebSettingsLease = {
+  settings: ChatGptWebSettings;
+  release: () => void;
+};
+
+type ChatGptWebSettingsWaiter = {
+  provider: RuntimeProviderRow;
+  preferredSourceAccountId: string;
+  signal?: AbortSignal;
+  onAbort: () => void;
+  resolve: (lease: ChatGptWebSettingsLease) => void;
+  reject: (error: unknown) => void;
+};
+
+const activeChatGptWebAccountIds = new Set<string>();
+const activeChatGptWebDirectProviderIds = new Set<string>();
+const chatGptWebSettingsQueue: ChatGptWebSettingsWaiter[] = [];
+
+function directChatGptWebSettings(provider: ProviderRow): ChatGptWebSettings {
+  return {
     baseUrl: provider.base_url || STUDIO_BACKEND_BASE_URL,
     accessToken: providerAccessToken(provider),
     cookies: provider.web_cookies ?? "",
@@ -1902,12 +1899,131 @@ function requireChatGptWebSettings(provider: ProviderRow, preferredSourceAccount
     sourceAccountId: "",
     ...chatGptWebSessionFields()
   };
-  if (settings.accessToken) return settings;
+}
 
-  const account = chooseChatGptWebAccount(provider, true);
-  if (account) return chatGptWebSettingsFromAccount(provider, account);
+function reserveChatGptWebSettings(
+  provider: RuntimeProviderRow,
+  preferredSourceAccountId: string
+): ChatGptWebSettingsLease | null {
+  let account: ImageAccountRow | null = null;
+  if (preferredSourceAccountId) {
+    const preferred = getOne<ImageAccountRow>(configDb, "select * from image_accounts where id = ?", preferredSourceAccountId);
+    if (preferred && !chatGptWebAccountUnavailableReason(preferred)) {
+      if (activeChatGptWebAccountIds.has(preferred.id)) return null;
+      account = preferred;
+    }
+  }
 
-  throw new Error("ChatGPT 官网渠道缺少可用 Access Token：请选择号池账号，或在渠道里填写备用 Access Token");
+  const selectedAccountIds = normalizeIdList(provider.web_account_ids);
+  if (!account && selectedAccountIds.length > 0) {
+    const candidates = chatGptWebAccountCandidates(provider);
+    if (candidates.length === 0) {
+      const reasons = selectedChatGptWebAccountRows(provider)
+        .map(chatGptWebAccountUnavailableReason)
+        .filter(Boolean);
+      throw new Error(
+        reasons.length > 0
+          ? `ChatGPT 官网渠道选择的号池账号不可用：${reasons.join("；")}`
+          : "ChatGPT 官网渠道选择的号池账号不存在"
+      );
+    }
+    account = chooseChatGptWebAccount(provider, false, activeChatGptWebAccountIds);
+    if (!account) return null;
+  }
+
+  if (!account) {
+    const directSettings = directChatGptWebSettings(provider);
+    if (directSettings.accessToken) {
+      if (activeChatGptWebDirectProviderIds.has(provider.id)) return null;
+      activeChatGptWebDirectProviderIds.add(provider.id);
+      let released = false;
+      return {
+        settings: directSettings,
+        release: () => {
+          if (released) return;
+          released = true;
+          activeChatGptWebDirectProviderIds.delete(provider.id);
+          drainChatGptWebSettingsQueue();
+        }
+      };
+    }
+
+    const candidates = chatGptWebAccountCandidates(provider, true);
+    if (candidates.length === 0) {
+      throw new Error("ChatGPT 官网渠道缺少可用 Access Token：请选择号池账号，或在渠道里填写备用 Access Token");
+    }
+    account = chooseChatGptWebAccount(provider, true, activeChatGptWebAccountIds);
+    if (!account) return null;
+  }
+
+  activeChatGptWebAccountIds.add(account.id);
+  let released = false;
+  return {
+    settings: chatGptWebSettingsFromAccount(provider, account),
+    release: () => {
+      if (released) return;
+      released = true;
+      activeChatGptWebAccountIds.delete(account.id);
+      drainChatGptWebSettingsQueue();
+    }
+  };
+}
+
+function drainChatGptWebSettingsQueue() {
+  let index = 0;
+  while (index < chatGptWebSettingsQueue.length) {
+    const waiter = chatGptWebSettingsQueue[index]!;
+    if (waiter.signal?.aborted) {
+      chatGptWebSettingsQueue.splice(index, 1);
+      waiter.signal.removeEventListener("abort", waiter.onAbort);
+      waiter.reject(new ProviderRequestCancelledError());
+      continue;
+    }
+    try {
+      const lease = reserveChatGptWebSettings(waiter.provider, waiter.preferredSourceAccountId);
+      if (!lease) {
+        index += 1;
+        continue;
+      }
+      chatGptWebSettingsQueue.splice(index, 1);
+      waiter.signal?.removeEventListener("abort", waiter.onAbort);
+      waiter.resolve(lease);
+    } catch (error) {
+      chatGptWebSettingsQueue.splice(index, 1);
+      waiter.signal?.removeEventListener("abort", waiter.onAbort);
+      waiter.reject(error);
+    }
+  }
+}
+
+function acquireChatGptWebSettings(
+  provider: RuntimeProviderRow,
+  preferredSourceAccountId: string,
+  signal?: AbortSignal
+) {
+  if (signal?.aborted) return Promise.reject(new ProviderRequestCancelledError());
+  return new Promise<ChatGptWebSettingsLease>((resolve, reject) => {
+    const waiter: ChatGptWebSettingsWaiter = {
+      provider,
+      preferredSourceAccountId,
+      signal,
+      onAbort: () => {
+        const index = chatGptWebSettingsQueue.indexOf(waiter);
+        if (index >= 0) chatGptWebSettingsQueue.splice(index, 1);
+        reject(new ProviderRequestCancelledError());
+        drainChatGptWebSettingsQueue();
+      },
+      resolve,
+      reject
+    };
+    chatGptWebSettingsQueue.push(waiter);
+    signal?.addEventListener("abort", waiter.onAbort, { once: true });
+    if (signal?.aborted) {
+      waiter.onAbort();
+      return;
+    }
+    drainChatGptWebSettingsQueue();
+  });
 }
 
 function studioBackendUrl(settings: ChatGptWebSettings, childPath: string) {
@@ -2179,7 +2295,8 @@ type ChatGptWebBridgeResult = {
   error?: string;
 };
 
-function runBridgeProcess(input: Record<string, unknown>) {
+function runBridgeProcess(input: Record<string, unknown>, signal?: AbortSignal) {
+  if (signal?.aborted) return Promise.reject(new ProviderRequestCancelledError());
   return new Promise<{ stdout: string; stderr: string; code: number | null }>((resolve, reject) => {
     const python = Bun.env.CHATGPT_WEB_BRIDGE_PYTHON || "python";
     const scriptPath = path.join(ROOT, "scripts", "chatgpt_web_bridge.py");
@@ -2188,9 +2305,33 @@ function runBridgeProcess(input: Record<string, unknown>) {
       windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"]
     });
-    const timeoutId = setTimeout(() => {
-      child.kill();
-      reject(new Error(PROVIDER_REQUEST_TIMEOUT_ERROR));
+    let settled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const terminateChild = () => {
+      if (child.killed) return;
+      try {
+        child.kill();
+      } catch {
+        // The process may already have exited between the state check and kill call.
+      }
+    };
+    const cleanup = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const rejectOnce = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+    const onAbort = () => {
+      terminateChild();
+      rejectOnce(new ProviderRequestCancelledError());
+    };
+    timeoutId = setTimeout(() => {
+      terminateChild();
+      rejectOnce(new Error(PROVIDER_REQUEST_TIMEOUT_ERROR));
     }, IMAGE_JOB_RUNNING_TIMEOUT_MS);
     let stdout = "";
     let stderr = "";
@@ -2203,15 +2344,29 @@ function runBridgeProcess(input: Record<string, unknown>) {
       stderr += String(chunk);
     });
     child.on("error", (error) => {
-      clearTimeout(timeoutId);
-      reject(error);
+      rejectOnce(error);
+    });
+    child.stdin.on("error", (error) => {
+      terminateChild();
+      rejectOnce(error);
     });
     child.on("close", (code) => {
-      clearTimeout(timeoutId);
+      if (settled) return;
+      settled = true;
+      cleanup();
       resolve({ stdout, stderr, code });
     });
-    child.stdin.write(JSON.stringify(input));
-    child.stdin.end();
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    try {
+      child.stdin.end(JSON.stringify(input));
+    } catch (error) {
+      terminateChild();
+      rejectOnce(error);
+    }
   });
 }
 
@@ -2229,18 +2384,21 @@ async function executeChatGptWebBridgeRequest(
   let loggedRouteMode = routeMode;
   try {
     const proxy = proxySettings();
-    const { stdout, stderr, code } = await runBridgeProcess({
-      operation: mode,
-      baseUrl: settings.baseUrl || STUDIO_BACKEND_BASE_URL,
-      accessToken: settings.accessToken,
-      cookies: settings.cookies,
-      accountId: settings.accountId,
-      sourceAccountId: settings.sourceAccountId,
-      model: provider.model || DEFAULT_IMAGE_MODEL,
-      payload,
-      proxy: proxy.enabled && proxy.url ? proxy.url : "",
-      retryCount: proxy.enabled && proxy.url ? proxy.retryCount : 0
-    });
+    const { stdout, stderr, code } = await runBridgeProcess(
+      {
+        operation: mode,
+        baseUrl: settings.baseUrl || STUDIO_BACKEND_BASE_URL,
+        accessToken: settings.accessToken,
+        cookies: settings.cookies,
+        accountId: settings.accountId,
+        sourceAccountId: settings.sourceAccountId,
+        model: provider.model || DEFAULT_IMAGE_MODEL,
+        payload,
+        proxy: proxy.enabled && proxy.url ? proxy.url : "",
+        retryCount: proxy.enabled && proxy.url ? proxy.retryCount : 0
+      },
+      context.signal
+    );
     const line = stdout.trim().split(/\r?\n/).filter(Boolean).at(-1) || "";
     const result = safeJson<ChatGptWebBridgeResult>(line, {});
     endpoint = String(result.endpoint || endpoint);
@@ -2919,9 +3077,9 @@ async function callChatGptWebCodexResponsesProvider(
   provider: RuntimeProviderRow,
   mode: "generation" | "edit",
   payload: Record<string, unknown>,
+  settings: ChatGptWebSettings,
   context: ProviderRequestContext = {}
 ) {
-  const settings = requireChatGptWebSettings(provider, sourceReferenceAccountId(payload));
   const responseJson = await executeStudioJsonRequest(
     provider,
     mode,
@@ -2940,9 +3098,10 @@ async function callChatGptWebQuotaProvider(
   mode: "generation" | "edit",
   payload: Record<string, unknown>,
   quota: "codex" | "official",
+  settings: ChatGptWebSettings,
   context: ProviderRequestContext = {}
 ) {
-  if (quota === "codex") return callChatGptWebCodexResponsesProvider(provider, mode, payload, context);
+  if (quota === "codex") return callChatGptWebCodexResponsesProvider(provider, mode, payload, settings, context);
   return callChatGptWebConversationProvider(
     provider,
     mode,
@@ -2952,6 +3111,7 @@ async function callChatGptWebQuotaProvider(
         ? "chatgpt_web_official_inpaint_conversation"
         : "chatgpt_web_official_edit_conversation"
       : "chatgpt_web_official_conversation",
+    settings,
     context
   );
 }
@@ -2960,10 +3120,10 @@ async function callChatGptWebConversationProvider(
   provider: RuntimeProviderRow,
   mode: "generation" | "edit",
   payload: Record<string, unknown>,
-  routeMode = "chatgpt_web_conversation",
+  routeMode: string,
+  settings: ChatGptWebSettings,
   context: ProviderRequestContext = {}
 ) {
-  const settings = requireChatGptWebSettings(provider, sourceReferenceAccountId(payload));
   return executeChatGptWebBridgeRequest(provider, settings, mode, routeMode, payload, context);
 }
 
@@ -2973,17 +3133,22 @@ async function callChatGptWebProvider(
   payload: Record<string, unknown>,
   context: ProviderRequestContext = {}
 ) {
+  const lease = await acquireChatGptWebSettings(provider, sourceReferenceAccountId(payload), context.signal);
   const errors: string[] = [];
-  for (const quota of chatGptWebQuotaOrder(provider)) {
-    assertProviderRequestActive(context);
-    try {
-      return await callChatGptWebQuotaProvider(provider, mode, payload, quota, context);
-    } catch (error) {
-      if (providerRequestWasCancelled(error, context.signal)) throw new ProviderRequestCancelledError();
-      errors.push(`${quota === "codex" ? "Codex 额度" : "官网额度"}失败：${error instanceof Error ? error.message : String(error)}`);
+  try {
+    for (const quota of chatGptWebQuotaOrder(provider)) {
+      assertProviderRequestActive(context);
+      try {
+        return await callChatGptWebQuotaProvider(provider, mode, payload, quota, lease.settings, context);
+      } catch (error) {
+        if (providerRequestWasCancelled(error, context.signal)) throw new ProviderRequestCancelledError();
+        errors.push(`${quota === "codex" ? "Codex 额度" : "官网额度"}失败：${error instanceof Error ? error.message : String(error)}`);
+      }
     }
+    throw new Error(errors.join("; ") || "ChatGPT 官网渠道调用失败");
+  } finally {
+    lease.release();
   }
-  throw new Error(errors.join("; ") || "ChatGPT 官网渠道调用失败");
 }
 
 export async function callProvider(
@@ -3046,6 +3211,7 @@ function payloadForProvider(provider: RuntimeProviderRow, payload: Record<string
   }
   if (channel !== "chatgpt_web") {
     delete nextPayload.webConversationContext;
+    delete nextPayload.editIntent;
   }
   return injectAspectRatioInstruction(nextPayload);
 }
@@ -3054,6 +3220,100 @@ type ProviderChainResponseHandler<T> = (input: {
   provider: RuntimeProviderRow;
   responseJson: unknown;
 }) => Promise<T> | T;
+
+type ProviderConcurrencyWaiter = {
+  limit: number;
+  signal?: AbortSignal;
+  onAbort: () => void;
+  resolve: (release: () => void) => void;
+  reject: (error: unknown) => void;
+};
+
+const activeProviderRequestLimits = new Map<string, Map<symbol, number>>();
+const providerConcurrencyQueues = new Map<string, ProviderConcurrencyWaiter[]>();
+
+function providerRequestConcurrencyLimit(provider: RuntimeProviderRow, payload: Record<string, unknown>) {
+  const configured = imageGenerationSettings().multiImageConcurrency;
+  const channel = normalizeProviderChannel(provider.channel || inferChannelFromType(provider.type));
+  if (channel !== "chatgpt_web") return configured;
+  if (sourceReferenceAccountId(payload) || payload.webConversationContext) return 1;
+  const accountMode = normalizeWebAccountMode(provider.web_account_mode);
+  if (accountMode !== "round_robin" && accountMode !== "random") return 1;
+  const selectedAccountIds = normalizeIdList(provider.web_account_ids);
+  if (selectedAccountIds.length === 0 && providerAccessToken(provider)) return 1;
+  const includeAllAccounts = selectedAccountIds.length === 0;
+  const accountCount = chatGptWebAccountCandidates(provider, includeAllAccounts).length;
+  return Math.max(1, Math.min(configured, accountCount || 1));
+}
+
+function drainProviderConcurrencyQueue(providerId: string) {
+  const queue = providerConcurrencyQueues.get(providerId);
+  if (!queue?.length) {
+    providerConcurrencyQueues.delete(providerId);
+    return;
+  }
+  while (queue.length > 0) {
+    const waiter = queue[0]!;
+    if (waiter.signal?.aborted) {
+      queue.shift();
+      waiter.signal.removeEventListener("abort", waiter.onAbort);
+      waiter.reject(new ProviderRequestCancelledError());
+      continue;
+    }
+    const activeRequests = activeProviderRequestLimits.get(providerId);
+    const activeCount = activeRequests?.size ?? 0;
+    const activeLimit = activeRequests?.size
+      ? Math.min(...activeRequests.values())
+      : Number.POSITIVE_INFINITY;
+    if (activeCount >= Math.min(waiter.limit, activeLimit)) break;
+    queue.shift();
+    const requestToken = Symbol(providerId);
+    const nextActiveRequests = activeRequests ?? new Map<symbol, number>();
+    nextActiveRequests.set(requestToken, waiter.limit);
+    activeProviderRequestLimits.set(providerId, nextActiveRequests);
+    waiter.signal?.removeEventListener("abort", waiter.onAbort);
+    let released = false;
+    waiter.resolve(() => {
+      if (released) return;
+      released = true;
+      const currentActiveRequests = activeProviderRequestLimits.get(providerId);
+      currentActiveRequests?.delete(requestToken);
+      if (currentActiveRequests?.size === 0) activeProviderRequestLimits.delete(providerId);
+      drainProviderConcurrencyQueue(providerId);
+    });
+  }
+  if (queue.length === 0) providerConcurrencyQueues.delete(providerId);
+}
+
+function acquireProviderConcurrencySlot(provider: RuntimeProviderRow, payload: Record<string, unknown>, signal?: AbortSignal) {
+  if (signal?.aborted) return Promise.reject(new ProviderRequestCancelledError());
+  const providerId = provider.id;
+  const limit = providerRequestConcurrencyLimit(provider, payload);
+  return new Promise<() => void>((resolve, reject) => {
+    const waiter: ProviderConcurrencyWaiter = {
+      limit,
+      signal,
+      onAbort: () => {
+        const queue = providerConcurrencyQueues.get(providerId);
+        const index = queue?.indexOf(waiter) ?? -1;
+        if (index >= 0) queue?.splice(index, 1);
+        reject(new ProviderRequestCancelledError());
+        drainProviderConcurrencyQueue(providerId);
+      },
+      resolve,
+      reject
+    };
+    const queue = providerConcurrencyQueues.get(providerId) ?? [];
+    queue.push(waiter);
+    providerConcurrencyQueues.set(providerId, queue);
+    signal?.addEventListener("abort", waiter.onAbort, { once: true });
+    if (signal?.aborted) {
+      waiter.onAbort();
+      return;
+    }
+    drainProviderConcurrencyQueue(providerId);
+  });
+}
 
 export async function callProviderChain<T = undefined>(
   providers: RuntimeProviderRow[],
@@ -3066,7 +3326,14 @@ export async function callProviderChain<T = undefined>(
   for (const provider of providers) {
     assertProviderRequestActive(context);
     try {
-      const responseJson = await callProvider(provider, mode, payloadForProvider(provider, payload), context);
+      const providerPayload = payloadForProvider(provider, payload);
+      const release = await acquireProviderConcurrencySlot(provider, providerPayload, context.signal);
+      let responseJson: unknown;
+      try {
+        responseJson = await callProvider(provider, mode, providerPayload, context);
+      } finally {
+        release();
+      }
       const result = onProviderResponse ? await onProviderResponse({ provider, responseJson }) : undefined;
       return { provider, responseJson, result };
     } catch (error) {

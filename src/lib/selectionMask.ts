@@ -11,11 +11,14 @@ export type Stroke = {
 export type SelectionOverlaySnapshot = {
   fillCanvas: HTMLCanvasElement;
   contours: Array<Array<{ x: number; y: number }>>;
+  circles: Array<{ centerX: number; centerY: number; radius: number }>;
 };
 
-export const BRUSH_MIN_SIZE = 14;
-export const BRUSH_MAX_SIZE = 120;
-export const BRUSH_SIZE_STEP = 10;
+export const BRUSH_MIN_SIZE = 32;
+export const BRUSH_MAX_SIZE = 512;
+export const BRUSH_SIZE_STEP = 16;
+export const DEFAULT_BRUSH_PREVIEW_ANCHOR = { x: 0.5, y: 0.5 } as const;
+export const SELECTION_PREVIEW_MAX_SCALE = 2;
 export const SELECTION_DASH_PATTERN = [4, 5];
 export const SELECTION_DASH_PATTERN_LENGTH = SELECTION_DASH_PATTERN.reduce((total, value) => total + value, 0);
 export const SELECTION_DASH_SPEED_MS = 120;
@@ -24,6 +27,106 @@ const CONTOUR_SIMPLIFY_EPSILON = 2.5;
 
 export function clampRatio(value: number) {
   return Math.max(0, Math.min(1, value));
+}
+
+export function brushSizeRatioFromDisplayPixels(size: number, width: number, height: number) {
+  const shortestSide = Math.min(width, height);
+  return shortestSide > 0 ? Math.max(4, size) / shortestSide : 0;
+}
+
+export function selectionPreviewCanvasSize(
+  displayWidth: number,
+  displayHeight: number,
+  naturalWidth: number,
+  naturalHeight: number
+) {
+  if (displayWidth <= 0 || displayHeight <= 0) return { width: 0, height: 0, scale: 1 };
+  const sourceScale = naturalWidth > 0 && naturalHeight > 0
+    ? Math.min(naturalWidth / displayWidth, naturalHeight / displayHeight)
+    : 1;
+  const scale = Math.max(1, Math.min(SELECTION_PREVIEW_MAX_SCALE, sourceScale));
+  return {
+    width: Math.max(1, Math.round(displayWidth * scale)),
+    height: Math.max(1, Math.round(displayHeight * scale)),
+    scale
+  };
+}
+
+export function brushPreviewMetrics(
+  anchor: { x: number; y: number },
+  sizeRatio: number,
+  width: number,
+  height: number
+) {
+  return {
+    centerX: clampRatio(anchor.x) * width,
+    centerY: clampRatio(anchor.y) * height,
+    diameter: Math.max(4, sizeRatio * Math.min(width, height))
+  };
+}
+
+type SelectionTapCircleOutline = {
+  strokeIndex: number;
+  centerX: number;
+  centerY: number;
+  radius: number;
+};
+
+function pointToSegmentDistance(
+  point: { x: number; y: number },
+  start: { x: number; y: number },
+  end: { x: number; y: number }
+) {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  if (dx === 0 && dy === 0) return Math.hypot(point.x - start.x, point.y - start.y);
+  const progress = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / (dx * dx + dy * dy)));
+  return Math.hypot(point.x - (start.x + progress * dx), point.y - (start.y + progress * dy));
+}
+
+function selectionTapCircleOutlineEntries(strokes: Stroke[], width: number, height: number) {
+  const shortestSide = Math.min(width, height);
+  const selectedStrokes = strokes.filter((stroke) => stroke.points.length > 0);
+  const candidates = selectedStrokes.flatMap((stroke, strokeIndex): SelectionTapCircleOutline[] => {
+    if (stroke.points.length !== 1) return [];
+    return [{
+      strokeIndex,
+      centerX: stroke.points[0].x * width,
+      centerY: stroke.points[0].y * height,
+      radius: Math.max(4, stroke.sizeRatio * shortestSide) / 2
+    }];
+  });
+
+  return candidates.filter((circle) => !selectedStrokes.some((stroke, strokeIndex) => {
+    if (strokeIndex === circle.strokeIndex) return false;
+    const strokeRadius = Math.max(4, stroke.sizeRatio * shortestSide) / 2;
+    if (stroke.points.length === 1) {
+      return Math.hypot(
+        circle.centerX - stroke.points[0].x * width,
+        circle.centerY - stroke.points[0].y * height
+      ) <= circle.radius + strokeRadius;
+    }
+    const center = { x: circle.centerX, y: circle.centerY };
+    for (let pointIndex = 1; pointIndex < stroke.points.length; pointIndex += 1) {
+      const start = stroke.points[pointIndex - 1];
+      const end = stroke.points[pointIndex];
+      const distance = pointToSegmentDistance(
+        center,
+        { x: start.x * width, y: start.y * height },
+        { x: end.x * width, y: end.y * height }
+      );
+      if (distance <= circle.radius + strokeRadius) return true;
+    }
+    return false;
+  }));
+}
+
+export function selectionTapCircleOutlines(strokes: Stroke[], width: number, height: number) {
+  return selectionTapCircleOutlineEntries(strokes, width, height).map(({ centerX, centerY, radius }) => ({
+    centerX,
+    centerY,
+    radius
+  }));
 }
 
 export function renderMaskStroke(
@@ -236,7 +339,7 @@ export function selectionOverlayKey(strokes: Stroke[], width: number, height: nu
 }
 
 export function buildSelectionOverlaySnapshot(strokes: Stroke[], width: number, height: number): SelectionOverlaySnapshot | null {
-  const selectedStrokes = strokes.filter((stroke) => stroke.points.length > 1);
+  const selectedStrokes = strokes.filter((stroke) => stroke.points.length > 0);
   if (selectedStrokes.length === 0) return null;
   const maskCanvas = document.createElement("canvas");
   maskCanvas.width = width;
@@ -249,6 +352,10 @@ export function buildSelectionOverlaySnapshot(strokes: Stroke[], width: number, 
   maskCtx.strokeStyle = "#000";
   maskCtx.fillStyle = "#000";
   for (const stroke of selectedStrokes) {
+    if (stroke.points.length === 1) {
+      renderMaskStroke(maskCtx, stroke, width, height, "#000");
+      continue;
+    }
     maskCtx.lineWidth = Math.max(4, stroke.sizeRatio * Math.min(width, height));
     drawSmoothSelectionPath(maskCtx, stroke, width, height);
     maskCtx.stroke();
@@ -264,21 +371,57 @@ export function buildSelectionOverlaySnapshot(strokes: Stroke[], width: number, 
   fillCtx.globalCompositeOperation = "destination-in";
   fillCtx.drawImage(maskCanvas, 0, 0);
 
-  const contours = extractMaskContours(maskCanvas);
-  return { fillCanvas, contours };
+  const circleEntries = selectionTapCircleOutlineEntries(selectedStrokes, width, height);
+  const circles = circleEntries.map(({ centerX, centerY, radius }) => ({ centerX, centerY, radius }));
+  const isolatedTapIndexes = new Set(circleEntries.map((circle) => circle.strokeIndex));
+  let contours: SelectionOverlaySnapshot["contours"] = [];
+  if (isolatedTapIndexes.size < selectedStrokes.length) {
+    const contourMaskCanvas = document.createElement("canvas");
+    contourMaskCanvas.width = width;
+    contourMaskCanvas.height = height;
+    const contourMaskCtx = contourMaskCanvas.getContext("2d");
+    if (contourMaskCtx) {
+      contourMaskCtx.lineCap = "round";
+      contourMaskCtx.lineJoin = "round";
+      contourMaskCtx.strokeStyle = "#000";
+      contourMaskCtx.fillStyle = "#000";
+      selectedStrokes.forEach((stroke, strokeIndex) => {
+        if (isolatedTapIndexes.has(strokeIndex)) return;
+        if (stroke.points.length === 1) {
+          renderMaskStroke(contourMaskCtx, stroke, width, height, "#000");
+          return;
+        }
+        contourMaskCtx.lineWidth = Math.max(4, stroke.sizeRatio * Math.min(width, height));
+        drawSmoothSelectionPath(contourMaskCtx, stroke, width, height);
+        contourMaskCtx.stroke();
+      });
+      contours = extractMaskContours(contourMaskCanvas);
+    }
+  }
+  return { fillCanvas, contours, circles };
 }
 
-export function renderSelectionOverlay(ctx: CanvasRenderingContext2D, snapshot: SelectionOverlaySnapshot, dashOffset: number) {
+export function renderSelectionOverlay(
+  ctx: CanvasRenderingContext2D,
+  snapshot: SelectionOverlaySnapshot,
+  dashOffset: number,
+  renderScale = 1
+) {
   ctx.drawImage(snapshot.fillCanvas, 0, 0);
   ctx.save();
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  ctx.lineWidth = 1.8;
+  ctx.lineWidth = 1.8 * renderScale;
   ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
-  ctx.setLineDash(SELECTION_DASH_PATTERN);
-  ctx.lineDashOffset = -dashOffset;
+  ctx.setLineDash(SELECTION_DASH_PATTERN.map((value) => value * renderScale));
+  ctx.lineDashOffset = -dashOffset * renderScale;
   for (const contour of snapshot.contours) {
     drawClosedContourPath(ctx, contour);
+    ctx.stroke();
+  }
+  for (const circle of snapshot.circles) {
+    ctx.beginPath();
+    ctx.arc(circle.centerX, circle.centerY, circle.radius, 0, -Math.PI * 2, true);
     ctx.stroke();
   }
   ctx.restore();

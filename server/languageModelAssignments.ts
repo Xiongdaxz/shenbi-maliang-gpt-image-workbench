@@ -9,6 +9,7 @@ export const LANGUAGE_MODEL_USAGE_KEYS = [
   "prompt.optimize",
   "template.optimize",
   "template.translate",
+  "image.prompt_plan",
   "image.edit_suggestions",
   "title.chat",
   "title.case",

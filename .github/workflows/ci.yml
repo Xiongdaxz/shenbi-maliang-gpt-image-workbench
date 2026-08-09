@@ -17,11 +17,24 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: |
+          bun install --frozen-lockfile
+          python -m pip install --requirement scripts/requirements-chatgpt-web.txt
 
       - name: Type check
         run: bun run check
+
+      - name: Bun tests
+        run: bun test
+
+      - name: ChatGPT Web bridge tests
+        run: python -B -m unittest discover -s scripts -p 'test_chatgpt_web_bridge.py'
 
       - name: Build
         run: bun run build

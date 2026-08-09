@@ -304,6 +304,8 @@ html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance=
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .direct-image-preview img,
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-result,
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-result-thumbs button,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-result-thumb-placeholder,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-result-main-placeholder,
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .reference-image-thumbs button,
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-preview-card,
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-image-frame,
@@ -337,8 +339,8 @@ html[data-appearance="dark"] .image-editor-title {
 }
 
 html[data-appearance="dark"] .image-editor-preview-tools {
-  border-color: rgba(244, 241, 234, 0.14);
-  background: rgba(244, 241, 234, 0.08);
+  border-color: transparent;
+  background: transparent;
 }
 
 html[data-appearance="dark"] .image-editor-preview-tool,
@@ -355,6 +357,13 @@ html[data-appearance="dark"] .brush-step-btn:hover:not(:disabled) {
   border-color: rgba(244, 241, 234, 0.28);
   background: var(--button-default-hover-bg);
   color: var(--app-text);
+}
+
+html[data-appearance="dark"] .editor-primary-btn,
+html[data-appearance="dark"] .image-editor-annotation-save {
+  border-color: var(--button-primary-bg);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
 }
 
 html[data-appearance="dark"] .editor-icon-btn,
@@ -467,7 +476,45 @@ html[data-appearance="dark"] .image-editor-composer {
   box-shadow: 0 14px 44px rgba(0, 0, 0, 0.36);
 }
 
-html[data-appearance="dark"] .image-editor-composer input {
+html[data-appearance="dark"] .image-editor-annotation-input {
+  border-color: var(--app-border-strong);
+  background: var(--app-surface-raised);
+  color: var(--app-text);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.42);
+}
+
+html[data-appearance="dark"] .image-editor-annotation-cancel,
+html[data-appearance="dark"] .image-editor-annotation-delete {
+  background: var(--button-default-bg);
+}
+
+html[data-appearance="dark"] .image-editor-annotation-count {
+  color: var(--app-muted);
+}
+
+html[data-appearance="dark"] .image-editor-annotation-summary {
+  border-color: var(--app-border);
+  color: var(--app-muted);
+}
+
+html[data-appearance="dark"] .image-editor-annotation-tooltip {
+  border-color: var(--app-border-strong);
+  color: var(--app-text);
+  background: var(--app-surface-raised);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.42);
+}
+
+html[data-appearance="dark"] .image-editor-annotation-clear {
+  color: var(--app-muted);
+}
+
+html[data-appearance="dark"] .image-editor-annotation-clear:hover:not(:disabled) {
+  color: var(--app-text);
+  background: var(--button-default-hover-bg);
+}
+
+html[data-appearance="dark"] .image-editor-composer input,
+html[data-appearance="dark"] .image-editor-annotation-input input {
   color: var(--app-text);
 }
 
@@ -576,6 +623,11 @@ html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance=
   box-shadow:
     inset 0 1px 0 rgba(244, 241, 234, 0.13),
     0 14px 32px rgba(0, 0, 0, 0.24);
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-result-thumb-placeholder.is-loading {
+  --image-result-thumb-loading-bg: var(--app-preview-bg);
+  --image-result-thumb-loading-highlight: rgba(244, 241, 234, 0.16);
 }
 
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-edit-suggestion-skeleton {
@@ -794,6 +846,17 @@ html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance=
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-space-filter-tabs button.active {
   border-color: var(--button-primary-bg);
   background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+}
+
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .pill-tabs.sliding-filter-surface > button.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .pill-tabs.sliding-filter-surface > button.active:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-filter-pinned-tabs.sliding-filter-surface > button.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .case-filter-pinned-tabs.sliding-filter-surface > button.active:hover,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-space-filter-tabs.sliding-filter-surface > button.active,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .asset-space-filter-tabs.sliding-filter-surface > button.active:hover {
+  border-color: transparent;
+  background: transparent;
   color: var(--button-primary-text);
 }
 
@@ -1277,6 +1340,10 @@ html[data-appearance="maliang"] .case-preview-toolbar {
   box-shadow: 0 -16px 42px rgba(67, 52, 43, 0.16);
 }
 
+html[data-appearance="maliang"] .image-result-thumb-placeholder.is-loading {
+  --image-result-thumb-loading-highlight: rgba(201, 100, 66, 0.18);
+}
+
 html[data-appearance="maliang"] .case-preview-info h3,
 html[data-appearance="maliang"] .case-preview-zoom {
   color: var(--app-text);
@@ -1368,6 +1435,10 @@ html[data-appearance="chunyu"] .image-load-skeleton {
     linear-gradient(90deg, transparent, rgba(47, 125, 86, 0.14), transparent),
     var(--app-preview-bg);
   background-size: 220% 100%;
+}
+
+html[data-appearance="chunyu"] .image-result-thumb-placeholder.is-loading {
+  --image-result-thumb-loading-highlight: rgba(47, 125, 86, 0.18);
 }
 
 html[data-appearance="chunyu"] .case-action-icon,

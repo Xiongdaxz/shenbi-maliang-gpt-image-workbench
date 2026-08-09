@@ -17,6 +17,74 @@ type HorizontalScrollHint = {
 const NO_SCROLL_HINT: HorizontalScrollHint = { overflow: false, atStart: true, atEnd: true };
 const FILTER_TAB_EDGE_PADDING_PX = 18;
 const FILTER_TAB_CENTER_THRESHOLD = 0.58;
+const FILTER_SLIDER_ANIMATION_RESET_MS = 360;
+
+type FilterSliderLayout = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  ready: boolean;
+};
+
+const EMPTY_FILTER_SLIDER: FilterSliderLayout = { left: 0, top: 0, width: 0, height: 0, ready: false };
+
+function filterSliderLayout(element: HTMLElement, activeValue: string | null | undefined, current: FilterSliderLayout) {
+  if (!activeValue) return current.ready ? { ...current, ready: false } : current;
+  const activeButton = Array.from(element.children).find(
+    (child): child is HTMLButtonElement => child instanceof HTMLButtonElement && child.dataset.filterValue === activeValue
+  );
+  if (!activeButton) return current.ready ? { ...current, ready: false } : current;
+  return {
+    left: activeButton.offsetLeft,
+    top: activeButton.offsetTop,
+    width: activeButton.offsetWidth,
+    height: activeButton.offsetHeight,
+    ready: true
+  };
+}
+
+function sameFilterSliderLayout(current: FilterSliderLayout, next: FilterSliderLayout) {
+  return (
+    current.ready === next.ready &&
+    Math.abs(current.left - next.left) <= 0.5 &&
+    Math.abs(current.top - next.top) <= 0.5 &&
+    Math.abs(current.width - next.width) <= 0.5 &&
+    Math.abs(current.height - next.height) <= 0.5
+  );
+}
+
+function filterSliderStyle(slider: FilterSliderLayout) {
+  return {
+    "--filter-slider-left": `${slider.left}px`,
+    "--filter-slider-top": `${slider.top}px`,
+    "--filter-slider-width": `${slider.width}px`,
+    "--filter-slider-height": `${slider.height}px`
+  } as CSSProperties;
+}
+
+function useFilterSliderAnimation() {
+  const [animated, setAnimated] = useState(false);
+  const resetTimerRef = useRef<number | null>(null);
+
+  const beginAnimation = useCallback(() => {
+    if (resetTimerRef.current !== null) window.clearTimeout(resetTimerRef.current);
+    setAnimated(true);
+    resetTimerRef.current = window.setTimeout(() => {
+      setAnimated(false);
+      resetTimerRef.current = null;
+    }, FILTER_SLIDER_ANIMATION_RESET_MS);
+  }, []);
+
+  useLayoutEffect(
+    () => () => {
+      if (resetTimerRef.current !== null) window.clearTimeout(resetTimerRef.current);
+    },
+    []
+  );
+
+  return { animated, beginAnimation };
+}
 
 function storedFilterDisplayMode(): LibraryFilterDisplayMode {
   if (typeof window === "undefined") return "compact";
@@ -43,38 +111,39 @@ export function useLibraryFilterDisplayMode() {
   return [mode, setMode] as const;
 }
 
-function useHorizontalScroller(dependencyKey: string, enabled = true) {
+function useHorizontalScroller(dependencyKey: string, enabled = true, activeFilterValue?: string | null) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [scrollHint, setScrollHint] = useState<HorizontalScrollHint>(NO_SCROLL_HINT);
+  const [filterSlider, setFilterSlider] = useState<FilterSliderLayout>(EMPTY_FILTER_SLIDER);
+  const { animated: filterSliderAnimated, beginAnimation: beginFilterSliderAnimation } = useFilterSliderAnimation();
 
   useLayoutEffect(() => {
-    if (!enabled) {
-      if (scrollRef.current) scrollRef.current.scrollLeft = 0;
-      setScrollHint((value) =>
-        value.overflow === NO_SCROLL_HINT.overflow && value.atStart === NO_SCROLL_HINT.atStart && value.atEnd === NO_SCROLL_HINT.atEnd
-          ? value
-          : NO_SCROLL_HINT
-      );
-      return;
-    }
-
     const element = scrollRef.current;
     if (!element) return;
+    if (!enabled) element.scrollLeft = 0;
     let frame = 0;
+    const measure = () => {
+      const maxScrollLeft = enabled ? Math.max(0, element.scrollWidth - element.clientWidth) : 0;
+      const overflow = maxScrollLeft > 1;
+      const atStart = !overflow || element.scrollLeft <= 1;
+      const atEnd = !overflow || element.scrollLeft >= maxScrollLeft - 1;
+      setScrollHint((value) =>
+        value.overflow === overflow && value.atStart === atStart && value.atEnd === atEnd ? value : { overflow, atStart, atEnd }
+      );
+      if (activeFilterValue !== undefined) {
+        setFilterSlider((current) => {
+          const next = filterSliderLayout(element, activeFilterValue, current);
+          return sameFilterSliderLayout(current, next) ? current : next;
+        });
+      }
+    };
     const sync = () => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const maxScrollLeft = Math.max(0, element.scrollWidth - element.clientWidth);
-        const overflow = maxScrollLeft > 1;
-        const atStart = !overflow || element.scrollLeft <= 1;
-        const atEnd = !overflow || element.scrollLeft >= maxScrollLeft - 1;
-        setScrollHint((value) =>
-          value.overflow === overflow && value.atStart === atStart && value.atEnd === atEnd ? value : { overflow, atStart, atEnd }
-        );
-      });
+      frame = requestAnimationFrame(measure);
     };
 
     const handleWheel = (event: WheelEvent) => {
+      if (!enabled) return;
       const maxScrollLeft = Math.max(0, element.scrollWidth - element.clientWidth);
       if (maxScrollLeft <= 1) return;
 
@@ -93,24 +162,30 @@ function useHorizontalScroller(dependencyKey: string, enabled = true) {
       element.scrollLeft = Math.max(0, Math.min(maxScrollLeft, element.scrollLeft + delta));
     };
 
-    sync();
+    measure();
     const resizeObserver = new ResizeObserver(sync);
     resizeObserver.observe(element);
-    Array.from(element.children).forEach((child) => resizeObserver.observe(child));
-    element.addEventListener("scroll", sync, { passive: true });
-    element.addEventListener("wheel", handleWheel, { passive: false });
+    Array.from(element.children).forEach((child) => {
+      if (child instanceof HTMLButtonElement) resizeObserver.observe(child);
+    });
+    if (enabled) {
+      element.addEventListener("scroll", sync, { passive: true });
+      element.addEventListener("wheel", handleWheel, { passive: false });
+    }
     window.addEventListener("resize", sync);
 
     return () => {
       cancelAnimationFrame(frame);
       resizeObserver.disconnect();
-      element.removeEventListener("scroll", sync);
-      element.removeEventListener("wheel", handleWheel);
+      if (enabled) {
+        element.removeEventListener("scroll", sync);
+        element.removeEventListener("wheel", handleWheel);
+      }
       window.removeEventListener("resize", sync);
     };
-  }, [dependencyKey, enabled]);
+  }, [activeFilterValue, dependencyKey, enabled]);
 
-  return { scrollRef, scrollHint };
+  return { scrollRef, scrollHint, filterSlider, filterSliderAnimated, beginFilterSliderAnimation };
 }
 
 export function AssetTagScroller({ names }: { names: string[] }) {
@@ -127,11 +202,19 @@ export function AssetTagScroller({ names }: { names: string[] }) {
   );
 }
 
-export function FilterTabLabel({ children, count }: { children: ReactNode; count?: number }) {
+export function FilterTabLabel({
+  children,
+  count,
+  reserveCountSpace = false
+}: {
+  children: ReactNode;
+  count?: number;
+  reserveCountSpace?: boolean;
+}) {
   return (
     <>
       <span>{children}</span>
-      {typeof count === "number" && count > 0 ? <span className="filter-tab-count">{count}</span> : null}
+      {typeof count === "number" && (count > 0 || reserveCountSpace) ? <span className="filter-tab-count">{count}</span> : null}
     </>
   );
 }
@@ -140,23 +223,30 @@ export function FilterTabsScroller({
   className,
   ariaLabel,
   hintKey,
+  activeValue,
   mode = "compact",
   children
 }: {
   className?: string;
   ariaLabel?: string;
   hintKey: string;
+  activeValue?: string | null;
   mode?: LibraryFilterDisplayMode;
   children: ReactNode;
 }) {
-  const { scrollRef, scrollHint } = useHorizontalScroller(hintKey, mode === "compact");
+  const { scrollRef, scrollHint, filterSlider, filterSliderAnimated, beginFilterSliderAnimation } = useHorizontalScroller(
+    hintKey,
+    mode === "compact",
+    activeValue
+  );
   const scrollClickedTabIntoView = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
-      if (mode !== "compact") return;
       const scroller = scrollRef.current;
       const target = event.target instanceof Element ? event.target : null;
       const button = target?.closest("button");
       if (!scroller || !button || !scroller.contains(button)) return;
+      if (activeValue !== undefined) beginFilterSliderAnimation();
+      if (mode !== "compact") return;
 
       const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
       if (maxScrollLeft <= 1) return;
@@ -185,7 +275,7 @@ export function FilterTabsScroller({
       if (Math.abs(clampedLeft - visibleLeft) <= 1) return;
       window.requestAnimationFrame(() => scroller.scrollTo({ left: clampedLeft, behavior: "smooth" }));
     },
-    [mode, scrollRef]
+    [activeValue, beginFilterSliderAnimation, mode, scrollRef]
   );
 
   return (
@@ -198,9 +288,121 @@ export function FilterTabsScroller({
         scrollHint.overflow && !scrollHint.atEnd && "has-end-overflow"
       )}
     >
-      <div className={cx("pill-tabs", className)} ref={scrollRef} aria-label={ariaLabel} onClickCapture={scrollClickedTabIntoView}>
+      <div
+        className={cx("pill-tabs", activeValue !== undefined && "sliding-filter-surface", className)}
+        ref={scrollRef}
+        role="group"
+        aria-label={ariaLabel}
+        style={activeValue !== undefined ? filterSliderStyle(filterSlider) : undefined}
+        data-filter-slider-ready={filterSlider.ready ? "true" : "false"}
+        data-filter-slider-animated={filterSliderAnimated ? "true" : "false"}
+        onClickCapture={scrollClickedTabIntoView}
+      >
+        {activeValue !== undefined ? <span className="filter-selection-slider" aria-hidden="true" /> : null}
         {children}
       </div>
+    </div>
+  );
+}
+
+export function SlidingFilterGroup({
+  className,
+  ariaLabel,
+  activeValue,
+  countDigits,
+  children
+}: {
+  className?: string;
+  ariaLabel?: string;
+  activeValue: string | null;
+  countDigits?: number;
+  children: ReactNode;
+}) {
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const [slider, setSlider] = useState<FilterSliderLayout>(EMPTY_FILTER_SLIDER);
+  const { animated, beginAnimation } = useFilterSliderAnimation();
+
+  useLayoutEffect(() => {
+    const element = wrapRef.current;
+    if (!element) return;
+    let frame = 0;
+    const measure = () => {
+      setSlider((current) => {
+        const next = filterSliderLayout(element, activeValue, current);
+        return sameFilterSliderLayout(current, next) ? current : next;
+      });
+    };
+    const sync = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(measure);
+    };
+
+    measure();
+    const resizeObserver = new ResizeObserver(sync);
+    resizeObserver.observe(element);
+    Array.from(element.children).forEach((child) => {
+      if (child instanceof HTMLButtonElement) resizeObserver.observe(child);
+    });
+    window.addEventListener("resize", sync);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", sync);
+    };
+  }, [activeValue]);
+
+  const handleClickCapture = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const button = target?.closest("button");
+      if (button && wrapRef.current?.contains(button)) beginAnimation();
+    },
+    [beginAnimation]
+  );
+
+  return (
+    <div
+      className={cx("sliding-filter-surface", className)}
+      ref={wrapRef}
+      role="group"
+      aria-label={ariaLabel}
+      style={{
+        ...filterSliderStyle(slider),
+        ...(countDigits ? { "--filter-count-width": `${countDigits}ch` } : {})
+      } as CSSProperties}
+      data-filter-slider-ready={slider.ready ? "true" : "false"}
+      data-filter-slider-animated={animated ? "true" : "false"}
+      onClickCapture={handleClickCapture}
+    >
+      <span className="filter-selection-slider" aria-hidden="true" />
+      {children}
+    </div>
+  );
+}
+
+export function FilterResultTransition({ resultKey, children }: { resultKey: unknown; children: ReactNode }) {
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const hasInitialResultRef = useRef(false);
+
+  useLayoutEffect(() => {
+    if (resultKey === null || resultKey === undefined) return;
+    if (!hasInitialResultRef.current) {
+      hasInitialResultRef.current = true;
+      return;
+    }
+    const element = wrapRef.current;
+    if (!element || typeof element.animate !== "function" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    element.getAnimations().forEach((animation) => animation.cancel());
+    element.animate([{ opacity: 0.94 }, { opacity: 1 }], {
+      duration: 140,
+      easing: "cubic-bezier(0.22, 1, 0.36, 1)"
+    });
+  }, [resultKey]);
+
+  return (
+    <div className="library-filter-results" ref={wrapRef}>
+      {children}
     </div>
   );
 }

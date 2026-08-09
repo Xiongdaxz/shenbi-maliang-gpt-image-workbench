@@ -174,7 +174,8 @@ export function SessionActionsMenu({ open, title, pinned, disabled, variant = "s
         aria-label={t("sidebar.sessionMoreActions")}
         aria-haspopup="menu"
         aria-expanded={open && !closing}
-        title={t("common.more")}
+        data-tooltip={variant === "toolbar" ? t("common.more") : undefined}
+        title={variant === "toolbar" ? undefined : t("common.more")}
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();

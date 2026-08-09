@@ -83,15 +83,15 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border: 1px solid rgba(17, 24, 39, 0.08);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.74);
-  padding: 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
 }
 
 .image-editor-preview-tool {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -112,14 +112,6 @@
   cursor: not-allowed;
 }
 
-.image-editor-preview-tool.text {
-  width: auto;
-  padding: 0 11px;
-  font-size: 13px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
 .image-editor-preview-zoom {
   min-width: 46px;
   color: #111827;
@@ -135,6 +127,7 @@
 .editor-icon-btn,
 .editor-round-btn,
 .editor-text-btn,
+.editor-primary-btn,
 .thumb-step-btn,
 .editor-composer-tool,
 .editor-send-btn {
@@ -164,11 +157,11 @@
 }
 
 .editor-round-btn {
-  width: 38px;
-  height: 38px;
-  min-width: 38px;
-  min-height: 38px;
-  flex: 0 0 38px;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  flex: 0 0 36px;
   text-decoration: none;
 }
 
@@ -190,14 +183,38 @@
 }
 
 .editor-text-btn {
-  min-height: 38px;
+  height: 36px;
+  min-height: 36px;
   display: inline-flex;
   align-items: center;
   gap: 7px;
   border: 1px solid #d8dce3;
   background: #fff;
-  padding: 7px 12px;
+  padding: 6px 12px;
   font-weight: 500;
+}
+
+.editor-primary-btn {
+  height: 36px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #050505;
+  border-radius: 999px;
+  padding: 6px 12px;
+  color: #fff;
+  background: #050505;
+  font-weight: 600;
+}
+
+.editor-primary-btn:hover:not(:disabled) {
+  background: #202020;
+}
+
+.editor-primary-btn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
 }
 
 .editor-text-btn small {
@@ -207,7 +224,8 @@
 }
 
 .brush-size-control {
-  min-height: 38px;
+  height: 36px;
+  min-height: 36px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -563,6 +581,193 @@
   will-change: transform;
 }
 
+.image-editor-brush-size-preview {
+  position: absolute;
+  z-index: 5;
+  border: 2px dashed rgba(255, 255, 255, 0.96);
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.06);
+  box-shadow:
+    0 0 0 1px rgba(17, 24, 39, 0.48),
+    0 2px 10px rgba(17, 24, 39, 0.18);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.image-editor-annotation-layer {
+  position: absolute;
+  z-index: 6;
+  inset: 0;
+  cursor: url("/image/message-circle-plus-cursor.svg") 16 15, crosshair;
+  touch-action: none;
+  overflow: visible;
+}
+
+.image-editor-annotation-marker {
+  position: absolute;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  display: block;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: #fff;
+  transform: translate(-50%, -50%);
+  transform-origin: center;
+  cursor: grab;
+  touch-action: none;
+}
+
+.image-editor-annotation-marker::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #050505;
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.9),
+    0 5px 16px rgba(15, 23, 42, 0.28);
+}
+
+.image-editor-annotation-marker-number {
+  position: relative;
+  z-index: 1;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.image-editor-annotation-tooltip {
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  z-index: 4;
+  width: max-content;
+  max-width: min(280px, 42vw);
+  border: 1px solid rgba(17, 24, 39, 0.1);
+  border-radius: 12px;
+  padding: 9px 12px;
+  color: #1f2937;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(4px, -50%);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    visibility 140ms ease;
+  pointer-events: none;
+}
+
+.image-editor-annotation-marker:hover .image-editor-annotation-tooltip,
+.image-editor-annotation-marker:focus-visible .image-editor-annotation-tooltip,
+.image-editor-annotation-layer.show-all-tooltips .image-editor-annotation-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(0, -50%);
+}
+
+.image-editor-annotation-marker:hover,
+.image-editor-annotation-marker:focus-visible,
+.image-editor-annotation-marker.active,
+.image-editor-annotation-layer.show-all-tooltips .image-editor-annotation-marker {
+  z-index: 3;
+  transform: translate(-50%, -50%) scale(1.08);
+  outline: none;
+}
+
+.image-editor-annotation-marker:active {
+  cursor: grabbing;
+}
+
+.image-editor-annotation-marker.is-draft {
+  pointer-events: none;
+}
+
+.image-editor-annotation-input {
+  position: absolute;
+  z-index: 5;
+  min-width: 0;
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px 34px;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid rgba(17, 24, 39, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.98);
+  padding: 5px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.22);
+  cursor: default;
+}
+
+.image-editor-annotation-input input {
+  min-width: 0;
+  height: 36px;
+  border: 0;
+  background: transparent;
+  padding: 0 8px;
+  box-shadow: none;
+}
+
+.image-editor-annotation-input input:focus {
+  box-shadow: none;
+}
+
+.image-editor-annotation-input button {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+}
+
+.image-editor-annotation-save {
+  color: #fff;
+  background: #050505;
+}
+
+.image-editor-annotation-save:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.image-editor-annotation-cancel,
+.image-editor-annotation-delete {
+  color: #374151;
+  background: #f3f4f6;
+}
+
+.image-editor-annotation-delete {
+  color: #b42318;
+}
+
+.image-editor-mode-error {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  z-index: 8;
+  max-width: min(460px, calc(100% - 32px));
+  transform: translateX(-50%);
+}
+
 .image-editor-preview-navigator {
   position: absolute;
   top: 18px;
@@ -667,6 +872,89 @@
   padding: 8px 9px 8px 16px;
   box-shadow: 0 14px 44px rgba(15, 23, 42, 0.12);
   pointer-events: auto;
+}
+
+.image-editor-composer.is-annotation {
+  grid-template-columns: auto minmax(0, 1fr) 36px;
+  border-radius: 999px;
+  padding: 8px 9px 8px 12px;
+}
+
+.image-editor-composer.is-annotation.has-annotations {
+  row-gap: 0;
+  border-radius: 26px;
+  padding: 0 9px 8px 12px;
+}
+
+.image-editor-annotation-summary {
+  grid-column: 1 / -1;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 -9px 8px -12px;
+  border-bottom: 1px solid #eef0f3;
+  padding: 0 20px;
+  color: #4b5563;
+}
+
+.image-editor-annotation-toggle {
+  min-width: 0;
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  line-height: 1;
+  text-align: left;
+}
+
+.image-editor-annotation-toggle > svg {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.image-editor-annotation-toggle:focus-visible {
+  border-radius: 8px;
+  outline: 2px solid rgba(37, 99, 235, 0.45);
+  outline-offset: 2px;
+}
+
+.image-editor-annotation-count {
+  color: #4b5563;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.image-editor-annotation-clear {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  margin-left: auto;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  color: #6b7280;
+  background: transparent;
+}
+
+.image-editor-annotation-clear:hover:not(:disabled) {
+  color: #111827;
+  background: #f3f4f6;
+}
+
+.image-editor-annotation-clear:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .image-editor-composer-tools {

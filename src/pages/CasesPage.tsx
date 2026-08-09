@@ -7,7 +7,14 @@ import { AddAssetFromImageModal } from "../components/AddAssetFromImageModal";
 import { CaseModalImagePreview, type CaseModalPreviewImage } from "../components/CaseModalImagePreview";
 import { CaseCategoryMultiSelect } from "../components/CaseCategoryMultiSelect";
 import { CaseMaterialActionsMenu } from "../components/CaseMaterialActionsMenu";
-import { FilterModeToggle, FilterTabLabel, FilterTabsScroller, useLibraryFilterDisplayMode } from "../components/HorizontalScrollers";
+import {
+  FilterModeToggle,
+  FilterResultTransition,
+  FilterTabLabel,
+  FilterTabsScroller,
+  SlidingFilterGroup,
+  useLibraryFilterDisplayMode
+} from "../components/HorizontalScrollers";
 import { ImageDownloadMenu } from "../components/ImageDownloadMenu";
 import { InspirationLeaderboardDialog } from "../components/InspirationLeaderboardDialog";
 import { ImagePreviewModal } from "../components/ImagePreviewModal";
@@ -162,7 +169,7 @@ function EditCaseModal({
 
   return (
     <ModalPortal>
-      <div className="modal-backdrop">
+      <div className="modal-backdrop modal-backdrop-preview-child">
         <section className="case-modal edit-case-modal">
           <header>
             <h3>{t("pages.cases.edit")}</h3>
@@ -587,6 +594,16 @@ export function CasesPage({
       ["case-filter", mineOnly ? "mine" : "all", favoriteOnly ? "favorite" : "normal", selectedCategoryIds.join(","), ...caseStyleCategories.map((category) => `${category.id}:${category.name}`)].join("\u0000"),
     [caseStyleCategories, favoriteOnly, mineOnly, selectedCategoryIds]
   );
+  const caseResultTransitionKey = useMemo(
+    () => ["cases", selectedCategoryIds.join(","), mineOnly ? "mine" : "all", favoriteOnly ? "favorite" : "normal", debouncedKeyword].join("\u0000"),
+    [debouncedKeyword, favoriteOnly, mineOnly, selectedCategoryIds]
+  );
+  const activeCaseFilterValue = selectedCategoryIds[0]
+    ? `case-category:${selectedCategoryIds[0]}`
+    : mineOnly
+      ? "case-scope:mine"
+      : "case-scope:all";
+  const activeCaseScopeValue = selectedCategoryIds.length > 0 ? null : activeCaseFilterValue;
   const caseScrollJumpKey = useMemo(
     () => ["cases", filterDisplayMode, mineOnly ? "mine" : "all", favoriteOnly ? "favorite" : "normal", selectedCategoryIds.join(","), keyword, visibleItems.length].join("\u0000"),
     [favoriteOnly, filterDisplayMode, keyword, mineOnly, selectedCategoryIds, visibleItems.length]
@@ -755,19 +772,23 @@ export function CasesPage({
     <>
       <button
         className={cx(selectedCategoryIds.length === 0 && !mineOnly && "active")}
+        data-filter-value="case-scope:all"
         onClick={() => {
           setSelectedCategoryIds([]);
           setMineOnly(false);
         }}
+        aria-pressed={selectedCategoryIds.length === 0 && !mineOnly}
       >
         <FilterTabLabel count={caseFilterCounts.all}>{t("common.all")}</FilterTabLabel>
       </button>
       <button
         className={cx(mineOnly && "active")}
+        data-filter-value="case-scope:mine"
         onClick={() => {
           setSelectedCategoryIds([]);
           setMineOnly((value) => !value);
         }}
+        aria-pressed={mineOnly}
       >
         <FilterTabLabel count={caseFilterCounts.mine}>{t("common.mine")}</FilterTabLabel>
       </button>
@@ -815,17 +836,24 @@ export function CasesPage({
       />
       <div className={cx("library-filter-row", `filter-mode-${filterDisplayMode}`)}>
         {filterDisplayMode === "compact" ? (
-          <div className="case-filter-pinned-tabs" role="group" aria-label={t("pages.cases.scope")}>
+          <SlidingFilterGroup className="case-filter-pinned-tabs" ariaLabel={t("pages.cases.scope")} activeValue={activeCaseScopeValue}>
             {scopeFilterButtons}
-          </div>
+          </SlidingFilterGroup>
         ) : null}
-        <FilterTabsScroller ariaLabel={t("pages.cases.styles")} hintKey={caseFilterHintKey} mode={filterDisplayMode}>
+        <FilterTabsScroller
+          ariaLabel={t("pages.cases.styles")}
+          hintKey={caseFilterHintKey}
+          activeValue={filterDisplayMode === "compact" && selectedCategoryIds.length === 0 ? null : activeCaseFilterValue}
+          mode={filterDisplayMode}
+        >
           {filterDisplayMode === "compact" ? null : scopeFilterButtons}
           {caseStyleCategories.map((category) => (
             <button
               key={category.slug}
               className={cx(selectedCategoryIds.includes(category.id) && "active")}
+              data-filter-value={`case-category:${category.id}`}
               onClick={() => toggleCaseCategory(category.id)}
+              aria-pressed={selectedCategoryIds.includes(category.id)}
             >
               <FilterTabLabel count={caseFilterCounts.byCategory.get(category.id)}>{category.name}</FilterTabLabel>
             </button>
@@ -858,18 +886,19 @@ export function CasesPage({
           </button>
         </div>
       </div>
-      <VirtualizedResponsiveGrid
-        items={visibleItems}
-        getKey={(item) => item.groupId || item.id}
-        minColumnWidth={210}
-        estimateCardHeight={(width) => width + 85}
-        gap={16}
-        mobileGap={10}
-        className="case-virtual-grid"
-        rowClassName="case-virtual-grid-row"
-        renderItem={(item, { index, eager, highPriority }) => {
-          return (
-            <article className="case-card" key={item.id}>
+      <FilterResultTransition resultKey={cases.data?.pages[0] ? caseResultTransitionKey : null}>
+        <VirtualizedResponsiveGrid
+          items={visibleItems}
+          getKey={(item) => item.groupId || item.id}
+          minColumnWidth={210}
+          estimateCardHeight={(width) => width + 85}
+          gap={16}
+          mobileGap={10}
+          className="case-virtual-grid"
+          rowClassName="case-virtual-grid-row"
+          renderItem={(item, { index, eager, highPriority }) => {
+            return (
+              <article className="case-card" key={item.id}>
               <div className="case-image-frame" title={(item.imageCount ?? 1) > 1 ? t("pages.cases.groupImage") : undefined}>
                 <button className="case-image-btn" type="button" onClick={() => selectPreviewIndex(index)}>
                   <SkeletonImage
@@ -941,10 +970,11 @@ export function CasesPage({
                   />
                 </div>
               </div>
-            </article>
-          );
-        }}
-      />
+              </article>
+            );
+          }}
+        />
+      </FilterResultTransition>
       {!cases.isLoading && visibleItems.length === 0 ? (
         hasCaseFilters ? (
           <LibraryEmptyState
@@ -986,6 +1016,7 @@ export function CasesPage({
           initialImageSource="original"
           wheelMode={imagePreviewWheelMode}
           suppressStableScrollbarGutter
+          unifiedToolbarControls
           navigationItemCount={previewItemCount}
           canNavigateNext={previewIndex + 1 < previewItemCount}
           canNavigatePrevious={previewIndex > 0}
@@ -1103,6 +1134,7 @@ export function CasesPage({
         description={t("pages.cases.deleteDescription", { title: deleteTarget?.title ?? "" })}
         confirmText={deleteCase.isPending ? t("common.deleting") : t("common.delete")}
         destructive
+        backdropClassName="modal-backdrop-top"
         onConfirm={() => {
           if (deleteTarget && !deleteCase.isPending) deleteCase.mutate(deleteTarget.id);
         }}

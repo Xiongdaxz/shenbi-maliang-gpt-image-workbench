@@ -404,6 +404,10 @@
 }
 
 @media (max-width: 640px) {
+  .conversation-navigator {
+    display: none;
+  }
+
   .page-section {
     padding: 76px 14px 24px;
   }
@@ -562,6 +566,21 @@
 
   .image-result-group {
     grid-template-columns: 1fr;
+  }
+
+  .image-result-group.is-rendering .rendering-title {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .image-result-group.is-rendering .image-result-thumbs-wrap {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .image-result-group.is-rendering .rendering-card {
+    grid-column: 1;
+    grid-row: 3;
   }
 
   .assistant-image-group-toolbar {

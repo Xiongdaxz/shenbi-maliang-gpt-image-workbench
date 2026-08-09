@@ -1,4 +1,5 @@
 import type { AssetItem, CaseMaterialItem, Message, MessageSourceReferenceImage } from "../types";
+import type { ImageAnnotation, ImageEditIntent } from "./imageAnnotations";
 
 export type SubmitRequest = {
   clientRequestId: string;
@@ -9,7 +10,6 @@ export type SubmitRequest = {
   prompt: string;
   language?: string;
   size?: string;
-  quality?: string;
   n?: number;
   caseItemId?: string;
   sourceImageIds?: string[];
@@ -19,6 +19,8 @@ export type SubmitRequest = {
   sourceInlineImages?: Array<{ id?: string; name?: string; dataUrl: string }>;
   referenceAssetId?: string;
   maskDataUrl?: string;
+  editIntent?: ImageEditIntent;
+  imageAnnotations?: ImageAnnotation[];
   hideReference?: boolean;
   revisionRootId?: string;
   editedMessageId?: string;

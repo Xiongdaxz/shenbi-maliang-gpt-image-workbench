@@ -1087,19 +1087,23 @@ export function ImageModePanel() {
   const providers = useQuery({ queryKey: ["config-providers"], queryFn: configApi.providers });
   const [mode, setMode] = useState<ImageGenerationMode["mode"]>("auto");
   const [resultRetryCountInput, setResultRetryCountInput] = useState("1");
+  const [multiImageConcurrencyInput, setMultiImageConcurrencyInput] = useState("2");
   const save = useMutation({
     mutationFn: ({
       nextMode,
-      resultRetryCount
+      resultRetryCount,
+      multiImageConcurrency
     }: {
       nextMode: ImageGenerationMode["mode"];
       resultRetryCount: ImageGenerationMode["resultRetryCount"];
+      multiImageConcurrency: ImageGenerationMode["multiImageConcurrency"];
       toast: "mode" | "policy";
-    }) => configApi.saveImageMode({ mode: nextMode, resultRetryCount }),
+    }) => configApi.saveImageMode({ mode: nextMode, resultRetryCount, multiImageConcurrency }),
     onSuccess: (data, variables) => {
       const savedMode = data.imageMode.mode || variables.nextMode;
       setMode(savedMode);
       setResultRetryCountInput(data.imageMode.resultRetryCount === null ? "" : String(data.imageMode.resultRetryCount));
+      setMultiImageConcurrencyInput(String(data.imageMode.multiImageConcurrency));
       showToast(variables.toast === "mode" ? `${imageModeLabels[savedMode]}已启用` : "请求策略已保存");
       queryClient.invalidateQueries({ queryKey: ["config-image-mode"] });
       queryClient.invalidateQueries({ queryKey: ["providers"] });
@@ -1110,6 +1114,7 @@ export function ImageModePanel() {
     if (!imageMode.data?.imageMode) return;
     setMode(imageMode.data.imageMode.mode);
     setResultRetryCountInput(imageMode.data.imageMode.resultRetryCount === null ? "" : String(imageMode.data.imageMode.resultRetryCount));
+    setMultiImageConcurrencyInput(String(imageMode.data.imageMode.multiImageConcurrency));
   }, [imageMode.data?.imageMode]);
 
   const counts = useMemo(() => {
@@ -1136,6 +1141,7 @@ export function ImageModePanel() {
     save.mutate({
       nextMode,
       resultRetryCount: normalizedResultRetryCountInput(),
+      multiImageConcurrency: normalizedMultiImageConcurrencyInput(),
       toast: "mode"
     }, {
       onError: () => setMode(previousMode)
@@ -1150,11 +1156,18 @@ export function ImageModePanel() {
     return Math.max(0, Math.min(10, count));
   }
 
+  function normalizedMultiImageConcurrencyInput(): ImageGenerationMode["multiImageConcurrency"] {
+    const count = Number.parseInt(multiImageConcurrencyInput.trim(), 10);
+    if (!Number.isFinite(count)) return 2;
+    return Math.max(1, Math.min(10, count));
+  }
+
   function saveRequestPolicy() {
     if (save.isPending) return;
     save.mutate({
       nextMode: mode,
       resultRetryCount: normalizedResultRetryCountInput(),
+      multiImageConcurrency: normalizedMultiImageConcurrencyInput(),
       toast: "policy"
     });
   }
@@ -1163,26 +1176,45 @@ export function ImageModePanel() {
     <section className="config-card">
       <ConfigHeader title="模式配置" desc="控制图片生成整体从哪类渠道选路。" />
       <div className="mode-request-policy">
-        <div>
+        <div className="mode-request-policy-head">
           <strong>请求策略</strong>
-          <small>图片接口调用或图片结果保存出现错误时自动重试。默认 1；留空表示不自动重试。</small>
+          <button className="primary-btn mode-request-policy-save" type="button" onClick={saveRequestPolicy} disabled={save.isPending}>
+            <Save size={16} />
+            保存策略
+          </button>
         </div>
-        <label>
-          图片结果重试次数
-          <input
-            type="number"
-            min={0}
-            max={10}
-            step={1}
-            value={resultRetryCountInput}
-            onChange={(event) => setResultRetryCountInput(event.target.value)}
-            placeholder="留空不重试"
-          />
-        </label>
-        <button className="secondary-btn" type="button" onClick={saveRequestPolicy} disabled={save.isPending}>
-          <Save size={16} />
-          保存策略
-        </button>
+        <div className="mode-request-policy-fields">
+          <label className="mode-request-policy-field">
+            <span className="mode-request-policy-copy">
+              <strong>图片结果重试次数</strong>
+              <small>图片接口调用或图片结果保存出现错误时自动重试。默认 1；留空表示不自动重试。</small>
+            </span>
+            <input
+              type="number"
+              min={0}
+              max={10}
+              step={1}
+              value={resultRetryCountInput}
+              onChange={(event) => setResultRetryCountInput(event.target.value)}
+              placeholder="留空不重试"
+            />
+          </label>
+          <label className="mode-request-policy-field">
+            <span className="mode-request-policy-copy">
+              <strong>单个多图任务最大并发数</strong>
+              <small>范围 1–10；设置为 1 表示串行，系统会按渠道和可用账号自动降低实际并发数。</small>
+            </span>
+            <input
+              type="number"
+              min={1}
+              max={10}
+              step={1}
+              value={multiImageConcurrencyInput}
+              onChange={(event) => setMultiImageConcurrencyInput(event.target.value)}
+              placeholder="默认 2"
+            />
+          </label>
+        </div>
       </div>
       <div className="mode-grid">
         {imageModeOptions.map((option) => (
@@ -2111,6 +2143,7 @@ const LANGUAGE_MODEL_ASSIGNMENT_GROUPS: Array<{
       { usageKey: "prompt.optimize", label: "对话提示词优化", description: "对话输入框里的 AI 提示词优化。", recommendation: "质量优先" },
       { usageKey: "template.optimize", label: "表单提示词优化", description: "站内表单和导出网页的 AI 优化。", recommendation: "质量优先" },
       { usageKey: "template.translate", label: "表单提示词翻译", description: "站内表单和导出网页的中英翻译。", recommendation: "速度优先" },
+      { usageKey: "image.prompt_plan", label: "多图提示词规划", description: "判断多图提示词是否已按图片分组，并整理为独立生图请求。", recommendation: "低延迟优先" },
       { usageKey: "image.edit_suggestions", label: "图片续改建议", description: "图片完成前预生成及按需刷新的续改建议。", recommendation: "低延迟优先" }
     ]
   },

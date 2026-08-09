@@ -8,7 +8,7 @@ import type {
   RefObject,
   WheelEventHandler
 } from "react";
-import { ChevronLeft, ChevronRight, Download, Maximize2, RefreshCw, RotateCcw, RotateCw, ZoomIn, ZoomOut, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Maximize2, Minimize2, RefreshCw, RotateCcw, RotateCw, ZoomIn, ZoomOut, X } from "lucide-react";
 import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import type { CaseGroupImage, ImageReferenceItem } from "../types";
@@ -195,6 +195,8 @@ type ImagePreviewToolbarProps = {
   referenceImages: ImageReferenceItem[];
   sizeLabel: string;
   transparencyLabel?: string;
+  previewResetActive: boolean;
+  unifiedToolbarControls: boolean;
   zoomLabel: string;
   zoomMax: number;
   zoomMin: number;
@@ -260,6 +262,8 @@ export function ImagePreviewToolbar({
   referenceImages,
   sizeLabel,
   transparencyLabel,
+  previewResetActive,
+  unifiedToolbarControls,
   zoomLabel,
   zoomMax,
   zoomMin,
@@ -300,7 +304,7 @@ export function ImagePreviewToolbar({
         </div>
       ) : null}
       <div
-        className="case-preview-toolbar"
+        className={cx("case-preview-toolbar", unifiedToolbarControls && "has-unified-controls")}
         ref={toolbarRef}
         style={{
           backdropFilter: "var(--case-preview-toolbar-filter)",
@@ -341,13 +345,13 @@ export function ImagePreviewToolbar({
           <div className="case-preview-control-row">
             <div className="case-preview-transform-tools" aria-label={t("imagePreview.tools")}>
               <button className="case-preview-tool" type="button" onClick={onRotateLeft} aria-label={t("imagePreview.rotateLeft")} title={t("imagePreview.rotateLeft")}>
-                <RotateCcw size={16} />
+                <RotateCcw size={unifiedToolbarControls ? 20 : 16} />
               </button>
               <button className="case-preview-tool" type="button" onClick={onRotateRight} aria-label={t("imagePreview.rotateRight")} title={t("imagePreview.rotateRight")}>
-                <RotateCw size={16} />
+                <RotateCw size={unifiedToolbarControls ? 20 : 16} />
               </button>
               <button className="case-preview-tool" type="button" onClick={onZoomOut} aria-label={t("imagePreview.zoomOut")} title={t("imagePreview.zoomOut")}>
-                <ZoomOut size={16} />
+                <ZoomOut size={unifiedToolbarControls ? 20 : 16} />
               </button>
               <ImageZoomSlider
                 min={zoomMin}
@@ -357,14 +361,28 @@ export function ImagePreviewToolbar({
                 onChange={onZoomChange}
               />
               <button className="case-preview-tool" type="button" onClick={onZoomIn} aria-label={t("imagePreview.zoomIn")} title={t("imagePreview.zoomIn")}>
-                <ZoomIn size={16} />
+                <ZoomIn size={unifiedToolbarControls ? 20 : 16} />
               </button>
-              <button className="case-preview-tool" type="button" onClick={onReset} aria-label={t("imagePreview.reset")} title={t("imagePreview.reset")}>
-                <RefreshCw size={15} />
-              </button>
-              <button className="case-preview-tool" type="button" onClick={onOriginalSize} aria-label={t("imagePreview.originalSize")} title={t("imagePreview.originalSize")}>
-                <Maximize2 size={15} />
-              </button>
+              {unifiedToolbarControls ? (
+                <button
+                  className="case-preview-tool"
+                  type="button"
+                  onClick={previewResetActive ? onReset : onOriginalSize}
+                  aria-label={t(previewResetActive ? "imagePreview.reset" : "imagePreview.originalSize")}
+                  title={t(previewResetActive ? "imagePreview.reset" : "imagePreview.originalSize")}
+                >
+                  {previewResetActive ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
+                </button>
+              ) : (
+                <>
+                  <button className="case-preview-tool" type="button" onClick={onReset} aria-label={t("imagePreview.reset")} title={t("imagePreview.reset")}>
+                    <RefreshCw size={15} />
+                  </button>
+                  <button className="case-preview-tool" type="button" onClick={onOriginalSize} aria-label={t("imagePreview.originalSize")} title={t("imagePreview.originalSize")}>
+                    <Maximize2 size={15} />
+                  </button>
+                </>
+              )}
             </div>
             {actions ? <div className="case-preview-actions">{actions}</div> : null}
             {referenceImages.length > 0 ? (

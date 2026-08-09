@@ -26,12 +26,23 @@ import {
   type SubmitRequest
 } from "../lib/chatRequest";
 import { MAIN_CHAT_BRANCH_ID, buildChatRenderState, isServerEchoOfPending } from "../lib/chatRender";
+import { resolveChatSessionTransition } from "../lib/chatSessionTransition";
 import { cx } from "../lib/cx";
 import { type AssetUploadMode } from "../lib/assets";
 import { getAppIntroSlides } from "../lib/featureIntroSlides";
 import { isDefaultCaseItemId } from "../lib/defaultCases";
 import { useI18n, type LocaleCode } from "../i18n";
 import { requestSizeFromSelection, type SizeOption } from "../lib/imageOptions";
+import { resolvePromptImageCount, resolveSelectedImageCount } from "../lib/imagePromptCount";
+import {
+  REMOVE_SELECTED_AREA_PROMPT,
+  formatImageAnnotationDisplayText,
+  formatImageAnnotationPrompt,
+  parseImageAnnotations,
+  resolveImageAnnotationMessageEdit,
+  type ImageAnnotation,
+  type ImageEditIntent
+} from "../lib/imageAnnotations";
 import { normalizePromptColorSchemeIds } from "../lib/promptColorSchemes";
 import { normalizePromptOptimizeStyle, sanitizePromptOptimizeStyleGroups } from "../lib/promptOptimizeStyles";
 import { getTimeGreetingKey } from "../lib/timeGreeting";
@@ -72,7 +83,6 @@ type SubmittedDraftSnapshot = {
   selectedAssets: AssetItem[];
   imageCount: number;
   size: string;
-  quality: string;
   promptInputOptimizeStyle: ComposerSessionDraft["promptInputOptimizeStyle"];
   promptColorSchemeIds: string[];
   promptColorSchemeInjection: string;
@@ -399,7 +409,6 @@ function emptyComposerSessionDraft(): ComposerSessionDraft {
     selectedAssets: [],
     imageCount: 1,
     size: "",
-    quality: "",
     promptInputOptimizeStyle: "standard",
     promptColorSchemeIds: [],
     promptColorSchemeId: "",
@@ -416,7 +425,6 @@ function hasComposerDraftContent(draft: Pick<
   | "selectedAssets"
   | "imageCount"
   | "size"
-  | "quality"
   | "promptInputOptimizeStyle"
   | "promptColorSchemeIds"
   | "promptColorSchemeId"
@@ -429,7 +437,6 @@ function hasComposerDraftContent(draft: Pick<
     || draft.selectedAssets.length > 0
     || draft.imageCount !== 1
     || draft.size
-    || draft.quality
     || draft.promptInputOptimizeStyle !== "standard"
     || draft.promptColorSchemeIds.length > 0
     || draft.promptColorSchemeInjection.trim()
@@ -646,7 +653,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
   const providerOptions = providers.data?.providers ?? [];
   const assetCategoryList = assetCategories.data?.categories ?? [];
   const assetReviewEnabled = assetCategories.data?.reviewEnabled ?? true;
-  const { currentProvider, providerId, quality, qualityOptions, setQuality, setSize, size, sizeOptions } = useImageProviderSelection(providerOptions);
+  const { currentProvider, providerId, setSize, size, sizeOptions } = useImageProviderSelection(providerOptions);
   const composerScopeKey = sessionId ? `session:${sessionId}` : COMPOSER_NEW_DRAFT_SCOPE_KEY;
   const composerInstanceKey = sessionId ? composerScopeKey : `${COMPOSER_NEW_DRAFT_SCOPE_KEY}:${newChatResetKey}`;
   const currentComposerDraft = composerDrafts[composerScopeKey] ?? null;
@@ -819,7 +826,10 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
       if (pendingSubmitScopeRef.current === request.pendingScope) setPendingScope(request.sessionId);
       return { sessionId: request.sessionId, created: false };
     }
-    const result = await api.createSession({ prompt: request.prompt, clientRequestId: request.clientRequestId });
+    const sessionPrompt = request.editIntent === "annotation"
+      ? formatImageAnnotationPrompt(request.imageAnnotations ?? [], request.prompt)
+      : request.prompt;
+    const result = await api.createSession({ prompt: sessionPrompt, clientRequestId: request.clientRequestId });
     submitSessionByRequestRef.current.set(request.clientRequestId, result.session.id);
     replaceSubmittingScope(request.pendingScope, result.session.id);
     if (pendingSubmitScopeRef.current === request.pendingScope) setPendingScope(result.session.id);
@@ -864,7 +874,6 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
           prompt: request.prompt,
           ...(request.language ? { language: request.language } : {}),
           size: requestSizeFromSelection(request.size ?? ""),
-          ...(request.quality ? { quality: request.quality } : {}),
           ...(request.n ? { n: request.n } : {}),
           sourceImageIds: request.sourceImageIds ?? [],
           sourceAssetIds: request.sourceAssetIds ?? [],
@@ -873,6 +882,8 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
           ...(request.sourceInlineImages?.length ? { sourceInlineImages: request.sourceInlineImages } : {}),
           ...(request.referenceAssetId ? { referenceAssetId: request.referenceAssetId } : {}),
           ...(request.maskDataUrl ? { maskDataUrl: request.maskDataUrl } : {}),
+          ...(request.editIntent ? { editIntent: request.editIntent } : {}),
+          ...(request.imageAnnotations ? { imageAnnotations: request.imageAnnotations } : {}),
           ...(request.hideReference ? { hideReference: true } : {}),
           ...(request.caseItemId ? { caseItemId: request.caseItemId } : {}),
           ...(request.revisionRootId ? { revisionRootId: request.revisionRootId } : {}),
@@ -887,7 +898,6 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
         prompt: request.prompt,
         ...(request.language ? { language: request.language } : {}),
         size: requestSizeFromSelection(request.size ?? ""),
-        ...(request.quality ? { quality: request.quality } : {}),
         ...(request.n ? { n: request.n } : {}),
         ...(request.caseItemId ? { caseItemId: request.caseItemId } : {}),
         ...(request.revisionRootId ? { revisionRootId: request.revisionRootId } : {}),
@@ -991,7 +1001,6 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
     selectedAssets: [...selectedAssets],
     imageCount,
     size,
-    quality,
     promptInputOptimizeStyle: currentPromptInputOptimizeStyle,
     promptColorSchemeIds: [...currentPromptColorSchemeIds],
     promptColorSchemeInjection: currentPromptColorSchemeInjection,
@@ -1007,7 +1016,6 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
     setSelectedAssets(snapshot.selectedAssets);
     setImageCount(snapshot.imageCount);
     setSize(snapshot.size);
-    setQuality(snapshot.quality);
     setActiveBranchId(snapshot.activeBranchId === MAIN_CHAT_BRANCH_ID ? null : snapshot.activeBranchId);
     upsertComposerDraft(targetScopeKey, {
       draftPrompt: restoringEditor ? "" : snapshot.prompt,
@@ -1016,7 +1024,6 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
       selectedAssets: persistableAssets(snapshot.selectedAssets),
       imageCount: snapshot.imageCount,
       size: snapshot.size,
-      quality: snapshot.quality,
       promptInputOptimizeStyle: snapshot.promptInputOptimizeStyle,
       promptColorSchemeIds: snapshot.promptColorSchemeIds,
       promptColorSchemeId: snapshot.promptColorSchemeIds[0] ?? "",
@@ -1038,7 +1045,6 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
       selectedAssets: persistableAssets(selectedAssets),
       imageCount,
       size,
-      quality,
       promptInputOptimizeStyle: currentPromptInputOptimizeStyle,
       promptColorSchemeIds: currentPromptColorSchemeIds,
       promptColorSchemeId: currentPromptColorSchemeIds[0] ?? "",
@@ -1153,6 +1159,10 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
   const imageJobs = sessionImageJobs.data?.jobs ?? [];
   const runningImageJobs = imageJobs.filter((job) => job.status === "running");
   const failedJobIds = useMemo(() => new Set(imageJobs.filter((job) => job.status === "failed").map((job) => job.id)), [imageJobs]);
+  const imageJobStatuses = useMemo(
+    () => new Map(imageJobs.map((job) => [job.id, job.status] as const)),
+    [imageJobs]
+  );
   const retryingJobId = retryImageJob.isPending ? retryImageJob.variables ?? "" : "";
   const currentScopeBusy = currentScopeSubmitting || runningImageJobs.length > 0;
   const currentRunningJob = runningImageJobs.find((job) => (job.branchId?.trim() || MAIN_CHAT_BRANCH_ID) === (activeBranchId ?? MAIN_CHAT_BRANCH_ID))
@@ -1199,7 +1209,6 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
             selectedAssets: pendingEditorReturn?.selectedAssets ?? selectedAssets,
             imageCount: pendingEditorReturn?.imageCount ?? imageCount,
             size: pendingEditorReturn?.size ?? size,
-            quality: pendingEditorReturn?.quality ?? quality,
             promptInputOptimizeStyle: pendingEditorReturn?.promptInputOptimizeStyle ?? currentPromptInputOptimizeStyle,
             promptColorSchemeIds: pendingEditorReturn?.promptColorSchemeIds ?? currentPromptColorSchemeIds,
             promptColorSchemeInjection: pendingEditorReturn?.promptColorSchemeInjection ?? currentPromptColorSchemeInjection,
@@ -1223,7 +1232,6 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
     || selectedAssets.length > 0
     || size
     || imageCount !== snapshot.imageCount
-    || quality !== snapshot.quality
     || currentPromptInputOptimizeStyle !== "standard"
     || currentPromptColorSchemeIds.length > 0
     || currentPromptColorSchemeInjection.trim()
@@ -1443,6 +1451,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
     const clientRequestId = createSubmitRequestId();
     const pendingScope = currentSubmitScope;
     const branchFields = activeChatBranchId !== MAIN_CHAT_BRANCH_ID ? { branchId: activeChatBranchId } : {};
+    const resolvedImageCount = resolvePromptImageCount(prompt, imageCount);
     const submittedSnapshot = captureSubmittedDraft({ prompt, activeBranchId: activeChatBranchId });
     addSubmittingScope(pendingScope);
     setPendingScope(pendingScope);
@@ -1456,6 +1465,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
         metadata: {
           mode,
           pending: true,
+          clientRequestId,
           sourceImageIds: requestSourceImage ? [requestSourceImage.id] : [],
           sourceAssetIds,
           sourceCaseItemIds: selectedCaseItemIds,
@@ -1465,13 +1475,15 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
           ...(referenceAsset ? { referenceAssetId: referenceAsset.id } : {}),
           ...(useHiddenContinuityImage ? { hideReference: true, autoReference: true } : {}),
           ...branchFields,
-          n: imageCount
+          size: selectedRequestSize,
+          n: resolvedImageCount
         },
         createdAt: new Date().toISOString(),
         ...sourcePreview
       }
     });
     setDraftPrompt("");
+    setImageCount(1);
     setEditImage(null);
     setSelectedAssets([]);
     setSelectedCaseMaterials([]);
@@ -1488,8 +1500,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
       prompt,
       language: resolvedLanguage,
       size: selectedRequestSize,
-      ...(quality ? { quality } : {}),
-      n: imageCount,
+      n: resolvedImageCount,
       ...(requestCaseItemId ? { caseItemId: requestCaseItemId } : {}),
       ...(requestSourceImage ? { sourceImageIds: [requestSourceImage.id] } : { sourceImageIds: [] }),
       sourceAssetIds,
@@ -1511,11 +1522,12 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
     [serverMessages]
   );
   const selectedBranchId = activeBranchId ?? serverRenderState.activeBranchId;
-  const { currentViewSubmitting, loadingTitle, messageList, visibleLoadingMode, visiblePendingUserMessage } = useChatViewState({
+  const { currentViewSubmitting, loadingTitle, messageList, multiImageLoading, visibleLoadingMode, visiblePendingUserMessage } = useChatViewState({
     currentScopeBusy,
     currentScopeSubmitting,
     currentSubmitScope,
     activeBranchId: selectedBranchId,
+    activeClientRequestId: activeSubmitBelongsToCurrentScope ? activeSubmitCancellation?.clientRequestId ?? null : null,
     pendingMode,
     pendingSubmitScope,
     pendingUserMessage,
@@ -1689,17 +1701,16 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
   ]);
   const previousSessionKeyRef = useRef(sessionId ?? "");
   useEffect(() => {
-    const sessionKey = sessionId ?? "";
-    const sessionChanged = previousSessionKeyRef.current !== sessionKey;
-    previousSessionKeyRef.current = sessionKey;
-    setActiveBranchId(null);
+    const transition = resolveChatSessionTransition(previousSessionKeyRef.current, sessionId);
+    previousSessionKeyRef.current = transition.sessionKey;
+    if (transition.changed) setActiveBranchId(null);
     setStarterPromptOptimizeRequest(null);
     setError("");
-    if (sessionChanged) {
+    if (transition.changed) {
       setShareDialogOpen(false);
       setCreatedShareLink(null);
     }
-    if (sessionChanged && imageEditor && !editorImageRequest?.persistAcrossSessionChange) {
+    if (transition.changed && imageEditor && !editorImageRequest?.persistAcrossSessionChange) {
       closePagedImageEditor({ restoreSidebar: false });
     }
   }, [closePagedImageEditor, editorImageRequest?.persistAcrossSessionChange, imageEditor, sessionId]);
@@ -1713,7 +1724,6 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
       selectedAssets: draftSelectedAssets,
       imageCount,
       size,
-      quality,
       promptInputOptimizeStyle: currentPromptInputOptimizeStyle,
       promptColorSchemeIds: currentPromptColorSchemeIds,
       promptColorSchemeId: currentPromptColorSchemeIds[0] ?? "",
@@ -1736,7 +1746,6 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
     setSelectedAssets(persistableAssets(nextDraft.selectedAssets));
     setImageCount(nextDraft.imageCount);
     setSize(nextDraft.size);
-    setQuality(nextDraft.quality);
     setMaterialPickerOpen(false);
     setCasePickerOpen(false);
     setError("");
@@ -1763,7 +1772,6 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
       selectedAssets: persistableAssets(selectedAssets),
       imageCount,
       size,
-      quality,
       promptInputOptimizeStyle: currentPromptInputOptimizeStyle,
       promptColorSchemeIds: currentPromptColorSchemeIds,
       promptColorSchemeId: currentPromptColorSchemeIds[0] ?? "",
@@ -1779,7 +1787,6 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
     editorImageRequest?.discardDraftOnClose,
     imageEditor,
     imageCount,
-    quality,
     selectedAssets,
     selectedCaseMaterials,
     size,
@@ -1798,10 +1805,20 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
     maskDataUrl?: string,
     requestSize?: string,
     sourceAssetIds: string[] = [],
-    sourceCaseItemIds: string[] = []
+    sourceCaseItemIds: string[] = [],
+    editIntent: ImageEditIntent = "standard",
+    imageAnnotations: ImageAnnotation[] = []
   ) => {
     const trimmedPrompt = prompt.trim();
-    if (currentScopeBusy || !trimmedPrompt) return;
+    const displayedPrompt = editIntent === "annotation"
+      ? formatImageAnnotationPrompt(imageAnnotations, trimmedPrompt)
+      : editIntent === "remove"
+        ? REMOVE_SELECTED_AREA_PROMPT
+        : trimmedPrompt;
+    if (currentScopeBusy || !displayedPrompt) return;
+    const resolvedImageCount = editIntent === "annotation"
+      ? resolvePromptImageCount(trimmedPrompt, resolveSelectedImageCount(imageCount))
+      : resolvePromptImageCount(displayedPrompt, imageCount);
     const effectiveSize = requestSize ?? size;
     const selectedRequestSize = requestSizeFromSelection(effectiveSize);
     const sourceAssetIdSet = new Set(sourceAssetIds);
@@ -1826,7 +1843,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
       discardDraftOnClose: true
     } : null;
     const submittedSnapshot = captureSubmittedDraft({
-      prompt: trimmedPrompt,
+      prompt: displayedPrompt,
       editImage: image,
       editorReturn,
       size: effectiveSize,
@@ -1839,7 +1856,6 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
       selectedAssets: submittedSnapshot.selectedAssets,
       imageCount: submittedSnapshot.imageCount,
       size: submittedSnapshot.size,
-      quality: submittedSnapshot.quality,
       promptInputOptimizeStyle: submittedSnapshot.promptInputOptimizeStyle,
       promptColorSchemeIds: submittedSnapshot.promptColorSchemeIds,
       promptColorSchemeInjection: submittedSnapshot.promptColorSchemeInjection,
@@ -1854,18 +1870,21 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
       message: {
         id: `pending-${Date.now()}`,
         role: "user",
-        content: trimmedPrompt,
+        content: displayedPrompt,
         metadata: {
           mode: "edit",
           pending: true,
+          clientRequestId,
           sourceImageIds: [image.id],
           sourceAssetIds,
           sourceCaseItemIds,
           ...(selectedCaseReferences.length > 0 ? { sourceCaseReferences: selectedCaseReferences } : {}),
           hasMask: Boolean(maskDataUrl),
+          editIntent,
+          ...(imageAnnotations.length > 0 ? { imageAnnotations } : {}),
           size: selectedRequestSize,
           ...branchFields,
-          n: imageCount
+          n: resolvedImageCount
         },
         createdAt: new Date().toISOString(),
         imageId: image.id,
@@ -1892,6 +1911,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
     });
     closePagedImageEditor();
     setDraftPrompt("");
+    setImageCount(1);
     setEditImage(null);
     setSelectedAssets([]);
     setSelectedCaseMaterials([]);
@@ -1905,15 +1925,16 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
       mode: "edit",
       sessionId,
       providerId,
-      prompt: trimmedPrompt,
+      prompt: editIntent === "remove" ? REMOVE_SELECTED_AREA_PROMPT : trimmedPrompt,
       language: resolvedLanguage,
       size: selectedRequestSize,
-      ...(quality ? { quality } : {}),
-      n: imageCount,
+      n: resolvedImageCount,
       sourceImageIds: [image.id],
       sourceAssetIds,
       sourceCaseItemIds,
       ...(maskDataUrl ? { maskDataUrl } : {}),
+      editIntent,
+      ...(imageAnnotations.length > 0 ? { imageAnnotations } : {}),
       ...branchFields
     }, submittedSnapshot);
   };
@@ -1938,6 +1959,25 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
       sourceSnapshot.sourceReferenceIds.length > 0
         ? "edit"
         : "generation";
+    const originalEditIntent = payload.userMessage.metadata?.editIntent;
+    const parsedAnnotations = originalEditIntent === "annotation"
+      ? parseImageAnnotations(payload.userMessage.metadata?.imageAnnotations)
+      : null;
+    const annotationEdit = parsedAnnotations && !parsedAnnotations.error && parsedAnnotations.annotations.length > 0
+      ? resolveImageAnnotationMessageEdit(trimmedPrompt, parsedAnnotations.annotations)
+      : null;
+    const editIntent: ImageEditIntent = mode === "edit" && originalEditIntent === "remove"
+      ? "remove"
+      : annotationEdit
+        ? "annotation"
+        : "standard";
+    const imageAnnotations = annotationEdit?.annotations ?? [];
+    const requestPrompt = editIntent === "remove"
+      ? REMOVE_SELECTED_AREA_PROMPT
+      : annotationEdit?.extraInstruction ?? trimmedPrompt;
+    const displayedPrompt = annotationEdit
+      ? formatImageAnnotationPrompt(imageAnnotations, requestPrompt)
+      : requestPrompt;
     const selectedRequestSize = requestSizeFromSelection(size);
     const hideReference = sourceSnapshot.hideReference && sourceSnapshot.references.length === 0;
     const primaryReference = sourceSnapshot.primaryImageReference;
@@ -2012,6 +2052,9 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
           };
     const clientRequestId = createSubmitRequestId();
     const pendingScope = currentSubmitScope;
+    const resolvedImageCount = editIntent === "annotation"
+      ? resolvePromptImageCount(requestPrompt, resolveSelectedImageCount(imageCount))
+      : resolvePromptImageCount(displayedPrompt, imageCount);
     const branchId = createChatBranchId();
     const branchFields = {
       branchId,
@@ -2020,7 +2063,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
       branchRootMessageId: payload.rootId
     };
     const submittedSnapshot = captureSubmittedDraft({
-      prompt: trimmedPrompt,
+      prompt: formatImageAnnotationDisplayText(displayedPrompt),
       activeBranchId: branchId
     });
     addSubmittingScope(pendingScope);
@@ -2032,10 +2075,13 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
       message: {
         id: `pending-${Date.now()}`,
         role: "user",
-        content: trimmedPrompt,
+        content: displayedPrompt,
         metadata: {
           mode,
           pending: true,
+          clientRequestId,
+          editIntent,
+          ...(imageAnnotations.length > 0 ? { imageAnnotations } : {}),
           revisionRootId: payload.rootId,
           editedMessageId: payload.userMessage.id,
           ...branchFields,
@@ -2046,30 +2092,33 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
           sourceReferenceIds: sourceSnapshot.sourceReferenceIds,
           ...(sourceSnapshot.caseReferences.length > 0 ? { sourceCaseReferences: sourceSnapshot.caseReferences } : {}),
           ...(sourceSnapshot.referenceAssetId ? { referenceAssetId: sourceSnapshot.referenceAssetId } : {}),
-          n: imageCount
+          size: selectedRequestSize,
+          n: resolvedImageCount
         },
         createdAt: new Date().toISOString(),
         ...referenceFields
       }
     });
     setSize("");
+    setImageCount(1);
     startTrackedSubmit({
       clientRequestId,
       pendingScope,
       mode,
       sessionId,
       providerId,
-      prompt: trimmedPrompt,
+      prompt: requestPrompt,
       language: resolvedLanguage,
       size: selectedRequestSize,
-      ...(quality ? { quality } : {}),
-      n: imageCount,
+      n: resolvedImageCount,
       sourceImageIds: sourceSnapshot.sourceImageIds,
       sourceAssetIds: sourceSnapshot.sourceAssetIds,
       sourceCaseItemIds: sourceSnapshot.sourceCaseItemIds,
       sourceReferenceIds: sourceSnapshot.sourceReferenceIds,
       ...(hideReference ? { hideReference: true } : {}),
       ...(sourceSnapshot.referenceAssetId ? { referenceAssetId: sourceSnapshot.referenceAssetId } : {}),
+      editIntent,
+      ...(imageAnnotations.length > 0 ? { imageAnnotations } : {}),
       revisionRootId: payload.rootId,
       editedMessageId: payload.userMessage.id,
       ...branchFields
@@ -2185,8 +2234,8 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
             <button
               className="chat-share-trigger"
               type="button"
-              aria-label={t("shareDialog.share")}
-              data-tooltip={t("shareDialog.share")}
+              aria-label={t("shareDialog.trigger")}
+              data-tooltip={t("shareDialog.trigger")}
               disabled={currentScopeBusy || messages.isLoading || shareLinkPendingForCurrentSession || shareableMessageIds.length === 0}
               onClick={() => {
                 const includeBranches = shareBranchCount > 1;
@@ -2202,7 +2251,6 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
               }}
             >
               <Share size={17} />
-              <span>{t("shareDialog.share")}</span>
             </button>
             {sessionActions ? (
               <SessionActionsMenu
@@ -2250,6 +2298,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
           downloadBaseName={sessionActions?.title}
           isSubmitting={currentViewSubmitting}
           failedJobIds={failedJobIds}
+          jobStatuses={imageJobStatuses}
           retryingJobId={retryingJobId}
           itemStyle={messageRevealStyle}
           onOpenEditor={openImageEditor}
@@ -2264,7 +2313,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
             })
           }
         />
-        {visibleLoadingMode ? (
+        {visibleLoadingMode && !multiImageLoading ? (
           <div ref={loadingMessageRef} className="message-enter-row loading-message-anchor" style={messageRevealStyle(renderItems.length)}>
             <RenderingMessage mode={visibleLoadingMode} />
           </div>
@@ -2310,14 +2359,16 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
           onClose={handleCloseImageEditor}
           onPickSize={sendAspectRatioEdit}
           onToggleMaterialPicker={() => setMaterialPickerOpen(!materialPickerOpen)}
-          onSubmitEdit={({ image, prompt, maskDataUrl, sourceAssetIds, sourceCaseItemIds }) =>
+          onSubmitEdit={({ image, prompt, editIntent, imageAnnotations, maskDataUrl, sourceAssetIds, sourceCaseItemIds }) =>
             sendEditRequest(
               image,
               prompt,
               maskDataUrl,
               "",
               sourceAssetIds ?? assetIdsForRequest(selectedAssets),
-              sourceCaseItemIds ?? selectedCaseMaterials.map((item) => item.caseItemId)
+              sourceCaseItemIds ?? selectedCaseMaterials.map((item) => item.caseItemId),
+              editIntent ?? "standard",
+              imageAnnotations ?? []
             )
           }
         />
@@ -2386,8 +2437,6 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
         promptOptimizeCustomInstruction={promptOptimizeCustomInstruction}
         promptOptimizeStyleGroups={promptOptimizeStyleGroups}
         promptTemplateDraft={currentPromptTemplateDraft}
-        quality={quality}
-        qualityOptions={qualityOptions}
         selectedAssets={selectedAssets}
         selectedCaseMaterials={selectedCaseMaterials}
         size={size}
@@ -2399,7 +2448,6 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
         onDraftPromptChange={setDraftPrompt}
         onImageCountChange={setImageCount}
         onPaste={handleComposerPaste}
-        onQualityChange={setQuality}
         onSelectedAssetsChange={setSelectedAssets}
         onSelectedCaseMaterialsChange={setSelectedCaseMaterials}
         onSizeChange={setSize}

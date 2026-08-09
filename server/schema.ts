@@ -954,6 +954,7 @@ export function initAppDb() {
       user_id text not null,
       session_id text,
       job_id text,
+      job_image_index integer,
       path text not null,
       prompt text not null,
       suggested_case_title text not null default '',
@@ -980,6 +981,10 @@ export function initAppDb() {
     )
   `);
 
+  if (!tableColumnExists(appDb, "images", "job_image_index")) {
+    appDb.run("alter table images add column job_image_index integer");
+  }
+  appDb.run("create unique index if not exists images_job_slot_idx on images(job_id, job_image_index) where job_id is not null and job_image_index is not null");
   if (!tableColumnExists(appDb, "images", "image_width")) {
     appDb.run("alter table images add column image_width integer not null default 0");
   }
@@ -2157,11 +2162,15 @@ export function initConfigDb() {
       id text primary key,
       mode text not null default 'auto',
       result_retry_count integer default 1,
+      multi_image_concurrency integer not null default 2,
       updated_at text not null
     )
   `);
   if (!tableColumnExists(configDb, "image_generation_settings", "result_retry_count")) {
     configDb.run("alter table image_generation_settings add column result_retry_count integer default 1");
+  }
+  if (!tableColumnExists(configDb, "image_generation_settings", "multi_image_concurrency")) {
+    configDb.run("alter table image_generation_settings add column multi_image_concurrency integer not null default 2");
   }
 
   configDb.run(`
@@ -2437,10 +2446,11 @@ export function initConfigDb() {
   run(configDb, "update image_generation_settings set mode = ? where mode = ?", "api", "custom");
   run(
     configDb,
-    "insert or ignore into image_generation_settings (id, mode, result_retry_count, updated_at) values (?, ?, ?, ?)",
+    "insert or ignore into image_generation_settings (id, mode, result_retry_count, multi_image_concurrency, updated_at) values (?, ?, ?, ?, ?)",
     "default",
     "auto",
     1,
+    2,
     now()
   );
 
