@@ -2,6 +2,16 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.65 - 2026-08-15
+
+### 中文
+
+- AI 客户端安装与帮助页面换用新的品牌主视觉，并优化横幅图片焦点，在不同屏幕宽度下更完整地展示 ChatGPT、Claude 与神笔马良的连接场景。
+
+### English
+
+- AI-client installation and help pages now use a new branded hero visual with improved focal positioning, keeping the ChatGPT, Claude, and Shenbi Maliang connection scene visible more consistently across screen sizes.
+
 ## v0.1.64 - 2026-08-09
 
 ### 中文
