@@ -2,6 +2,16 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.66 - 2026-08-15
+
+### 中文
+
+- 安装页与帮助中心现在分别使用匹配场景的横幅图片：安装页保留 AI 客户端连接主视觉，帮助中心恢复阅读场景，避免两个入口共用素材后出现内容不匹配。
+
+### English
+
+- The installation page and Help Center now use separate hero images suited to each context: the installation page keeps the AI-client connection visual, while Help Center restores its reading scene to prevent mismatched artwork across the two entry points.
+
 ## v0.1.65 - 2026-08-15
 
 ### 中文

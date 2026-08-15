@@ -564,6 +564,8 @@ foreach ($value in @(
     expect(html).not.toContain('<nav class="nav">');
     expect(html).not.toContain('<span class="eyebrow">');
     expect(html).toContain('<div class="title-row"><img class="title-logo" src="/image/logo-small.webp" alt=""><h1>安装神笔马良插件</h1>');
+    expect(html).toContain('<img class="hero-art" src="/image/install/maliang-plugin-install-hero.webp"');
+    expect(html).not.toContain('/image/help/maliang-help-hero-v2.webp');
     expect(html).toContain("Claude Code、TRAE Work、WorkBuddy");
     expect(html).toContain('id="manual-mcp-title">手动添加 MCP Server</h2>');
     expect(html).toContain("客户端支持 JSON 配置时，复制下面的内容并粘贴");
