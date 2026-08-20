@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { buildMaliangImageJobResult, DEVICE_REPORT_REQUIRED_MESSAGE, externalMcpInternalApiUrl } from "./externalMcpServer";
+import {
+  buildMaliangImageJobResult,
+  DEVICE_REPORT_REQUIRED_MESSAGE,
+  EXTERNAL_MCP_IMAGE_COUNT_SCHEMA,
+  externalMcpInternalApiUrl
+} from "./externalMcpServer";
 
 describe("external MCP internal image requests", () => {
   test("requires the current agent to report an unknown device without waiting for another message", () => {
@@ -18,6 +23,14 @@ describe("external MCP internal image requests", () => {
     expect(externalMcpInternalApiUrl(resource, "/image-jobs/job_test")).toBe(
       "http://192.168.0.87:8787/image-jobs/job_test"
     );
+  });
+
+  test("uses the same 1-10 image count contract as the web workbench", () => {
+    expect(EXTERNAL_MCP_IMAGE_COUNT_SCHEMA.safeParse(1).success).toBe(true);
+    expect(EXTERNAL_MCP_IMAGE_COUNT_SCHEMA.safeParse(10).success).toBe(true);
+    expect(EXTERNAL_MCP_IMAGE_COUNT_SCHEMA.safeParse(0).success).toBe(false);
+    expect(EXTERNAL_MCP_IMAGE_COUNT_SCHEMA.safeParse(11).success).toBe(false);
+    expect(EXTERNAL_MCP_IMAGE_COUNT_SCHEMA.safeParse(1.5).success).toBe(false);
   });
 
   test("returns a compact resource link without base64 image data for a completed job", async () => {

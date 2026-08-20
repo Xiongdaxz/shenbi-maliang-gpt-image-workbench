@@ -1,5 +1,5 @@
-const MIN_IMAGE_COUNT = 1;
-const MAX_IMAGE_COUNT = 10;
+export const MIN_IMAGE_COUNT = 1;
+export const MAX_IMAGE_COUNT = 10;
 
 const CHINESE_DIGITS: Record<string, number> = {
   "〇": 0,

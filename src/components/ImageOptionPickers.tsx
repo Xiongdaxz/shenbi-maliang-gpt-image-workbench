@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Check, ChevronDown, Image as ImageIcon, ImagePlus, Ratio } from "lucide-react";
 import { useI18n, type Translate } from "../i18n";
 import { sizeOptionFromValue, type QualityOption, type SizeOption } from "../lib/imageOptions";
+import { MAX_IMAGE_COUNT, MIN_IMAGE_COUNT } from "../lib/imagePromptCount";
 
 function sizePreviewStyle(previewRatio?: string, box = 22) {
   const match = previewRatio?.match(/^(\d+)\s*\/\s*(\d+)$/);
@@ -245,8 +246,8 @@ export function QualityPicker({
 export function ImageCountStepper({
   value,
   onChange,
-  min = 1,
-  max = 10
+  min = MIN_IMAGE_COUNT,
+  max = MAX_IMAGE_COUNT
 }: {
   value: number;
   onChange: (value: number) => void;

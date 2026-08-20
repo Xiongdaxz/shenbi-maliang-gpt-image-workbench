@@ -2,6 +2,16 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.67 - 2026-08-20
+
+### 中文
+
+- AI 客户端生成和编辑图片时现在可一次请求 1–10 张结果，与网页工作台保持一致；提示词中明确写出的数量会优先采用，减少选择数量与实际结果不一致的情况。
+
+### English
+
+- AI clients can now request 1–10 results for both image generation and editing, matching the web workbench; an explicit count in the prompt takes priority, reducing mismatches between the selected count and delivered results.
+
 ## v0.1.66 - 2026-08-15
 
 ### 中文

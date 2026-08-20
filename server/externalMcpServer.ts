@@ -20,6 +20,7 @@ import { createMcpImageResultPresentation } from "./externalMcpResults";
 import { readCodexPluginVersion } from "./internalDistributionRoutes";
 import { LimitedRequestBodyError, requestWithLimitedBody } from "./limitedRequestBody";
 import type { ImageRow, UserRow } from "./types";
+import { MAX_IMAGE_COUNT, MIN_IMAGE_COUNT } from "../src/lib/imagePromptCount";
 
 type McpToolExtra = {
   authInfo?: {
@@ -32,6 +33,11 @@ type McpToolExtra = {
 };
 
 const MCP_PROTOCOL_REQUEST_MAX_BYTES = 1024 * 1024;
+
+export const EXTERNAL_MCP_IMAGE_COUNT_SCHEMA = z.number()
+  .int()
+  .min(MIN_IMAGE_COUNT)
+  .max(MAX_IMAGE_COUNT);
 
 function toolError(message: string) {
   return { isError: true as const, content: [{ type: "text" as const, text: message }] };
@@ -250,7 +256,8 @@ async function createMaliangMcpServer(api: Hono) {
       prompt: z.string().trim().min(1).max(8000).describe("图片描述或绘图提示词"),
       size: z.string().trim().optional().describe("图片尺寸，例如 1024x1024、1024x1536 或 1536x1024"),
       quality: z.string().trim().optional().describe("生成质量，例如 low、medium、high 或 auto"),
-      imageCount: z.number().int().min(1).max(4).optional().describe("生成数量，默认 1"),
+      imageCount: EXTERNAL_MCP_IMAGE_COUNT_SCHEMA.optional()
+        .describe(`生成数量，范围 ${MIN_IMAGE_COUNT}-${MAX_IMAGE_COUNT}，默认 ${MIN_IMAGE_COUNT}；提示词中明确指定的数量优先`),
       background: z.enum(["auto", "opaque", "transparent"]).optional(),
       outputFormat: z.enum(["png", "webp"]).optional()
     },
@@ -332,7 +339,8 @@ async function createMaliangMcpServer(api: Hono) {
       uploadIds: z.array(z.string().trim().min(1)).max(8).optional().describe("已上传完成的 MCP uploadId"),
       size: z.string().trim().optional(),
       quality: z.string().trim().optional(),
-      imageCount: z.number().int().min(1).max(4).optional(),
+      imageCount: EXTERNAL_MCP_IMAGE_COUNT_SCHEMA.optional()
+        .describe(`生成数量，范围 ${MIN_IMAGE_COUNT}-${MAX_IMAGE_COUNT}，默认 ${MIN_IMAGE_COUNT}；提示词中明确指定的数量优先`),
       inputFidelity: z.enum(["low", "high"]).optional()
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
