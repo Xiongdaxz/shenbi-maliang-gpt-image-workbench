@@ -19,6 +19,9 @@ import {
   sharedInlineImageVariantAllowed,
   sharedReferenceViewUrls,
   sharedMessageHidesReferences,
+  sharedMessageSourceReferencesAllowed,
+  sharedMessageSourceReferenceIds,
+  sharedSourceReferencesForMessage,
   withinShareLookupRateLimit
 } from "./sessionShareRoutes";
 
@@ -244,6 +247,36 @@ describe("shared message projection", () => {
       mode: "edit",
       hideReference: true
     });
+  });
+
+  test("inherits source references linked by a branch revision", () => {
+    const metadata = {
+      revisionRootId: "message_root",
+      sourceReferenceIds: ["reference_1", "reference_2", "reference_1", ""]
+    };
+    const referenceById = new Map([
+      ["reference_1", { id: "reference_1", name: "素材 1" }],
+      ["reference_2", { id: "reference_2", name: "素材 2" }]
+    ]);
+
+    expect(sharedMessageSourceReferenceIds(metadata)).toEqual(["reference_1", "reference_2"]);
+    expect(sharedMessageSourceReferenceIds(JSON.stringify(metadata))).toEqual(["reference_1", "reference_2"]);
+    expect(sharedSourceReferencesForMessage(metadata, [], referenceById)).toEqual([
+      { id: "reference_1", name: "素材 1" },
+      { id: "reference_2", name: "素材 2" }
+    ]);
+    expect(sharedSourceReferencesForMessage({}, [{ id: "direct_reference", name: "直接素材" }], referenceById)).toEqual([
+      { id: "direct_reference", name: "直接素材" }
+    ]);
+    expect(sharedSourceReferencesForMessage({ ...metadata, hideReference: true }, [], referenceById)).toEqual([]);
+  });
+
+  test("allows inherited source references only on visible user messages", () => {
+    const metadata = { jobId: "job_hidden", sourceReferenceIds: ["reference_1"] };
+    expect(sharedMessageSourceReferencesAllowed("user", metadata)).toBe(true);
+    expect(sharedMessageSourceReferencesAllowed("user", { ...metadata, hideReference: true })).toBe(false);
+    expect(sharedMessageSourceReferencesAllowed("assistant", metadata)).toBe(false);
+    expect(sharedMessageSourceReferencesAllowed("assistant", { ...metadata, hideReference: true })).toBe(false);
   });
 
   test("applies a hidden source job to assistant image references", () => {

@@ -571,6 +571,7 @@ export function AppSettingsDialog({
   if (!open) return null;
 
   const latestVersion = latestChangelogVersion || (!changelogSearchKeyword ? entries[0]?.version ?? "" : "");
+  const pluginVersion = pluginInstallLinks.data?.pluginVersion.trim() ?? "";
   const avatarSource = user.username?.trim() || user.account?.trim() || "U";
   const avatarText = avatarSource.slice(0, 1).toUpperCase();
   const toneDisabled = !preferences.editSuggestionsEnabled;
@@ -644,7 +645,17 @@ export function AppSettingsDialog({
             }}
           >
             <header className="settings-content-head">
-              <h2>{t(settingsSectionTitleKeys[activeSection])}</h2>
+              <div className="settings-content-title">
+                <h2>{t(settingsSectionTitleKeys[activeSection])}</h2>
+                {activeSection === "plugins" && pluginVersion ? (
+                  <span
+                    className="settings-plugin-version-badge"
+                    aria-label={t("settings.plugins.version", { version: pluginVersion })}
+                  >
+                    v{pluginVersion}
+                  </span>
+                ) : null}
+              </div>
             </header>
             {activeSection === "general" ? (
             <div className="settings-list">

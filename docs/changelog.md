@@ -2,6 +2,18 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.68 - 2026-08-20
+
+### 中文
+
+- 分享包含分支修订的会话时，修订消息现在会继承原消息关联的素材，分享查看者可继续预览或下载正确的参考文件，同时仍遵循素材隐藏设置。
+- AI 客户端安装页和设置中的插件页面现在会显示当前 Codex 插件版本；新版 `0.4.9` 同步支持一次生成 1–10 张图片，并在多图任务部分成功时保留和交付已有结果。
+
+### English
+
+- When sharing conversations with branch revisions, revised messages now inherit the source materials linked to the original message, so viewers can preview or download the correct reference files while material-hiding preferences remain respected.
+- The AI-client installation page and Plugins settings now display the current Codex plugin version; version `0.4.9` also supports generating 1–10 images per request and preserves completed results when a multi-image task only partially succeeds.
+
 ## v0.1.67 - 2026-08-20
 
 ### 中文

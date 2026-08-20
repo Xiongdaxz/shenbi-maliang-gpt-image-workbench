@@ -223,7 +223,7 @@ describe("Maliang Codex plugin distribution", () => {
       "distribution/codex-marketplace/plugins/maliang-image-generator/.codex-plugin/plugin.json",
       "utf8"
     )) as { hooks?: string; version?: string };
-    expect(pluginManifest.version).toBe("0.4.8");
+    expect(pluginManifest.version).toBe("0.4.9");
     expect(pluginManifest.hooks).toBe("./hooks/hooks.json");
 
     const hooks = JSON.parse(await readFile(
@@ -482,6 +482,7 @@ foreach ($value in @(
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       publicBaseUrl: "https://maliang.example.com",
+      pluginVersion: "0.4.9",
       install: {
         href: "https://maliang.example.com/install",
         instruction: "访问 https://maliang.example.com/install，安装神笔马良。"
@@ -498,6 +499,7 @@ foreach ($value in @(
     const response = await app.request("https://open-source.example/install/install.json");
     expect(response.status).toBe(200);
     const manifest = await response.json() as {
+      version: string;
       execution: {
         mode: string;
         owner: string;
@@ -524,6 +526,7 @@ foreach ($value in @(
         supported: boolean;
       };
     };
+    expect(manifest.version).toBe("0.4.9");
     expect(manifest.execution.owner).toBe("current-ai-agent");
     expect(manifest.execution.mode).toBe("execute-installation");
     expect(manifest.execution.startImmediatelyAfterReading).toBe(true);
@@ -564,6 +567,7 @@ foreach ($value in @(
     expect(html).not.toContain('<nav class="nav">');
     expect(html).not.toContain('<span class="eyebrow">');
     expect(html).toContain('<div class="title-row"><img class="title-logo" src="/image/logo-small.webp" alt=""><h1>安装神笔马良插件</h1>');
+    expect(html).toContain('<span class="version-badge">v0.4.9</span>');
     expect(html).toContain('<img class="hero-art" src="/image/install/maliang-plugin-install-hero.webp"');
     expect(html).not.toContain('/image/help/maliang-help-hero-v2.webp');
     expect(html).toContain("Claude Code、TRAE Work、WorkBuddy");

@@ -13,8 +13,10 @@ const CODEX_PLUGIN_MANIFEST = "plugins/maliang-image-generator/.codex-plugin/plu
 const CODEX_PLUGIN_HELPER = "plugins/maliang-image-generator/skills/maliang-image-generator/scripts/maliang-helper.mjs";
 const CODEX_PLUGIN_LOCAL_MCP = "plugins/maliang-image-generator/mcp/maliang-local-mcp.mjs";
 const CODEX_PLUGIN_ARCHIVE_DATE = new Date("2026-01-01T00:00:00.000Z");
-const CODEX_PLUGIN_RELEASED_AT = "2026-08-01";
+const CODEX_PLUGIN_RELEASED_AT = "2026-08-20";
 const CODEX_PLUGIN_RELEASE_NOTES = [
+  "Codex 插件生图数量逻辑与 Web 工作台保持一致，支持一次请求 1 至 10 张，并以提示词中的明确数量为准。",
+  "多图任务会逐张保存并交付全部已完成图片；部分成功时保留可用结果并明确报告缺失或失败。",
   "可信本机与私有局域网 HTTP 开发地址现在可以执行自动更新；公开与生产地址仍强制使用 HTTPS。",
   "Codex 本地附件通过托管的 maliang_local MCP 自动上传，不再由智能体启动额外子进程；浏览器只保留为无可读路径或本地 MCP 未启动时的兜底。",
   "图片上传在解析前限流限长，并校验真实格式、解码结果、尺寸和像素上限。",
@@ -696,10 +698,12 @@ async function pluginInstallManifest(c: Context) {
 async function compatibleInstallManifest(c: Context) {
   const links = aiClientInstallLinks(c);
   const endpoint = maliangMcpResourceUrl(c);
+  const version = await readCodexPluginVersion();
   return {
     schemaVersion: 1,
     product: "神笔马良",
     type: "client-compatible-installer",
+    version,
     userInstruction: links.install.instruction,
     execution: agentExecutionPolicy(),
     manualRemoteMcp: manualRemoteMcpSetup(endpoint),
@@ -813,11 +817,12 @@ body,body.is-mcp{--install-card-color:var(--install-primary);color:var(--install
 }
 
 export function registerInternalDistributionRoutes(app: Hono) {
-  app.get("/ai-client-install/links.json", (c) => {
+  app.get("/ai-client-install/links.json", async (c) => {
     noIndex(c);
     c.header("Cache-Control", "no-store");
     const links = aiClientInstallLinks(c);
-    return c.json({ publicBaseUrl: links.publicBaseUrl, install: links.install });
+    const pluginVersion = await readCodexPluginVersion().catch(() => "");
+    return c.json({ publicBaseUrl: links.publicBaseUrl, pluginVersion, install: links.install });
   });
 
   app.get("/install/install.json", async (c) => {
@@ -844,6 +849,7 @@ export function registerInternalDistributionRoutes(app: Hono) {
         manualMcpConfig: manifest.manualRemoteMcp.config,
         alternateHref: "/install/install.json",
         kind: "install",
+        version: manifest.version,
         sections: `<section class="card"><h2>Codex</h2><p>默认由当前智能体安装神笔马良 Codex 插件；如果你明确说明“只安装 MCP”，则只配置 MCP。</p></section><section class="card"><h2>其他智能体</h2><p>对于 Claude Code、TRAE Work、WorkBuddy 及标准 MCP 客户端，当前智能体会直接安装 MCP Server，写入并加载真实配置，而不是仅检查或读取现有配置。</p></section>`
       }));
     } catch {

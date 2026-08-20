@@ -91,6 +91,7 @@ export type ImageCounts = {
 
 export type AiClientInstallLinks = {
   publicBaseUrl: string;
+  pluginVersion: string;
   install: {
     href: string;
     instruction: string;

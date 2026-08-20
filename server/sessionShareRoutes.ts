@@ -7,6 +7,7 @@ import { appDb, configDb, getAll, getOne, run } from "./db";
 import { configuredMaliangPublicBaseUrl, resolveConfiguredMaliangPublicBaseUrl } from "./externalMcpAuth";
 import { getOrCreateImageDerivative, normalizeImageVariant, type ImageVariant } from "./imageDerivatives";
 import { imageExtensionFromMime, mimeTypeFromPath } from "./imageFiles";
+import { messageSourceReferencesByIds } from "./messageSourceReferences";
 import { pageInfo, paginationFromQuery } from "./pagination";
 import { localLanIpv4, resolvePublicHttpOrigin } from "./publicOrigin";
 import { readStoredFile } from "./secureFiles";
@@ -340,6 +341,31 @@ export function sharedMessageHidesReferences(value: string | null | Record<strin
   return parsedSharedMessageMetadata(value).hideReference === true;
 }
 
+export function sharedMessageSourceReferencesAllowed(
+  role: string,
+  value: string | null | Record<string, unknown>
+) {
+  return role === "user" && !sharedMessageHidesReferences(value);
+}
+
+export function sharedMessageSourceReferenceIds(value: string | null | Record<string, unknown>) {
+  const rawIds = parsedSharedMessageMetadata(value).sourceReferenceIds;
+  if (!Array.isArray(rawIds)) return [];
+  return Array.from(new Set(rawIds.map((id) => String(id ?? "").trim()).filter(Boolean)));
+}
+
+export function sharedSourceReferencesForMessage<T extends { id: string }>(
+  value: string | null | Record<string, unknown>,
+  directReferences: T[],
+  referenceById: ReadonlyMap<string, T>
+) {
+  if (sharedMessageHidesReferences(value)) return [];
+  const linkedReferences = sharedMessageSourceReferenceIds(value)
+    .map((id) => referenceById.get(id))
+    .filter((reference): reference is T => Boolean(reference));
+  return linkedReferences.length > 0 ? linkedReferences : directReferences;
+}
+
 export function sharedMessageJobId(value: string | null | Record<string, unknown>) {
   const jobId = parsedSharedMessageMetadata(value).jobId;
   return typeof jobId === "string" ? jobId.trim() : "";
@@ -506,6 +532,14 @@ function sharedMessages(share: SessionShareLinkRow, token: string) {
         ...imageIds
       )
     : [];
+  const linkedMessageReferenceIds = rows
+    .filter((row) => sharedMessageSourceReferencesAllowed(row.role, row.metadata))
+    .flatMap((row) => sharedMessageSourceReferenceIds(row.metadata));
+  const linkedMessageReferences = linkedMessageReferenceIds.length > 0
+    ? messageSourceReferencesByIds(linkedMessageReferenceIds, share.user_id).filter(
+        (reference): reference is NonNullable<typeof reference> => Boolean(reference)
+      )
+    : [];
   const messageReferenceMap = new Map<string, SharedReferenceRow[]>();
   for (const reference of messageReferences) {
     messageReferenceMap.set(reference.message_id, [...(messageReferenceMap.get(reference.message_id) ?? []), reference]);
@@ -514,6 +548,7 @@ function sharedMessages(share: SessionShareLinkRow, token: string) {
   for (const reference of imageReferences) {
     imageReferenceMap.set(reference.image_id, [...(imageReferenceMap.get(reference.image_id) ?? []), reference]);
   }
+  const linkedMessageReferenceMap = new Map(linkedMessageReferences.map((reference) => [reference.id, reference]));
   const metadataFor = safeScopedMetadata(rows, share.includes_branches === 1);
 
   return rows.map((row) => {
@@ -526,7 +561,14 @@ function sharedMessages(share: SessionShareLinkRow, token: string) {
     const imagePreviewUrl = viewUrls?.imagePreviewUrl ?? null;
     const imageThumbnailUrl = viewUrls?.imageThumbnailUrl ?? null;
     const imageDownloadUrl = hasImage ? `${baseUrl}/image/download?variant=original` : null;
-    const sourceReferences = (messageReferenceMap.get(row.id) ?? []).map((reference, index) => {
+    const sourceReferenceRows = sharedMessageSourceReferencesAllowed(row.role, row.metadata)
+      ? sharedSourceReferencesForMessage(
+          row.metadata,
+          messageReferenceMap.get(row.id) ?? [],
+          linkedMessageReferenceMap
+        )
+      : [];
+    const sourceReferences = sourceReferenceRows.map((reference, index) => {
       const referenceBase = `${baseUrl}/source-references/${index + 1}`;
       return {
         id: `shared-source-reference-${row.share_sort_order + 1}-${index + 1}`,
@@ -637,7 +679,12 @@ function sharedReferenceByIndex(
   );
   if (!message) return null;
   if (type === "source") {
-    if (sharedMessageHidesReferences(message.metadata)) return null;
+    if (!sharedMessageSourceReferencesAllowed(message.role, message.metadata)) return null;
+    const linkedReferences = messageSourceReferencesByIds(
+      sharedMessageSourceReferenceIds(message.metadata),
+      share.user_id
+    ).filter((reference): reference is NonNullable<typeof reference> => Boolean(reference));
+    if (linkedReferences.length > 0) return linkedReferences[offset] ?? null;
     return getOne<SharedReferenceRow>(
       appDb,
       `select r.id, r.message_id, r.source_name, r.path, r.mime_type, r.size,
