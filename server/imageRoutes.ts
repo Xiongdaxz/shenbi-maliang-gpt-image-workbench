@@ -93,6 +93,11 @@ import { imageBatchResult, parseImageBatchIds } from "./imageBatch";
 import { finalizeProviderEditPrompt, normalizeImageEditRequest } from "./imageEditRequest";
 import { resolvePromptImageCount, resolveSelectedImageCount } from "../src/lib/imagePromptCount";
 import type { ImageEditIntent } from "../src/lib/imageAnnotations";
+import {
+  isImageBackgroundOption,
+  type ImageBackgroundOption,
+  type TransparentImageOutputFormat
+} from "../src/lib/imageBackground";
 
 function providerPrompt(prompt: string, imageCount: number) {
   if (imageCount <= 1) return prompt;
@@ -124,8 +129,6 @@ function requestImageCompletionConcurrency(requestPayload: Record<string, unknow
   );
 }
 
-type ImageBackgroundOption = "auto" | "opaque" | "transparent";
-type ImageOutputFormatOption = "png" | "webp";
 type ImageInputFidelityOption = "low" | "high";
 
 function requestOptionText(body: Record<string, unknown>, ...fields: string[]) {
@@ -142,12 +145,12 @@ function normalizedImageRequestOptions(body: Record<string, unknown>, includeInp
   const inputFidelity = requestOptionText(body, "inputFidelity", "input_fidelity").toLowerCase();
   const payload: {
     background?: ImageBackgroundOption;
-    output_format?: ImageOutputFormatOption;
+    output_format?: TransparentImageOutputFormat;
     input_fidelity?: ImageInputFidelityOption;
   } = {};
 
   if (background) {
-    if (background !== "auto" && background !== "opaque" && background !== "transparent") {
+    if (!isImageBackgroundOption(background)) {
       return { error: "background 仅支持 auto、opaque 或 transparent", payload };
     }
     payload.background = background;
@@ -173,6 +176,13 @@ function normalizedImageRequestOptions(body: Record<string, unknown>, includeInp
   }
 
   return { error: "", payload };
+}
+
+function imageRequestMessageMetadata(options: ReturnType<typeof normalizedImageRequestOptions>["payload"]) {
+  return {
+    ...(options.background ? { background: options.background } : {}),
+    ...(options.output_format ? { outputFormat: options.output_format } : {})
+  };
 }
 
 function providerImageContextValues(context: ProviderImageContext) {
@@ -2268,6 +2278,7 @@ api.post("/images/generate", async (c) => {
     clientRequestId,
     size,
     quality,
+    ...imageRequestMessageMetadata(imageOptions.payload),
     n: imageCount,
     providerId: selectedProviderId,
     ...(caseItemId ? { caseItemId } : {}),
@@ -2381,6 +2392,7 @@ api.post("/images/generate", async (c) => {
             insertMessage(user.id, sessionId, "assistant", "已生成图片", saved.id, {
               mode: "generation",
               jobId,
+              ...imageRequestMessageMetadata(imageOptions.payload),
               n: imageCount,
               imageIndex,
               imageTotal: imageCount,
@@ -2708,6 +2720,7 @@ api.post("/images/edit", async (c) => {
       hideReference,
       size,
       quality,
+      ...imageRequestMessageMetadata(imageOptions.payload),
       n: imageCount,
       providerId: selectedProviderId,
       ...(caseItemId ? { caseItemId } : {}),
@@ -2903,6 +2916,7 @@ api.post("/images/edit", async (c) => {
               sourceAssetIds,
               sourceReferenceIds,
               hasMask: Boolean(maskDataUrl),
+              ...imageRequestMessageMetadata(imageOptions.payload),
               n: imageCount,
               imageIndex,
               imageTotal: imageCount,

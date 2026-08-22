@@ -1,5 +1,6 @@
 import type { AssetItem, CaseMaterialItem, Message, MessageSourceReferenceImage } from "../types";
 import type { ImageAnnotation, ImageEditIntent } from "./imageAnnotations";
+import type { ImageBackgroundOption, TransparentImageOutputFormat } from "./imageBackground";
 
 export type SubmitRequest = {
   clientRequestId: string;
@@ -11,6 +12,8 @@ export type SubmitRequest = {
   language?: string;
   size?: string;
   n?: number;
+  background?: ImageBackgroundOption;
+  outputFormat?: TransparentImageOutputFormat;
   caseItemId?: string;
   sourceImageIds?: string[];
   sourceAssetIds?: string[];

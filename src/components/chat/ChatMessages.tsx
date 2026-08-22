@@ -762,7 +762,7 @@ function AssistantImageGroup({
                 aria-label={t("chatMessages.viewNthImage", { index: index + 1 })}
                 aria-pressed={index === currentIndex}
               >
-                <img src={messageThumbnailUrl(message)} alt="" />
+                <CheckerboardImage src={messageThumbnailUrl(message)} alt="" />
                 <span className="image-result-thumb-index">{index + 1}</span>
               </button>
             ) : (
@@ -817,7 +817,7 @@ function AssistantImageGroup({
                   }}
                   aria-label={canOpenEditor ? t("pages.images.editImage") : t("imageLightbox.preview")}
                 >
-                  <img src={messagePreviewUrl(activeMessage)} alt={activeMessage.content} onLoad={updateThumbLayout} />
+                  <CheckerboardImage src={messagePreviewUrl(activeMessage)} alt={activeMessage.content} onLoad={updateThumbLayout} />
                 </button>
                 <AssistantImageActions
                   image={image}
@@ -1277,7 +1277,7 @@ export function ChatMessage({
               }}
               aria-label={canOpenEditor ? t("pages.images.editImage") : t("imageLightbox.preview")}
             >
-              <img src={messagePreviewUrl(message)} alt={message.content} />
+              <CheckerboardImage src={messagePreviewUrl(message)} alt={message.content} />
             </button>
             <AssistantImageActions
               image={image}

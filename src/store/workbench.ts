@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { normalizeImageBackgroundOption, type ImageBackgroundOption } from "../lib/imageBackground";
 import type { PromptTemplateOptimizeStyle } from "../lib/promptOptimizeStyles";
 import type { AssetItem, CaseMaterialItem, Message, WorkImage } from "../types";
 import type { PromptTemplateFormValues, PromptTemplateResult } from "../types";
@@ -41,6 +42,7 @@ export type PendingEditorCancellationReturn = {
   selectedAssets: AssetItem[];
   imageCount: number;
   size: string;
+  background: ImageBackgroundOption;
   promptInputOptimizeStyle: PromptTemplateOptimizeStyle;
   promptColorSchemeIds: string[];
   promptColorSchemeInjection: string;
@@ -77,6 +79,7 @@ export type ComposerSessionDraft = {
   selectedAssets: AssetItem[];
   imageCount: number;
   size: string;
+  background: ImageBackgroundOption;
   promptInputOptimizeStyle: PromptTemplateOptimizeStyle;
   promptColorSchemeIds: string[];
   promptColorSchemeId: string;
@@ -158,6 +161,7 @@ function emptyComposerDraft(): ComposerSessionDraft {
     selectedAssets: [],
     imageCount: 1,
     size: "",
+    background: "auto",
     promptInputOptimizeStyle: "standard",
     promptColorSchemeIds: [],
     promptColorSchemeId: "",
@@ -181,6 +185,7 @@ function normalizeComposerDraft(value: unknown): ComposerSessionDraft {
   const promptColorSchemeIds = Array.from(new Set(rawIds.map(String))).slice(0, 1);
   return {
     ...draft,
+    background: normalizeImageBackgroundOption(draft.background),
     promptColorSchemeIds,
     promptColorSchemeId: String(promptColorSchemeIds[0] || ""),
     promptColorSchemeInjection: String(draft.promptColorSchemeInjection || "")
@@ -195,6 +200,7 @@ function hasComposerDraftContent(draft: ComposerSessionDraft) {
     || draft.selectedAssets.length > 0
     || draft.imageCount !== 1
     || draft.size
+    || draft.background !== "auto"
     || draft.promptInputOptimizeStyle !== "standard"
     || draft.promptColorSchemeIds.length > 0
     || draft.promptColorSchemeInjection.trim()

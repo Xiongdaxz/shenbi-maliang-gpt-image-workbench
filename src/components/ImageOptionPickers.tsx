@@ -1,8 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, Image as ImageIcon, ImagePlus, Ratio } from "lucide-react";
+import { Check, ChevronDown, Image as ImageIcon, ImagePlus, Layers2, Ratio } from "lucide-react";
 import { useI18n, type Translate } from "../i18n";
-import { sizeOptionFromValue, type QualityOption, type SizeOption } from "../lib/imageOptions";
+import type { ImageBackgroundOption } from "../lib/imageBackground";
+import {
+  IMAGE_BACKGROUND_PICKER_OPTIONS,
+  sizeOptionFromValue,
+  type QualityOption,
+  type SizeOption
+} from "../lib/imageOptions";
 import { MAX_IMAGE_COUNT, MIN_IMAGE_COUNT } from "../lib/imagePromptCount";
 
 function sizePreviewStyle(previewRatio?: string, box = 22) {
@@ -233,6 +239,73 @@ export function QualityPicker({
               <span className="quality-option-copy">
                 <strong>{qualityOptionLabel(option, t)}</strong>
                 <small>{qualityOptionDescription(option, t)}</small>
+              </span>
+              {option.value === value ? <Check className="size-option-check" size={16} /> : <span />}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function BackgroundPicker({
+  value,
+  onChange
+}: {
+  value: ImageBackgroundOption;
+  onChange: (value: ImageBackgroundOption) => void;
+}) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const selected = IMAGE_BACKGROUND_PICKER_OPTIONS.find((item) => item.value === value);
+  const triggerLabel = selected ? t(selected.labelKey) : t("picker.background.trigger");
+  const tooltip = t("picker.backgroundTooltip");
+
+  useEffect(() => {
+    if (!open) return;
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Node;
+      if (!wrapRef.current?.contains(target)) setOpen(false);
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [open]);
+
+  return (
+    <div className="size-picker background-picker" ref={wrapRef}>
+      <button
+        type="button"
+        className="background-picker-trigger"
+        data-tooltip={tooltip}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((next) => !next)}
+      >
+        <span className="size-trigger-icon background-trigger-icon" aria-hidden="true">
+          <Layers2 size={15} />
+        </span>
+        <span>{triggerLabel}</span>
+        <ChevronDown size={15} className={open ? "open" : ""} />
+      </button>
+      {open ? (
+        <div className="size-picker-menu background-picker-menu" role="listbox">
+          {IMAGE_BACKGROUND_PICKER_OPTIONS.map((option) => (
+            <button
+              type="button"
+              key={option.value}
+              role="option"
+              aria-selected={option.value === value}
+              className={option.value === value ? "active" : ""}
+              onClick={() => {
+                onChange(option.value === value ? "auto" : option.value);
+                setOpen(false);
+              }}
+            >
+              <span className="background-option-copy">
+                <strong>{t(option.labelKey)}</strong>
+                <small>{t(option.descriptionKey)}</small>
               </span>
               {option.value === value ? <Check className="size-option-check" size={16} /> : <span />}
             </button>

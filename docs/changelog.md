@@ -2,6 +2,20 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.69 - 2026-08-22
+
+### 中文
+
+- 创建和编辑图片时新增自动、不透明与透明背景选择，并同步更新全部界面语言和帮助说明；透明图片默认输出 PNG，AI 客户端还可选择 WebP，未指定背景时继续使用渠道默认行为。
+- 修改历史提示词重新生成或继续编辑时会保留原背景模式和透明输出格式；透明与不透明要求也会明确传递给图片渠道，减少棋盘格伪透明或背景与选择不一致的问题。
+- Codex 插件升级至 `0.5.0` 并同步背景能力；选择透明背景时，系统会使用支持透明输出的官网额度，若当前设置仅允许不兼容额度则给出明确的调整提示。
+
+### English
+
+- Image creation and editing now include automatic, opaque, and transparent background choices across every interface language and the Help Center; transparent images default to PNG, AI clients may also choose WebP, and leaving the background unspecified preserves each channel's default behavior.
+- Regenerating a historical prompt or continuing an edit now preserves its original background mode and transparent output format; transparent and opaque requirements are also passed explicitly to image channels, reducing checkerboard-style fake transparency and background mismatches.
+- The Codex plugin is upgraded to `0.5.0` with the same background capabilities; transparent requests use website quota that supports transparent output, while incompatible quota-only configurations receive a clear adjustment prompt.
+
 ## v0.1.68 - 2026-08-20
 
 ### 中文

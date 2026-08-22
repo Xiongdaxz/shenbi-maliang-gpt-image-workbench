@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 import {
   buildMaliangImageJobResult,
   DEVICE_REPORT_REQUIRED_MESSAGE,
+  EXTERNAL_MCP_IMAGE_BACKGROUND_SCHEMA,
   EXTERNAL_MCP_IMAGE_COUNT_SCHEMA,
+  EXTERNAL_MCP_IMAGE_OUTPUT_FORMAT_SCHEMA,
   externalMcpInternalApiUrl
 } from "./externalMcpServer";
 
@@ -31,6 +33,16 @@ describe("external MCP internal image requests", () => {
     expect(EXTERNAL_MCP_IMAGE_COUNT_SCHEMA.safeParse(0).success).toBe(false);
     expect(EXTERNAL_MCP_IMAGE_COUNT_SCHEMA.safeParse(11).success).toBe(false);
     expect(EXTERNAL_MCP_IMAGE_COUNT_SCHEMA.safeParse(1.5).success).toBe(false);
+  });
+
+  test("uses the same transparent background contract for generation and editing", () => {
+    expect(EXTERNAL_MCP_IMAGE_BACKGROUND_SCHEMA.safeParse("auto").success).toBe(true);
+    expect(EXTERNAL_MCP_IMAGE_BACKGROUND_SCHEMA.safeParse("opaque").success).toBe(true);
+    expect(EXTERNAL_MCP_IMAGE_BACKGROUND_SCHEMA.safeParse("transparent").success).toBe(true);
+    expect(EXTERNAL_MCP_IMAGE_BACKGROUND_SCHEMA.safeParse("checkerboard").success).toBe(false);
+    expect(EXTERNAL_MCP_IMAGE_OUTPUT_FORMAT_SCHEMA.safeParse("png").success).toBe(true);
+    expect(EXTERNAL_MCP_IMAGE_OUTPUT_FORMAT_SCHEMA.safeParse("webp").success).toBe(true);
+    expect(EXTERNAL_MCP_IMAGE_OUTPUT_FORMAT_SCHEMA.safeParse("jpeg").success).toBe(false);
   });
 
   test("returns a compact resource link without base64 image data for a completed job", async () => {

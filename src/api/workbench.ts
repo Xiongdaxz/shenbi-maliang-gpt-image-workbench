@@ -46,6 +46,7 @@ import type {
   WorkImage
 } from "../types";
 import type { ImageAnnotation, ImageEditIntent } from "../lib/imageAnnotations";
+import type { ImageBackgroundOption, TransparentImageOutputFormat } from "../lib/imageBackground";
 import { ApiError, request } from "./client";
 import type { AppearanceMode } from "../lib/appearance";
 import type { PromptColorScheme, PromptColorSchemePayload } from "../lib/promptColorSchemes";
@@ -107,9 +108,9 @@ export type GenerateImagePayload = {
   size?: string;
   quality?: string;
   n?: number;
-  background?: "auto" | "opaque" | "transparent";
-  outputFormat?: "png" | "webp";
-  output_format?: "png" | "webp";
+  background?: ImageBackgroundOption;
+  outputFormat?: TransparentImageOutputFormat;
+  output_format?: TransparentImageOutputFormat;
   caseItemId?: string;
   revisionRootId?: string;
   editedMessageId?: string;

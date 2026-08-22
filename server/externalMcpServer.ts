@@ -38,6 +38,8 @@ export const EXTERNAL_MCP_IMAGE_COUNT_SCHEMA = z.number()
   .int()
   .min(MIN_IMAGE_COUNT)
   .max(MAX_IMAGE_COUNT);
+export const EXTERNAL_MCP_IMAGE_BACKGROUND_SCHEMA = z.enum(["auto", "opaque", "transparent"]);
+export const EXTERNAL_MCP_IMAGE_OUTPUT_FORMAT_SCHEMA = z.enum(["png", "webp"]);
 
 function toolError(message: string) {
   return { isError: true as const, content: [{ type: "text" as const, text: message }] };
@@ -258,8 +260,10 @@ async function createMaliangMcpServer(api: Hono) {
       quality: z.string().trim().optional().describe("生成质量，例如 low、medium、high 或 auto"),
       imageCount: EXTERNAL_MCP_IMAGE_COUNT_SCHEMA.optional()
         .describe(`生成数量，范围 ${MIN_IMAGE_COUNT}-${MAX_IMAGE_COUNT}，默认 ${MIN_IMAGE_COUNT}；提示词中明确指定的数量优先`),
-      background: z.enum(["auto", "opaque", "transparent"]).optional(),
-      outputFormat: z.enum(["png", "webp"]).optional()
+      background: EXTERNAL_MCP_IMAGE_BACKGROUND_SCHEMA.optional()
+        .describe("背景模式；transparent 会输出带 Alpha 通道的 PNG 或 WebP"),
+      outputFormat: EXTERNAL_MCP_IMAGE_OUTPUT_FORMAT_SCHEMA.optional()
+        .describe("透明背景输出格式；省略时使用 PNG")
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
   }, async (input, extra) => {
@@ -341,6 +345,10 @@ async function createMaliangMcpServer(api: Hono) {
       quality: z.string().trim().optional(),
       imageCount: EXTERNAL_MCP_IMAGE_COUNT_SCHEMA.optional()
         .describe(`生成数量，范围 ${MIN_IMAGE_COUNT}-${MAX_IMAGE_COUNT}，默认 ${MIN_IMAGE_COUNT}；提示词中明确指定的数量优先`),
+      background: EXTERNAL_MCP_IMAGE_BACKGROUND_SCHEMA.optional()
+        .describe("背景模式；transparent 会在每次编辑中保留透明 Alpha 背景"),
+      outputFormat: EXTERNAL_MCP_IMAGE_OUTPUT_FORMAT_SCHEMA.optional()
+        .describe("透明背景输出格式；省略时使用 PNG"),
       inputFidelity: z.enum(["low", "high"]).optional()
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
@@ -370,6 +378,8 @@ async function createMaliangMcpServer(api: Hono) {
         ...(input.size ? { size: input.size } : {}),
         ...(input.quality ? { quality: input.quality } : {}),
         ...(input.imageCount ? { n: input.imageCount } : {}),
+        ...(input.background ? { background: input.background } : {}),
+        ...(input.outputFormat ? { outputFormat: input.outputFormat } : {}),
         ...(input.inputFidelity ? { inputFidelity: input.inputFidelity } : {}),
         clientRequestId: `mcp-${randomUUID()}`
       });

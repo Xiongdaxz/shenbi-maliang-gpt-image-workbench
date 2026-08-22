@@ -192,6 +192,13 @@ const messages: Messages = {
   "picker.quality.high": "Hoch",
   "picker.quality.highDesc": "Mehr Details, langsamere Generierung",
   "picker.quality.custom": "Benutzerdefinierte Qualität {quality}",
+  "picker.backgroundTooltip": "Hintergrund. Er kann auch über den Prompt erzeugt werden.",
+  "picker.background.trigger": "Hintergrund",
+  "picker.background.default": "Standard",
+  "picker.background.opaque": "Undurchsichtig",
+  "picker.background.opaqueDesc": "Erzeugt ein Standardbild mit vollständig deckendem Hintergrund",
+  "picker.background.transparent": "Transparent",
+  "picker.background.transparentDesc": "Gibt ein PNG-Bild mit Alphakanal aus",
   "picker.imageCountTooltip": "Bildanzahl. Du kannst die Anzahl auch im Prompt angeben.",
   "picker.imageCount": "Anzahl {count}",
   "picker.imageCountOption": "{count} Bilder"

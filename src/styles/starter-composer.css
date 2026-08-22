@@ -882,7 +882,7 @@
   z-index: 4;
 }
 
-.composer:has(.size-picker-trigger[aria-expanded="true"], .quality-picker-trigger[aria-expanded="true"]) {
+.composer:has(.size-picker-trigger[aria-expanded="true"], .quality-picker-trigger[aria-expanded="true"], .background-picker-trigger[aria-expanded="true"]) {
   z-index: 5;
 }
 
@@ -2306,7 +2306,7 @@
   flex: 0 0 auto;
 }
 
-.size-picker:has(.size-picker-trigger[aria-expanded="true"], .quality-picker-trigger[aria-expanded="true"], .image-count-trigger[aria-expanded="true"]) {
+.size-picker:has(.size-picker-trigger[aria-expanded="true"], .quality-picker-trigger[aria-expanded="true"], .background-picker-trigger[aria-expanded="true"], .image-count-trigger[aria-expanded="true"]) {
   z-index: 2;
 }
 
@@ -2316,6 +2316,7 @@
 
 .size-picker-trigger,
 .quality-picker-trigger,
+.background-picker-trigger,
 .image-count-trigger {
   min-height: 36px;
   height: 36px;
@@ -2343,7 +2344,14 @@
   padding-inline: 10px 8px;
 }
 
+.background-picker-trigger {
+  min-width: 100px;
+  justify-content: center;
+  padding-inline: 10px 8px;
+}
+
 .quality-trigger-icon,
+.background-trigger-icon,
 .image-count-trigger-icon {
   color: #111827;
 }
@@ -2360,6 +2368,7 @@
 
 .size-picker-trigger svg,
 .quality-picker-trigger svg,
+.background-picker-trigger svg,
 .image-count-trigger svg {
   color: #6b7280;
   transition: transform 160ms ease;
@@ -2367,6 +2376,7 @@
 
 .size-picker-trigger svg.open,
 .quality-picker-trigger svg.open,
+.background-picker-trigger svg.open,
 .image-count-trigger svg.open {
   transform: rotate(180deg);
 }
@@ -2392,6 +2402,7 @@
 
 .size-trigger-icon svg,
 .quality-trigger-icon svg,
+.background-trigger-icon svg,
 .image-count-trigger-icon svg {
   width: 15px;
   height: 15px;
@@ -2445,6 +2456,14 @@
   width: max-content;
   min-width: 148px;
   max-width: min(240px, calc(100vw - 24px));
+}
+
+.background-picker-menu {
+  width: min(286px, calc(100vw - 24px));
+}
+
+.background-picker-menu button {
+  grid-template-columns: minmax(0, 1fr) 18px;
 }
 
 .image-count-menu {
@@ -2501,6 +2520,7 @@
 }
 
 .image-count-option-copy strong,
+.background-option-copy strong,
 .quality-option-copy strong,
 .size-option-copy strong {
   font-size: 14px;
@@ -2512,6 +2532,7 @@
 }
 
 .image-count-option-copy small,
+.background-option-copy small,
 .quality-option-copy small,
 .size-option-copy small {
   margin-top: 2px;
@@ -2523,6 +2544,17 @@
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
+  line-height: 1.35;
+}
+
+.background-option-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.background-option-copy small {
+  white-space: normal;
   line-height: 1.35;
 }
 

@@ -1,3 +1,5 @@
+import type { ImageBackgroundOption } from "./imageBackground";
+
 export type SizeOption = {
   value: string;
   label: string;
@@ -16,6 +18,12 @@ export type QualityOption = {
   descriptionKey?: string;
 };
 
+export type BackgroundOption = {
+  value: Exclude<ImageBackgroundOption, "auto">;
+  labelKey: string;
+  descriptionKey: string;
+};
+
 const DEFAULT_REQUEST_SIZE = "auto";
 
 const BASE_SIZE_OPTIONS: SizeOption[] = [
@@ -31,6 +39,11 @@ const QUALITY_PRESETS: Record<string, { label: string; labelKey: string; descrip
   medium: { label: "中", labelKey: "picker.quality.medium", descriptionKey: "picker.quality.mediumDesc" },
   high: { label: "高", labelKey: "picker.quality.high", descriptionKey: "picker.quality.highDesc" }
 };
+
+export const IMAGE_BACKGROUND_PICKER_OPTIONS: BackgroundOption[] = [
+  { value: "transparent", labelKey: "picker.background.transparent", descriptionKey: "picker.background.transparentDesc" },
+  { value: "opaque", labelKey: "picker.background.opaque", descriptionKey: "picker.background.opaqueDesc" }
+];
 
 function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { ArrowUp, BrushCleaning, ImageIcon, Lightbulb, LoaderCircle, Plus, RotateCw, Sparkles, Square, Undo2, WandSparkles, X } from "lucide-react";
 import { ImageLightbox, type ImageLightboxState } from "../ImageLightbox";
 import { MaterialPickerDrawer } from "../MaterialPicker";
-import { ImageCountStepper, SizePicker } from "../ImageOptionPickers";
+import { BackgroundPicker, ImageCountStepper, SizePicker } from "../ImageOptionPickers";
 import { CheckerboardImage } from "../CheckerboardImage";
 import { PromptColorSchemeSelect } from "../PromptColorSchemeSelect";
 import { PromptOptimizeStyleSelect } from "../PromptOptimizeStyleSelect";
@@ -26,6 +26,7 @@ import {
 } from "../../lib/promptOptimizeStyles";
 import { useI18n } from "../../i18n";
 import type { SizeOption } from "../../lib/imageOptions";
+import type { ImageBackgroundOption } from "../../lib/imageBackground";
 import type { ComposerPromptTemplateDraft, ComposerPromptTemplatePanelDraft } from "../../store/workbench";
 import type { AssetItem, CaseMaterialItem, ImageEditSuggestion } from "../../types";
 import { useToast } from "../../ui";
@@ -57,6 +58,7 @@ type ChatComposerProps = {
   placeholder: string;
   previews: ChatComposerPreview[];
   imageCount: number;
+  background: ImageBackgroundOption;
   promptColorSchemes: PromptColorScheme[];
   promptColorSchemeIds: string[];
   promptColorSchemeInjection?: string;
@@ -73,6 +75,7 @@ type ChatComposerProps = {
   onCancel?: () => void;
   onApplyEditSuggestion?: (suggestion: ImageEditSuggestion) => void;
   onAutoOptimizePromptRequestHandled?: (id: number) => void;
+  onBackgroundChange: (value: ImageBackgroundOption) => void;
   onImageCountChange: (value: number) => void;
   onPaste: ClipboardEventHandler<HTMLTextAreaElement>;
   onSelectedAssetsChange: (assets: AssetItem[]) => void;
@@ -143,6 +146,7 @@ export function ChatComposer({
   placeholder,
   previews,
   imageCount,
+  background,
   promptColorSchemes,
   promptColorSchemeIds,
   promptColorSchemeInjection = "",
@@ -159,6 +163,7 @@ export function ChatComposer({
   onCancel,
   onApplyEditSuggestion,
   onAutoOptimizePromptRequestHandled,
+  onBackgroundChange,
   onImageCountChange,
   onPaste,
   onSelectedAssetsChange,
@@ -895,6 +900,7 @@ export function ChatComposer({
             ) : null}
           </div>
           <SizePicker value={size} options={sizeOptions} onChange={onSizeChange} />
+          <BackgroundPicker value={background} onChange={onBackgroundChange} />
           <ImageCountStepper value={imageCount} onChange={onImageCountChange} />
           <span className="composer-prompt-template-style-tooltip composer-prompt-template-color-control" data-tooltip={t("settings.personalization.colorSchemes.title")}>
             <PromptColorSchemeSelect

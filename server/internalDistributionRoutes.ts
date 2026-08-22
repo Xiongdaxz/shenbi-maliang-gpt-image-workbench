@@ -13,8 +13,10 @@ const CODEX_PLUGIN_MANIFEST = "plugins/maliang-image-generator/.codex-plugin/plu
 const CODEX_PLUGIN_HELPER = "plugins/maliang-image-generator/skills/maliang-image-generator/scripts/maliang-helper.mjs";
 const CODEX_PLUGIN_LOCAL_MCP = "plugins/maliang-image-generator/mcp/maliang-local-mcp.mjs";
 const CODEX_PLUGIN_ARCHIVE_DATE = new Date("2026-01-01T00:00:00.000Z");
-const CODEX_PLUGIN_RELEASED_AT = "2026-08-20";
+const CODEX_PLUGIN_RELEASED_AT = "2026-08-22";
 const CODEX_PLUGIN_RELEASE_NOTES = [
+  "文生图与改图统一支持透明、不透明和自动背景模式；透明输出使用 PNG 或 WebP，默认不传背景参数。",
+  "历史消息重提会保留原背景模式和透明输出格式，ChatGPT Web 官网链路也会明确传达不透明背景要求。",
   "Codex 插件生图数量逻辑与 Web 工作台保持一致，支持一次请求 1 至 10 张，并以提示词中的明确数量为准。",
   "多图任务会逐张保存并交付全部已完成图片；部分成功时保留可用结果并明确报告缺失或失败。",
   "可信本机与私有局域网 HTTP 开发地址现在可以执行自动更新；公开与生产地址仍强制使用 HTTPS。",

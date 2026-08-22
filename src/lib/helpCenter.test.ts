@@ -44,4 +44,30 @@ describe("help center article registry", () => {
       expect(troubleshooting, `missing Remove prerequisite for: ${locale}`).toMatch(/Remove|移除/);
     }
   });
+
+  test("documents the background option in every help locale", () => {
+    const localeMessages = {
+      ...helpCenterPrimaryOverrides,
+      ...helpCenterOverrides
+    };
+    const backgroundTerms: Record<string, RegExp> = {
+      "zh-CN": /背景/,
+      "en-US": /background/i,
+      "ja-JP": /背景/,
+      "ko-KR": /배경/,
+      "es-ES": /fondo/i,
+      "fr-FR": /arrière-plan/i,
+      "de-DE": /Hintergrund/i,
+      "pt-BR": /fundo/i,
+      "ru-RU": /фон/i,
+      "fa-IR": /پس‌زمینه/
+    };
+
+    for (const [locale, messages] of Object.entries(localeMessages)) {
+      const pattern = backgroundTerms[locale];
+      expect(pattern, `missing background term for: ${locale}`).toBeDefined();
+      expect(messages["help.visual.workbench.parameters"], `missing background visual copy for: ${locale}`).toMatch(pattern);
+      expect(messages["help.article.adjustGenerationOptions.body"], `missing background guide for: ${locale}`).toMatch(pattern);
+    }
+  });
 });

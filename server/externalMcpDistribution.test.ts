@@ -218,12 +218,14 @@ describe("Maliang Codex plugin distribution", () => {
     expect(connectionSkill).toContain("Automatic updates default to `auto`");
     expect(imageSkill).toContain("maliang_report_device");
     expect(connectionSkill).toContain("maliang_report_device");
+    expect(imageSkill).toContain("transparent or opaque result");
+    expect(imageSkill).toContain("continued edits should preserve");
 
     const pluginManifest = JSON.parse(await readFile(
       "distribution/codex-marketplace/plugins/maliang-image-generator/.codex-plugin/plugin.json",
       "utf8"
     )) as { hooks?: string; version?: string };
-    expect(pluginManifest.version).toBe("0.4.9");
+    expect(pluginManifest.version).toBe("0.5.0");
     expect(pluginManifest.hooks).toBe("./hooks/hooks.json");
 
     const hooks = JSON.parse(await readFile(
@@ -482,7 +484,7 @@ foreach ($value in @(
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       publicBaseUrl: "https://maliang.example.com",
-      pluginVersion: "0.4.9",
+      pluginVersion: "0.5.0",
       install: {
         href: "https://maliang.example.com/install",
         instruction: "访问 https://maliang.example.com/install，安装神笔马良。"
@@ -526,7 +528,7 @@ foreach ($value in @(
         supported: boolean;
       };
     };
-    expect(manifest.version).toBe("0.4.9");
+    expect(manifest.version).toBe("0.5.0");
     expect(manifest.execution.owner).toBe("current-ai-agent");
     expect(manifest.execution.mode).toBe("execute-installation");
     expect(manifest.execution.startImmediatelyAfterReading).toBe(true);
@@ -567,7 +569,7 @@ foreach ($value in @(
     expect(html).not.toContain('<nav class="nav">');
     expect(html).not.toContain('<span class="eyebrow">');
     expect(html).toContain('<div class="title-row"><img class="title-logo" src="/image/logo-small.webp" alt=""><h1>安装神笔马良插件</h1>');
-    expect(html).toContain('<span class="version-badge">v0.4.9</span>');
+    expect(html).toContain('<span class="version-badge">v0.5.0</span>');
     expect(html).toContain('<img class="hero-art" src="/image/install/maliang-plugin-install-hero.webp"');
     expect(html).not.toContain('/image/help/maliang-help-hero-v2.webp');
     expect(html).toContain("Claude Code、TRAE Work、WorkBuddy");
@@ -593,6 +595,8 @@ foreach ($value in @(
       channel: string;
       downloadUrl: string;
       mcpResource: string;
+      releasedAt: string;
+      releaseNotes: string[];
       sha256: string;
       size: number;
       update: {
@@ -611,6 +615,8 @@ foreach ($value in @(
     };
     expect(manifest.version).toBe(await readCodexPluginVersion());
     expect(manifest.channel).toBe("stable");
+    expect(manifest.releasedAt).toBe("2026-08-22");
+    expect(manifest.releaseNotes.join("\n")).toContain("透明、不透明和自动背景模式");
     expect(manifest.downloadUrl).toBe("https://open-source.example/plugin/download/latest");
     expect(manifest.mcpResource).toBe("https://open-source.example/api/external-mcp/mcp");
     expect(manifest.update).toEqual(expect.objectContaining({

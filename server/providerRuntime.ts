@@ -15,6 +15,11 @@ import {
 } from "./constants";
 import { logProviderRequest } from "./auditLog";
 import { selectAvailableChatGptWebAccount } from "./chatGptWebAccountPool";
+import {
+  CHATGPT_WEB_TRANSPARENT_BACKGROUND_QUOTA_ERROR,
+  resolveChatGptWebImageQuotaOrder
+} from "./chatGptWebImageRequest";
+import { injectImageBackgroundInstruction } from "../src/lib/imageBackground";
 import { configDb, getAll, getOne, run } from "./db";
 import { readImageDimensions } from "./imageDimensions";
 import { ROOT } from "./paths";
@@ -36,7 +41,6 @@ import {
   normalizeImageAccountStatus,
   normalizePath,
   normalizeProviderChannel,
-  normalizeQuotaMode,
   normalizeRouteMode,
   normalizeWebAccountMode,
   now,
@@ -3004,14 +3008,6 @@ async function prepareChatGptWebConversation(
   return String(record.client_prepare_state ?? record.prepare_state ?? record.state ?? "").trim();
 }
 
-function chatGptWebQuotaOrder(provider: RuntimeProviderRow) {
-  const quotaMode = normalizeQuotaMode(provider.quota_mode);
-  if (quotaMode === "official_first") return ["official", "codex"] as const;
-  if (quotaMode === "codex_only") return ["codex"] as const;
-  if (quotaMode === "official_only") return ["official"] as const;
-  return ["codex", "official"] as const;
-}
-
 function chatGptWebImagePayload(payload: Record<string, unknown>, quota: "codex" | "official") {
   const { response_format: _responseFormat, ...rest } = payload;
   return {
@@ -3133,10 +3129,12 @@ async function callChatGptWebProvider(
   payload: Record<string, unknown>,
   context: ProviderRequestContext = {}
 ) {
+  const quotaOrder = resolveChatGptWebImageQuotaOrder(provider.quota_mode, payload);
+  if (quotaOrder.length === 0) throw new Error(CHATGPT_WEB_TRANSPARENT_BACKGROUND_QUOTA_ERROR);
   const lease = await acquireChatGptWebSettings(provider, sourceReferenceAccountId(payload), context.signal);
   const errors: string[] = [];
   try {
-    for (const quota of chatGptWebQuotaOrder(provider)) {
+    for (const quota of quotaOrder) {
       assertProviderRequestActive(context);
       try {
         return await callChatGptWebQuotaProvider(provider, mode, payload, quota, lease.settings, context);
@@ -3213,6 +3211,7 @@ function payloadForProvider(provider: RuntimeProviderRow, payload: Record<string
     delete nextPayload.webConversationContext;
     delete nextPayload.editIntent;
   }
+  nextPayload.prompt = injectImageBackgroundInstruction(nextPayload.prompt, nextPayload.background);
   return injectAspectRatioInstruction(nextPayload);
 }
 

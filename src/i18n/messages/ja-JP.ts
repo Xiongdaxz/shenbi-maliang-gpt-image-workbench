@@ -192,6 +192,13 @@ const messages: Messages = {
   "picker.quality.high": "高",
   "picker.quality.highDesc": "より高精細、生成は遅め",
   "picker.quality.custom": "カスタム品質 {quality}",
+  "picker.backgroundTooltip": "背景。プロンプトから生成することもできます。",
+  "picker.background.trigger": "背景",
+  "picker.background.default": "デフォルト",
+  "picker.background.opaque": "不透明",
+  "picker.background.opaqueDesc": "完全な背景を持つ通常の画像を生成",
+  "picker.background.transparent": "透明",
+  "picker.background.transparentDesc": "アルファチャンネル付きの PNG 画像を出力",
   "picker.imageCountTooltip": "画像枚数。プロンプト内に枚数を書くこともできます。",
   "picker.imageCount": "枚数 {count}",
   "picker.imageCountOption": "{count} 枚"

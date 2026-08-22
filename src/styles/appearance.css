@@ -978,6 +978,7 @@ html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance=
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-result-select-trigger,
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .size-picker-trigger,
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .quality-picker-trigger,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .background-picker-trigger,
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-count-trigger {
   border-color: var(--button-default-border);
   background: var(--button-default-bg);
@@ -1008,6 +1009,7 @@ html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance=
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .size-trigger-icon,
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .size-option-icon,
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .quality-trigger-icon,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .background-trigger-icon,
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-count-trigger-icon,
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-optimize-submit,
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-undo-submit,
@@ -1025,6 +1027,7 @@ html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance=
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .size-picker-trigger small,
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .size-picker-trigger svg,
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .quality-picker-trigger svg,
+html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .background-picker-trigger svg,
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .image-count-trigger svg,
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-color-select .custom-select-trigger > svg,
 html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance="chunyu"]) .composer-prompt-template-color-select .custom-select-value > svg,

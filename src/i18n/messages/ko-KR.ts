@@ -192,6 +192,13 @@ const messages: Messages = {
   "picker.quality.high": "높음",
   "picker.quality.highDesc": "더 많은 디테일, 느린 생성",
   "picker.quality.custom": "사용자 지정 품질 {quality}",
+  "picker.backgroundTooltip": "배경. 프롬프트로도 생성할 수 있습니다.",
+  "picker.background.trigger": "배경",
+  "picker.background.default": "기본값",
+  "picker.background.opaque": "불투명",
+  "picker.background.opaqueDesc": "전체 배경이 있는 일반 이미지를 생성합니다",
+  "picker.background.transparent": "투명",
+  "picker.background.transparentDesc": "알파 채널이 포함된 PNG 이미지로 출력합니다",
   "picker.imageCountTooltip": "이미지 수입니다. 프롬프트에 수량을 직접 적어도 됩니다.",
   "picker.imageCount": "수량 {count}",
   "picker.imageCountOption": "{count}장"
