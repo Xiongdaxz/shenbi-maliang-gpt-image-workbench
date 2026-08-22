@@ -2,6 +2,16 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.70 - 2026-08-22
+
+### 中文
+
+- “我的图片”和灵感空间的缩略图现在会自动识别透明内容，并用棋盘格清楚展示透明区域，同时保留原有的渐进加载效果。
+
+### English
+
+- Thumbnails in My Images and Inspiration now detect transparent content automatically and display transparent areas on a checkerboard while preserving the existing progressive loading experience.
+
 ## v0.1.69 - 2026-08-22
 
 ### 中文

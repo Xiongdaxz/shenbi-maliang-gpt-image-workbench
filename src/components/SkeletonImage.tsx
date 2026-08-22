@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { cx } from "../lib/cx";
+import { CheckerboardImage } from "./CheckerboardImage";
 
 const loadedImageSources = new Map<string, true>();
 const MAX_REMEMBERED_IMAGE_SOURCES = 2_000;
@@ -19,12 +20,14 @@ export function SkeletonImage({
   src,
   alt,
   className,
+  detectTransparency = false,
   loading = "lazy",
   fetchPriority = "auto"
 }: {
   src: string;
   alt: string;
   className?: string;
+  detectTransparency?: boolean;
   loading?: "eager" | "lazy";
   fetchPriority?: "high" | "low" | "auto";
 }) {
@@ -43,20 +46,36 @@ export function SkeletonImage({
   return (
     <span className={cx("image-load-shell", loaded && "loaded")}>
       <span className="image-load-skeleton" aria-hidden="true" />
-      <img
-        ref={imageRef}
-        className={loadedImageSources.has(src) ? className : undefined}
-        src={src}
-        alt={alt}
-        loading={loading}
-        fetchPriority={fetchPriority}
-        decoding="async"
-        onLoad={() => {
-          rememberLoadedImageSource(src);
-          setLoadedSrc(src);
-        }}
-        onError={() => setLoadedSrc(src)}
-      />
+      {detectTransparency ? (
+        <CheckerboardImage
+          className={loadedImageSources.has(src) ? className : undefined}
+          src={src}
+          alt={alt}
+          loading={loading}
+          fetchPriority={fetchPriority}
+          decoding="async"
+          onLoad={() => {
+            rememberLoadedImageSource(src);
+            setLoadedSrc(src);
+          }}
+          onError={() => setLoadedSrc(src)}
+        />
+      ) : (
+        <img
+          ref={imageRef}
+          className={loadedImageSources.has(src) ? className : undefined}
+          src={src}
+          alt={alt}
+          loading={loading}
+          fetchPriority={fetchPriority}
+          decoding="async"
+          onLoad={() => {
+            rememberLoadedImageSource(src);
+            setLoadedSrc(src);
+          }}
+          onError={() => setLoadedSrc(src)}
+        />
+      )}
     </span>
   );
 }

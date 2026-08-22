@@ -54,7 +54,13 @@ export function MyImageCard({
           title={selectionMode ? t("pages.images.batch.selectImage") : t("pages.images.editImage")}
           disabled={selectionMode && selectionDisabled}
         >
-          <SkeletonImage src={thumbnailUrl} alt={image.prompt} loading={loading} fetchPriority={fetchPriority} />
+          <SkeletonImage
+            src={thumbnailUrl}
+            alt={image.prompt}
+            loading={loading}
+            fetchPriority={fetchPriority}
+            detectTransparency
+          />
         </button>
         {selectionMode ? (
           <button

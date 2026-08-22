@@ -906,6 +906,7 @@ export function CasesPage({
                     alt={item.title}
                     loading={eager ? "eager" : "lazy"}
                     fetchPriority={highPriority ? "high" : "auto"}
+                    detectTransparency
                   />
                 </button>
                 {(item.imageCount ?? 1) > 1 ? (
