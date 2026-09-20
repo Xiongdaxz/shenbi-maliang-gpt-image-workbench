@@ -56,7 +56,7 @@ if ! command -v "$BUN_CMD" >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "[1/4] Installing dependencies..."
+echo "[1/5] Installing Bun dependencies..."
 if ! "$BUN_CMD" install --frozen-lockfile; then
   if [[ -d "node_modules" ]]; then
     echo
@@ -72,11 +72,23 @@ if ! "$BUN_CMD" install --frozen-lockfile; then
 fi
 
 echo
-echo "[2/4] Building frontend..."
+echo "[2/5] Preparing ChatGPT Web Python runtime..."
+unset CHATGPT_WEB_BRIDGE_SETUP_ERROR
+if ! "$BUN_CMD" run setup:chatgpt-web; then
+  export CHATGPT_WEB_BRIDGE_SETUP_ERROR="启动器准备 Python 环境失败，请查看上方日志并重新启动以恢复官网普通额度"
+  echo
+  echo "[WARN] ChatGPT Web Python runtime setup failed."
+  echo "The app will continue, but ordinary ChatGPT Web quota fallback will be unavailable."
+  echo "Install Python 3.10 or newer, then restart to restore that route."
+  echo "To use a specific interpreter, set CHATGPT_WEB_BASE_PYTHON to its full path."
+fi
+
+echo
+echo "[3/5] Building frontend..."
 "$BUN_CMD" run build
 
 echo
-echo "[3/4] Stopping old process on port $PORT..."
+echo "[4/5] Stopping old process on port $PORT..."
 if command -v lsof >/dev/null 2>&1; then
   pids="$(lsof -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null || true)"
   for pid in $pids; do
@@ -92,7 +104,7 @@ else
 fi
 
 echo
-echo "[4/4] Starting server..."
+echo "[5/5] Starting server..."
 if [[ "$HOST" == "0.0.0.0" ]]; then
   echo "Main app:      http://127.0.0.1:$PORT"
   echo "Config app:    http://127.0.0.1:$PORT/config"
@@ -108,4 +120,4 @@ echo "Keep this terminal open while the service is running."
 echo "Press Ctrl+C to stop."
 echo
 
-exec "$BUN_CMD" server/index.ts
+exec "$BUN_CMD" run start

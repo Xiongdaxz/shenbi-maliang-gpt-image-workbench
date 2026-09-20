@@ -82,7 +82,7 @@ if not "%BUN_READY%"=="1" (
   exit /b 1
 )
 
-echo [1/4] Installing dependencies...
+echo [1/5] Installing Bun dependencies...
 "%BUN_CMD%" install --frozen-lockfile
 if errorlevel 1 (
   if exist "node_modules" (
@@ -101,7 +101,21 @@ if errorlevel 1 (
 )
 
 echo.
-echo [2/4] Building frontend...
+echo [2/5] Preparing ChatGPT Web Python runtime...
+set "CHATGPT_WEB_BRIDGE_SETUP_ERROR="
+"%BUN_CMD%" run setup:chatgpt-web
+if errorlevel 1 (
+  set "CHATGPT_WEB_BRIDGE_SETUP_ERROR=Launcher Python setup failed; review the preceding log and restart to restore ordinary ChatGPT Web quota"
+  echo.
+  echo [WARN] ChatGPT Web Python runtime setup failed.
+  echo The app will continue, but ordinary ChatGPT Web quota fallback will be unavailable.
+  echo Install Python 3.10 or newer, then restart to restore that route.
+  echo To use a specific interpreter, set CHATGPT_WEB_BASE_PYTHON to its full path.
+  echo.
+)
+
+echo.
+echo [3/5] Building frontend...
 "%BUN_CMD%" run build
 if errorlevel 1 (
   echo.
@@ -113,7 +127,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [3/4] Stopping old process on port %PORT%...
+echo [4/5] Stopping old process on port %PORT%...
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$port=[int]$env:PORT; $listenerIds=@(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique); foreach ($id in $listenerIds) { if ($id) { Write-Host ('Stopping PID ' + $id); Stop-Process -Id $id -Force -ErrorAction SilentlyContinue } }"
 if errorlevel 1 (
   echo.
@@ -121,7 +135,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [4/4] Starting server...
+echo [5/5] Starting server...
 if "%HOST%"=="0.0.0.0" (
   echo Main app:      http://127.0.0.1:%PORT%
   echo Config app:    http://127.0.0.1:%PORT%/config
@@ -137,7 +151,7 @@ echo Keep this window open while the service is running.
 echo Press Ctrl+C to stop.
 echo.
 
-"%BUN_CMD%" server/index.ts
+"%BUN_CMD%" run start
 
 echo.
 echo Server stopped.

@@ -23,9 +23,10 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: |
-          bun install --frozen-lockfile
-          python -m pip install --requirement scripts/requirements-chatgpt-web.txt
+        run: bun install --frozen-lockfile
+
+      - name: Prepare ChatGPT Web Python runtime
+        run: bun run setup:chatgpt-web
 
       - name: Type check
         run: bun run check
@@ -34,7 +35,7 @@ jobs:
         run: bun test
 
       - name: ChatGPT Web bridge tests
-        run: python -B -m unittest discover -s scripts -p 'test_chatgpt_web_bridge.py'
+        run: bun run test:chatgpt-web-bridge
 
       - name: Build
         run: bun run build

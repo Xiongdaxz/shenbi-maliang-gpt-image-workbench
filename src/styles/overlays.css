@@ -864,6 +864,10 @@
   box-shadow: none;
 }
 
+.rendering-card.is-snake-active {
+  border-radius: 0;
+}
+
 .rendering-card::before {
   content: none;
 }

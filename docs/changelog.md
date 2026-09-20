@@ -2,6 +2,22 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.76 - 2026-09-20
+
+### 中文
+
+- ChatGPT Web 官网普通额度现在会在首次启动或升级时自动准备项目独立的 Python 3.10+ 环境，并按锁定版本安装桥接依赖；Windows、Linux、macOS、源码运行包和便携包均使用一致流程，环境准备失败时会明确提示，同时 CPA、API 和 Codex Responses 等其他图片渠道仍可继续使用。
+- 图片生成和编辑的“自动”背景现在默认使用完整不透明画布，只有选择透明或在提示词中明确要求透明背景、无背景或 Alpha 通道时才输出透明图片，减少来源图片透明度推断造成的意外透明结果；编辑透明原图如需继续保持透明，可直接选择或写明透明要求。
+- 绘图素材现在会作为低精度构图参考而非逐线复刻：系统会保留主体数量、粗略位置、姿态意图、主要配色和空间关系，并根据人物/动物、产品/建筑/机械或图标/版式等类型修正不自然的比例、轮廓和透视误差。
+- 优化图片生成等待体验：动态光点会更自然地覆盖完整画布，贪吃蛇游戏与容器边缘贴合；ChatGPT Web 自动选择图片模型时不再显示重复的降级说明，绘图文字工具的输入提示也更简洁准确。
+
+### English
+
+- ChatGPT Web ordinary quota now prepares an isolated Python 3.10+ environment automatically on first startup or upgrade and installs bridge dependencies at locked versions; Windows, Linux, macOS, source-run packages, and portable packages use the same flow, setup failures are reported clearly, and other image channels such as CPA, API, and Codex Responses remain available.
+- Automatic background handling for image generation and editing now defaults to a fully opaque canvas; transparent output is used only when users select it or explicitly request a transparent background, no background, or an alpha channel, reducing accidental transparency caused by inferring it from the source image. Users editing a transparent source can keep transparency by selecting or stating that requirement.
+- Drawing materials are now treated as low-precision composition references instead of line-for-line artwork: the system preserves subject count, approximate placement, pose intent, main colors, and spatial relationships while correcting unnatural proportions, outlines, and perspective according to whether the subject is a person or animal, product or structure, or icon and layout.
+- Improved the image-generation waiting experience: animated dots move more naturally across the full canvas and the Snake game aligns with the container edges; redundant fallback text is no longer shown when ChatGPT Web selects the image model automatically, and the drawing text tool now uses a clearer input hint.
+
 ## v0.1.75 - 2026-09-17
 
 ### 中文

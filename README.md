@@ -50,9 +50,12 @@
 
 ```bash
 bun install
+bun run setup:chatgpt-web
 bun run build
 bun run start
 ```
+
+ChatGPT 官网普通额度回退需要 Python 3.10+。首次执行准备命令时会在 `runtime/chatgpt-web-venv` 创建项目独立环境并安装依赖；后续仅在依赖文件变化或环境缺包时更新。详见 [ChatGPT Web Python 运行环境](docs/chatgpt-web-python-runtime.md)。
 
 启动后访问：
 
@@ -141,7 +144,7 @@ data/     本地运行数据目录，启动后自动生成
 | 便携运行包 | macOS Apple Silicon | `shenbi-maliang-X.Y.Z-macos-arm64-portable.zip` | zip + 可执行文件 | 解压后进入 `shenbi-maliang` 目录，执行 `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
 | 源码运行包 | Windows / Linux / macOS | `shenbi-maliang-X.Y.Z-source-run.zip` | zip + 源码 | Windows 执行 `start-update.bat`；Linux/macOS 执行 `bash ./start.sh` |
 
-`shenbi-maliang-X.Y.Z-source-run.zip` 不包含 exe、`node_modules` 和构建产物，也可以手动执行 `bun install --frozen-lockfile`、`bun run build`、`bun run start`。GitHub Release 页面还会自动提供原始 `Source code (zip)` 和 `Source code (tar.gz)`；如果要查看完整仓库历史，建议直接 `git clone`。运行数据会自动创建到 `data/`，升级前请先备份 `data/`。
+`shenbi-maliang-X.Y.Z-source-run.zip` 不包含 exe、`node_modules` 和构建产物，需要 Bun；ChatGPT 官网普通额度回退另需 Python 3.10+，缺少时 CPA、API 和 Codex Responses 路径仍可运行。也可以手动执行 `bun install --frozen-lockfile`、`bun run setup:chatgpt-web`、`bun run build`、`bun run start`。GitHub Release 页面还会自动提供原始 `Source code (zip)` 和 `Source code (tar.gz)`；如果要查看完整仓库历史，建议直接 `git clone`。运行数据会自动创建到 `data/`，升级前请先备份 `data/`。
 
 ## 🔄 发布版更新教程
 
@@ -182,7 +185,7 @@ data/     本地运行数据目录，启动后自动生成
 - `.env` 或你自己额外放置的环境变量、启动脚本、反向代理配置等本地部署文件。
 - 你手动保存的备份目录、日志目录或其它自定义文件。
 
-源码运行包 `shenbi-maliang-X.Y.Z-source-run.zip` 的更新逻辑不同：保留旧目录的 `data/` 和本地自定义配置，替换源码文件后执行 `start-update.bat`，或手动执行 `bun install --frozen-lockfile`、`bun run build`、`bun run start`。源码运行包里的 `node_modules/` 和 `dist/` 是运行时生成内容，不需要从旧版本手动复制。
+源码运行包 `shenbi-maliang-X.Y.Z-source-run.zip` 的更新逻辑不同：保留旧目录的 `data/` 和本地自定义配置，替换源码文件后执行 `start-update.bat`，或手动执行 `bun install --frozen-lockfile`、`bun run setup:chatgpt-web`、`bun run build`、`bun run start`。启动流程会复用或更新 `runtime/chatgpt-web-venv`，源码运行包里的 `node_modules/` 和 `dist/` 是运行时生成内容，不需要从旧版本手动复制。
 
 ## 🙏 鸣谢
 

@@ -17,5 +17,14 @@
     "jsx": "react-jsx",
     "types": ["bun"]
   },
-  "include": ["src", "server", "scripts/package-maliang-codex-plugin.ts", "vite.config.ts", "tailwind.config.ts"]
+  "include": [
+    "src",
+    "server",
+    "scripts/package-maliang-codex-plugin.ts",
+    "scripts/run-chatgpt-web-bridge-tests.ts",
+    "scripts/setup-chatgpt-web-python.ts",
+    "scripts/start-server.ts",
+    "vite.config.ts",
+    "tailwind.config.ts"
+  ]
 }

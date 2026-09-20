@@ -32,8 +32,6 @@ const EDIT_LOADING_TITLE_KEYS = [
 const RENDERING_DOT_COUNT = 35;
 const RENDERING_FRAME_INTERVAL_MS = 1000 / 30;
 const RENDERING_CANVAS_MAX_DPR = 1.5;
-const RENDERING_DOT_LAYER_INSET_X = 0.008;
-const RENDERING_DOT_LAYER_INSET_Y = 0.008;
 const RENDERING_DOT_STATIC_ELAPSED_MS = 9000;
 const RENDERING_LIFEFORM_SPEED = 4.2;
 const RENDERING_DOT_OPACITY_BUCKET_COUNT = 24;
@@ -72,26 +70,24 @@ type RenderingLifeform = {
   sinTilt: number;
 };
 
-const clampRatio = (value: number) => Math.max(0.06, Math.min(0.94, value));
-
 const renderingLifeformsAt = (elapsedMs: number): [RenderingLifeform, RenderingLifeform] => {
   const time = (elapsedMs / 1000) * RENDERING_LIFEFORM_SPEED;
   const tiltA = Math.sin(time * 0.17) * 0.38;
   const tiltB = Math.cos(time * 0.19 + 0.8) * 0.34;
   return [
     {
-      x: clampRatio(0.52 + Math.sin(time * 0.27) * 0.18 + Math.sin(time * 0.61 + 0.4) * 0.04),
-      y: clampRatio(0.3 + Math.cos(time * 0.23 + 1.9) * 0.14 + Math.sin(time * 0.43 + 0.3) * 0.035),
-      radius: 0.3 + Math.sin(time * 0.39) * 0.025,
+      x: 0.5 + Math.sin(time * 0.27) * 0.5,
+      y: 0.5 + Math.cos(time * 0.23 + 1.9) * 0.5,
+      radius: 0.35 + Math.sin(time * 0.39) * 0.03,
       scaleX: 1.08 + Math.sin(time * 0.31 + 0.2) * 0.08,
       scaleY: 0.94 + Math.cos(time * 0.29 + 0.6) * 0.06,
       cosTilt: Math.cos(tiltA),
       sinTilt: Math.sin(tiltA)
     },
     {
-      x: clampRatio(0.46 + Math.cos(time * 0.25 + 1.2) * 0.18 + Math.sin(time * 0.53) * 0.04),
-      y: clampRatio(0.7 + Math.sin(time * 0.29 + 0.4) * 0.14 + Math.cos(time * 0.47 + 1.2) * 0.035),
-      radius: 0.31 + Math.cos(time * 0.37 + 0.7) * 0.025,
+      x: 0.5 + Math.cos(time * 0.25 + 1.2) * 0.5,
+      y: 0.5 + Math.sin(time * 0.29 + 0.4) * 0.5,
+      radius: 0.36 + Math.cos(time * 0.37 + 0.7) * 0.03,
       scaleX: 0.95 + Math.cos(time * 0.27 + 0.9) * 0.06,
       scaleY: 1.09 + Math.sin(time * 0.33 + 0.5) * 0.08,
       cosTilt: Math.cos(tiltB),
@@ -133,10 +129,8 @@ const drawRenderingDots = (
   themeRgb: RenderingRgb | null
 ) => {
   context.clearRect(0, 0, width, height);
-  const innerWidth = width * (1 - RENDERING_DOT_LAYER_INSET_X * 2);
-  const innerHeight = height * (1 - RENDERING_DOT_LAYER_INSET_Y * 2);
-  const cellWidth = innerWidth / (RENDERING_DOT_COUNT - 1);
-  const cellHeight = innerHeight / (RENDERING_DOT_COUNT - 1);
+  const cellWidth = width / (RENDERING_DOT_COUNT - 1);
+  const cellHeight = height / (RENDERING_DOT_COUNT - 1);
   const cellSize = Math.min(cellWidth, cellHeight);
   const time = Math.max(0, elapsedMs);
   const [lifeformA, lifeformB] = renderingLifeformsAt(time);
@@ -144,8 +138,8 @@ const drawRenderingDots = (
   renderingDotBuckets.forEach((bucket) => { bucket.length = 0; });
 
   for (const dot of RENDERING_DOTS) {
-    const x = width * RENDERING_DOT_LAYER_INSET_X + dot.x * innerWidth;
-    const y = height * RENDERING_DOT_LAYER_INSET_Y + dot.y * innerHeight;
+    const x = dot.x * width;
+    const y = dot.y * height;
     const influenceA = lifeformInfluence(dot.x, dot.y, lifeformA);
     const influenceB = lifeformInfluence(dot.x, dot.y, lifeformB);
     const lifeEnergy = 1 - (1 - influenceA) * (1 - influenceB);

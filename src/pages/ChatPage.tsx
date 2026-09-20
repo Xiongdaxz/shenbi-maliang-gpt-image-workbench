@@ -1966,9 +1966,9 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
     );
     const effectiveSize = requestSize ?? size;
     const selectedRequestSize = requestSizeFromSelection(effectiveSize);
-    // Ordinary editor requests derive the background from the source image.
-    // Explicit editor actions, such as one-click background removal, can
-    // override that behavior without reusing the hidden chat-composer value.
+    // Ordinary editor requests keep the visible background selection. The
+    // server resolves auto to opaque unless the prompt explicitly requests
+    // transparency. One-click background removal passes transparent directly.
     const backgroundRequestOptions = imageBackgroundRequestOptions(requestedBackground);
     const sourceAssetIdSet = new Set(sourceAssetIds);
     const sourceCaseItemIdSet = new Set(sourceCaseItemIds);

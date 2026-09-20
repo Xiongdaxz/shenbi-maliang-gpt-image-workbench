@@ -138,7 +138,7 @@ jobs:
 
           Then open http://127.0.0.1:8787 if the browser does not open automatically.
 
-          No Bun or npm install is required. Runtime data is created in `data/` next to the executable. Back up `data/` before upgrading.
+          No Bun or npm install is required. ChatGPT Web ordinary-quota fallback requires Python 3.10+; when Python is available, the app creates `runtime/chatgpt-web-venv` and installs its bridge dependencies automatically. Other image routes remain available if that optional setup cannot complete. Runtime data is created in `data/` next to the executable. Back up `data/` before upgrading.
           '@ | Set-Content -Encoding UTF8 -Path "$packageRoot/RUNNING.md"
 
       - name: Compress portable package
@@ -218,6 +218,7 @@ jobs:
           ## Requirements
 
           - Bun
+          - Python 3.10 or newer for ChatGPT Web ordinary-quota fallback; CPA, API, and Codex Responses routes can run without it
 
           ## Run
 
@@ -237,6 +238,7 @@ jobs:
 
           ```bash
           bun install --frozen-lockfile
+          bun run setup:chatgpt-web
           bun run build
           bun run start
           ```

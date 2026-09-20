@@ -15,11 +15,16 @@ import {
 } from "./constants";
 import { logProviderRequest } from "./auditLog";
 import { selectAvailableChatGptWebAccount } from "./chatGptWebAccountPool";
+import { chatGptWebPythonBridgeUnavailableMessage } from "./chatGptWebPythonRuntime";
 import {
   CHATGPT_WEB_TRANSPARENT_BACKGROUND_QUOTA_ERROR,
   resolveChatGptWebImageQuotaOrder
 } from "./chatGptWebImageRequest";
-import { INHERITED_SOURCE_BACKGROUND_REQUEST_KEY, injectImageBackgroundInstruction } from "../src/lib/imageBackground";
+import {
+  INHERITED_SOURCE_BACKGROUND_REQUEST_KEY,
+  injectImageBackgroundInstruction,
+  resolveImageBackgroundOption
+} from "../src/lib/imageBackground";
 import { DRAWING_REFERENCE_REQUEST_KEY } from "../src/lib/drawingReference";
 import { isImageModelId } from "../src/lib/imageModels";
 import { configDb, getAll, getOne, run } from "./db";
@@ -2371,6 +2376,10 @@ type ChatGptWebBridgeResult = {
 
 function runBridgeProcess(input: Record<string, unknown>, signal?: AbortSignal) {
   if (signal?.aborted) return Promise.reject(new ProviderRequestCancelledError());
+  const unavailableMessage = chatGptWebPythonBridgeUnavailableMessage(Bun.env);
+  if (unavailableMessage) {
+    return Promise.reject(new Error(unavailableMessage));
+  }
   return new Promise<{ stdout: string; stderr: string; code: number | null }>((resolve, reject) => {
     const python = Bun.env.CHATGPT_WEB_BRIDGE_PYTHON || "python";
     const scriptPath = path.join(ROOT, "scripts", "chatgpt_web_bridge.py");
@@ -3223,9 +3232,7 @@ async function callChatGptWebProvider(
           actualRouteMode: quota === "codex" ? "chatgpt_web_codex_responses" : "chatgpt_web_official",
           requestedQuality,
           actualQuality: quota === "official" ? "auto" : requestedQuality,
-          modelFallbackReason: quota === "official"
-            ? "ChatGPT 官网普通额度不公开图片模型和质量参数，已由官网自动选择"
-            : ""
+          modelFallbackReason: ""
         });
       } catch (error) {
         if (providerRequestWasCancelled(error, context.signal)) throw new ProviderRequestCancelledError();
@@ -3290,6 +3297,17 @@ function payloadForProvider(provider: RuntimeProviderRow, payload: Record<string
   };
   const inheritedSourceBackground = nextPayload[INHERITED_SOURCE_BACKGROUND_REQUEST_KEY] === true;
   delete nextPayload[INHERITED_SOURCE_BACKGROUND_REQUEST_KEY];
+  const resolvedBackground = resolveImageBackgroundOption(
+    inheritedSourceBackground ? "auto" : nextPayload.background,
+    nextPayload.prompt
+  );
+  nextPayload.background = resolvedBackground;
+  if (resolvedBackground === "transparent") {
+    const outputFormat = String(nextPayload.output_format ?? "").trim().toLowerCase();
+    nextPayload.output_format = outputFormat === "webp" ? "webp" : "png";
+  } else {
+    delete nextPayload.output_format;
+  }
   delete nextPayload[DRAWING_REFERENCE_REQUEST_KEY];
   if (isGptImage2Family(nextPayload.model)) {
     delete nextPayload.input_fidelity;
@@ -3306,7 +3324,7 @@ function payloadForProvider(provider: RuntimeProviderRow, payload: Record<string
     delete nextPayload.webConversationContext;
     delete nextPayload.editIntent;
   }
-  nextPayload.prompt = injectImageBackgroundInstruction(nextPayload.prompt, nextPayload.background, inheritedSourceBackground);
+  nextPayload.prompt = injectImageBackgroundInstruction(nextPayload.prompt, resolvedBackground);
   return injectAspectRatioInstruction(nextPayload);
 }
 

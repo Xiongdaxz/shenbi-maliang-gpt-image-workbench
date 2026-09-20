@@ -4,6 +4,7 @@ export const SESSION_MAX_AGE = 60 * 60 * 24 * 30;
 export const IMAGE_JOB_RUNNING_TIMEOUT_MS = 30 * 60 * 1000;
 export const IMAGE_JOB_TIMEOUT_ERROR = "任务已超时，请重新生成";
 export const PROVIDER_REQUEST_TIMEOUT_ERROR = "图片接口请求超时，请重新生成";
+export const CHATGPT_WEB_BRIDGE_SETUP_ERROR_ENV = "CHATGPT_WEB_BRIDGE_SETUP_ERROR";
 export const DEFAULT_RESPONSES_MODEL = "gpt-6-astra";
 export const CPA_RESPONSES_MODEL_FALLBACK = "gpt-5.4-mini";
 export const DEFAULT_IMAGE_MODEL = "gpt-image-2.5-sunburst";

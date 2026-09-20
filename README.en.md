@@ -50,9 +50,12 @@ Shenbi Maliang GPT Image Workbench is an AI image generation and image editing w
 
 ```bash
 bun install
+bun run setup:chatgpt-web
 bun run build
 bun run start
 ```
+
+ChatGPT Web ordinary-quota fallback requires Python 3.10+. The setup command creates a project-local environment at `runtime/chatgpt-web-venv` on first run and only updates it when the requirements change or imports are missing. See [ChatGPT Web Python runtime](docs/chatgpt-web-python-runtime.md).
 
 Open:
 
@@ -141,7 +144,7 @@ Official versions provide the following packages in GitHub Releases:
 | Portable runtime | macOS Apple Silicon | `shenbi-maliang-X.Y.Z-macos-arm64-portable.zip` | zip + executable | Unzip, open the `shenbi-maliang` directory, then run `chmod +x ./shenbi-maliang && ./shenbi-maliang` |
 | Source run package | Windows / Linux / macOS | `shenbi-maliang-X.Y.Z-source-run.zip` | zip + source | Run `start-update.bat` on Windows, or `bash ./start.sh` on Linux/macOS |
 
-`shenbi-maliang-X.Y.Z-source-run.zip` does not include an executable, `node_modules`, or build output. You can also run `bun install --frozen-lockfile`, `bun run build`, and `bun run start` manually. GitHub Releases also provide the raw `Source code (zip)` and `Source code (tar.gz)` automatically. Use `git clone` if you want the full repository history. Runtime data is created in `data/`. Back up `data/` before upgrading.
+`shenbi-maliang-X.Y.Z-source-run.zip` does not include an executable, `node_modules`, or build output and requires Bun. ChatGPT Web ordinary-quota fallback additionally requires Python 3.10+; CPA, API, and Codex Responses routes remain available without it. You can also run `bun install --frozen-lockfile`, `bun run setup:chatgpt-web`, `bun run build`, and `bun run start` manually. GitHub Releases also provide the raw `Source code (zip)` and `Source code (tar.gz)` automatically. Use `git clone` if you want the full repository history. Runtime data is created in `data/`. Back up `data/` before upgrading.
 
 ## 🔄 Updating a Release Build
 
@@ -182,7 +185,7 @@ Do not delete these files, and do not overwrite them with empty directories from
 - `.env` or any local environment files, startup scripts, reverse proxy settings, or other deployment files you created.
 - Backup directories, log directories, or other custom files you keep manually.
 
-The `shenbi-maliang-X.Y.Z-source-run.zip` package is updated differently: keep the old `data/` directory and local custom settings, replace the source files, then run `start-update.bat`, or manually run `bun install --frozen-lockfile`, `bun run build`, and `bun run start`. The `node_modules/` and `dist/` directories in a source-run deployment are generated at runtime, so you do not need to copy them from the old version manually.
+The `shenbi-maliang-X.Y.Z-source-run.zip` package is updated differently: keep the old `data/` directory and local custom settings, replace the source files, then run `start-update.bat`, or manually run `bun install --frozen-lockfile`, `bun run setup:chatgpt-web`, `bun run build`, and `bun run start`. The startup flow reuses or updates `runtime/chatgpt-web-venv`. The `node_modules/` and `dist/` directories in a source-run deployment are generated at runtime, so you do not need to copy them from the old version manually.
 
 ## 🙏 Acknowledgements
 

@@ -1,16 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import {
-  INHERITED_TRANSPARENT_BACKGROUND_PROMPT_INSTRUCTION,
+  DEFAULT_OPAQUE_BACKGROUND_PROMPT_INSTRUCTION,
   OPAQUE_BACKGROUND_PROMPT_INSTRUCTION,
   REMOVE_IMAGE_BACKGROUND_PROMPT,
   TRANSPARENT_BACKGROUND_PROMPT_INSTRUCTION,
-  inheritSourceImageBackgroundOptions,
-  imageEditPromptRequestsNonTransparentBackground,
   imageBackgroundRequestOptions,
   imageBackgroundRequestOptionsFromMetadata,
+  imagePromptRequestsTransparentBackground,
   injectImageBackgroundInstruction,
   isImageBackgroundOption,
-  normalizeImageBackgroundOption
+  normalizeImageBackgroundOption,
+  resolveImageBackgroundOption
 } from "./imageBackground";
 
 describe("image background options", () => {
@@ -37,32 +37,18 @@ describe("image background options", () => {
     expect(imageBackgroundRequestOptions("auto")).toEqual({});
   });
 
-  test("inherits transparent background parameters from the source image", () => {
-    expect(inheritSourceImageBackgroundOptions({}, true)).toEqual({
-      background: "transparent",
-      output_format: "png"
-    });
-    expect(inheritSourceImageBackgroundOptions({ background: "auto" }, true)).toEqual({
-      background: "transparent",
-      output_format: "png"
-    });
-    expect(inheritSourceImageBackgroundOptions({ background: "opaque" }, true)).toEqual({ background: "opaque" });
-    expect(inheritSourceImageBackgroundOptions({}, false)).toEqual({});
-  });
-
-  test("recognizes an explicit request to add or replace a non-transparent background", () => {
-    expect(imageEditPromptRequestsNonTransparentBackground("给商品添加白色背景")).toBe(true);
-    expect(imageEditPromptRequestsNonTransparentBackground("1. (x: 50%, y: 40%) 换一件衣服\n背景换为海滩")).toBe(true);
-    expect(imageEditPromptRequestsNonTransparentBackground("把背景换成海滩场景")).toBe(true);
-    expect(imageEditPromptRequestsNonTransparentBackground("不要透明图片，改成白底")).toBe(true);
-    expect(imageEditPromptRequestsNonTransparentBackground("Change the background to a beach")).toBe(true);
-    expect(imageEditPromptRequestsNonTransparentBackground("保持透明图片")).toBe(false);
-    expect(imageEditPromptRequestsNonTransparentBackground("添加透明背景")).toBe(false);
-    expect(imageEditPromptRequestsNonTransparentBackground("背景改成透明")).toBe(false);
-    expect(imageEditPromptRequestsNonTransparentBackground("加一个狗绳，背景保持透明")).toBe(false);
-    expect(imageEditPromptRequestsNonTransparentBackground("不要添加背景，只修改衣服")).toBe(false);
-    expect(imageEditPromptRequestsNonTransparentBackground("加一个狗绳")).toBe(false);
-    expect(imageEditPromptRequestsNonTransparentBackground("Add a transparent background")).toBe(false);
+  test("requires an explicit transparent prompt and defaults every other auto request to opaque", () => {
+    expect(imagePromptRequestsTransparentBackground("生成透明背景素材")).toBe(true);
+    expect(imagePromptRequestsTransparentBackground("无背景产品图")).toBe(true);
+    expect(imagePromptRequestsTransparentBackground("Add a transparent background")).toBe(true);
+    expect(imagePromptRequestsTransparentBackground("不要透明图片，改成白底")).toBe(false);
+    expect(imagePromptRequestsTransparentBackground("生成不透明背景图片")).toBe(false);
+    expect(imagePromptRequestsTransparentBackground("非透明画布")).toBe(false);
+    expect(imagePromptRequestsTransparentBackground("普通产品图")).toBe(false);
+    expect(resolveImageBackgroundOption("auto", "生成透明背景素材")).toBe("transparent");
+    expect(resolveImageBackgroundOption("auto", "普通产品图")).toBe("opaque");
+    expect(resolveImageBackgroundOption("opaque", "生成透明背景素材")).toBe("opaque");
+    expect(resolveImageBackgroundOption("transparent", "普通产品图")).toBe("transparent");
   });
 
   test("preserves background metadata when resubmitting a message", () => {
@@ -89,13 +75,21 @@ describe("image background options", () => {
     const opaque = injectImageBackgroundInstruction("一只陶瓷杯", "opaque");
 
     expect(first).toContain(TRANSPARENT_BACKGROUND_PROMPT_INSTRUCTION);
+    expect(first).not.toContain(DEFAULT_OPAQUE_BACKGROUND_PROMPT_INSTRUCTION);
     expect(second).toBe(first);
     expect(opaque).toContain(OPAQUE_BACKGROUND_PROMPT_INSTRUCTION);
     expect(injectImageBackgroundInstruction(opaque, "opaque")).toBe(opaque);
-    expect(injectImageBackgroundInstruction("一只陶瓷杯", "auto")).toBe("一只陶瓷杯");
-    const inherited = injectImageBackgroundInstruction("修改尾巴颜色", "transparent", true);
-    expect(INHERITED_TRANSPARENT_BACKGROUND_PROMPT_INSTRUCTION).toBe("保持透明图片。");
-    expect(inherited).toBe("修改尾巴颜色\n\n保持透明图片。");
-    expect(injectImageBackgroundInstruction(inherited, "transparent", true)).toBe(inherited);
+    const automatic = injectImageBackgroundInstruction("一只陶瓷杯", "auto");
+    expect(automatic).toContain(DEFAULT_OPAQUE_BACKGROUND_PROMPT_INSTRUCTION);
+    expect(injectImageBackgroundInstruction(automatic, "auto")).toBe(automatic);
+    const switchedToTransparent = injectImageBackgroundInstruction(automatic, "transparent");
+    expect(switchedToTransparent).toContain(TRANSPARENT_BACKGROUND_PROMPT_INSTRUCTION);
+    expect(switchedToTransparent).not.toContain(DEFAULT_OPAQUE_BACKGROUND_PROMPT_INSTRUCTION);
+    const promptRequestedTransparent = injectImageBackgroundInstruction("生成透明背景素材", "auto");
+    expect(promptRequestedTransparent).toContain(TRANSPARENT_BACKGROUND_PROMPT_INSTRUCTION);
+    expect(promptRequestedTransparent).not.toContain(DEFAULT_OPAQUE_BACKGROUND_PROMPT_INSTRUCTION);
+    expect(injectImageBackgroundInstruction("修改尾巴颜色", "transparent")).toContain(
+      TRANSPARENT_BACKGROUND_PROMPT_INSTRUCTION
+    );
   });
 });

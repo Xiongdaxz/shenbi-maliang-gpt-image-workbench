@@ -134,7 +134,9 @@ function imageExecutionDetails(message: Message): ImageExecutionDetails | null {
     : model === "chatgpt-web-auto"
       ? "ChatGPT Auto"
       : model || "-";
-  const fallbackReason = String(message.metadata?.modelFallbackReason ?? "").trim();
+  const fallbackReason = model === "chatgpt-web-auto"
+    ? ""
+    : String(message.metadata?.modelFallbackReason ?? "").trim();
   return {
     modelLabel,
     languageModelLabel: languageModel || "-",
