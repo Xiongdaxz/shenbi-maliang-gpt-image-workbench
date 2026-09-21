@@ -3,12 +3,16 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 import {
   Activity,
   ArrowDown,
+  ArrowRight,
   ArrowUp,
   Archive,
   Bug,
   Check,
+  ChevronDown,
   Database,
   Download,
+  Eye,
+  EyeOff,
   FolderOpen,
   ImageIcon,
   KeyRound,
@@ -31,7 +35,8 @@ import {
   Trash2,
   Upload,
   Users,
-  WandSparkles
+  WandSparkles,
+  X
 } from "lucide-react";
 import { api, configApi } from "../../api";
 import { LightweightLineChart } from "../../components/LightweightChart";
@@ -1012,9 +1017,9 @@ export function ImageAccountPoolPanel() {
 }
 
 const routeModeOptions: Array<{ value: ProviderConfig["routeMode"]; label: string }> = [
-  { value: "images_api", label: "图片接口直连：直接请求生成/编辑接口" },
-  { value: "responses", label: "Responses 接口：统一走 /v1/responses" },
-  { value: "auto", label: "失败自动切换：图片接口失败后自动切换" }
+  { value: "auto", label: "自动切换：默认先走 Responses，失败后回退图片接口" },
+  { value: "responses", label: "Responses 接口：始终走 /v1/responses，由语言模型规划后生成" },
+  { value: "images_api", label: "图片接口直连：始终直接请求生成/编辑接口，不使用语言模型" }
 ];
 
 const quotaModeOptions: Array<{ value: ProviderConfig["quotaMode"]; label: string; description: string }> = [
@@ -1258,13 +1263,6 @@ function normalizeProviderForm(provider: ProviderConfig): ProviderConfig {
   };
 }
 
-function csvList(value: string) {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
 function providerAccessSummary(provider: ProviderConfig, accounts: ImageAccount[]) {
   if (provider.channel !== "chatgpt_web") return provider.generationPath || "-";
   const ids = new Set(provider.webAccountIds);
@@ -1427,6 +1425,9 @@ function ProviderAccountMultiSelect({
   );
 }
 
+type ProviderDialogSection = "basics" | "routing" | "models" | "auth";
+type ProviderExpandableSection = "connection" | "auth";
+
 function ProviderDialog({
   mode,
   provider,
@@ -1455,6 +1456,14 @@ function ProviderDialog({
   const [modelCatalog, setModelCatalog] = useState<ProviderModelsResult | null>(initialModelCatalog);
   const [manualImageModel, setManualImageModel] = useState(false);
   const [manualResponsesModel, setManualResponsesModel] = useState(Boolean(initialModelCatalog && initialModelCatalog.responsesModels.length === 0));
+  const [loadingCachedModels, setLoadingCachedModels] = useState(mode === "edit" && !initialModelCatalog);
+  const [apiKeyVisible, setApiKeyVisible] = useState(false);
+  const [activeSection, setActiveSection] = useState<ProviderDialogSection>("basics");
+  const [expandedSections, setExpandedSections] = useState<Record<ProviderExpandableSection, boolean>>({
+    connection: false,
+    auth: false
+  });
+  const sectionRefs = useRef<Partial<Record<ProviderDialogSection, HTMLElement | null>>>({});
   const isChatgptWeb = form.channel === "chatgpt_web";
   const isApi = form.channel === "api";
   const isCpa = form.channel === "cpa";
@@ -1472,6 +1481,7 @@ function ProviderDialog({
 
   function patchChannel(channel: ProviderConfig["channel"]) {
     setModelCatalog(null);
+    setApiKeyVisible(false);
     onModelCatalogChange(form, null);
     setForm((value) =>
       providerWithChannelDefaults(value, channel, {
@@ -1508,238 +1518,426 @@ function ProviderDialog({
       showToast(error instanceof Error ? error.message : "模型列表获取失败", "error");
     }
   });
+  const revealApiKey = useMutation({
+    mutationFn: () => configApi.providerApiKey(form.id),
+    onSuccess: (data) => {
+      setForm((value) => ({ ...value, apiKeyValue: data.apiKeyValue }));
+      setApiKeyVisible(true);
+    },
+    onError: (error) => {
+      showToast(error instanceof Error ? error.message : "API Key 获取失败", "error");
+    }
+  });
+
+  useEffect(() => {
+    if (mode !== "edit" || initialModelCatalog) return;
+    let disposed = false;
+    setLoadingCachedModels(true);
+    configApi.cachedProviderModels(provider.id)
+      .then(({ catalog }) => {
+        if (disposed || !catalog) return;
+        setModelCatalog(catalog);
+        setManualImageModel(false);
+        setManualResponsesModel(catalog.responsesModels.length === 0);
+        onModelCatalogChange(provider, catalog);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!disposed) setLoadingCachedModels(false);
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [initialModelCatalog, mode, provider.id]);
+
+  const sectionNavigation: Array<{ id: ProviderDialogSection; label: string }> = [
+    { id: "basics", label: "基本信息" },
+    { id: "routing", label: "路由与端点" },
+    { id: "models", label: "模型配置" },
+    { id: "auth", label: "鉴权与网络" }
+  ];
+
+  function toggleExpanded(section: ProviderExpandableSection) {
+    setActiveSection(section === "connection" ? "routing" : section);
+    setExpandedSections((value) => ({ ...value, [section]: !value[section] }));
+  }
+
+  function navigateToSection(section: ProviderDialogSection) {
+    setActiveSection(section);
+    if (section === "routing") {
+      setExpandedSections((value) => ({ ...value, connection: true }));
+    } else if (section === "auth") {
+      setExpandedSections((value) => ({ ...value, [section]: true }));
+    }
+    requestAnimationFrame(() => sectionRefs.current[section]?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
+  const authSummary = isChatgptWeb
+    ? providerAccessSummary(form, accounts)
+    : form.apiKeyEnv.trim() || (form.apiKeyValue.trim() ? "已配置 API Key" : "未配置 API Key");
+
+  function toggleApiKeyVisibility() {
+    if (apiKeyVisible) {
+      setApiKeyVisible(false);
+      return;
+    }
+    if (mode === "edit" && form.apiKeyValue.includes("****")) {
+      revealApiKey.mutate();
+      return;
+    }
+    setApiKeyVisible(true);
+  }
 
   return (
     <div className="modal-backdrop">
-      <section className="case-modal provider-dialog">
-        <header>
-          <h3>{mode === "create" ? "新增渠道" : "编辑渠道"}</h3>
-          <button type="button" onClick={onClose}>
-            关闭
-          </button>
-        </header>
-        <div className="provider-form provider-dialog-form">
-          <label>
-            名称
-            <input value={form.name} onChange={(event) => patch({ name: event.target.value })} autoFocus />
-          </label>
-          <label>
-            接口 ID
-            <input value={form.id} readOnly className="readonly-input" />
-          </label>
-          <label>
-            渠道
-            <CustomSelect
-              value={form.channel}
-              onChange={(value) => patchChannel(value as ProviderConfig["channel"])}
-              options={[
-                { value: "cpa", label: "CPA", description: "CPA 额度代理" },
-                { value: "chatgpt_web", label: "ChatGPT 官网", description: "官网额度 / Codex 额度" },
-                { value: "api", label: "API 直连", description: "OpenAI 兼容接口" }
-              ]}
-            />
-          </label>
-          {!isChatgptWeb ? (
-            <label>
-              路由方式
-              <CustomSelect
-                value={form.routeMode}
-                onChange={(value) => patch({ routeMode: value as ProviderConfig["routeMode"] })}
-                options={routeModeOptions.map((option) => {
-                  const [label, description] = option.label.split("：");
-                  return { value: option.value, label, description };
-                })}
-              />
-            </label>
-          ) : null}
-          <label>
-            服务地址
-            <input value={form.baseUrl} onChange={(event) => patchConnection({ baseUrl: event.target.value })} />
-          </label>
-          <div className="provider-switch-row">
-            <div className="switch-row">
-              <span>使用代理</span>
-              <SwitchControl
-                checked={form.proxyEnabled}
-                label={form.proxyEnabled ? "启用" : "停用"}
-                onChange={(proxyEnabled) => patchConnection({ proxyEnabled })}
-              />
-            </div>
-            <div className="switch-row">
-              <span>渠道状态</span>
-              <SwitchControl
-                checked={form.enabled}
-                label={form.enabled ? "启用" : "停用"}
-                onChange={(enabled) => patch({ enabled })}
-              />
-            </div>
+      <section className="case-modal provider-dialog" role="dialog" aria-modal="true" aria-labelledby="provider-dialog-title">
+        <header className="provider-dialog-header">
+          <div className="provider-dialog-title">
+            <h3 id="provider-dialog-title">{mode === "create" ? "新增渠道" : "编辑渠道"}</h3>
+            <small>{form.id || "保存后生成接口 ID"}</small>
           </div>
-          {usesProviderApiKey ? (
-            <label>
-              API Key 环境变量
-              <input value={form.apiKeyEnv} onChange={(event) => patchConnection({ apiKeyEnv: event.target.value })} />
-            </label>
-          ) : null}
-          {usesProviderApiKey ? (
-            <label>
-              API Key
-              <input
-                value={form.apiKeyValue}
-                onChange={(event) => patchConnection({ apiKeyValue: event.target.value })}
-                placeholder={isCpa ? "CPA Bearer Key，可留空" : "优先建议使用环境变量"}
-              />
-            </label>
-          ) : null}
-          {isChatgptWeb ? (
-            <label>
-              额度来源
-              <CustomSelect
-                value={form.quotaMode}
-                onChange={(value) => patch({ quotaMode: value as ProviderConfig["quotaMode"] })}
-                options={quotaModeOptions}
-              />
-            </label>
-          ) : null}
-          {isChatgptWeb ? (
-            <label>
-              账号访问模式
-              <CustomSelect
-                value={form.webAccountMode}
-                onChange={(value) => patch({ webAccountMode: value as ProviderConfig["webAccountMode"] })}
-                options={webAccountModeOptions}
-              />
-            </label>
-          ) : null}
-          {isChatgptWeb ? (
-            <label className="wide">
-              号池账号
-              <ProviderAccountMultiSelect
-                accounts={accounts}
-                value={form.webAccountIds}
-                onChange={(webAccountIds) => patchConnection({ webAccountIds })}
-              />
-              <small>CPA 同步账号通常只有 OAuth Access Token，可走 Codex Responses；官网会话链路会先访问 ChatGPT 首页自动预热 Cookie，手动 Cookie 只是防护拦截时的备用项。</small>
-            </label>
-          ) : null}
-          {isChatgptWeb ? (
-            <label>
-              备用 Access Token
-              <input
-                value={form.apiKeyValue}
-                onChange={(event) => patchConnection({ apiKeyValue: event.target.value })}
-                placeholder="ChatGPT access_token"
-              />
-            </label>
-          ) : null}
-          {isChatgptWeb ? (
-            <label>
-              备用 Account ID
-              <input value={form.webAccountId} onChange={(event) => patchConnection({ webAccountId: event.target.value })} />
-            </label>
-          ) : null}
-          {isChatgptWeb ? (
-            <label className="wide">
-              备用 Cookie（可选）
-              <textarea rows={3} value={form.webCookies} onChange={(event) => patchConnection({ webCookies: event.target.value })} />
-              <small>默认会按参考项目思路预热首页并接住 Set-Cookie；只有遇到网页防护或会话拦截时，才需要从浏览器复制 Cookie 作为兜底。</small>
-            </label>
-          ) : null}
-          {!isChatgptWeb ? (
-            <label>
-              生成路径
-              <input value={form.generationPath} onChange={(event) => patchConnection({ generationPath: event.target.value })} />
-            </label>
-          ) : null}
-          {!isChatgptWeb ? (
-            <label>
-              编辑路径
-              <input value={form.editPath} onChange={(event) => patch({ editPath: event.target.value })} />
-            </label>
-          ) : null}
-          {!isChatgptWeb ? (
-            <label>
-              Responses 路径
-              <input value={form.responsesPath} onChange={(event) => patchConnection({ responsesPath: event.target.value })} />
-            </label>
-          ) : null}
-          <div className="provider-model-toolbar wide">
-            <span>
-              <strong>渠道模型</strong>
-              <small>读取当前渠道的模型目录，再分别选择图片模型和 Responses 主模型。</small>
+          <div className="provider-dialog-header-actions">
+            <span className={cx("provider-dialog-status", form.enabled ? "enabled" : "disabled")}>
+              <i aria-hidden="true" />
+              {form.enabled ? "已启用" : "已停用"}
             </span>
-            <button className="secondary-btn" type="button" onClick={() => fetchModels.mutate()} disabled={fetchModels.isPending}>
-              <RefreshCw className={fetchModels.isPending ? "spin-icon" : undefined} size={16} />
-              获取模型
+            <button className="provider-dialog-close" type="button" onClick={onClose} aria-label="关闭">
+              <X size={19} />
             </button>
           </div>
-          <label>
-            图片模型
-            <ProviderModelControl
-              value={form.model}
-              options={imageModelOptions}
-              manual={manualImageModel}
-              onChange={(model) => patch({ model })}
-              onManualChange={setManualImageModel}
-            />
-            <small>{modelCatalog && modelCatalog.imageModels.length === 0 ? "渠道没有返回图片模型，已显示内置 GPT Image 选项。" : "Images API 与 Responses 图片工具使用。"}</small>
-          </label>
-          <label>
-            Responses 主模型
-            <ProviderModelControl
-              value={form.responsesModel}
-              options={responsesModelOptions}
-              manual={manualResponsesModel}
-              onChange={(responsesModel) => patch({ responsesModel })}
-              onManualChange={setManualResponsesModel}
-            />
-            <small>
-              {isChatgptWeb
-                ? "Codex Responses 额度链路使用这个主模型；官网普通额度链路不使用。"
-                : "Responses 路由、CPA 遮罩编辑和自动回退到 Responses 时使用；普通 images_api 仍只发图片模型。"}
-            </small>
-          </label>
-          <label>
-            尺寸列表
-            <input
-              value={form.sizes.join(",")}
-              onChange={(event) => patch({ sizes: csvList(event.target.value) })}
-            />
-          </label>
-          <label>
-            质量列表
-            <input
-              value={form.qualities.join(",")}
-              onChange={(event) => patch({ qualities: csvList(event.target.value) })}
-            />
-          </label>
-          <label>
-            默认尺寸
-            <input value={form.defaultSize} onChange={(event) => patch({ defaultSize: event.target.value })} />
-          </label>
-          <label>
-            默认质量
-            <input value={form.defaultQuality} onChange={(event) => patch({ defaultQuality: event.target.value })} />
-          </label>
-          {!isChatgptWeb ? (
-            <label className="wide">
-              base64 响应路径
-              <input
-                value={form.responseImagePath}
-                onChange={(event) => patch({ responseImagePath: event.target.value })}
-              />
-            </label>
-          ) : null}
+        </header>
+        <nav className="provider-dialog-nav" aria-label="渠道配置分区">
+          {sectionNavigation.map((item) => (
+            <button
+              key={item.id}
+              className={activeSection === item.id ? "active" : ""}
+              type="button"
+              onClick={() => navigateToSection(item.id)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+        <div className="provider-dialog-body">
+          <section
+            className="provider-dialog-section"
+            ref={(node) => {
+              sectionRefs.current.basics = node;
+            }}
+          >
+            <div className="provider-dialog-section-head">
+              <span className="provider-dialog-section-index">1</span>
+              <span>
+                <strong>基本信息</strong>
+                <small>设置渠道的基础标识、类型和启用状态。</small>
+              </span>
+            </div>
+            <div className="provider-dialog-fields provider-dialog-fields-three">
+              <label>
+                渠道类型
+                <CustomSelect
+                  value={form.channel}
+                  onChange={(value) => patchChannel(value as ProviderConfig["channel"])}
+                  options={[
+                    { value: "cpa", label: "CPA", description: "CPA 额度代理" },
+                    { value: "chatgpt_web", label: "ChatGPT 官网", description: "官网额度 / Codex 额度" },
+                    { value: "api", label: "API 直连", description: "OpenAI 兼容接口" }
+                  ]}
+                />
+              </label>
+              <label>
+                名称
+                <input value={form.name} onChange={(event) => patch({ name: event.target.value })} />
+              </label>
+              <label>
+                接口 ID
+                <input value={form.id} readOnly className="readonly-input" />
+              </label>
+              <div className="switch-row provider-dialog-field-span-all">
+                <span>
+                  <strong>渠道状态</strong>
+                  <small>停用后不会参与任何自动选路。</small>
+                </span>
+                <SwitchControl
+                  checked={form.enabled}
+                  label={form.enabled ? "启用" : "停用"}
+                  onChange={(enabled) => patch({ enabled })}
+                />
+              </div>
+            </div>
+          </section>
+
+          <section
+            className="provider-dialog-section provider-dialog-route-section"
+            ref={(node) => {
+              sectionRefs.current.routing = node;
+            }}
+          >
+            <div className="provider-dialog-section-head">
+              <span className="provider-dialog-section-index">2</span>
+              <span>
+                <strong>执行路由</strong>
+                <small>{isChatgptWeb ? "选择官网额度与 Codex Responses 的使用顺序。" : "决定生成与编辑请求使用哪条上游链路。"}</small>
+              </span>
+            </div>
+            {isChatgptWeb ? (
+              <div className="provider-dialog-fields">
+                <label>
+                  额度来源
+                  <CustomSelect
+                    value={form.quotaMode}
+                    onChange={(value) => patch({ quotaMode: value as ProviderConfig["quotaMode"] })}
+                    options={quotaModeOptions}
+                  />
+                </label>
+              </div>
+            ) : (
+              <div className="provider-route-options" role="radiogroup" aria-label="路由方式">
+                {routeModeOptions.map((option) => {
+                  const [label, description] = option.label.split("：");
+                  const selected = form.routeMode === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      className={selected ? "active" : ""}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => patch({ routeMode: option.value })}
+                    >
+                      <span className="provider-route-radio" aria-hidden="true"><i /></span>
+                      <span>
+                        <strong>{label}</strong>
+                        <small>{description}</small>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          <section
+            className="provider-dialog-section"
+            ref={(node) => {
+              sectionRefs.current.models = node;
+            }}
+          >
+            <div className="provider-dialog-section-head provider-dialog-section-head-actions">
+              <span className="provider-dialog-section-index">3</span>
+              <span>
+                <strong>模型配置</strong>
+                <small>{modelCatalog ? "已加载缓存的模型目录；连接信息变化后会自动失效。" : "语言模型负责理解和规划，图片模型负责生成与编辑。"}</small>
+              </span>
+              <button className="secondary-btn" type="button" onClick={() => fetchModels.mutate()} disabled={fetchModels.isPending || loadingCachedModels}>
+                <RefreshCw className={fetchModels.isPending || loadingCachedModels ? "spin-icon" : undefined} size={16} />
+                {loadingCachedModels ? "加载缓存" : fetchModels.isPending ? "获取中" : modelCatalog ? "更新模型" : "获取模型"}
+              </button>
+            </div>
+            <div className="provider-model-flow">
+              <label className="provider-model-card">
+                <span className="provider-model-card-title">
+                  <WandSparkles size={17} />
+                  Responses 主模型（语言模型）
+                </span>
+                <ProviderModelControl
+                  value={form.responsesModel}
+                  options={responsesModelOptions}
+                  manual={manualResponsesModel}
+                  onChange={(responsesModel) => patch({ responsesModel })}
+                  onManualChange={setManualResponsesModel}
+                />
+                <small>
+                  {isChatgptWeb
+                    ? "Codex Responses 额度链路使用；官网普通额度链路不使用。"
+                    : "Responses 路由及自动回退时使用，负责理解需求与规划提示词。"}
+                </small>
+              </label>
+              <span className="provider-model-flow-arrow" aria-label="再交给">
+                <ArrowRight size={22} />
+              </span>
+              <label className="provider-model-card">
+                <span className="provider-model-card-title">
+                  <ImageIcon size={17} />
+                  图片模型
+                </span>
+                <ProviderModelControl
+                  value={form.model}
+                  options={imageModelOptions}
+                  manual={manualImageModel}
+                  onChange={(model) => patch({ model })}
+                  onManualChange={setManualImageModel}
+                />
+                <small>{modelCatalog && modelCatalog.imageModels.length === 0 ? "渠道没有返回图片模型，已显示内置 GPT Image 选项。" : "Images API 与 Responses 图片工具共同使用。"}</small>
+              </label>
+            </div>
+          </section>
+
+          <section className={cx("provider-dialog-section", "provider-dialog-collapsible", expandedSections.connection && "open")}>
+            <button className="provider-dialog-collapsible-trigger" type="button" onClick={() => toggleExpanded("connection")}>
+              <span className="provider-dialog-section-index">4</span>
+              <span>
+                <strong>服务地址与路径</strong>
+                <small>配置 API 服务地址和各接口路径。</small>
+              </span>
+              <span className="provider-dialog-summary">{form.baseUrl || "未配置服务地址"}</span>
+              <ChevronDown size={18} />
+            </button>
+            {expandedSections.connection ? (
+              <div className="provider-dialog-fields provider-dialog-collapsible-body">
+                <label className="provider-dialog-field-span-all">
+                  服务地址
+                  <input value={form.baseUrl} onChange={(event) => patchConnection({ baseUrl: event.target.value })} />
+                </label>
+                {!isChatgptWeb ? (
+                  <>
+                    <label>
+                      生成路径
+                      <input value={form.generationPath} onChange={(event) => patchConnection({ generationPath: event.target.value })} />
+                    </label>
+                    <label>
+                      编辑路径
+                      <input value={form.editPath} onChange={(event) => patch({ editPath: event.target.value })} />
+                    </label>
+                    <label className="provider-dialog-field-span-all">
+                      Responses 路径
+                      <input value={form.responsesPath} onChange={(event) => patchConnection({ responsesPath: event.target.value })} />
+                    </label>
+                    <label className="provider-dialog-field-span-all">
+                      base64 响应路径
+                      <input value={form.responseImagePath} onChange={(event) => patch({ responseImagePath: event.target.value })} />
+                      <small>仅用于兼容返回结构不同的私有或 OpenAI 兼容接口。</small>
+                    </label>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+
+          <section
+            className={cx("provider-dialog-section", "provider-dialog-collapsible", expandedSections.auth && "open")}
+            ref={(node) => {
+              sectionRefs.current.auth = node;
+            }}
+          >
+            <button className="provider-dialog-collapsible-trigger" type="button" onClick={() => toggleExpanded("auth")}>
+              <span className="provider-dialog-section-index">5</span>
+              <span>
+                <strong>鉴权与网络</strong>
+                <small>管理渠道凭据、账号来源和代理设置。</small>
+              </span>
+              <span className="provider-dialog-summary">{authSummary}</span>
+              <ChevronDown size={18} />
+            </button>
+            {expandedSections.auth ? (
+              <div className="provider-dialog-fields provider-dialog-collapsible-body">
+                <div className={cx("provider-dialog-auth-controls", "provider-dialog-field-span-all", !isChatgptWeb && "single")}>
+                  <div className="switch-row">
+                    <span>
+                      <strong>使用代理</strong>
+                      <small>仅在全局代理也允许当前渠道类型时生效。</small>
+                    </span>
+                    <SwitchControl
+                      checked={form.proxyEnabled}
+                      label={form.proxyEnabled ? "启用" : "停用"}
+                      onChange={(proxyEnabled) => patchConnection({ proxyEnabled })}
+                    />
+                  </div>
+                  {isChatgptWeb ? (
+                    <label>
+                      账号访问模式
+                      <CustomSelect
+                        value={form.webAccountMode}
+                        onChange={(value) => patch({ webAccountMode: value as ProviderConfig["webAccountMode"] })}
+                        options={webAccountModeOptions}
+                      />
+                    </label>
+                  ) : null}
+                </div>
+                {usesProviderApiKey ? (
+                  <>
+                    <label>
+                      API Key 环境变量
+                      <input value={form.apiKeyEnv} onChange={(event) => patchConnection({ apiKeyEnv: event.target.value })} />
+                    </label>
+                    <label>
+                      API Key
+                      <span className="provider-secret-input">
+                        <input
+                          type={apiKeyVisible ? "text" : "password"}
+                          value={form.apiKeyValue}
+                          onChange={(event) => patchConnection({ apiKeyValue: event.target.value })}
+                          placeholder={isCpa ? "CPA Bearer Key，可留空" : "优先建议使用环境变量"}
+                        />
+                        <button
+                          type="button"
+                          onClick={toggleApiKeyVisibility}
+                          disabled={revealApiKey.isPending || !form.apiKeyValue}
+                          aria-label={apiKeyVisible ? "隐藏 API Key" : "查看 API Key"}
+                          title={apiKeyVisible ? "隐藏 API Key" : "查看 API Key"}
+                        >
+                          {revealApiKey.isPending ? (
+                            <LoaderCircle className="spin-icon" size={17} />
+                          ) : apiKeyVisible ? (
+                            <EyeOff size={17} />
+                          ) : (
+                            <Eye size={17} />
+                          )}
+                        </button>
+                      </span>
+                    </label>
+                  </>
+                ) : null}
+                {isChatgptWeb ? (
+                  <>
+                    <label className="provider-dialog-field-span-all">
+                      号池账号
+                      <ProviderAccountMultiSelect
+                        accounts={accounts}
+                        value={form.webAccountIds}
+                        onChange={(webAccountIds) => patchConnection({ webAccountIds })}
+                      />
+                      <small>CPA 同步账号通常只有 OAuth Access Token，可走 Codex Responses；手动 Cookie 仅作为网页防护拦截时的备用项。</small>
+                    </label>
+                    <label>
+                      备用 Access Token
+                      <input
+                        type="password"
+                        value={form.apiKeyValue}
+                        onChange={(event) => patchConnection({ apiKeyValue: event.target.value })}
+                        placeholder="ChatGPT access_token"
+                      />
+                    </label>
+                    <label>
+                      备用 Account ID
+                      <input value={form.webAccountId} onChange={(event) => patchConnection({ webAccountId: event.target.value })} />
+                    </label>
+                    <label className="provider-dialog-field-span-all">
+                      备用 Cookie（可选）
+                      <textarea rows={3} value={form.webCookies} onChange={(event) => patchConnection({ webCookies: event.target.value })} />
+                      <small>默认会预热 ChatGPT 首页并接住 Set-Cookie；仅在网页防护或会话拦截时需要手动填写。</small>
+                    </label>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+
+        </div>
+        <footer className="provider-dialog-footer">
+          <span className={error ? "form-error" : "provider-dialog-save-note"}>
+            {error ? error.message : "仅保存当前渠道的配置，不影响其他渠道。"}
+          </span>
           <div className="row-actions">
-            <button className="secondary-btn" type="button" onClick={onClose}>
+            <button className="secondary-btn" type="button" onClick={onClose} disabled={saving}>
               取消
             </button>
             <button className="primary-btn" type="button" onClick={() => onSubmit(form)} disabled={saving}>
               <Save size={16} />
-              {mode === "create" ? "新增渠道" : "保存渠道"}
+              {saving ? "保存中" : mode === "create" ? "新增渠道" : "保存渠道"}
             </button>
           </div>
-          {error ? <div className="form-error">{error.message}</div> : null}
-        </div>
+        </footer>
       </section>
     </div>
   );
@@ -2189,7 +2387,7 @@ function PromptOptimizerDialog({
   });
   return (
     <div className="modal-backdrop">
-      <section className="case-modal provider-dialog">
+      <section className="case-modal provider-dialog prompt-optimizer-dialog">
         <header>
           <div className="prompt-optimizer-dialog-title">
             <h3>{mode === "create" ? "新增模型供应商" : "编辑模型供应商"}</h3>

@@ -6,6 +6,7 @@ runtime/
 output/
 logs/
 tmp/
+/.tmp/
 release/
 release-bin/
 repo-src-full/

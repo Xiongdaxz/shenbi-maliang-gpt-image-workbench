@@ -24,8 +24,8 @@ export type ImageModelOption = {
 };
 
 export function imageModelDisplayName(model: ImageModelId) {
-  if (model === "gpt-image-2.5-flare") return "GPT‑Image‑2.5 Flare";
-  if (model === "gpt-image-2.5-sunburst") return "GPT‑Image‑2.5 Sunburst";
+  if (model === "gpt-image-2.5-flare") return "GPT Image 2.5 Flare";
+  if (model === "gpt-image-2.5-sunburst") return "GPT Image 2.5 Sunburst";
   return "GPT Image 2";
 }
 

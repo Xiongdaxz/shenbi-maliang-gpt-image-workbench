@@ -1,8 +1,16 @@
 export const DRAWING_EXPORT_SIZE = 832;
 export const DRAWING_EXPORT_PADDING = 36;
-export const DRAWING_MIN_STROKE_WIDTH = 4;
-export const DRAWING_MAX_STROKE_WIDTH = 64;
-export const DRAWING_DEFAULT_STROKE_WIDTH = 10;
+export const DRAWING_MIN_STROKE_WIDTH = 2;
+export const DRAWING_MAX_STROKE_WIDTH = 48;
+export const DRAWING_DEFAULT_STROKE_WIDTH = 12;
+export const DRAWING_MIN_ERASER_WIDTH = 4;
+export const DRAWING_MAX_ERASER_WIDTH = 96;
+export const DRAWING_DEFAULT_ERASER_WIDTH = 32;
+export const DRAWING_MIN_TEXT_SIZE = 8;
+export const DRAWING_MAX_TEXT_SIZE = 128;
+export const DRAWING_DEFAULT_TEXT_SIZE = 24;
+const DRAWING_COMPATIBLE_MAX_STROKE_WIDTH = 64;
+const DRAWING_COMPATIBLE_MAX_TEXT_FONT_SIZE = 0.2;
 
 export type DrawingPoint = {
   x: number;
@@ -122,7 +130,19 @@ export function clampDrawingPoint(point: DrawingPoint): DrawingPoint {
 }
 
 export function strokeWidthRatio(width: number) {
-  return clampDrawingNumber(width, DRAWING_MIN_STROKE_WIDTH, DRAWING_MAX_STROKE_WIDTH) / DRAWING_EXPORT_SIZE;
+  return clampDrawingNumber(width, DRAWING_MIN_STROKE_WIDTH, DRAWING_MAX_ERASER_WIDTH) / DRAWING_EXPORT_SIZE;
+}
+
+export function drawingTextSizeRatio(size: number) {
+  return clampDrawingNumber(size, DRAWING_MIN_TEXT_SIZE, DRAWING_MAX_TEXT_SIZE) / DRAWING_EXPORT_SIZE;
+}
+
+export function drawingTextSizeFromRatio(ratio: number) {
+  return Math.round(clampDrawingNumber(
+    ratio * DRAWING_EXPORT_SIZE,
+    DRAWING_MIN_TEXT_SIZE,
+    DRAWING_MAX_TEXT_SIZE
+  ));
 }
 
 function pointDistance(left: DrawingPoint, right: DrawingPoint) {
@@ -165,7 +185,7 @@ export function drawingTextLineWidth(text: string, fontSize: number) {
 
 function drawingArrowHeadPoints(start: DrawingPoint, end: DrawingPoint, width: number) {
   const angle = Math.atan2(end.y - start.y, end.x - start.x);
-  const headLength = Math.max(12, clampDrawingNumber(width, DRAWING_MIN_STROKE_WIDTH, DRAWING_MAX_STROKE_WIDTH) * 3.2)
+  const headLength = Math.max(12, clampDrawingNumber(width, DRAWING_MIN_STROKE_WIDTH, DRAWING_COMPATIBLE_MAX_STROKE_WIDTH) * 3.2)
     / DRAWING_EXPORT_SIZE;
   return [
     {
@@ -302,7 +322,11 @@ export function resizeDrawingElement(element: DrawingElement, originalBounds: Dr
     return {
       ...element,
       points: element.points.map(mapPoint),
-      width: clampDrawingNumber(element.width * scale, DRAWING_MIN_STROKE_WIDTH, DRAWING_MAX_STROKE_WIDTH)
+      width: clampDrawingNumber(
+        element.width * scale,
+        element.type === "erase" ? DRAWING_MIN_ERASER_WIDTH : DRAWING_MIN_STROKE_WIDTH,
+        element.type === "erase" ? DRAWING_MAX_ERASER_WIDTH : DRAWING_COMPATIBLE_MAX_STROKE_WIDTH
+      )
     };
   }
   if (element.type === "text") {
@@ -310,7 +334,11 @@ export function resizeDrawingElement(element: DrawingElement, originalBounds: Dr
       ...element,
       x: target.left,
       y: target.top,
-      fontSize: clampDrawingNumber(element.fontSize * scale, 0.018, 0.16),
+      fontSize: clampDrawingNumber(
+        element.fontSize * scale,
+        drawingTextSizeRatio(DRAWING_MIN_TEXT_SIZE),
+        DRAWING_COMPATIBLE_MAX_TEXT_FONT_SIZE
+      ),
       boxWidth: targetWidth,
       boxHeight: targetHeight
     };
@@ -349,14 +377,14 @@ export function resizeDrawingElement(element: DrawingElement, originalBounds: Dr
       ...element,
       start: { x: resizedStart.x + translateX, y: resizedStart.y + translateY },
       end: { x: resizedEnd.x + translateX, y: resizedEnd.y + translateY },
-      width: clampDrawingNumber(element.width * linearScale, DRAWING_MIN_STROKE_WIDTH, DRAWING_MAX_STROKE_WIDTH)
+      width: clampDrawingNumber(element.width * linearScale, DRAWING_MIN_STROKE_WIDTH, DRAWING_COMPATIBLE_MAX_STROKE_WIDTH)
     };
   }
   return {
     ...element,
     start: mapPoint(element.start),
     end: mapPoint(element.end),
-    width: clampDrawingNumber(element.width * scale, DRAWING_MIN_STROKE_WIDTH, DRAWING_MAX_STROKE_WIDTH)
+    width: clampDrawingNumber(element.width * scale, DRAWING_MIN_STROKE_WIDTH, DRAWING_COMPATIBLE_MAX_STROKE_WIDTH)
   };
 }
 
@@ -373,7 +401,7 @@ export function eraseDrawingElements(
       id: nextId(),
       type: "erase",
       points: eraserPath.map(clampDrawingPoint),
-      width: clampDrawingNumber(eraserWidth, DRAWING_MIN_STROKE_WIDTH, DRAWING_MAX_STROKE_WIDTH)
+      width: clampDrawingNumber(eraserWidth, DRAWING_MIN_ERASER_WIDTH, DRAWING_MAX_ERASER_WIDTH)
     } satisfies DrawingEraseElement
   ];
 }
@@ -521,7 +549,7 @@ export function drawDrawingElements(
       drawSmoothStroke(ctx, element.points, width, height);
       ctx.stroke();
     } else if (element.type === "text") {
-      const fontSize = Math.max(12, element.fontSize * height);
+      const fontSize = Math.max(DRAWING_MIN_TEXT_SIZE, element.fontSize * height);
       const lines = normalizedTextLines(element);
       const bounds = drawingElementBounds(element);
       const blockHeight = Math.max(1, lines.length) * DRAWING_TEXT_LINE_HEIGHT * fontSize;

@@ -22,9 +22,10 @@ describe("editor wheel size adjustment", () => {
     expect(shouldWheelAdjustToolSize(100)).toBe(false);
   });
 
-  test("keeps explicit vertical pan after comments expand at a fixed zoom", () => {
+  test("centers fit-mode editing content above the composer without changing fixed-zoom pan", () => {
     expect(editorPreviewPanY(135, true, 75, 700, 900)).toBe(135);
     expect(editorPreviewPanY(135, true, "fit", 700, 900)).toBe(-100);
+    expect(editorPreviewPanY(135, false, "fit", 700, 900)).toBe(135);
   });
 
   test("grows upward and shrinks downward using the dominant wheel axis", () => {

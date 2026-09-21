@@ -1182,9 +1182,8 @@ export function ImageEditWorkspace({
     setEditorError("");
   };
   const enterMode = (nextMode: "markup" | "annotation" | "remove") => {
-    const fitted = !previewOriginalSizeMode && Math.abs(previewZoom - 1) < 0.001;
-    setMarkupZoomValue(fitted ? "fit" : Math.round(previewZoomPercentage));
-    if (normalizedPreviewRotation !== 0) setPreviewRotation(0);
+    setMarkupZoomValue("fit");
+    resetPreviewTransform();
     clearSelection();
     clearAnnotations();
     setMarkupElements([]);

@@ -332,7 +332,7 @@
   height: 50px;
   margin-block: auto;
   white-space: nowrap;
-  transform: translateX(-50%) translateY(0.5px);
+  transform: translateX(-50%);
 }
 
 .image-editor-viewport > .drawing-size-control-embedded {

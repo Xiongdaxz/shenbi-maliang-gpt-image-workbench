@@ -99,6 +99,7 @@ import { invalidateLibraryFacetCache, registerLibraryRoutes } from "./libraryRou
 import { registerLanguageModelAssignmentRoutes } from "./languageModelAssignments";
 import { registerPromptOptimizerRoutes } from "./promptOptimizerRoutes";
 import { fetchProviderModelCatalog } from "./providerModels";
+import { readProviderModelCatalogCache, writeProviderModelCatalogCache } from "./providerModelCache";
 import { registerPromptColorSchemeRoutes } from "./promptColorSchemeRoutes";
 import { registerPromptReferenceLinkRoutes } from "./promptReferenceLinkRoutes";
 import { registerPromptTemplateRoutes } from "./promptTemplateRoutes";
@@ -2064,6 +2065,18 @@ api.get("/config/providers", (c) => {
   return c.json({ providers: rows.map((row) => toProvider(row, false)) });
 });
 
+api.get("/config/providers/:id/api-key", (c) => {
+  const blocked = requireConfig(c);
+  if (blocked) return blocked;
+  const id = c.req.param("id").trim();
+  const provider = getOne<ProviderRow>(configDb, "select * from provider_configs where id = ?", id);
+  if (!provider) return c.json({ error: "渠道不存在" }, 404);
+  c.header("Cache-Control", "no-store");
+  c.header("Pragma", "no-cache");
+  audit("provider.api_key.view", { id: provider.id, channel: provider.channel });
+  return c.json({ apiKeyValue: provider.api_key_value ?? "" });
+});
+
 function normalizeProviderConfigPath(channel: string, value: unknown, kind: "generation" | "edit" | "responses") {
   const path = String(value ?? "").trim();
   if (channel === "chatgpt_web") {
@@ -2114,7 +2127,7 @@ function providerForModelDiscovery(raw: Record<string, unknown>) {
     base_url: String(raw.baseUrl ?? existing?.base_url ?? "").trim(),
     api_key_env: String(raw.apiKeyEnv ?? existing?.api_key_env ?? "").trim(),
     api_key_value: apiKeyValue,
-    route_mode: normalizeRouteMode(String(raw.routeMode ?? existing?.route_mode ?? "images_api")),
+    route_mode: normalizeRouteMode(String(raw.routeMode ?? existing?.route_mode ?? (channel === "chatgpt_web" ? "images_api" : "auto"))),
     generation_path: normalizeProviderConfigPath(channel, raw.generationPath ?? existing?.generation_path, "generation"),
     edit_path: normalizeProviderConfigPath(channel, raw.editPath ?? existing?.edit_path, "edit"),
     responses_path: normalizeProviderConfigPath(channel, raw.responsesPath ?? existing?.responses_path, "responses"),
@@ -2152,6 +2165,18 @@ function providerForModelDiscovery(raw: Record<string, unknown>) {
   return provider;
 }
 
+api.get("/config/providers/:id/models-cache", (c) => {
+  const blocked = requireConfig(c);
+  if (blocked) return blocked;
+  const id = c.req.param("id").trim();
+  if (!getOne<ProviderRow>(configDb, "select * from provider_configs where id = ?", id)) {
+    return c.json({ error: "渠道不存在" }, 404);
+  }
+  const provider = providerForModelDiscovery({ id });
+  c.header("Cache-Control", "no-store");
+  return c.json({ catalog: readProviderModelCatalogCache(configDb, provider) });
+});
+
 api.post("/config/providers/models", async (c) => {
   const blocked = requireConfig(c);
   if (blocked) return blocked;
@@ -2159,6 +2184,7 @@ api.post("/config/providers/models", async (c) => {
   try {
     const provider = providerForModelDiscovery(raw);
     const result = await fetchProviderModelCatalog(provider);
+    const cachedResult = writeProviderModelCatalogCache(configDb, provider, result);
     audit("provider.models", {
       id: provider.id,
       name: provider.name,
@@ -2169,7 +2195,7 @@ api.post("/config/providers/models", async (c) => {
       endpoint: result.endpoint,
       durationMs: result.durationMs
     });
-    return c.json(result);
+    return c.json(cachedResult);
   } catch (error) {
     return c.json({ error: apiErrorMessage(error, "模型列表获取失败") }, 400);
   }
@@ -2251,7 +2277,7 @@ api.put("/config/providers", async (c) => {
       String(raw.baseUrl ?? "http://127.0.0.1:8317"),
       String(raw.apiKeyEnv ?? ""),
       preservedApiKey,
-      normalizeRouteMode(String(raw.routeMode ?? "images_api")),
+      normalizeRouteMode(String(raw.routeMode ?? (channel === "chatgpt_web" ? "images_api" : "auto"))),
       normalizeProviderConfigPath(channel, raw.generationPath, "generation"),
       normalizeProviderConfigPath(channel, raw.editPath, "edit"),
       normalizeProviderConfigPath(channel, raw.responsesPath, "responses"),
@@ -2276,6 +2302,7 @@ api.put("/config/providers", async (c) => {
   if (savedProviderIds.length > 0) {
     const placeholders = savedProviderIds.map(() => "?").join(",");
     run(configDb, `delete from provider_configs where id not in (${placeholders})`, ...savedProviderIds);
+    run(configDb, `delete from provider_model_catalogs where provider_id not in (${placeholders})`, ...savedProviderIds);
   }
   audit("provider.save", { count: providers.length });
   return c.json({ ok: true });

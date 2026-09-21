@@ -2134,7 +2134,7 @@ export function initConfigDb() {
       base_url text not null,
       api_key_env text,
       api_key_value text,
-      route_mode text not null default 'images_api',
+      route_mode text not null default 'auto',
       generation_path text not null,
       edit_path text not null,
       responses_path text not null default '/v1/responses',
@@ -2270,6 +2270,19 @@ export function initConfigDb() {
   `);
 
   configDb.run(`
+    create table if not exists provider_model_catalogs (
+      provider_id text primary key,
+      connection_signature text not null,
+      endpoint text not null default '',
+      duration_ms integer not null default 0,
+      models_json text not null default '[]',
+      image_models_json text not null default '[]',
+      responses_models_json text not null default '[]',
+      updated_at text not null
+    )
+  `);
+
+  configDb.run(`
     create table if not exists safety_review_settings (
       id text primary key,
       enabled integer not null default 0,
@@ -2348,7 +2361,7 @@ export function initConfigDb() {
 
   for (const [column, definition] of [
     ["channel", "text not null default 'api'"],
-    ["route_mode", "text not null default 'images_api'"],
+    ["route_mode", "text not null default 'auto'"],
     ["responses_path", "text not null default '/v1/responses'"],
     ["responses_model", "text not null default 'gpt-6-astra'"],
     ["proxy_enabled", "integer not null default 0"],
@@ -2989,7 +3002,7 @@ export function seedProvider() {
       "https://api.openai.com",
       "OPENAI_API_KEY",
       "",
-      "images_api",
+      "auto",
       "/v1/images/generations",
       "/v1/images/edits",
       "/v1/responses",

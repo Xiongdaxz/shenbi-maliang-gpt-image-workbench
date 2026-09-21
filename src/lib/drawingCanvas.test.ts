@@ -1,8 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import {
+  DRAWING_DEFAULT_ERASER_WIDTH,
+  DRAWING_DEFAULT_STROKE_WIDTH,
+  DRAWING_DEFAULT_TEXT_SIZE,
   DRAWING_EXPORT_PADDING,
-  DRAWING_MIN_STROKE_WIDTH,
   DRAWING_EXPORT_SIZE,
+  DRAWING_MAX_ERASER_WIDTH,
+  DRAWING_MAX_STROKE_WIDTH,
+  DRAWING_MAX_TEXT_SIZE,
+  DRAWING_MIN_STROKE_WIDTH,
+  DRAWING_MIN_TEXT_SIZE,
   clampDrawingPoint,
   drawDrawingElements,
   drawingContentPixelBounds,
@@ -48,8 +55,17 @@ describe("drawing canvas geometry", () => {
     expect(drawingContentPixelBounds(new Uint8ClampedArray(16), 2, 2)).toBeNull();
   });
 
-  test("keeps the thinnest visible stroke at four export pixels", () => {
-    expect(DRAWING_MIN_STROKE_WIDTH).toBe(4);
+  test("matches the official independent drawing tool size ranges", () => {
+    expect([DRAWING_MIN_STROKE_WIDTH, DRAWING_DEFAULT_STROKE_WIDTH, DRAWING_MAX_STROKE_WIDTH]).toEqual([2, 12, 48]);
+    expect([DRAWING_MIN_TEXT_SIZE, DRAWING_DEFAULT_TEXT_SIZE, DRAWING_MAX_TEXT_SIZE]).toEqual([8, 24, 128]);
+    expect([DRAWING_DEFAULT_ERASER_WIDTH, DRAWING_MAX_ERASER_WIDTH]).toEqual([32, 96]);
+  });
+
+  test("allows the eraser to use the larger official maximum", () => {
+    const erased = eraseDrawingElements([], [{ x: 0.5, y: 0.5 }], 200, () => "erase-1");
+    expect(erased).toEqual([
+      { id: "erase-1", type: "erase", points: [{ x: 0.5, y: 0.5 }], width: DRAWING_MAX_ERASER_WIDTH }
+    ]);
   });
 
   test("normalizes points and finds the topmost element", () => {
@@ -148,6 +164,43 @@ describe("drawing canvas geometry", () => {
     expect(resized.fontSize).toBeGreaterThan(element.fontSize);
     expect(resized.boxWidth).toBeCloseTo(0.4);
     expect(resized.boxHeight).toBeCloseTo(0.2);
+  });
+
+  test("preserves vector sizes created by the previous tool ranges", () => {
+    const legacyStroke: DrawingElement = {
+      id: "legacy-stroke",
+      type: "stroke",
+      color: "#000000",
+      width: 64,
+      points: [{ x: 0.2, y: 0.2 }, { x: 0.8, y: 0.8 }]
+    };
+    const legacyShape: DrawingElement = {
+      id: "legacy-shape",
+      type: "shape",
+      shape: "rectangle",
+      start: { x: 0.2, y: 0.2 },
+      end: { x: 0.8, y: 0.8 },
+      color: "#000000",
+      width: 64
+    };
+    const legacyText: DrawingElement = {
+      id: "legacy-text",
+      type: "text",
+      x: 0.1,
+      y: 0.1,
+      text: "旧文字",
+      color: "#000000",
+      fontSize: 0.2,
+      boxWidth: 0.7,
+      boxHeight: 0.25
+    };
+
+    for (const element of [legacyStroke, legacyShape, legacyText]) {
+      const bounds = drawingElementBounds(element);
+      const resized = resizeDrawingElement(element, bounds, bounds);
+      if (resized.type === "text") expect(resized.fontSize).toBe(0.2);
+      else expect(resized.width).toBe(64);
+    }
   });
 
   test("keeps line and arrow direction stable during non-uniform corner resizing", () => {

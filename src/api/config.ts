@@ -215,6 +215,7 @@ export type ProviderModelsResult = {
   models: string[];
   imageModels: string[];
   responsesModels: string[];
+  cachedAt?: string;
 };
 
 export type RuntimeLogsResult = {
@@ -537,6 +538,10 @@ export const configApi = {
       body: JSON.stringify(imageMode)
     }),
   providers: () => request<{ providers: ProviderConfig[] }>("/api/config/providers"),
+  providerApiKey: (id: string) =>
+    request<{ apiKeyValue: string }>(`/api/config/providers/${encodeURIComponent(id)}/api-key`),
+  cachedProviderModels: (id: string) =>
+    request<{ catalog: ProviderModelsResult | null }>(`/api/config/providers/${encodeURIComponent(id)}/models-cache`),
   providerModels: (provider: ProviderConfig) =>
     request<ProviderModelsResult>("/api/config/providers/models", {
       method: "POST",

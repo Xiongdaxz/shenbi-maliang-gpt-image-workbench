@@ -2,6 +2,22 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.77 - 2026-09-21
+
+### 中文
+
+- 后台图片渠道配置界面重新整理为基本信息、执行路由、模型配置和鉴权网络等清晰分区，并适配移动端；支持按需查看已保存的 API Key、刷新图片与语言模型目录，并持久缓存最近一次成功结果，连接信息变化时会自动失效。
+- 新建 CPA 和 API 渠道默认使用“自动切换（Responses 优先）”：先由 Responses 链路处理，失败或未返回可保存图片时自动回退图片接口，并兼容要求流式响应的上游；已有渠道继续保留用户保存的路由选择。
+- 绘图素材现在为笔画、文字和橡皮擦提供独立的尺寸范围与默认值，支持更大的文字和擦除区域，调整文字大小时保持编辑焦点，并兼容旧版绘图尺寸；图片标注模式的缩放、取消和画面复位也更顺手。
+- 渠道返回多张图片但保存过程中发生错误时，会自动清理本轮尚未完成的临时文件，减少失败任务留下无效文件和占用空间的情况。
+
+### English
+
+- The image-channel configuration dialog is reorganized into clear sections for basics, execution routing, model configuration, and authentication and networking, with responsive mobile support; administrators can reveal a saved API key when needed, refresh image and language model catalogs, and reuse the most recent successful catalog until connection details change.
+- New CPA and API channels now default to Automatic (Responses first): requests try the Responses path first and fall back to the Images API when it fails or returns no saveable image, including compatibility with upstreams that require streaming; existing channels retain their saved routing choice.
+- Drawing materials now use independent size ranges and defaults for strokes, text, and the eraser, with larger text and erase areas, preserved text-edit focus during size changes, and compatibility with older drawing sizes; markup zoom, cancellation, and canvas reset behavior are also smoother.
+- If a provider returns multiple images but an error occurs while saving them, unfinished files from that attempt are cleaned up automatically, reducing invalid remnants and wasted storage from failed tasks.
+
 ## v0.1.76 - 2026-09-20
 
 ### 中文
@@ -32,8 +48,8 @@
 
 ### 中文
 
-- 创建和编辑图片现在正式支持 `GPT‑Image‑2.5 Flare`、`GPT‑Image‑2.5 Sunburst` 与 `GPT Image 2`：可在快速、精细和兼容模式间切换，并使用自动、低、中、高、超高或最高质量；选择会随当前对话延续，结果详情会展示实际使用的图片模型、语言模型和质量。
-- 后台图片渠道支持刷新可用模型目录并分别选择图片模型与语言模型；新建渠道默认使用 `GPT‑Image‑2.5 Sunburst` 与 `GPT‑6 Astra`，同时保留手动填写和旧配置兼容。
+- 创建和编辑图片现在正式支持 `GPT Image 2.5 Flare`、`GPT Image 2.5 Sunburst` 与 `GPT Image 2`：可在快速、精细和兼容模式间切换，并使用自动、低、中、高、超高或最高质量；选择会随当前对话延续，结果详情会展示实际使用的图片模型、语言模型和质量。
+- 后台图片渠道支持刷新可用模型目录并分别选择图片模型与语言模型；新建渠道默认使用 `GPT Image 2.5 Sunburst` 与 `GPT‑6 Astra`，同时保留手动填写和旧配置兼容。
 - 输入框新增绘图素材，可使用画笔、文字、橡皮擦和多种几何图形制作或继续编辑构图草图，并作为结构参考发送给图片渠道。
 - 图片编辑新增“标注”模式，可直接在原图上绘制画笔、文字和形状后提交修改；同时新增一键移除背景，并优化评论浮层位置、擦除画笔指针和标注缩放操作。
 - 聊天与图片编辑输入框支持更宽的布局、多行自适应和全屏展开；粘贴或拖入图片时会更稳定地生成临时素材，并改进素材预览、清空和键盘提交体验。
@@ -43,8 +59,8 @@
 
 ### English
 
-- Image creation and editing now officially support `GPT‑Image‑2.5 Flare`, `GPT‑Image‑2.5 Sunburst`, and `GPT Image 2`: users can switch among fast, precise, and compatibility modes and choose automatic, low, medium, high, extra-high, or maximum quality; selections carry forward within the conversation, and result details show the image model, language model, and quality actually used.
-- Image channels in the admin console can now refresh their available model catalog and select image and language models separately; new channels default to `GPT‑Image‑2.5 Sunburst` and `GPT‑6 Astra` while retaining manual entry and compatibility with existing configurations.
+- Image creation and editing now officially support `GPT Image 2.5 Flare`, `GPT Image 2.5 Sunburst`, and `GPT Image 2`: users can switch among fast, precise, and compatibility modes and choose automatic, low, medium, high, extra-high, or maximum quality; selections carry forward within the conversation, and result details show the image model, language model, and quality actually used.
+- Image channels in the admin console can now refresh their available model catalog and select image and language models separately; new channels default to `GPT Image 2.5 Sunburst` and `GPT‑6 Astra` while retaining manual entry and compatibility with existing configurations.
 - The composer now includes drawing materials: use brushes, text, an eraser, and multiple geometric shapes to create or continue editing a composition sketch, then send it to the image provider as a structural reference.
 - Image editing now includes a Markup mode for drawing brushes, text, and shapes directly over the source image before submitting changes; it also adds one-click background removal and improves comment placement, erase-brush cursor alignment, and markup zoom controls.
 - Chat and image-edit inputs now use a wider layout with adaptive multiline sizing and full-screen expansion; pasted or dropped images become temporary materials more reliably, with improved material previews, clearing, and keyboard submission.

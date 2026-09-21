@@ -365,6 +365,9 @@ const englishConfigCopy: Record<string, string> = {
   "失败数": "Failures",
   "失败自动切换": "Auto switch on failure",
   "失败自动切换：图片接口失败后自动切换": "Auto switch on failure: switch after image API failure",
+  "自动切换": "Automatic",
+  "自动切换（Responses 优先）": "Automatic (Responses first)",
+  "默认先走 Responses，失败后回退图片接口": "Try Responses first, then fall back to the Images API",
   "失败总数": "Total failures",
   "使用代理": "Use proxy",
   "适合标准 API Key 或第三方兼容接口。": "Suitable for standard API keys or third-party compatible endpoints.",
@@ -410,6 +413,7 @@ const englishConfigCopy: Record<string, string> = {
   "图片产出": "Image output",
   "图片接口直连": "Direct image API",
   "图片接口直连：直接请求生成/编辑接口": "Direct image API: call generation/edit endpoints directly",
+  "始终直接请求生成/编辑接口，不使用语言模型": "Always call generation/edit endpoints directly without a language model",
   "图片趋势": "Image trend",
   "图片生成": "Image generation",
   "图片数": "Images",
@@ -565,6 +569,7 @@ const englishConfigCopy: Record<string, string> = {
   "OpenAI 兼容接口": "OpenAI-compatible endpoint",
   "Responses 接口": "Responses API",
   "Responses 接口：统一走 /v1/responses": "Responses API: use /v1/responses",
+  "始终走 /v1/responses，由语言模型规划后生成": "Always use /v1/responses so the language model can plan before generation",
   "Responses 路由、CPA 遮罩编辑和自动回退到 Responses 时使用；普通 images_api 仍只发图片模型。": "Used by Responses routes, CPA mask editing, and automatic fallback to Responses. Normal images_api still sends only the image model."
 };
 

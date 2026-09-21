@@ -4,7 +4,7 @@ import { warmImageDerivatives } from "./imageDerivatives";
 import { readImageDimensions } from "./imageDimensions";
 import { providerFetch, providerHeaders, withProviderRequestTimeout } from "./providerHttp";
 import { providerResponseErrorDetail } from "./responseSnapshots";
-import { readStoredFile, secureImagePath, secureImageReferencePath, writeEncryptedFile } from "./secureFiles";
+import { deleteStoredFilesIfUnreferenced, readStoredFile, secureImagePath, secureImageReferencePath, writeEncryptedFile } from "./secureFiles";
 import type { ImageReferenceSourceAsset, ProviderImageContext, ProviderRow, SavedImageFile } from "./types";
 import { makeId, now } from "./utils";
 
@@ -311,44 +311,51 @@ export async function saveProviderImageResults(
   userId: string,
   sessionId: string | null
 ): Promise<Array<{ id: string; file: SavedImageFile; providerContext: ProviderImageContext }>> {
-  const responseMimeType = responseJson && typeof responseJson === "object" ? imageMimeTypeFromRecord(responseJson as Record<string, unknown>) : "";
-  const imageItems = uniqueImageItems(findStructuredImageItems(responseJson));
-  if (imageItems.length > 0) {
-    const saved: Array<{ id: string; file: SavedImageFile; providerContext: ProviderImageContext }> = [];
-    for (const item of imageItems) {
-      const id = makeImageId();
-      const file = item.kind === "base64"
-        ? await saveBase64Image(item.value, id, userId, sessionId, item.mimeType || responseMimeType)
-        : await saveImageUrl(provider, item.value, id, userId, sessionId);
-      saved.push({ id, file, providerContext: item.context });
+  const saved: Array<{ id: string; file: SavedImageFile; providerContext: ProviderImageContext }> = [];
+  try {
+    const responseMimeType = responseJson && typeof responseJson === "object" ? imageMimeTypeFromRecord(responseJson as Record<string, unknown>) : "";
+    const imageItems = uniqueImageItems(findStructuredImageItems(responseJson));
+    if (imageItems.length > 0) {
+      for (const item of imageItems) {
+        const id = makeImageId();
+        const file = item.kind === "base64"
+          ? await saveBase64Image(item.value, id, userId, sessionId, item.mimeType || responseMimeType)
+          : await saveImageUrl(provider, item.value, id, userId, sessionId);
+        saved.push({ id, file, providerContext: item.context });
+      }
+      return saved;
     }
-    return saved;
-  }
 
-  const base64Values = uniqueImageValues([
-    ...(extractByPath(responseJson, provider.response_image_path) ? [extractByPath(responseJson, provider.response_image_path)!] : []),
-    ...findBase64Images(responseJson)
-  ]);
-  if (base64Values.length > 0) {
-    const saved: Array<{ id: string; file: SavedImageFile; providerContext: ProviderImageContext }> = [];
-    for (const base64 of base64Values) {
-      const id = makeImageId();
-      saved.push({ id, file: await saveBase64Image(base64, id, userId, sessionId, responseMimeType), providerContext: providerImageContextFromRecord({}) });
+    const base64Values = uniqueImageValues([
+      ...(extractByPath(responseJson, provider.response_image_path) ? [extractByPath(responseJson, provider.response_image_path)!] : []),
+      ...findBase64Images(responseJson)
+    ]);
+    if (base64Values.length > 0) {
+      for (const base64 of base64Values) {
+        const id = makeImageId();
+        saved.push({ id, file: await saveBase64Image(base64, id, userId, sessionId, responseMimeType), providerContext: providerImageContextFromRecord({}) });
+      }
+      return saved;
     }
-    return saved;
-  }
 
-  const imageUrls = uniqueImageValues(findImageUrls(responseJson));
-  if (imageUrls.length > 0) {
-    const saved: Array<{ id: string; file: SavedImageFile; providerContext: ProviderImageContext }> = [];
-    for (const imageUrl of imageUrls) {
-      const id = makeImageId();
-      saved.push({ id, file: await saveImageUrl(provider, imageUrl, id, userId, sessionId), providerContext: providerImageContextFromRecord({}) });
+    const imageUrls = uniqueImageValues(findImageUrls(responseJson));
+    if (imageUrls.length > 0) {
+      for (const imageUrl of imageUrls) {
+        const id = makeImageId();
+        saved.push({ id, file: await saveImageUrl(provider, imageUrl, id, userId, sessionId), providerContext: providerImageContextFromRecord({}) });
+      }
+      return saved;
     }
-    return saved;
-  }
 
-  throw missingImageDataError(responseJson);
+    throw missingImageDataError(responseJson);
+  } catch (error) {
+    if (saved.length > 0) {
+      await deleteStoredFilesIfUnreferenced(saved.map((image) => image.file.path)).catch((cleanupError) => {
+        console.warn("清理未完成的渠道图片结果失败", cleanupError);
+      });
+    }
+    throw error;
+  }
 }
 
 export async function snapshotImageReferences(userId: string, sessionId: string | null, imageId: string, sources: ImageReferenceSnapshotInput[]) {

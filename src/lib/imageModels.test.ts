@@ -34,7 +34,12 @@ describe("image model selection", () => {
       { role: "user", metadata: { model: "gpt-image-2.5-sunburst", quality: "max" } }
     ])).toEqual({ imageModel: "gpt-image-2.5-sunburst", quality: "max" });
     expect(latestConversationImageSelection([{ role: "assistant", metadata: { actualModel: "gpt-image-2" } }])).toBeNull();
-    expect(imageModelDisplayName("gpt-image-2.5-flare")).toBe("GPT‑Image‑2.5 Flare");
+  });
+
+  test("uses consistent product-style display names", () => {
+    expect(imageModelDisplayName("gpt-image-2.5-flare")).toBe("GPT Image 2.5 Flare");
+    expect(imageModelDisplayName("gpt-image-2.5-sunburst")).toBe("GPT Image 2.5 Sunburst");
+    expect(imageModelDisplayName("gpt-image-2")).toBe("GPT Image 2");
   });
 
   test("only exposes xhigh and max on GPT Image 2.5", () => {

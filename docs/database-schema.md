@@ -897,7 +897,7 @@ Remote MCP OAuth 令牌有效期配置，固定使用 `default` 单行。保存�
 | `enabled` | 是否启用，`0` 否、`1` 是 |
 | `base_url` | 渠道根地址 |
 | `api_key_env` / `api_key_value` | API Key 来源 |
-| `route_mode` | 路由模式：`images_api`、`responses`、`auto`；首次初始化和新建 CPA 渠道时默认为 `auto` |
+| `route_mode` | 路由模式：`images_api`、`responses`、`auto`；首次初始化和新建 CPA/API 渠道时默认为 `auto`，运行时先请求 Responses、失败后回退 Images API；现有渠道保留用户已经保存的明确选择 |
 | `generation_path` / `edit_path` / `responses_path` | 上游接口路径 |
 | `model` / `responses_model` | 图片模型和 Responses 主模型；新渠道默认分别为 `gpt-image-2.5-sunburst`、`gpt-6-astra`，后台可从渠道模型目录刷新后分别选择 |
 | `sizes` / `qualities` | 可选尺寸和质量 JSON |
@@ -909,6 +909,20 @@ Remote MCP OAuth 令牌有效期配置，固定使用 `default` 单行。保存�
 | `web_account_id` / `web_account_ids` / `web_account_mode` | 官网账号选择；`web_account_mode` 为 `priority` 优先级、`round_robin` 轮询、`random` 随机 |
 | `web_cookies` | 官网 Cookie |
 | `created_at` / `updated_at` | 创建和更新时间 |
+
+### provider_model_catalogs
+
+渠道模型目录的持久缓存。后台首次点击“获取模型”后保存；再次打开渠道时直接读取缓存，不重复请求上游。服务地址、凭据、账号池、代理或模型路径变化后，连接签名不再匹配，旧缓存会自动失效。
+
+| 字段 | 说明 |
+| --- | --- |
+| `provider_id` | 渠道 ID，主键 |
+| `connection_signature` | 渠道连接信息的 SHA-256 签名，不保存明文凭据 |
+| `endpoint` / `duration_ms` | 最近一次模型目录请求地址与耗时 |
+| `models_json` | 渠道返回的完整模型 ID 列表 |
+| `image_models_json` | 图片模型 ID 列表 |
+| `responses_models_json` | Responses 语言模型 ID 列表 |
+| `updated_at` | 最近一次成功刷新时间 |
 
 ### image_generation_settings
 

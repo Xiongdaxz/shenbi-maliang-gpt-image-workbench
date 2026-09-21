@@ -260,7 +260,6 @@ export function ImageEditorTopbar({
       ) : null}
       {removeMode ? (
         <div className="image-editor-actions">
-          <ImageMarkupZoomMenu value={markupZoomValue} onChange={onMarkupZoomChange} />
           <button type="button" className="editor-icon-btn" onClick={onUndoStroke} disabled={strokeCount === 0} aria-label={t("imageEditor.undo")}>
             <Undo2 size={20} />
           </button>
@@ -279,6 +278,7 @@ export function ImageEditorTopbar({
           >
             {t("composer.send")}
           </button>
+          <ImageMarkupZoomMenu value={markupZoomValue} onChange={onMarkupZoomChange} />
           <button type="button" className="editor-text-btn" onClick={onExitMode}>
             {t("common.cancel")}
           </button>
@@ -286,6 +286,9 @@ export function ImageEditorTopbar({
       ) : markupMode ? (
         <div className="image-editor-actions">
           <ImageMarkupZoomMenu value={markupZoomValue} onChange={onMarkupZoomChange} />
+          <button type="button" className="editor-text-btn" onClick={onExitMode}>
+            {t("common.cancel")}
+          </button>
         </div>
       ) : annotationMode ? (
         <div className="image-editor-actions">

@@ -1680,9 +1680,14 @@ function shouldFallbackToResponses(provider: ProviderRow, hasMask: boolean, erro
   );
 }
 
-function shouldRetryResponsesWithoutStream(error: unknown) {
+export function shouldRetryResponsesAsStream(error: unknown) {
   const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
-  return message.includes("stream_not_supported") || message.includes("stream is not supported");
+  return (
+    message.includes("stream_required") ||
+    message.includes("streaming is required") ||
+    message.includes("requires stream=true") ||
+    message.includes("only supports streaming")
+  );
 }
 
 function shouldFallbackResponsesModel(provider: ProviderRow, model: string | undefined, error: unknown) {
@@ -1709,7 +1714,7 @@ async function callResponsesProviderWithCompatFallback(
     if (shouldFallbackResponsesModel(provider, responsesModel, error)) {
       return callResponsesProvider(provider, mode, payload, false, CPA_RESPONSES_MODEL_FALLBACK, context);
     }
-    if (shouldRetryResponsesWithoutStream(error)) throw error;
+    if (!shouldRetryResponsesAsStream(error)) throw error;
     try {
       return await callResponsesProvider(provider, mode, payload, true, responsesModel, context);
     } catch (streamError) {
@@ -3245,6 +3250,42 @@ async function callChatGptWebProvider(
   }
 }
 
+export const AUTOMATIC_PROVIDER_ROUTE_ORDER = ["responses", "images_api"] as const;
+type AutomaticProviderRoute = typeof AUTOMATIC_PROVIDER_ROUTE_ORDER[number];
+
+export async function executeAutomaticProviderRoutes<T>(
+  attempt: (route: AutomaticProviderRoute) => Promise<T>,
+  isCancelled: (error: unknown) => boolean = () => false
+) {
+  const errors: string[] = [];
+  for (const route of AUTOMATIC_PROVIDER_ROUTE_ORDER) {
+    try {
+      return await attempt(route);
+    } catch (error) {
+      if (isCancelled(error)) throw new ProviderRequestCancelledError();
+      const label = route === "responses" ? "Responses 接口" : "图片接口回退";
+      errors.push(`${label}失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  throw new Error(errors.join("; ") || "自动路由没有可用链路");
+}
+
+function callAutomaticProviderRoute(
+  provider: RuntimeProviderRow,
+  mode: "generation" | "edit",
+  payload: Record<string, unknown>,
+  route: AutomaticProviderRoute,
+  context: ProviderRequestContext
+) {
+  if (route === "responses") {
+    return callResponsesProviderWithCompatFallback(provider, mode, payload, undefined, context);
+  }
+  const hasMask = typeof payload.mask === "string" && payload.mask.trim();
+  return mode === "edit" && hasMask
+    ? callImagesApiProviderWithSourceReferenceFallback(provider, mode, payload, context)
+    : callImagesApiProvider(provider, mode, payload, context);
+}
+
 export async function callProvider(
   provider: RuntimeProviderRow,
   mode: "generation" | "edit",
@@ -3258,29 +3299,20 @@ export async function callProvider(
   if (channel === "chatgpt_web") {
     return callChatGptWebProvider(provider, mode, payload, context);
   }
-  if (mode === "edit" && hasMask && channel === "cpa") {
+  if (routeMode === "responses") {
     return callResponsesProviderWithCompatFallback(provider, mode, payload, undefined, context);
   }
-  if (routeMode === "responses") {
+  if (routeMode === "auto") {
+    return executeAutomaticProviderRoutes(
+      (route) => callAutomaticProviderRoute(provider, mode, payload, route, context),
+      (error) => providerRequestWasCancelled(error, context.signal)
+    );
+  }
+  if (mode === "edit" && hasMask && channel === "cpa") {
     return callResponsesProviderWithCompatFallback(provider, mode, payload, undefined, context);
   }
   if (mode === "edit" && hasMask) {
     return callImagesApiProviderWithSourceReferenceFallback(provider, mode, payload, context);
-  }
-  if (routeMode === "auto") {
-    try {
-      return await callImagesApiProvider(provider, mode, payload, context);
-    } catch (imagesError) {
-      if (providerRequestWasCancelled(imagesError, context.signal)) throw new ProviderRequestCancelledError();
-      try {
-        return await callResponsesProviderWithCompatFallback(provider, mode, payload, undefined, context);
-      } catch (responsesError) {
-        if (providerRequestWasCancelled(responsesError, context.signal)) throw new ProviderRequestCancelledError();
-        const first = imagesError instanceof Error ? imagesError.message : String(imagesError);
-        const second = responsesError instanceof Error ? responsesError.message : String(responsesError);
-        throw new Error(`图片接口直连失败：${first}; 综合接口回退失败：${second}`);
-      }
-    }
   }
   return callImagesApiProviderWithCpaFallback(provider, mode, payload, Boolean(hasMask), context);
 }
@@ -3440,26 +3472,38 @@ export async function callProviderChain<T = undefined>(
     assertProviderRequestActive(context);
     try {
       const providerPayload = payloadForProvider(provider, payload);
-      const release = await acquireProviderConcurrencySlot(provider, providerPayload, context.signal);
-      let responseJson: unknown;
-      try {
-        responseJson = await callProvider(provider, mode, providerPayload, context);
-      } finally {
-        release();
-      }
       const requestedModel = String(payload.model ?? providerPayload.model ?? "").trim() || DEFAULT_IMAGE_MODEL;
       const requestedQuality = String(payload.quality ?? providerPayload.quality ?? "").trim() || "auto";
-      const execution = providerImageExecution(responseJson, {
-        requestedModel,
-        actualModel: String(providerPayload.model ?? "").trim() || DEFAULT_IMAGE_MODEL,
-        actualLanguageModel: "",
-        actualRouteMode: "",
-        requestedQuality,
-        actualQuality: String(providerPayload.quality ?? "").trim() || "auto",
-        modelFallbackReason: ""
-      });
-      const result = onProviderResponse ? await onProviderResponse({ provider, responseJson, execution }) : undefined;
-      return { provider, responseJson, result, execution };
+      const executeProvider = async (route?: AutomaticProviderRoute) => {
+        const release = await acquireProviderConcurrencySlot(provider, providerPayload, context.signal);
+        let responseJson: unknown;
+        try {
+          responseJson = route
+            ? await callAutomaticProviderRoute(provider, mode, providerPayload, route, context)
+            : await callProvider(provider, mode, providerPayload, context);
+        } finally {
+          release();
+        }
+        const execution = providerImageExecution(responseJson, {
+          requestedModel,
+          actualModel: String(providerPayload.model ?? "").trim() || DEFAULT_IMAGE_MODEL,
+          actualLanguageModel: "",
+          actualRouteMode: "",
+          requestedQuality,
+          actualQuality: String(providerPayload.quality ?? "").trim() || "auto",
+          modelFallbackReason: ""
+        });
+        const result = onProviderResponse ? await onProviderResponse({ provider, responseJson, execution }) : undefined;
+        return { provider, responseJson, result, execution };
+      };
+      const channel = normalizeProviderChannel(provider.channel || inferChannelFromType(provider.type));
+      if (channel !== "chatgpt_web" && normalizeRouteMode(provider.route_mode) === "auto") {
+        return await executeAutomaticProviderRoutes(
+          executeProvider,
+          (error) => providerRequestWasCancelled(error, context.signal)
+        );
+      }
+      return await executeProvider();
     } catch (error) {
       if (providerRequestWasCancelled(error, context.signal)) throw new ProviderRequestCancelledError();
       errors.push(`${provider.name}：${error instanceof Error ? error.message : String(error)}`);
@@ -3475,7 +3519,7 @@ export async function callProviderGenerationWithProgress(
   context: ProviderRequestContext = {}
 ) {
   const providerPayload = payloadForProvider(provider, payload);
-  if (normalizeProviderChannel(provider.channel || inferChannelFromType(provider.type)) !== "chatgpt_web" && normalizeRouteMode(provider.route_mode) !== "responses") {
+  if (normalizeProviderChannel(provider.channel || inferChannelFromType(provider.type)) !== "chatgpt_web" && normalizeRouteMode(provider.route_mode) === "images_api") {
     const endpoint = normalizePath(provider.base_url, provider.generation_path);
     try {
       const responseJson = await executeImagesApiStreamRequest(provider, endpoint, providerPayload, onImageResult, context);

@@ -127,7 +127,8 @@
 
 .image-editor-topbar .image-editor-markup-zoom-trigger {
   min-width: 84px;
-  height: 38px;
+  height: 36px;
+  min-height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;

@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type FocusEvent as ReactFocusEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
@@ -36,15 +37,23 @@ import {
 import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import {
+  DRAWING_DEFAULT_ERASER_WIDTH,
   DRAWING_DEFAULT_STROKE_WIDTH,
+  DRAWING_DEFAULT_TEXT_SIZE,
   DRAWING_EXPORT_SIZE,
+  DRAWING_MAX_ERASER_WIDTH,
   DRAWING_MAX_STROKE_WIDTH,
+  DRAWING_MAX_TEXT_SIZE,
+  DRAWING_MIN_ERASER_WIDTH,
   DRAWING_MIN_STROKE_WIDTH,
+  DRAWING_MIN_TEXT_SIZE,
   DRAWING_TEXT_HORIZONTAL_PADDING,
   clampDrawingNumber,
   drawDrawingElements,
   drawingElementBounds,
   drawingTextLineWidth,
+  drawingTextSizeFromRatio,
+  drawingTextSizeRatio,
   eraseDrawingElements,
   exportDrawingBlob,
   moveDrawingElement,
@@ -138,8 +147,8 @@ const PRESET_COLORS = [
 const EMPTY_DRAWING_ELEMENTS: DrawingElement[] = [];
 const DRAWING_ELEMENT_MIN_SCALE = 0.04;
 const DRAWING_ELEMENT_MAX_SCALE = 0.92;
-const DRAWING_TEXT_MIN_FONT_SIZE = 0.025;
-const DRAWING_TEXT_MAX_FONT_SIZE = 0.2;
+const DRAWING_ELEMENT_SLIDER_MIN = 4;
+const DRAWING_ELEMENT_SLIDER_MAX = 64;
 const DRAWING_TEXT_DEFAULT_INPUT_WIDTH = 220;
 const DRAWING_TEXT_FRAME_HEIGHT_FACTOR = 1.2;
 
@@ -258,7 +267,7 @@ function drawingElementSliderValue(element: DrawingElement) {
   const progress = (
     clampDrawingNumber(scale, DRAWING_ELEMENT_MIN_SCALE, DRAWING_ELEMENT_MAX_SCALE) - DRAWING_ELEMENT_MIN_SCALE
   ) / (DRAWING_ELEMENT_MAX_SCALE - DRAWING_ELEMENT_MIN_SCALE);
-  return DRAWING_MIN_STROKE_WIDTH + progress * (DRAWING_MAX_STROKE_WIDTH - DRAWING_MIN_STROKE_WIDTH);
+  return DRAWING_ELEMENT_SLIDER_MIN + progress * (DRAWING_ELEMENT_SLIDER_MAX - DRAWING_ELEMENT_SLIDER_MIN);
 }
 
 function resizeDrawingElementFromSlider(element: DrawingElement, value: number) {
@@ -267,8 +276,8 @@ function resizeDrawingElementFromSlider(element: DrawingElement, value: number) 
   const height = Math.max(0.0001, bounds.bottom - bounds.top);
   const currentScale = Math.max(width, height);
   const progress = (
-    clampDrawingNumber(value, DRAWING_MIN_STROKE_WIDTH, DRAWING_MAX_STROKE_WIDTH) - DRAWING_MIN_STROKE_WIDTH
-  ) / (DRAWING_MAX_STROKE_WIDTH - DRAWING_MIN_STROKE_WIDTH);
+    clampDrawingNumber(value, DRAWING_ELEMENT_SLIDER_MIN, DRAWING_ELEMENT_SLIDER_MAX) - DRAWING_ELEMENT_SLIDER_MIN
+  ) / (DRAWING_ELEMENT_SLIDER_MAX - DRAWING_ELEMENT_SLIDER_MIN);
   const targetScale = DRAWING_ELEMENT_MIN_SCALE + progress * (DRAWING_ELEMENT_MAX_SCALE - DRAWING_ELEMENT_MIN_SCALE);
   const factor = targetScale / currentScale;
   const targetWidth = width * factor;
@@ -303,6 +312,8 @@ export function DrawingCanvasDialog({
   const [colorMenuOpen, setColorMenuOpen] = useState(false);
   const [color, setColor] = useState(embedded ? "#DC2626" : "#000000");
   const [strokeWidth, setStrokeWidth] = useState(DRAWING_DEFAULT_STROKE_WIDTH);
+  const [textSize, setTextSize] = useState(DRAWING_DEFAULT_TEXT_SIZE);
+  const [eraserWidth, setEraserWidth] = useState(DRAWING_DEFAULT_ERASER_WIDTH);
   const [elements, setElementsState] = useState<DrawingElement[]>([]);
   const [undoStack, setUndoStack] = useState<DrawingElement[][]>([]);
   const [redoStack, setRedoStack] = useState<DrawingElement[][]>([]);
@@ -319,6 +330,7 @@ export function DrawingCanvasDialog({
   const toolCursorRef = useRef<HTMLSpanElement | null>(null);
   const toolCursorPointRef = useRef<{ clientX: number; clientY: number; inside: boolean } | null>(null);
   const textInputRef = useRef<HTMLDivElement | null>(null);
+  const sizeInputRef = useRef<HTMLInputElement | null>(null);
   const textDraftFrameRef = useRef<HTMLDivElement | null>(null);
   const textDraftRef = useRef<TextDraft | null>(null);
   const colorInputRef = useRef<HTMLInputElement | null>(null);
@@ -329,6 +341,7 @@ export function DrawingCanvasDialog({
   const sizeWheelBeforeRef = useRef<DrawingElement[] | null>(null);
   const sizeWheelCommitTimerRef = useRef<number | null>(null);
   const textDraftResizeRef = useRef<TextDraftResizeInteraction | null>(null);
+  const preserveTextDraftFocusRef = useRef(false);
   const idRef = useRef(0);
 
   const nextId = useCallback(() => {
@@ -376,14 +389,15 @@ export function DrawingCanvasDialog({
       return;
     }
     const rect = canvas.getBoundingClientRect();
-    const diameter = Math.max(6, (strokeWidth / DRAWING_EXPORT_SIZE) * Math.min(rect.width, rect.height));
+    const activeWidth = tool === "eraser" ? eraserWidth : strokeWidth;
+    const diameter = Math.max(6, (activeWidth / DRAWING_EXPORT_SIZE) * Math.min(rect.width, rect.height));
     cursor.style.left = `${clientX - rect.left}px`;
     cursor.style.top = `${clientY - rect.top}px`;
     cursor.style.width = `${diameter}px`;
     cursor.style.height = `${diameter}px`;
     cursor.style.setProperty("--drawing-tool-cursor-color", tool === "brush" ? color : "rgba(255, 255, 255, 0.86)");
     cursor.style.opacity = "1";
-  }, [color, strokeWidth, tool]);
+  }, [color, eraserWidth, strokeWidth, tool]);
 
   const resetDialog = useCallback(() => {
     if (sizeWheelCommitTimerRef.current !== null) {
@@ -411,9 +425,12 @@ export function DrawingCanvasDialog({
     setColorMenuOpen(false);
     setColor(embedded ? "#DC2626" : "#000000");
     setStrokeWidth(DRAWING_DEFAULT_STROKE_WIDTH);
+    setTextSize(DRAWING_DEFAULT_TEXT_SIZE);
+    setEraserWidth(DRAWING_DEFAULT_ERASER_WIDTH);
     interactionRef.current = null;
     sizeAdjustmentBeforeRef.current = null;
     textDraftResizeRef.current = null;
+    preserveTextDraftFocusRef.current = false;
     toolCursorPointRef.current = null;
     idRef.current = 0;
   }, [embedded, notifyElementsChange, replaceElements, startingElements]);
@@ -597,15 +614,57 @@ export function DrawingCanvasDialog({
     if (commitElements(next)) setSelectedId(null);
   }, [commitElements, finishWheelSizeAdjustment, selectedId]);
 
+  const updateTextSize = (value: number) => {
+    const nextSize = clampDrawingNumber(value, DRAWING_MIN_TEXT_SIZE, DRAWING_MAX_TEXT_SIZE);
+    const nextFontSize = drawingTextSizeRatio(nextSize);
+    const canvasRect = canvasRef.current?.getBoundingClientRect();
+    setTextSize(nextSize);
+    setTextDraft((current) => {
+      if (!current) {
+        textDraftRef.current = null;
+        return null;
+      }
+      const next = {
+        ...current,
+        fontSize: nextFontSize,
+        boxWidth: canvasRect && canvasRect.width > 0
+          ? Math.min(
+              Math.max(0.012, 1 - current.x - 8 / canvasRect.width),
+              Math.max(
+                current.boxWidth,
+                drawingTextLineWidth(current.value || "M", nextFontSize) + DRAWING_TEXT_HORIZONTAL_PADDING * 2
+              )
+            )
+          : current.boxWidth,
+        boxHeight: Math.max(current.boxHeight, nextFontSize * DRAWING_TEXT_FRAME_HEIGHT_FACTOR)
+      };
+      textDraftRef.current = next;
+      return next;
+    });
+  };
+
+  const updateActiveToolSize = (value: number) => {
+    if (tool === "text") {
+      updateTextSize(value);
+      return;
+    }
+    if (tool === "eraser") {
+      setEraserWidth(clampDrawingNumber(value, DRAWING_MIN_ERASER_WIDTH, DRAWING_MAX_ERASER_WIDTH));
+      return;
+    }
+    setStrokeWidth(clampDrawingNumber(value, DRAWING_MIN_STROKE_WIDTH, DRAWING_MAX_STROKE_WIDTH));
+  };
+
   const beginSizeAdjustment = () => {
     finishWheelSizeAdjustment();
+    if (textDraftRef.current) preserveTextDraftFocusRef.current = true;
     if (!selectedId) return;
     sizeAdjustmentBeforeRef.current = elementsRef.current;
   };
 
   const updateSizeAdjustment = (value: number) => {
     if (!selectedId) {
-      setStrokeWidth(value);
+      updateActiveToolSize(value);
       return;
     }
     const selected = elementsRef.current.find((element) => element.id === selectedId);
@@ -619,10 +678,23 @@ export function DrawingCanvasDialog({
   const finishSizeAdjustment = () => {
     const before = sizeAdjustmentBeforeRef.current;
     sizeAdjustmentBeforeRef.current = null;
-    if (!before || elementsEqual(before, elementsRef.current)) return;
-    setUndoStack((items) => [...items, before]);
-    setRedoStack([]);
-    notifyElementsChange(elementsRef.current);
+    if (before && !elementsEqual(before, elementsRef.current)) {
+      setUndoStack((items) => [...items, before]);
+      setRedoStack([]);
+      notifyElementsChange(elementsRef.current);
+    }
+    if (preserveTextDraftFocusRef.current) {
+      preserveTextDraftFocusRef.current = false;
+      window.requestAnimationFrame(() => textInputRef.current?.focus());
+    }
+  };
+
+  const handleSizeControlBlur = (event: ReactFocusEvent<HTMLInputElement>) => {
+    const shouldCommitText = Boolean(textDraftRef.current)
+      && !preserveTextDraftFocusRef.current
+      && event.relatedTarget !== textInputRef.current;
+    finishSizeAdjustment();
+    if (shouldCommitText) commitTextDraft();
   };
 
   const handleSizeWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
@@ -634,11 +706,8 @@ export function DrawingCanvasDialog({
     event.preventDefault();
     event.stopPropagation();
     if (!selectedId) {
-      setStrokeWidth((current) => clampDrawingNumber(
-        current + sizeDelta,
-        DRAWING_MIN_STROKE_WIDTH,
-        DRAWING_MAX_STROKE_WIDTH
-      ));
+      const currentSize = tool === "text" ? textSize : tool === "eraser" ? eraserWidth : strokeWidth;
+      updateActiveToolSize(currentSize + sizeDelta);
       return;
     }
     const selected = elementsRef.current.find((element) => element.id === selectedId);
@@ -706,8 +775,8 @@ export function DrawingCanvasDialog({
         : (scaleX + scaleY) / 2;
     const fontSize = clampDrawingNumber(
       interaction.fontSize * Math.max(0.2, scale),
-      DRAWING_TEXT_MIN_FONT_SIZE,
-      DRAWING_TEXT_MAX_FONT_SIZE
+      drawingTextSizeRatio(DRAWING_MIN_TEXT_SIZE),
+      drawingTextSizeRatio(DRAWING_MAX_TEXT_SIZE)
     );
     setTextDraft((current) => {
       const next = current ? {
@@ -798,7 +867,7 @@ export function DrawingCanvasDialog({
         return;
       }
       const minimumWidth = 32 / mapped.rect.width;
-      const fontSize = clampDrawingNumber(strokeWidth / 250, DRAWING_TEXT_MIN_FONT_SIZE, DRAWING_TEXT_MAX_FONT_SIZE);
+      const fontSize = drawingTextSizeRatio(textSize);
       const boxHeight = Math.max(fontSize * DRAWING_TEXT_FRAME_HEIGHT_FACTOR, 24 / mapped.rect.height);
       const x = Math.min(mapped.point.x, Math.max(0, 1 - minimumWidth));
       const y = Math.min(mapped.point.y, Math.max(0, 1 - boxHeight));
@@ -881,7 +950,7 @@ export function DrawingCanvasDialog({
     const path = [mapped.point];
     if (!before.some((element) => element.type !== "erase")) return;
     interactionRef.current = { pointerId: event.pointerId, kind: "erase", before, start: mapped.point, path };
-    replaceElements(eraseDrawingElements(before, path, strokeWidth, nextId));
+    replaceElements(eraseDrawingElements(before, path, eraserWidth, nextId));
   };
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -920,7 +989,7 @@ export function DrawingCanvasDialog({
     if (interaction.kind === "erase") {
       const path = [...(interaction.path ?? []), mapped.point];
       interaction.path = path;
-      replaceElements(eraseDrawingElements(interaction.before, path, strokeWidth, nextId));
+      replaceElements(eraseDrawingElements(interaction.before, path, eraserWidth, nextId));
       return;
     }
     if (!interaction.originalElement || !interaction.elementId) return;
@@ -1004,6 +1073,7 @@ export function DrawingCanvasDialog({
     setHoverMode(null);
     setTool("text");
     setColor(hit.color);
+    setTextSize(drawingTextSizeFromRatio(hit.fontSize));
   };
 
   const commitTextDraft = () => {
@@ -1087,9 +1157,20 @@ export function DrawingCanvasDialog({
   if (!open) return null;
   const selectedColorIsPreset = PRESET_COLORS.includes(color.toUpperCase());
   const selectedElement = selectedId ? elements.find((element) => element.id === selectedId) : null;
-  const sliderValue = selectedElement ? drawingElementSliderValue(selectedElement) : strokeWidth;
-  const sizeProgress = ((sliderValue - DRAWING_MIN_STROKE_WIDTH) / (DRAWING_MAX_STROKE_WIDTH - DRAWING_MIN_STROKE_WIDTH)) * 100;
-  const sizeLabel = selectedElement ? t("drawing.elementSize") : t("drawing.size");
+  const activeSizeControl = tool === "text"
+    ? { min: DRAWING_MIN_TEXT_SIZE, max: DRAWING_MAX_TEXT_SIZE, value: textSize, label: t("drawing.textSize") }
+    : tool === "eraser"
+      ? { min: DRAWING_MIN_ERASER_WIDTH, max: DRAWING_MAX_ERASER_WIDTH, value: eraserWidth, label: t("drawing.eraserSize") }
+      : { min: DRAWING_MIN_STROKE_WIDTH, max: DRAWING_MAX_STROKE_WIDTH, value: strokeWidth, label: t("drawing.size") };
+  const sizeControl = selectedElement
+    ? {
+        min: DRAWING_ELEMENT_SLIDER_MIN,
+        max: DRAWING_ELEMENT_SLIDER_MAX,
+        value: drawingElementSliderValue(selectedElement),
+        label: t("drawing.elementSize")
+      }
+    : activeSizeControl;
+  const sizeProgress = ((sizeControl.value - sizeControl.min) / (sizeControl.max - sizeControl.min)) * 100;
   const chooseColor = (nextColor: string) => {
     setColor(nextColor);
     setTextDraft((current) => {
@@ -1102,7 +1183,7 @@ export function DrawingCanvasDialog({
     ? (() => {
         const canvasRect = canvasRef.current!.getBoundingClientRect();
         const fontSizeRatio = textDraft.fontSize;
-        const fontSize = Math.max(16, canvasRect.height * fontSizeRatio);
+        const fontSize = Math.max(DRAWING_MIN_TEXT_SIZE, canvasRect.height * fontSizeRatio);
         const availableWidth = Math.max(32, canvasRect.width * (1 - textDraft.x) - 8);
         const availableHeight = Math.max(24, canvasRect.height * (1 - textDraft.y));
         return {
@@ -1222,22 +1303,24 @@ export function DrawingCanvasDialog({
       className={cx("drawing-size-control", embedded && "drawing-size-control-embedded")}
       style={{ "--drawing-size-progress": `${sizeProgress}%` } as CSSProperties}
     >
-      <span className="visually-hidden">{sizeLabel}</span>
+      <span className="visually-hidden">{sizeControl.label}</span>
       <span className="drawing-size-rail" aria-hidden="true">
         <span className="drawing-size-fill" />
         <span className="drawing-size-thumb" />
       </span>
       <input
+        ref={sizeInputRef}
         type="range"
-        min={DRAWING_MIN_STROKE_WIDTH}
-        max={DRAWING_MAX_STROKE_WIDTH}
-        value={sliderValue}
-        aria-label={sizeLabel}
+        min={sizeControl.min}
+        max={sizeControl.max}
+        step={1}
+        value={sizeControl.value}
+        aria-label={sizeControl.label}
         aria-orientation="vertical"
         onPointerDown={beginSizeAdjustment}
         onPointerUp={finishSizeAdjustment}
         onPointerCancel={finishSizeAdjustment}
-        onBlur={finishSizeAdjustment}
+        onBlur={handleSizeControlBlur}
         onChange={(event) => updateSizeAdjustment(Number(event.currentTarget.value))}
       />
     </label>
@@ -1357,7 +1440,12 @@ export function DrawingCanvasDialog({
                     });
                   }}
                   onKeyDown={handleTextKeyDown}
-                  onBlur={commitTextDraft}
+                  onBlur={(event) => {
+                    if (
+                      !preserveTextDraftFocusRef.current
+                      && event.relatedTarget !== sizeInputRef.current
+                    ) commitTextDraft();
+                  }}
                 />
                 {TEXT_DRAFT_RESIZE_HANDLES.map((handle) => (
                   <span

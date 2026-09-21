@@ -3026,12 +3026,511 @@ td.compact-actions a:last-child {
 }
 
 .provider-dialog {
-  width: min(920px, 100%);
-  max-height: min(92vh, 820px);
-  max-height: min(92dvh, 820px);
+  width: min(1080px, calc(100vw - 36px));
+  height: min(860px, calc(100vh - 36px));
+  height: min(860px, calc(100dvh - 36px));
+  max-height: none;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  padding: 0;
+  border-radius: 14px;
 }
 
-.provider-dialog-form {
+.provider-dialog-header {
+  min-width: 0;
+  padding: 20px 24px 16px;
+}
+
+.provider-dialog-title {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.provider-dialog-title h3 {
+  color: var(--app-text, #111827);
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.provider-dialog-title small {
+  overflow: hidden;
+  color: var(--app-text-muted, #6b7280);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-dialog-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.provider-dialog-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--app-text-muted, #6b7280);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.provider-dialog-status i {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #9ca3af;
+  box-shadow: 0 0 0 3px rgba(156, 163, 175, 0.13);
+}
+
+.provider-dialog-status.enabled {
+  color: #15803d;
+}
+
+.provider-dialog-status.enabled i {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.13);
+}
+
+.provider-dialog-close {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--app-text-muted, #6b7280);
+  cursor: pointer;
+}
+
+.provider-dialog-close:hover {
+  color: var(--app-text, #111827);
+  background: var(--app-surface-soft, #f3f4f6);
+}
+
+.provider-dialog-nav {
+  min-width: 0;
+  display: flex;
+  gap: 24px;
+  overflow-x: auto;
+  border-top: 1px solid var(--app-border-muted, #f1f5f9);
+  border-bottom: 1px solid var(--app-border, #e5e7eb);
+  padding: 0 24px;
+  scrollbar-width: none;
+}
+
+.provider-dialog-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.provider-dialog-nav button {
+  position: relative;
+  flex: 0 0 auto;
+  min-height: 46px;
+  border: 0;
+  background: transparent;
+  color: var(--app-text-muted, #6b7280);
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.provider-dialog-nav button::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 999px 999px 0 0;
+  background: transparent;
+}
+
+.provider-dialog-nav button:hover,
+.provider-dialog-nav button.active {
+  color: var(--app-text, #111827);
+}
+
+.provider-dialog-nav button.active::after {
+  background: var(--app-text, #111827);
+}
+
+.provider-dialog-body {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 18px 24px 24px;
+  background: var(--app-surface-soft, #f8fafc);
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scroll-padding-top: 14px;
+}
+
+.provider-dialog-section {
+  min-width: 0;
+  display: grid;
+  gap: 16px;
+  scroll-margin-top: 14px;
+  border: 1px solid var(--app-border, #e5e7eb);
+  border-radius: 12px;
+  background: var(--app-surface-raised, #fff);
+  padding: 16px;
+}
+
+.provider-dialog-section-head {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.provider-dialog-section-head-actions {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.provider-dialog-section-head > span:not(.provider-dialog-section-index),
+.provider-dialog-collapsible-trigger > span:nth-child(2) {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  text-align: left;
+}
+
+.provider-dialog-section-head strong,
+.provider-dialog-collapsible-trigger strong {
+  color: var(--app-text, #111827);
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.provider-dialog-section-head small,
+.provider-dialog-collapsible-trigger small {
+  color: var(--app-text-muted, #6b7280);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.provider-dialog-section-index {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #334155;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.provider-dialog-fields {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.provider-dialog-fields-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.provider-dialog-field-span-all {
+  grid-column: 1 / -1;
+}
+
+.provider-dialog-fields label > small,
+.provider-model-card > small {
+  color: var(--app-text-muted, #6b7280);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.provider-secret-input {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.provider-secret-input input {
+  padding-right: 44px;
+}
+
+.provider-secret-input button {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--app-text-muted, #64748b);
+  cursor: pointer;
+}
+
+.provider-secret-input button:hover:not(:disabled) {
+  color: var(--app-text, #111827);
+  background: var(--app-surface-soft, #f3f4f6);
+}
+
+.provider-secret-input button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.provider-dialog-fields .switch-row {
+  min-height: 58px;
+  border: 1px solid var(--app-border-muted, #eef2f7);
+  border-radius: 10px;
+  background: var(--app-surface-soft, #f8fafc);
+  padding: 10px 12px;
+}
+
+.provider-dialog-fields .switch-row > span:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.provider-dialog-fields .switch-row strong {
+  color: var(--app-text, #111827);
+  font-size: 13px;
+}
+
+.provider-dialog-fields .switch-row small {
+  color: var(--app-text-muted, #6b7280);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.provider-dialog-auth-controls {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 14px;
+}
+
+.provider-dialog-auth-controls.single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.provider-route-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.provider-route-options > button {
+  min-width: 0;
+  min-height: 74px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  border: 1px solid var(--app-border, #dbe1e8);
+  border-radius: 10px;
+  background: var(--app-surface-raised, #fff);
+  color: var(--app-text, #111827);
+  padding: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+
+.provider-route-options > button:hover {
+  border-color: #94a3b8;
+}
+
+.provider-route-options > button.active {
+  border-color: #2563eb;
+  background: rgba(37, 99, 235, 0.035);
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.12);
+}
+
+.provider-route-options > button > span:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.provider-route-options strong {
+  font-size: 13px;
+}
+
+.provider-route-options small {
+  color: var(--app-text-muted, #6b7280);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.provider-route-radio {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #94a3b8;
+  border-radius: 999px;
+  background: var(--app-surface-raised, #fff);
+}
+
+.provider-route-radio i {
+  width: 8px;
+  height: 8px;
+  border-radius: inherit;
+  background: transparent;
+}
+
+.provider-route-options > button.active .provider-route-radio {
+  border-color: #2563eb;
+}
+
+.provider-route-options > button.active .provider-route-radio i {
+  background: #2563eb;
+}
+
+.provider-model-flow {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 10px;
+}
+
+.provider-model-card {
+  min-width: 0;
+  align-content: start;
+  border: 1px solid var(--app-border-muted, #e8edf3);
+  border-radius: 10px;
+  background: var(--app-surface-soft, #f8fafc);
+  padding: 13px;
+}
+
+.provider-model-card-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--app-text, #111827);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.provider-model-flow-arrow {
+  display: grid;
+  place-items: center;
+  color: var(--app-text-muted, #64748b);
+}
+
+.provider-dialog-collapsible {
+  gap: 0;
+  padding: 0;
+}
+
+.provider-dialog-collapsible.open {
+  gap: 14px;
+}
+
+.provider-dialog-collapsible-trigger {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(120px, 0.75fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  padding: 14px 16px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.provider-dialog-collapsible-trigger:hover {
+  background: var(--app-surface-soft, #f8fafc);
+}
+
+.provider-dialog-collapsible-trigger > svg {
+  color: var(--app-text-muted, #64748b);
+  transition: transform 150ms ease;
+}
+
+.provider-dialog-collapsible.open .provider-dialog-collapsible-trigger > svg {
+  transform: rotate(180deg);
+}
+
+.provider-dialog-summary {
+  overflow: hidden;
+  color: var(--app-text-muted, #64748b);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-dialog-collapsible-body {
+  border-top: 1px solid var(--app-border-muted, #eef2f7);
+  padding: 0 16px 16px;
+  padding-top: 16px;
+}
+
+.provider-dialog-footer {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-top: 1px solid var(--app-border, #e5e7eb);
+  background: var(--app-surface-raised, #fff);
+  padding: 13px 24px;
+}
+
+.provider-dialog-footer .row-actions {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  margin: 0;
+}
+
+.provider-dialog-save-note {
+  min-width: 0;
+  color: var(--app-text-muted, #6b7280);
+  font-size: 12px;
+}
+
+.provider-dialog-footer .form-error {
+  min-width: 0;
+  margin: 0;
+}
+
+.prompt-optimizer-dialog-title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.provider-dialog.prompt-optimizer-dialog {
+  width: min(920px, 100%);
+  height: auto;
+  max-height: min(92vh, 820px);
+  max-height: min(92dvh, 820px);
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.prompt-optimizer-dialog .provider-dialog-form {
   min-height: 0;
   align-content: start;
   margin-bottom: 0;
@@ -3042,15 +3541,17 @@ td.compact-actions a:last-child {
   scrollbar-gutter: stable;
 }
 
-.provider-dialog-form .wide {
+.prompt-optimizer-dialog .provider-dialog-form .wide {
   grid-column: 1 / -1;
 }
 
-.prompt-optimizer-dialog-title {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.prompt-optimizer-dialog .provider-dialog-form .row-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin: 4px -4px 0 0;
+  padding: 12px 4px 2px 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0), var(--app-surface-raised, #fff) 28%);
 }
 
 .prompt-optimizer-switches {
@@ -3058,15 +3559,6 @@ td.compact-actions a:last-child {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
-}
-
-.provider-dialog-form .row-actions {
-  position: sticky;
-  bottom: 0;
-  z-index: 1;
-  margin: 4px -4px 0 0;
-  padding: 12px 4px 2px 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0), var(--app-surface-raised, #fff) 28%);
 }
 
 .prompt-optimizer-model-row,
@@ -3077,38 +3569,94 @@ td.compact-actions a:last-child {
   align-items: center;
 }
 
-.provider-model-toolbar {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 14px;
-  border: 1px solid var(--app-border, #e5e7eb);
-  border-radius: 10px;
-  background: var(--app-surface-soft, #f8fafc);
-}
-
-.provider-model-toolbar > span {
-  min-width: 0;
-  display: grid;
-  gap: 3px;
-}
-
-.provider-model-toolbar strong {
-  color: var(--app-text, #111827);
-  font-size: 14px;
-}
-
-.provider-model-toolbar small {
-  color: var(--app-text-muted, #6b7280);
-  line-height: 1.45;
-}
-
-.provider-model-toolbar .secondary-btn,
 .provider-model-control .secondary-btn {
   flex: 0 0 auto;
   white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .provider-dialog-fields-three {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .provider-route-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .provider-model-flow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .provider-model-flow-arrow {
+    min-height: 24px;
+    transform: rotate(90deg);
+  }
+}
+
+@media (max-width: 720px) {
+  .provider-dialog {
+    width: 100%;
+    height: calc(100dvh - 36px);
+    border-radius: 12px;
+  }
+
+  .provider-dialog-header {
+    padding: 16px 16px 13px;
+  }
+
+  .provider-dialog-status {
+    display: none;
+  }
+
+  .provider-dialog-nav {
+    gap: 20px;
+    padding: 0 16px;
+  }
+
+  .provider-dialog-body {
+    padding: 12px;
+    scrollbar-gutter: auto;
+  }
+
+  .provider-dialog-section {
+    padding: 14px;
+  }
+
+  .provider-dialog-fields,
+  .provider-dialog-fields-three,
+  .provider-dialog-auth-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .provider-dialog-section-head-actions {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .provider-dialog-section-head-actions > button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .provider-dialog-collapsible-trigger {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .provider-dialog-summary {
+    display: none;
+  }
+
+  .provider-dialog-footer {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 9px;
+    padding: 12px;
+  }
+
+  .provider-dialog-footer .row-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .prompt-optimizer-status-cell {

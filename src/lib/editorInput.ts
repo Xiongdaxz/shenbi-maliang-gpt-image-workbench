@@ -14,12 +14,12 @@ export function shouldWheelAdjustToolSize(zoomValue: "fit" | number) {
 
 export function editorPreviewPanY(
   requestedPanY: number,
-  annotationComposerExpanded: boolean,
+  centerWithinVisibleStage: boolean,
   zoomValue: "fit" | number,
   visibleStageHeight: number,
   stageHeight: number
 ) {
-  return annotationComposerExpanded && shouldWheelAdjustToolSize(zoomValue) && visibleStageHeight > 0
+  return centerWithinVisibleStage && shouldWheelAdjustToolSize(zoomValue) && visibleStageHeight > 0
     ? visibleStageHeight / 2 - stageHeight / 2
     : requestedPanY;
 }
