@@ -26,6 +26,7 @@ import imageTaskSoundMessages from "./messages/imageTaskSoundMessages";
 import moreToolsMessages from "./messages/moreToolsMessages";
 import type { Messages } from "./messages/types";
 import drawingMessages from "./messages/drawingMessages";
+import caseSharingMessages from "./messages/caseSharingMessages";
 
 export type { LanguagePreference, LocaleCode } from "./locales";
 export { AUTO_LANGUAGE, DEFAULT_LOCALE, enabledLocales, localeRegistry, normalizeLanguagePreference } from "./locales";
@@ -36,17 +37,17 @@ export type Translate = (key: string, params?: TranslationParams) => string;
 const LANGUAGE_STORAGE_KEY = "gpt-image.language";
 
 const messagesByLocale: Record<LocaleCode, Messages> = {
-  "zh-CN": { ...zhCNMessages, ...imageTaskSoundMessages["zh-CN"], ...imageModelMessages["zh-CN"], ...moreToolsMessages["zh-CN"], ...drawingMessages["zh-CN"] },
-  "zh-TW": { ...zhTWMessages, ...imageTaskSoundMessages["zh-TW"], ...imageModelMessages["zh-TW"], ...moreToolsMessages["zh-TW"], ...drawingMessages["zh-TW"] },
-  "en-US": { ...enUSMessages, ...imageTaskSoundMessages["en-US"], ...imageModelMessages["en-US"], ...moreToolsMessages["en-US"], ...drawingMessages["en-US"] },
-  "ja-JP": { ...jaJPMessages, ...imageTaskSoundMessages["ja-JP"], ...imageModelMessages["ja-JP"], ...moreToolsMessages["ja-JP"], ...drawingMessages["ja-JP"] },
-  "ko-KR": { ...koKRMessages, ...imageTaskSoundMessages["ko-KR"], ...imageModelMessages["ko-KR"], ...moreToolsMessages["ko-KR"], ...drawingMessages["ko-KR"] },
-  "es-ES": { ...esESMessages, ...imageTaskSoundMessages["es-ES"], ...imageModelMessages["es-ES"], ...moreToolsMessages["es-ES"], ...drawingMessages["es-ES"] },
-  "fr-FR": { ...frFRMessages, ...imageTaskSoundMessages["fr-FR"], ...imageModelMessages["fr-FR"], ...moreToolsMessages["fr-FR"], ...drawingMessages["fr-FR"] },
-  "de-DE": { ...deDEMessages, ...imageTaskSoundMessages["de-DE"], ...imageModelMessages["de-DE"], ...moreToolsMessages["de-DE"], ...drawingMessages["de-DE"] },
-  "pt-BR": { ...ptBRMessages, ...imageTaskSoundMessages["pt-BR"], ...imageModelMessages["pt-BR"], ...moreToolsMessages["pt-BR"], ...drawingMessages["pt-BR"] },
-  "ru-RU": { ...ruRUMessages, ...imageTaskSoundMessages["ru-RU"], ...imageModelMessages["ru-RU"], ...moreToolsMessages["ru-RU"], ...drawingMessages["ru-RU"] },
-  "fa-IR": { ...faIRMessages, ...imageTaskSoundMessages["fa-IR"], ...imageModelMessages["fa-IR"], ...moreToolsMessages["fa-IR"], ...drawingMessages["fa-IR"] }
+  "zh-CN": { ...zhCNMessages, ...imageTaskSoundMessages["zh-CN"], ...imageModelMessages["zh-CN"], ...moreToolsMessages["zh-CN"], ...drawingMessages["zh-CN"], ...caseSharingMessages["zh-CN"] },
+  "zh-TW": { ...zhTWMessages, ...imageTaskSoundMessages["zh-TW"], ...imageModelMessages["zh-TW"], ...moreToolsMessages["zh-TW"], ...drawingMessages["zh-TW"], ...caseSharingMessages["zh-TW"] },
+  "en-US": { ...enUSMessages, ...imageTaskSoundMessages["en-US"], ...imageModelMessages["en-US"], ...moreToolsMessages["en-US"], ...drawingMessages["en-US"], ...caseSharingMessages["en-US"] },
+  "ja-JP": { ...jaJPMessages, ...imageTaskSoundMessages["ja-JP"], ...imageModelMessages["ja-JP"], ...moreToolsMessages["ja-JP"], ...drawingMessages["ja-JP"], ...caseSharingMessages["ja-JP"] },
+  "ko-KR": { ...koKRMessages, ...imageTaskSoundMessages["ko-KR"], ...imageModelMessages["ko-KR"], ...moreToolsMessages["ko-KR"], ...drawingMessages["ko-KR"], ...caseSharingMessages["ko-KR"] },
+  "es-ES": { ...esESMessages, ...imageTaskSoundMessages["es-ES"], ...imageModelMessages["es-ES"], ...moreToolsMessages["es-ES"], ...drawingMessages["es-ES"], ...caseSharingMessages["es-ES"] },
+  "fr-FR": { ...frFRMessages, ...imageTaskSoundMessages["fr-FR"], ...imageModelMessages["fr-FR"], ...moreToolsMessages["fr-FR"], ...drawingMessages["fr-FR"], ...caseSharingMessages["fr-FR"] },
+  "de-DE": { ...deDEMessages, ...imageTaskSoundMessages["de-DE"], ...imageModelMessages["de-DE"], ...moreToolsMessages["de-DE"], ...drawingMessages["de-DE"], ...caseSharingMessages["de-DE"] },
+  "pt-BR": { ...ptBRMessages, ...imageTaskSoundMessages["pt-BR"], ...imageModelMessages["pt-BR"], ...moreToolsMessages["pt-BR"], ...drawingMessages["pt-BR"], ...caseSharingMessages["pt-BR"] },
+  "ru-RU": { ...ruRUMessages, ...imageTaskSoundMessages["ru-RU"], ...imageModelMessages["ru-RU"], ...moreToolsMessages["ru-RU"], ...drawingMessages["ru-RU"], ...caseSharingMessages["ru-RU"] },
+  "fa-IR": { ...faIRMessages, ...imageTaskSoundMessages["fa-IR"], ...imageModelMessages["fa-IR"], ...moreToolsMessages["fa-IR"], ...drawingMessages["fa-IR"], ...caseSharingMessages["fa-IR"] }
 };
 
 type I18nContextValue = {

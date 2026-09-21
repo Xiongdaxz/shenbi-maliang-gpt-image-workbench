@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { FolderOpen, ImageUp, MoreHorizontal } from "lucide-react";
+import { FolderOpen, ImageUp, Link2, MoreHorizontal } from "lucide-react";
 import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 
@@ -14,6 +14,7 @@ type CaseMaterialActionsMenuProps = {
   buttonClassName: string;
   onUseAsMaterial: () => void;
   onAddToAssets: () => void;
+  onViewConversation?: () => void;
 };
 
 type CaseMoreMenuPlacement = "top-end" | "bottom-end";
@@ -23,7 +24,7 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
-export function CaseMaterialActionsMenu({ buttonClassName, onUseAsMaterial, onAddToAssets }: CaseMaterialActionsMenuProps) {
+export function CaseMaterialActionsMenu({ buttonClassName, onUseAsMaterial, onAddToAssets, onViewConversation }: CaseMaterialActionsMenuProps) {
   const { t } = useI18n();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -33,6 +34,7 @@ export function CaseMaterialActionsMenu({ buttonClassName, onUseAsMaterial, onAd
   const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null);
   const [placement, setPlacement] = useState<CaseMoreMenuPlacement>("bottom-end");
   const menuVisible = (open || closing) && Boolean(menuStyle);
+  const menuHeight = onViewConversation ? 132 : CASE_MORE_MENU_HEIGHT;
 
   const clearCloseTimer = useCallback(() => {
     if (closeTimerRef.current === null) return;
@@ -47,13 +49,13 @@ export function CaseMaterialActionsMenu({ buttonClassName, onUseAsMaterial, onAd
     const spaceBelow = window.innerHeight - rect.bottom - CASE_MORE_MENU_VIEWPORT_PADDING;
     const spaceAbove = rect.top - CASE_MORE_MENU_VIEWPORT_PADDING;
     const nextPlacement: CaseMoreMenuPlacement =
-      spaceBelow < CASE_MORE_MENU_HEIGHT && spaceAbove > spaceBelow ? "top-end" : "bottom-end";
+      spaceBelow < menuHeight && spaceAbove > spaceBelow ? "top-end" : "bottom-end";
     const rawTop =
       nextPlacement === "top-end"
-        ? rect.top - CASE_MORE_MENU_HEIGHT - CASE_MORE_MENU_GAP
+        ? rect.top - menuHeight - CASE_MORE_MENU_GAP
         : rect.bottom + CASE_MORE_MENU_GAP;
     const viewportWidth = document.documentElement.clientWidth;
-    const maxTop = window.innerHeight - CASE_MORE_MENU_HEIGHT - CASE_MORE_MENU_VIEWPORT_PADDING;
+    const maxTop = window.innerHeight - menuHeight - CASE_MORE_MENU_VIEWPORT_PADDING;
     const maxRight = viewportWidth - CASE_MORE_MENU_WIDTH - CASE_MORE_MENU_VIEWPORT_PADDING;
 
     return {
@@ -63,7 +65,7 @@ export function CaseMaterialActionsMenu({ buttonClassName, onUseAsMaterial, onAd
         right: clamp(viewportWidth - rect.right, CASE_MORE_MENU_VIEWPORT_PADDING, maxRight)
       } satisfies CSSProperties
     };
-  }, []);
+  }, [menuHeight]);
 
   const openMenu = useCallback(() => {
     const position = measureMenuPosition();
@@ -151,6 +153,19 @@ export function CaseMaterialActionsMenu({ buttonClassName, onUseAsMaterial, onAd
               onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => event.stopPropagation()}
             >
+              {onViewConversation ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    closeMenu();
+                    onViewConversation();
+                  }}
+                >
+                  <Link2 size={16} />
+                  <span>{t("pages.cases.viewConversation")}</span>
+                </button>
+              ) : null}
               <button
                 type="button"
                 role="menuitem"

@@ -21,8 +21,9 @@
 
 | 表 | 关键字段 | 用途 |
 | --- | --- | --- |
-| `session_share_links` | `id`, `public_token`, `user_id`, `session_id`, `title`, `created_at` | 保存分享记录、公开 UUID 和创建时的标题快照；用户、会话外键均级联删除 |
+| `session_share_links` | `id`, `public_token`, `user_id`, `session_id`, `title`, `include_references`, `created_at` | 保存分享记录、公开 UUID、素材可见策略和创建时的标题快照；用户、会话外键均级联删除 |
 | `session_share_messages` | `share_id`, `message_id`, `sort_order` | 保存该链接冻结的消息成员及顺序；同一分享内消息和顺序均唯一 |
+| `case_session_shares` | `group_id`, `share_id`, `created_at` | 把灵感组关联到只读会话快照；撤销分享时级联移除入口 |
 
 新创建的公开链接使用随机 UUID，格式为 `/share/6a59ab65-3c2c-83ee-a47b-fcfdd050b9ca`，UUID 作为不可猜测的 bearer token 存在 `session_share_links.public_token`。HMAC 密钥仍保存在 `configDb.session_share_signing_settings`，仅用于兼容已经发出的 `v1.<share-id-base64url>.<HMAC-SHA256>` 旧链接。
 
@@ -59,7 +60,9 @@
 | `GET /shared-sessions/:token` | 返回 `{ share: { title, createdAt }, messages }` 公共 DTO |
 | `GET /shared-sessions/:token/messages/:messageId/image?variant=thumb\|preview` | 查看消息图片；通用预览接口对所有角色拒绝 `original` |
 | `GET /shared-sessions/:token/messages/:messageId/source-references/:index?variant=thumb\|preview` | 查看输入/消息引用的派生图 |
+| `GET /shared-sessions/:token/messages/:messageId/source-references/:index/download` | 在分享允许素材时下载输入/消息引用原图 |
 | `GET /shared-sessions/:token/messages/:messageId/image-references/:index?variant=thumb\|preview` | 查看助手结果关联引用的派生图 |
+| `GET /shared-sessions/:token/messages/:messageId/image-references/:index/download` | 在分享允许素材时下载结果关联引用原图 |
 | `GET /shared-sessions/:token/messages/:messageId/image/download-options` | 获取助手结果图的缩略图、预览图和原图下载选项 |
 | `GET /shared-sessions/:token/messages/:messageId/image/download?variant=...` | 下载助手结果图 |
 | `GET /shared-sessions/:token/result-images/:imageId/download-options` | 按共享局部图片 ID 获取下载选项的兼容接口 |
@@ -76,7 +79,9 @@
 3. 所有消息必须属于该会话和用户，角色只能是 `user` 或 `assistant`。
 4. 按 `created_at, rowid` 重新排序后必须与前端提交顺序完全一致；任何变化返回冲突，不创建部分快照。
 
-同一会话可拥有多条不同快照链接。创建时按 `created_at, rowid` 从旧到新查找消息数量相同的分享记录，并逐条比较 `message_id` 与 `sort_order`；完全一致时返回最早的原链接，不新增记录。后续消息不会自动追加；可见消息变化后再次分享会生成新链接。改名不改标题快照，归档和继续聊天不影响旧链接。
+同一会话可拥有多条不同快照链接。创建时按分享范围、素材可见策略、消息数量、`message_id` 与 `sort_order` 查找完全一致的记录；命中时返回最早的原链接。后续消息不会自动追加；可见消息或素材策略变化后再次分享会生成新链接。改名不改标题快照，归档和继续聊天不影响旧链接。
+
+灵感空间的“分享会话”由服务端根据所选图片反查助手结果消息，复用 `buildChatRenderState` 选出该图片所在分支，并冻结从分支起点到最后一个所选结果的消息。多图必须属于同一会话和分支；无会话图片、跨会话、跨分支、消息缺失或仍有运行中任务时拒绝创建。灵感创建与分享关联在同一事务中完成。关闭灵感中的入口只删除 `case_session_shares` 关联，不撤销已经发出的分享链接。
 
 以下操作会使全部或部分内容立即失效：
 
@@ -88,7 +93,7 @@
 ## 安全与媒体权限
 
 - 每次公共读取都执行 `token -> 活动分享 -> 快照消息 -> 图片/引用` 校验。隐藏分支、后续消息、跨 token、篡改 token、越界局部 ID 和任意内部图片 ID 均使用相同的 404 响应，避免泄漏对象是否存在。
-- 输入图、消息引用和结果关联引用只提供 `thumb`/`preview` 派生图，`original` 返回 404；标记为 `hideReference` 的任务会在 JSON 投影和两个引用媒体端点同时排除用户引用及对应助手结果引用。只有角色为 `assistant` 的结果图能获得下载选项和原图下载响应，前端同源下载菜单负责指定简短文件名；通用预览接口不能绕过下载限流取得原图。
+- 输入图、消息引用和结果关联引用的通用查看接口只提供 `thumb`/`preview` 派生图，`original` 参数返回 404；`include_references=1` 时可通过受下载限流保护的专用 `/download` 接口获取这些素材原图。标记为 `hideReference` 的任务会在 JSON 投影、查看和下载端点同时排除用户引用及对应助手结果引用；`include_references=0` 则隐藏全部用户输入图、来源引用和助手结果关联引用，并让对应公开媒体接口返回 404。助手结果图始终可查看和下载，前端同源下载菜单负责指定简短文件名。
 - 公共响应统一设置 `Cache-Control: private, no-store`、`Referrer-Policy: no-referrer`、`X-Robots-Tag: noindex, nofollow, noarchive`、`X-Content-Type-Options: nosniff`、`X-Frame-Options: DENY`、`Cross-Origin-Resource-Policy: same-origin`，并通过 CSP `frame-ancestors 'none'` 禁止第三方嵌入。
 - 所有匿名分享请求在 token 查询前先按客户端地址限制为 600 次/分钟，避免随机或无效 token 持续制造数据库查询；有效分享再按客户端地址和分享 ID 分桶：会话读取 120 次/分钟、媒体预览 240 次/分钟、下载 40 次/分钟。超限返回 429 和 `Retry-After: 60`。默认以 Bun socket 地址为准并覆盖外部传入的内部地址头。只有在应用仅由可信反向代理访问、且代理会清洗客户端伪造的 `CF-Connecting-IP`、`X-Forwarded-For`、`X-Real-IP` 时，才可设置 `APP_TRUST_PROXY=true` 使用代理提供的客户端地址。
 - 创建和撤销写入审计事件；签名密钥不得暴露到前端或日志。共享 URL 本身等同访问凭据，应按敏感链接管理。

@@ -676,6 +676,7 @@ export function ImagesPage({
       setCaseSource({
         type: "image",
         id: detail.id,
+        sessionId: detail.sessionId,
         url: detail.previewUrl || detail.url,
         titleSeed: detail.prompt,
         promptSeed: originPrompt,

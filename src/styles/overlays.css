@@ -185,6 +185,10 @@
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+.edit-case-modal .case-modal-prompt-field {
+  min-height: 104px;
+}
+
 .add-case-modal .case-modal-prompt-field textarea,
 .edit-case-modal .case-modal-prompt-field textarea {
   height: 100%;
@@ -332,6 +336,22 @@
   color: #9ca3af;
   font-size: 12px;
   line-height: 17px;
+}
+
+.edit-case-modal .case-reference-toggle-copy small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.case-reference-toggle.disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.case-reference-toggle.disabled:hover {
+  border-color: #d1d5db;
+  background: #fff;
 }
 
 @media (max-width: 760px) {

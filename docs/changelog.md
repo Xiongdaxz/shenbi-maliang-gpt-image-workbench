@@ -2,6 +2,22 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.78 - 2026-09-21
+
+### 中文
+
+- 创建或编辑灵感案例时可选择同时分享生成会话，并单独控制是否展示参考素材；已分享的案例会提供“查看会话”入口，方便访客了解从提示词到结果的创作过程。
+- 案例会话分享只保留所选结果所在的有效分支及结果之前的消息，排除被替换的轮次、兄弟分支和后续内容；修改分享或素材可见设置时会安全复用、重建或解除关联，避免展示无关内容。
+- 从聊天、“我的图片”和案例流程打开图片编辑器时会继续携带原会话关联，使继续编辑、生成上下文和后续案例会话分享更稳定；案例创建和编辑也改为整体提交，减少部分保存造成的状态不一致。
+- 后台保存渠道配置时，未修改或仍为掩码显示的 API Key、Cookie 等敏感字段会保留原值；管理员仍可明确替换或清空，减少普通配置调整意外覆盖凭据的问题。
+
+### English
+
+- When creating or editing an Inspiration case, authors can optionally share the generation conversation and independently choose whether reference materials are visible; shared cases include a View conversation action so visitors can follow the creative process from prompt to result.
+- Case conversation sharing keeps only the selected result's active branch and messages up to that result, excluding replaced turns, sibling branches, and later content; changing sharing or material-visibility settings safely reuses, rebuilds, or detaches the association to avoid exposing unrelated content.
+- Images opened for editing from chat, My Images, and case workflows now retain their original conversation association, making continued edits, generation context, and later case-conversation sharing more reliable; case creation and editing are also committed as a single operation to avoid partially saved states.
+- When administrators save channel settings, unchanged or still-masked API keys, cookies, and similar secrets retain their stored values; they can still be explicitly replaced or cleared, reducing accidental credential loss during ordinary configuration changes.
+
 ## v0.1.77 - 2026-09-21
 
 ### 中文

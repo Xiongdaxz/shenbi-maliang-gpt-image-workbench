@@ -100,6 +100,7 @@ import { registerLanguageModelAssignmentRoutes } from "./languageModelAssignment
 import { registerPromptOptimizerRoutes } from "./promptOptimizerRoutes";
 import { fetchProviderModelCatalog } from "./providerModels";
 import { readProviderModelCatalogCache, writeProviderModelCatalogCache } from "./providerModelCache";
+import { providerSecretInput } from "./providerConfigInput";
 import { registerPromptColorSchemeRoutes } from "./promptColorSchemeRoutes";
 import { registerPromptReferenceLinkRoutes } from "./promptReferenceLinkRoutes";
 import { registerPromptTemplateRoutes } from "./promptTemplateRoutes";
@@ -2106,14 +2107,8 @@ function providerForModelDiscovery(raw: Record<string, unknown>) {
   const id = String(raw.id ?? "").trim();
   const existing = id ? getOne<ProviderRow>(configDb, "select * from provider_configs where id = ?", id) : null;
   const channel = normalizeProviderChannel(String(raw.channel ?? existing?.channel ?? inferChannelFromType(String(raw.type ?? existing?.type ?? "api"))));
-  const incomingApiKey = String(raw.apiKeyValue ?? "");
-  const apiKeyValue = incomingApiKey.includes("****")
-    ? existing?.api_key_value ?? ""
-    : incomingApiKey;
-  const incomingCookies = String(raw.webCookies ?? "");
-  const webCookies = incomingCookies.includes("****")
-    ? existing?.web_cookies ?? ""
-    : incomingCookies;
+  const apiKeyValue = providerSecretInput(raw, "apiKeyValue", existing?.api_key_value);
+  const webCookies = providerSecretInput(raw, "webCookies", existing?.web_cookies);
   const webAccountIds = Object.prototype.hasOwnProperty.call(raw, "webAccountIds")
     ? normalizeIdList(raw.webAccountIds)
     : normalizeIdList(existing?.web_account_ids);

@@ -370,6 +370,8 @@ async function deleteImagesMatching(userId: string, imageFilterSql: string, para
     run(appDb, `delete from case_favorites where source_type = 'case_group' and source_id in (select group_id from case_group_images where image_id in (${imageFilterSql}))`, ...params);
     run(appDb, `delete from case_favorites where source_type = 'asset' and source_id in (${assetFilterSql})`, ...assetParams);
     run(appDb, `delete from case_favorites where source_type = 'case_group' and source_id in (select group_id from case_group_images where asset_id in (${assetFilterSql}))`, ...assetParams);
+    run(appDb, `delete from case_session_shares where group_id in (select group_id from case_group_images where image_id in (${imageFilterSql}))`, ...params);
+    run(appDb, `delete from case_session_shares where group_id in (select group_id from case_group_images where asset_id in (${assetFilterSql}))`, ...assetParams);
     run(appDb, `delete from case_items where group_id in (select group_id from case_group_images where image_id in (${imageFilterSql}))`, ...params);
     run(appDb, `delete from case_items where group_id in (select group_id from case_group_images where asset_id in (${assetFilterSql}))`, ...assetParams);
     run(appDb, `delete from case_group_images where group_id in (select group_id from case_group_images where image_id in (${imageFilterSql}))`, ...params);

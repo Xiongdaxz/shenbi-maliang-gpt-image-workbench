@@ -88,6 +88,8 @@ function caseCardToCategoryItem(card: LibraryCaseCard): CaseCategory["items"][nu
     categoryIds: card.categoryIds,
     categoryNames: card.categoryNames,
     includeReferences: card.includeReferences,
+    conversationSharePath: card.conversationSharePath,
+    conversationShareAvailable: card.conversationShareAvailable,
     reviewStatus: card.reviewStatus,
     reviewRequestedAt: card.reviewRequestedAt,
     reviewedAt: card.reviewedAt,
@@ -108,7 +110,7 @@ function EditCaseModal({
   item: GalleryCaseItem;
   categories: CaseCategory[];
   onClose: () => void;
-  onSave: (payload: { title: string; prompt: string; categoryIds: string[]; includeReferences: boolean; coverImage?: CaseGroupImage }) => void;
+  onSave: (payload: { title: string; prompt: string; categoryIds: string[]; includeReferences: boolean; shareConversation: boolean; coverImage?: CaseGroupImage }) => void;
   pending: boolean;
   error: Error | null;
 }) {
@@ -117,6 +119,7 @@ function EditCaseModal({
   const [prompt, setPrompt] = useState(item.prompt);
   const [categoryIds, setCategoryIds] = useState<string[]>(item.categoryIds);
   const [includeReferences, setIncludeReferences] = useState(item.includeReferences);
+  const [shareConversation, setShareConversation] = useState(Boolean(item.conversationSharePath));
   const groupImages = useMemo(() => (item.images ?? []).filter((image) => image.id && image.imageUrl), [item.images]);
   const previewImages = useMemo<CaseModalPreviewImage[]>(
     () =>
@@ -153,8 +156,9 @@ function EditCaseModal({
     setPrompt(item.prompt);
     setCategoryIds(item.categoryIds);
     setIncludeReferences(item.includeReferences);
+    setShareConversation(Boolean(item.conversationSharePath));
     setCoverImageId(currentCoverImageId);
-  }, [currentCoverImageId, item.categoryIds, item.id, item.includeReferences, item.prompt, item.title]);
+  }, [currentCoverImageId, item.categoryIds, item.conversationSharePath, item.id, item.includeReferences, item.prompt, item.title]);
 
   const submit = () => {
     if (pending || !title.trim() || !prompt.trim()) return;
@@ -163,6 +167,7 @@ function EditCaseModal({
       prompt: prompt.trim(),
       categoryIds,
       includeReferences,
+      shareConversation,
       coverImage: selectedCoverImage && !selectedCoverImage.isCover ? selectedCoverImage : undefined
     });
   };
@@ -198,6 +203,21 @@ function EditCaseModal({
                 <span className="case-reference-toggle-copy">
                   <span>{t("pages.cases.includeReferences")}</span>
                   <small>{t("pages.cases.includeReferencesDesc")}</small>
+                </span>
+              </label>
+              <label className={cx("case-reference-toggle", shareConversation && "active", !item.conversationShareAvailable && !item.conversationSharePath && "disabled")}>
+                <input
+                  type="checkbox"
+                  checked={shareConversation}
+                  disabled={!item.conversationShareAvailable && !item.conversationSharePath}
+                  onChange={(event) => setShareConversation(event.target.checked)}
+                />
+                <span className="case-reference-toggle-check" aria-hidden="true">
+                  {shareConversation ? <Check size={13} strokeWidth={2.5} /> : null}
+                </span>
+                <span className="case-reference-toggle-copy">
+                  <span>{t("shareDialog.title")}</span>
+                  <small>{t(item.conversationShareAvailable || item.conversationSharePath ? "shareDialog.description" : "pages.cases.shareConversationUnavailable")}</small>
                 </span>
               </label>
               <label>
@@ -361,12 +381,13 @@ export function CasesPage({
     }
   });
   const updateCase = useMutation({
-    mutationFn: async (payload: { caseId: string; title: string; prompt: string; categoryIds: string[]; includeReferences: boolean; coverImage?: CaseGroupImage }) => {
+    mutationFn: async (payload: { caseId: string; title: string; prompt: string; categoryIds: string[]; includeReferences: boolean; shareConversation: boolean; coverImage?: CaseGroupImage }) => {
       const result = await api.updateCase(payload.caseId, {
         title: payload.title,
         prompt: payload.prompt,
         categoryIds: payload.categoryIds,
-        includeReferences: payload.includeReferences
+        includeReferences: payload.includeReferences,
+        shareConversation: payload.shareConversation
       });
       if (payload.coverImage) {
         await api.setCaseCover(payload.caseId, { groupImageId: payload.coverImage.id, sourceId: payload.coverImage.sourceId });
@@ -649,6 +670,10 @@ export function CasesPage({
     setMaterialPickerOpen(false);
     navigate("/");
     showToast(t("toast.caseUsedAsMaterial"));
+  };
+  const openCaseConversation = (item: GalleryCaseItem) => {
+    if (!item.conversationSharePath) return;
+    window.open(item.conversationSharePath, "_blank", "noopener,noreferrer");
   };
   const toggleCaseFavorite = (item: GalleryCaseItem) => {
     setCaseFavorite.mutate({ caseId: item.groupId || item.id, favorited: !item.favorited });
@@ -963,6 +988,7 @@ export function CasesPage({
                   ) : null}
                   <CaseMaterialActionsMenu
                     buttonClassName="case-action-icon"
+                    onViewConversation={item.conversationSharePath ? () => openCaseConversation(item) : undefined}
                     onUseAsMaterial={() => useCaseAsMaterial(item)}
                     onAddToAssets={() => {
                       addAssetFromCase.reset();
@@ -1086,6 +1112,7 @@ export function CasesPage({
               ) : null}
               <CaseMaterialActionsMenu
                 buttonClassName="case-preview-tool"
+                onViewConversation={item.conversationSharePath ? () => openCaseConversation(item) : undefined}
                 onUseAsMaterial={() => useCaseAsMaterial(item)}
                 onAddToAssets={() => {
                   addAssetFromCase.reset();

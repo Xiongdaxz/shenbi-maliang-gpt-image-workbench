@@ -14,6 +14,7 @@ type MessageEditPayload = {
 
 type ConversationViewProps = {
   items: ChatRenderItem[];
+  sessionId?: string | null;
   mode?: "workspace" | "shared-readonly";
   sharedToken?: string;
   downloadBaseName?: string;
@@ -90,6 +91,7 @@ function visibleAssistantImages(items: ChatRenderItem[]) {
 
 export function ConversationView({
   items,
+  sessionId = null,
   mode = "workspace",
   sharedToken,
   downloadBaseName,
@@ -314,6 +316,7 @@ export function ConversationView({
             data-conversation-turn={navigatorEntry?.message.id}
           >
             <ChatMessageThread
+              sessionId={sessionId}
               mode={mode}
               sharedToken={sharedToken}
               downloadBaseName={downloadBaseName}
@@ -349,6 +352,7 @@ export function ConversationView({
             data-conversation-turn={navigatorEntry?.message.id}
           >
             <ChatMessage
+              sessionId={sessionId}
               mode={mode}
               sharedToken={sharedToken}
               downloadBaseName={downloadBaseName}

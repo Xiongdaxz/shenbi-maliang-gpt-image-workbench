@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { Context, Hono } from "hono";
 import { audit } from "./auditLog";
 import { requireUser } from "./auth";
@@ -11,25 +11,19 @@ import { messageSourceReferencesByIds } from "./messageSourceReferences";
 import { pageInfo, paginationFromQuery } from "./pagination";
 import { localLanIpv4, resolvePublicHttpOrigin } from "./publicOrigin";
 import { readStoredFile } from "./secureFiles";
-import { now, safeJson } from "./utils";
+import {
+  createOrReuseSessionShareSnapshot,
+  SESSION_SHARE_MAX_MESSAGES,
+  SessionShareError,
+  type SessionShareLinkRow
+} from "./sessionShareService";
+import { safeJson } from "./utils";
 
 const SESSION_SHARE_TOKEN_VERSION = "v1";
 const SESSION_SHARE_TOKEN_SCOPE = "session-share";
 const SESSION_SHARE_SECRET_ID = "default";
-const SESSION_SHARE_MAX_MESSAGES = 2_000;
 const PUBLIC_NOT_FOUND_MESSAGE = "分享链接不存在或已失效";
 export const SESSION_SHARE_CLIENT_IP_HEADER = "x-gpt-image-client-ip";
-
-type SessionShareLinkRow = {
-  id: string;
-  public_token: string;
-  user_id: string;
-  session_id: string;
-  title: string;
-  includes_branches: number;
-  created_at: string;
-  message_count?: number | null;
-};
 
 type SharedMessageRow = {
   share_sort_order: number;
@@ -497,6 +491,14 @@ export function sharedInlineImageVariantAllowed(variant: ImageVariant, role: str
   return variant !== "original" || role === "assistant";
 }
 
+export function sharedMessageImageAllowed(includeReferences: boolean, role: string, metadata: string | null | Record<string, unknown>) {
+  return role === "assistant" || (includeReferences && !sharedMessageHidesReferences(metadata));
+}
+
+export function sharedReferenceMediaAllowed(includeReferences: boolean) {
+  return includeReferences;
+}
+
 function sharedMessages(share: SessionShareLinkRow, token: string) {
   const rows = getAll<SharedMessageRow>(
     appDb,
@@ -517,17 +519,20 @@ function sharedMessages(share: SessionShareLinkRow, token: string) {
   );
   if (rows.length === 0) return [];
 
+  const includeReferences = share.include_references !== 0;
   const hiddenReferenceJobIds = hiddenReferenceJobIdsForSession(share);
-  const referenceVisibleMessageIds = rows
-    .filter((row) => !sharedMessageHidesReferences(row.metadata))
-    .map((row) => row.id);
-  const imageIds = rows
-    .filter((row) => {
-      if (sharedMessageHidesReferences(row.metadata)) return false;
-      return row.role !== "assistant" || !sharedAssistantReferencesHidden(row.metadata, hiddenReferenceJobIds, row.image_job_id ?? "");
-    })
-    .map((row) => row.image_id ?? "")
-    .filter(Boolean);
+  const referenceVisibleMessageIds = includeReferences
+    ? rows.filter((row) => !sharedMessageHidesReferences(row.metadata)).map((row) => row.id)
+    : [];
+  const imageIds = includeReferences
+    ? rows
+        .filter((row) => {
+          if (sharedMessageHidesReferences(row.metadata)) return false;
+          return row.role !== "assistant" || !sharedAssistantReferencesHidden(row.metadata, hiddenReferenceJobIds, row.image_job_id ?? "");
+        })
+        .map((row) => row.image_id ?? "")
+        .filter(Boolean)
+    : [];
   const messageReferences = referenceVisibleMessageIds.length > 0
     ? getAll<SharedReferenceRow>(
         appDb,
@@ -550,9 +555,11 @@ function sharedMessages(share: SessionShareLinkRow, token: string) {
         ...imageIds
       )
     : [];
-  const linkedMessageReferenceIds = rows
-    .filter((row) => sharedMessageSourceReferencesAllowed(row.role, row.metadata))
-    .flatMap((row) => sharedMessageSourceReferenceIds(row.metadata));
+  const linkedMessageReferenceIds = includeReferences
+    ? rows
+        .filter((row) => sharedMessageSourceReferencesAllowed(row.role, row.metadata))
+        .flatMap((row) => sharedMessageSourceReferenceIds(row.metadata))
+    : [];
   const linkedMessageReferences = linkedMessageReferenceIds.length > 0
     ? messageSourceReferencesByIds(linkedMessageReferenceIds, share.user_id).filter(
         (reference): reference is NonNullable<typeof reference> => Boolean(reference)
@@ -571,15 +578,14 @@ function sharedMessages(share: SessionShareLinkRow, token: string) {
 
   return rows.map((row) => {
     const baseUrl = sharedMessageBaseUrl(token, row.share_sort_order);
-    const hideReference = row.role === "user" && sharedMessageHidesReferences(row.metadata);
-    const hasImage = Boolean(row.image_id && row.image_path) && !hideReference;
+    const hasImage = Boolean(row.image_id && row.image_path) && sharedMessageImageAllowed(includeReferences, row.role, row.metadata);
     const viewUrls = hasImage ? sharedImageViewUrls(token, row.share_sort_order) : null;
     const imageUrl = viewUrls?.imageUrl ?? null;
     const imageOriginalUrl = viewUrls?.imageOriginalUrl ?? null;
     const imagePreviewUrl = viewUrls?.imagePreviewUrl ?? null;
     const imageThumbnailUrl = viewUrls?.imageThumbnailUrl ?? null;
     const imageDownloadUrl = hasImage ? `${baseUrl}/image/download?variant=original` : null;
-    const sourceReferenceRows = sharedMessageSourceReferencesAllowed(row.role, row.metadata)
+    const sourceReferenceRows = includeReferences && sharedMessageSourceReferencesAllowed(row.role, row.metadata)
       ? sharedSourceReferencesForMessage(
           row.metadata,
           messageReferenceMap.get(row.id) ?? [],
@@ -598,7 +604,7 @@ function sharedMessages(share: SessionShareLinkRow, token: string) {
       };
     });
     const primaryReference = !hasImage ? sourceReferences[0] ?? null : null;
-    const outputReferences = row.image_id && !sharedAssistantReferencesHidden(row.metadata, hiddenReferenceJobIds, row.image_job_id ?? "")
+    const outputReferences = includeReferences && row.image_id && !sharedAssistantReferencesHidden(row.metadata, hiddenReferenceJobIds, row.image_job_id ?? "")
       ? (imageReferenceMap.get(row.image_id) ?? []).map((reference, index) => {
           const referenceBase = `${baseUrl}/image-references/${index + 1}`;
           return {
@@ -663,7 +669,7 @@ function sharedMessageMedia(share: SessionShareLinkRow, localId: string) {
     share.id,
     sortOrder
   );
-  if (media?.role === "user" && sharedMessageHidesReferences(media.metadata)) return null;
+  if (media && !sharedMessageImageAllowed(share.include_references !== 0, media.role, media.metadata)) return null;
   return media;
 }
 
@@ -678,6 +684,7 @@ function sharedReferenceByIndex(
   rawIndex: string,
   type: "source" | "image"
 ) {
+  if (!sharedReferenceMediaAllowed(share.include_references !== 0)) return null;
   const sortOrder = sortOrderFromLocalMessageId(localId);
   const index = Number(rawIndex);
   if (sortOrder === null || !Number.isSafeInteger(index) || index < 1 || index > 100) return null;
@@ -848,102 +855,19 @@ export function registerSessionShareRoutes(api: Hono) {
     const includeBranches = requestBody.includeBranches === true;
     const sessionId = c.req.param("sessionId");
     expireStaleImageJobs(user.id, sessionId);
-
-    const creation = appDb.transaction(() => {
-      const session = getOne<{ id: string; title: string }>(
-        appDb,
-        "select id, title from sessions where id = ? and user_id = ? and deleted_at is null",
+    let creation;
+    try {
+      creation = appDb.transaction(() => createOrReuseSessionShareSnapshot({
+        userId: user.id,
         sessionId,
-        user.id
-      );
-      if (!session) return { error: "对话不存在", status: 404 as const };
-      const running = getOne<{ id: string }>(
-        appDb,
-        "select id from image_jobs where session_id = ? and user_id = ? and status = 'running' limit 1",
-        sessionId,
-        user.id
-      );
-      if (running) return { error: "图片仍在生成中，请完成后再分享", status: 409 as const };
-      const rows = getAll<{ id: string; role: string }>(
-        appDb,
-        `select id, role from messages
-         where session_id = ? and user_id = ? and id in (${requested.ids.map(() => "?").join(", ")})
-         order by created_at asc, rowid asc`,
-        sessionId,
-        user.id,
-        ...requested.ids
-      );
-      if (
-        rows.length !== requested.ids.length ||
-        rows.some((row) => row.role !== "user" && row.role !== "assistant") ||
-        rows.some((row, index) => row.id !== requested.ids[index])
-      ) {
-        return { error: "消息列表已变化，请刷新会话后重试", status: 409 as const };
-      }
-      const existingShares = getAll<SessionShareLinkRow>(
-        appDb,
-        `select l.*,
-                (select count(*) from session_share_messages sm where sm.share_id = l.id) as message_count
-         from session_share_links l
-         where l.user_id = ? and l.session_id = ?
-           and l.includes_branches = ?
-           and (select count(*) from session_share_messages sm where sm.share_id = l.id) = ?
-         order by l.created_at asc, l.rowid asc`,
-        user.id,
-        sessionId,
-        includeBranches ? 1 : 0,
-        rows.length
-      );
-      const requestedIds = rows.map((row) => row.id);
-      const existingShare = existingShares.find((share) => {
-        const existingMessageIds = getAll<{ message_id: string }>(
-          appDb,
-          "select message_id from session_share_messages where share_id = ? order by sort_order asc",
-          share.id
-        ).map((item) => item.message_id);
-        return sessionShareSnapshotMatches(existingMessageIds, requestedIds);
-      });
-      if (existingShare) return { row: existingShare, reused: true as const };
-
-      const id = `share_${randomUUID().replaceAll("-", "")}`;
-      const publicToken = randomUUID();
-      const timestamp = now();
-      run(
-        appDb,
-        "insert into session_share_links (id, public_token, user_id, session_id, title, includes_branches, created_at) values (?, ?, ?, ?, ?, ?, ?)",
-        id,
-        publicToken,
-        user.id,
-        sessionId,
-        session.title,
-        includeBranches ? 1 : 0,
-        timestamp
-      );
-      rows.forEach((row, index) => {
-        run(
-          appDb,
-          "insert into session_share_messages (share_id, message_id, sort_order) values (?, ?, ?)",
-          id,
-          row.id,
-          index
-        );
-      });
-      return {
-        row: {
-          id,
-          public_token: publicToken,
-          user_id: user.id,
-          session_id: sessionId,
-          title: session.title,
-          includes_branches: includeBranches ? 1 : 0,
-          created_at: timestamp,
-          message_count: rows.length
-        } satisfies SessionShareLinkRow,
-        reused: false as const
-      };
-    })();
-
-    if ("error" in creation) return c.json({ error: creation.error }, creation.status);
+        messageIds: requested.ids,
+        includeBranches,
+        includeReferences: true
+      }))();
+    } catch (error) {
+      if (error instanceof SessionShareError) return c.json({ error: error.message }, error.status);
+      throw error;
+    }
     audit(creation.reused ? "session_share.reuse" : "session_share.create", {
       shareId: creation.row.id,
       sessionId: creation.row.session_id,

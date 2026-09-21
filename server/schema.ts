@@ -854,6 +854,7 @@ export function initAppDb() {
       session_id text not null,
       title text not null,
       includes_branches integer not null default 0,
+      include_references integer not null default 1,
       created_at text not null,
       foreign key (user_id) references users(id) on delete cascade,
       foreign key (session_id) references sessions(id) on delete cascade
@@ -864,6 +865,9 @@ export function initAppDb() {
   }
   if (!tableColumnExists(appDb, "session_share_links", "includes_branches")) {
     appDb.run("alter table session_share_links add column includes_branches integer not null default 0");
+  }
+  if (!tableColumnExists(appDb, "session_share_links", "include_references")) {
+    appDb.run("alter table session_share_links add column include_references integer not null default 1");
   }
   const usedSessionShareTokens = new Set(
     getAll<{ public_token: string | null }>(appDb, "select public_token from session_share_links where public_token is not null and public_token <> ''")
@@ -896,6 +900,16 @@ export function initAppDb() {
   `);
   appDb.run("create unique index if not exists session_share_messages_order_idx on session_share_messages(share_id, sort_order)");
   appDb.run("create index if not exists session_share_messages_message_idx on session_share_messages(message_id)");
+
+  appDb.run(`
+    create table if not exists case_session_shares (
+      group_id text primary key,
+      share_id text not null,
+      created_at text not null,
+      foreign key (share_id) references session_share_links(id) on delete cascade
+    )
+  `);
+  appDb.run("create index if not exists case_session_shares_share_idx on case_session_shares(share_id)");
 
   appDb.run(`
     create table if not exists image_jobs (

@@ -704,7 +704,7 @@ const messages: Messages = {
   "pages.cases.setCover": "Set as cover",
   "pages.cases.setNthCover": "Set image {index} as cover",
   "pages.cases.includeReferences": "Allow viewing and downloading materials",
-  "pages.cases.includeReferencesDesc": "When enabled, inspiration shows the materials referenced by this image. When disabled, materials are hidden.",
+  "pages.cases.includeReferencesDesc": "Show this image's referenced materials in Inspiration.",
   "pages.cases.style": "Style",
   "pages.cases.titleField": "Title",
   "pages.cases.descriptionField": "Description",

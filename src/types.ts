@@ -1182,6 +1182,8 @@ export type LibraryCaseCard = {
   categoryIds: string[];
   categoryNames: string[];
   includeReferences: boolean;
+  conversationSharePath: string | null;
+  conversationShareAvailable: boolean;
   reviewStatus: "pending" | "approved" | "rejected";
   reviewRequestedAt: string;
   reviewedAt: string;
@@ -1287,6 +1289,8 @@ export type CaseCategory = {
     categoryIds: string[];
     categoryNames: string[];
     includeReferences: boolean;
+    conversationSharePath: string | null;
+    conversationShareAvailable: boolean;
     reviewStatus: "pending" | "approved" | "rejected";
     reviewRequestedAt: string;
     reviewedAt: string;

@@ -417,6 +417,7 @@ async function convertImageBlobToPng(blob: Blob) {
 
 export function ChatMessageThread({
   rootId,
+  sessionId,
   versions,
   activeVersionIndex,
   isSubmitting = false,
@@ -435,6 +436,7 @@ export function ChatMessageThread({
   downloadBaseName
 }: {
   rootId: string;
+  sessionId?: string | null;
   versions: MessageRevision[];
   activeVersionIndex?: number;
   isSubmitting?: boolean;
@@ -578,6 +580,7 @@ export function ChatMessageThread({
           </form>
         ) : (
           <ChatMessage
+            sessionId={sessionId}
             message={revision.user}
             onOpenEditor={onOpenEditor}
             onAddAsset={onAddAsset}
@@ -632,6 +635,7 @@ export function ChatMessageThread({
       {shouldRenderImageGroup ? (
         <>
           <AssistantImageGroup
+            sessionId={sessionId}
             messages={assistantImageMessages}
             totalCount={requestedImageCount}
             jobStatus={revisionJobStatus}
@@ -647,6 +651,7 @@ export function ChatMessageThread({
           />
           {assistantTextMessages.map((message) => (
             <ChatMessage
+              sessionId={sessionId}
               key={message.id}
               message={message}
               onOpenEditor={onOpenEditor}
@@ -661,6 +666,7 @@ export function ChatMessageThread({
         </>
       ) : revision.assistant ? (
         <ChatMessage
+          sessionId={sessionId}
           message={revision.assistant}
           onOpenEditor={onOpenEditor}
           onAddAsset={onAddAsset}
@@ -682,6 +688,7 @@ export function ChatMessageThread({
 
 function AssistantImageGroup({
   messages,
+  sessionId,
   totalCount,
   jobStatus,
   renderingMode,
@@ -695,6 +702,7 @@ function AssistantImageGroup({
   downloadBaseName
 }: {
   messages: Message[];
+  sessionId?: string | null;
   totalCount: number;
   jobStatus?: ImageJob["status"];
   renderingMode: "generation" | "edit";
@@ -738,10 +746,10 @@ function AssistantImageGroup({
   const currentIndex = Math.max(0, Math.min(activeIndex, slots.length - 1));
   const activeMessage = slots[currentIndex] ?? null;
   const activeExecution = activeMessage ? imageExecutionDetails(activeMessage) : null;
-  const image = activeMessage ? workImageFromMessage(activeMessage) : null;
+  const image = activeMessage ? workImageFromMessage(activeMessage, sessionId ?? null) : null;
   const capabilities = resolveChatMessageCapabilities(mode, capabilityOverrides);
   const canOpenEditor = capabilities.editImage && Boolean(image && onOpenEditor);
-  const groupImages = imageMessages.map((message) => workImageFromMessage(message)).filter((item): item is WorkImage => Boolean(item));
+  const groupImages = imageMessages.map((message) => workImageFromMessage(message, sessionId ?? null)).filter((item): item is WorkImage => Boolean(item));
   const resultPreviewItems = imageMessages.map((message) => ({
     url: messagePreviewUrl(message),
     thumbnailUrl: messageThumbnailUrl(message),
@@ -941,6 +949,7 @@ function AssistantImageGroup({
           source={{
             type: "image",
             id: image.id,
+            sessionId: image.sessionId,
             url: image.previewUrl || image.url,
             titleSeed: image.prompt,
             promptSeed: image.originPrompt?.trim() || image.prompt,
@@ -948,6 +957,7 @@ function AssistantImageGroup({
             suggestedCategoryIds: image.suggestedCaseCategoryIds,
             images: groupImages.map((item) => ({
               id: item.id,
+              sessionId: item.sessionId,
               url: item.url,
               originalUrl: item.originalUrl,
               previewUrl: item.previewUrl,
@@ -1062,6 +1072,7 @@ function AssistantImageActions({
 
 export function ChatMessage({
   message,
+  sessionId,
   onOpenEditor,
   onAddAsset,
   mode = "workspace",
@@ -1071,6 +1082,7 @@ export function ChatMessage({
   downloadBaseName
 }: {
   message: Message;
+  sessionId?: string | null;
   onOpenEditor?: (image: WorkImage) => void;
   onAddAsset?: (image: WorkImage) => void;
   mode?: ChatMessageMode;
@@ -1089,7 +1101,7 @@ export function ChatMessage({
   const { showToast } = useToast();
   const { t } = useI18n();
   const imageExecution = message.role === "assistant" ? imageExecutionDetails(message) : null;
-  const image = workImageFromMessage(message);
+  const image = workImageFromMessage(message, sessionId ?? null);
   const capabilities = resolveChatMessageCapabilities(mode, capabilityOverrides);
   const displayContent = message.role === "user"
     ? formatImageAnnotationMessageDisplayText(message.content, message.metadata)
@@ -1389,6 +1401,7 @@ export function ChatMessage({
           source={{
             type: "image",
             id: image.id,
+            sessionId: image.sessionId,
             url: image.previewUrl || image.url,
             titleSeed: image.prompt,
             promptSeed: image.originPrompt?.trim() || image.prompt,

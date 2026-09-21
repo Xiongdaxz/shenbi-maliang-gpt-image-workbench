@@ -17,6 +17,8 @@ import {
   sharedAssistantReferencesHidden,
   sharedImageViewUrls,
   sharedInlineImageVariantAllowed,
+  sharedMessageImageAllowed,
+  sharedReferenceMediaAllowed,
   sharedReferenceViewUrls,
   sharedMessageHidesReferences,
   sharedMessageSourceReferencesAllowed,
@@ -325,6 +327,15 @@ describe("shared message projection", () => {
     expect(sharedInlineImageVariantAllowed("preview", "user")).toBe(true);
     expect(sharedInlineImageVariantAllowed("original", "assistant")).toBe(true);
     expect(sharedInlineImageVariantAllowed("original", "user")).toBe(false);
+  });
+
+  test("applies the share-level reference policy to JSON and public media paths", () => {
+    expect(sharedMessageImageAllowed(false, "user", {})).toBe(false);
+    expect(sharedMessageImageAllowed(true, "user", {})).toBe(true);
+    expect(sharedMessageImageAllowed(true, "user", { hideReference: true })).toBe(false);
+    expect(sharedMessageImageAllowed(false, "assistant", {})).toBe(true);
+    expect(sharedReferenceMediaAllowed(false)).toBe(false);
+    expect(sharedReferenceMediaAllowed(true)).toBe(true);
   });
 
   test("keeps shared reference previews derivative-only and gives downloads a dedicated original route", () => {

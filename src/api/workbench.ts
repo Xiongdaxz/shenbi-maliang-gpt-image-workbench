@@ -1181,7 +1181,7 @@ export const api = {
     request<{ options: ImageDownloadOption[] }>(`/api/files/assets/${encodeURIComponent(assetId)}/download-options`),
   imageReferenceDownloadOptions: (referenceId: string) =>
     request<{ options: ImageDownloadOption[] }>(`/api/files/image-references/${encodeURIComponent(referenceId)}/download-options`),
-  addCase: (payload: { imageId?: string; imageIds?: string[]; assetId?: string; coverImageId?: string; categoryIds: string[]; title: string; prompt: string; includeReferences?: boolean; autoCategory?: boolean; duplicateMode?: "skip" }) =>
+  addCase: (payload: { imageId?: string; imageIds?: string[]; assetId?: string; coverImageId?: string; categoryIds: string[]; title: string; prompt: string; includeReferences?: boolean; shareConversation?: boolean; autoCategory?: boolean; duplicateMode?: "skip" }) =>
     request<{ caseItems: Array<Record<string, string | number | boolean | string[]>>; skipped: number; createdImageIds?: string[]; skippedImageIds?: string[] }>("/api/cases", {
       method: "POST",
       body: JSON.stringify(payload)
@@ -1196,7 +1196,7 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(payload)
     }),
-  updateCase: (caseId: string, payload: { title: string; prompt: string; categoryIds?: string[]; categoryId?: string; includeReferences?: boolean }) =>
+  updateCase: (caseId: string, payload: { title: string; prompt: string; categoryIds?: string[]; categoryId?: string; includeReferences?: boolean; shareConversation?: boolean }) =>
     request<{ caseItems: Array<Record<string, string | number | boolean | string[]>> }>(`/api/cases/${caseId}`, {
       method: "PATCH",
       body: JSON.stringify(payload)

@@ -7,6 +7,7 @@ import type { ImageEditorState } from "../components/ImageEditWorkspace";
 type UseImageEditorLauncherOptions = {
   editorImageRequest: ImageEditorOpenRequest | null;
   messageList: Message[];
+  sessionId?: string | null;
   setEditorImageRequest: (request: ImageEditorOpenRequest | null) => void;
   setMaterialPickerOpen: (open: boolean) => void;
   setSelectedAssets: (assets: AssetItem[]) => void;
@@ -20,6 +21,7 @@ type CloseImageEditorOptions = {
 export function useImageEditorLauncher({
   editorImageRequest,
   messageList,
+  sessionId = null,
   setEditorImageRequest,
   setMaterialPickerOpen,
   setSelectedAssets,
@@ -28,8 +30,8 @@ export function useImageEditorLauncher({
   const [imageEditor, setImageEditor] = useState<ImageEditorState | null>(null);
   const handledEditorRequestRef = useRef<ImageEditorOpenRequest | null>(null);
   const editorImages = useMemo(
-    () => uniqueWorkImages(messageList.filter((message) => message.role === "assistant").map(workImageFromMessage).filter(Boolean) as WorkImage[]),
-    [messageList]
+    () => uniqueWorkImages(messageList.filter((message) => message.role === "assistant").map((message) => workImageFromMessage(message, sessionId)).filter(Boolean) as WorkImage[]),
+    [messageList, sessionId]
   );
 
   useEffect(() => {

@@ -14,6 +14,7 @@ import {
   type LibrarySortDirection
 } from "./libraryCursor";
 import { imageDateSearchConditions } from "./imageSearch";
+import { caseSessionShareMetadataByGroupIds, type CaseSessionShareMetadata } from "./sessionShareService";
 import { assetUrlFromAssetId, imageUrlFromImageId } from "./serializers";
 import type { AssetRow, ImageRow } from "./types";
 import {
@@ -471,7 +472,14 @@ function caseEngagementBySource(sources: CaseSource[], userId: string) {
   return result;
 }
 
-function caseCard(row: CaseListRow, categories: Array<{ id: string; name: string }>, cover: CaseCover | undefined, userId: string, engagement: CaseEngagement) {
+function caseCard(
+  row: CaseListRow,
+  categories: Array<{ id: string; name: string }>,
+  cover: CaseCover | undefined,
+  userId: string,
+  engagement: CaseEngagement,
+  shareMetadata: CaseSessionShareMetadata
+) {
   const imageId = cover?.image_id ?? row.image_id;
   const assetId = cover?.asset_id ?? row.asset_id;
   const externalUrl = cover?.image_url || row.image_url;
@@ -499,6 +507,7 @@ function caseCard(row: CaseListRow, categories: Array<{ id: string; name: string
     categoryIds: categories.map((category) => category.id),
     categoryNames: categories.map((category) => category.name),
     includeReferences: row.include_references !== 0,
+    ...shareMetadata,
     reviewStatus: normalizeReviewStatus(row.review_status),
     reviewRequestedAt: row.review_requested_at ?? "",
     reviewedAt: row.reviewed_at ?? "",
@@ -724,6 +733,7 @@ export function registerLibraryRoutes(api: Hono) {
     const groupIds = page.items.map((row) => row.id);
     const categories = caseCategoriesByGroup(groupIds, { userId: user.id, mineOnly: loaded.filters.mineOnly });
     const covers = caseCovers(groupIds);
+    const shareMetadata = caseSessionShareMetadataByGroupIds(groupIds);
     const sources = page.items.map((row) => caseSource(row, covers.get(row.id)));
     const engagements = caseEngagementBySource(sources, user.id);
     return libraryResponse(
@@ -738,7 +748,8 @@ export function registerLibraryRoutes(api: Hono) {
           categories.get(row.id) ?? [],
           cover,
           user.id,
-          engagements.get(caseSourceKey(source)) ?? { useCount: 0, favoriteCount: 0, favorited: false }
+          engagements.get(caseSourceKey(source)) ?? { useCount: 0, favoriteCount: 0, favorited: false },
+          shareMetadata.get(row.id) ?? { conversationSharePath: null, conversationShareAvailable: false }
         );
       }),
       loaded.total === undefined ? page.pageInfo : { ...page.pageInfo, total: loaded.total }
@@ -862,6 +873,7 @@ export function registerLibraryRoutes(api: Hono) {
       ids.add(item.id);
     }
     const covers = caseCovers(selected.map((item) => item.id));
+    const shareMetadata = caseSessionShareMetadataByGroupIds(selected.map((item) => item.id));
     const sources = selected.map((item) => caseSource(item, covers.get(item.id)));
     const engagements = caseEngagementBySource(sources, user.id);
     return c.json({
@@ -873,7 +885,8 @@ export function registerLibraryRoutes(api: Hono) {
           candidateCategories.get(item.id) ?? [],
           cover,
           user.id,
-          engagements.get(caseSourceKey(source)) ?? { useCount: 0, favoriteCount: 0, favorited: false }
+          engagements.get(caseSourceKey(source)) ?? { useCount: 0, favoriteCount: 0, favorited: false },
+          shareMetadata.get(item.id) ?? { conversationSharePath: null, conversationShareAvailable: false }
         );
       })
     });

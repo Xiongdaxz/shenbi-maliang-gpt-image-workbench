@@ -125,6 +125,8 @@ export const DEFAULT_CASE_ITEMS: CaseCategory["items"] = DEFAULT_CASE_SEEDS.map(
     categoryIds: [categoryId],
     categoryNames: [seed.categoryName],
     includeReferences: false,
+    conversationSharePath: null,
+    conversationShareAvailable: false,
     reviewStatus: "approved",
     reviewRequestedAt: "",
     reviewedAt: DEFAULT_CASE_CREATED_AT,

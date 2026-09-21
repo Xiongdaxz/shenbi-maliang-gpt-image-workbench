@@ -13,6 +13,7 @@ import { CaseModalImagePreview } from "./CaseModalImagePreview";
 export type AddCaseSource = {
   type: "image" | "asset";
   id: string;
+  sessionId?: string | null;
   url: string;
   titleSeed: string;
   promptSeed: string;
@@ -20,6 +21,7 @@ export type AddCaseSource = {
   suggestedCategoryIds?: string[];
   images?: Array<{
     id: string;
+    sessionId?: string | null;
     url: string;
     originalUrl?: string;
     previewUrl?: string;
@@ -67,13 +69,14 @@ export function AddCaseModal({
   const categoryTouchedRef = useRef(false);
   const caseSuggestionRequestRef = useRef("");
   const [includeReferences, setIncludeReferences] = useState(true);
+  const [shareConversation, setShareConversation] = useState(false);
   const sourceImages = useMemo(
     () =>
       source.type === "image"
-        ? (source.images?.length ? source.images : [{ id: source.id, url: source.url, previewUrl: source.url, thumbnailUrl: source.url, prompt: source.promptSeed }])
+        ? (source.images?.length ? source.images : [{ id: source.id, sessionId: source.sessionId, url: source.url, previewUrl: source.url, thumbnailUrl: source.url, prompt: source.promptSeed }])
             .filter((image) => image.id && image.url)
         : [],
-    [source.id, source.images, source.promptSeed, source.type, source.url]
+    [source.id, source.images, source.promptSeed, source.sessionId, source.type, source.url]
   );
   const canAddAll = source.type === "image" && sourceImages.length > 1;
   const [includeAllImagesState, setIncludeAllImages] = useState(canAddAll);
@@ -82,6 +85,9 @@ export function AddCaseModal({
   const [coverImageId, setCoverImageId] = useState(source.id);
   const canSave = Boolean(prompt.trim()) && Boolean(title.trim()) && !caseSuggestionPending;
   const activePreviewId = includeAllImages ? coverImageId : selectedImageId;
+  const shareSourceImages = includeAllImages ? sourceImages : sourceImages.filter((image) => image.id === selectedImageId);
+  const shareSessionIds = new Set(shareSourceImages.map((image) => image.sessionId?.trim() ?? ""));
+  const shareConversationAvailable = source.type === "image" && shareSourceImages.length > 0 && shareSessionIds.size === 1 && !shareSessionIds.has("");
   const save = useMutation({
     mutationFn: () =>
       api.addCase({
@@ -94,7 +100,8 @@ export function AddCaseModal({
         title: title.trim(),
         prompt: prompt.trim(),
         autoCategory: false,
-        includeReferences
+        includeReferences,
+        shareConversation
       }),
     onSuccess: (result) => {
       const { caseItems, skipped } = result;
@@ -123,7 +130,12 @@ export function AddCaseModal({
     setIncludeAllImages(canAddAll);
     setSelectedImageId(source.id);
     setCoverImageId(source.id);
+    setShareConversation(false);
   }, [canAddAll, source.id, source.promptSeed]);
+
+  useEffect(() => {
+    if (!shareConversationAvailable) setShareConversation(false);
+  }, [shareConversationAvailable]);
 
   useEffect(() => {
     if (source.type !== "image") return;
@@ -228,6 +240,23 @@ export function AddCaseModal({
                 <small>{t("pages.cases.includeReferencesDesc")}</small>
               </span>
             </label>
+            {source.type === "image" ? (
+              <label className={cx("case-reference-toggle", shareConversation && "active", !shareConversationAvailable && "disabled")}>
+                <input
+                  type="checkbox"
+                  checked={shareConversation}
+                  disabled={!shareConversationAvailable}
+                  onChange={(event) => setShareConversation(event.target.checked)}
+                />
+                <span className="case-reference-toggle-check" aria-hidden="true">
+                  {shareConversation ? <Check size={13} strokeWidth={2.5} /> : null}
+                </span>
+                <span className="case-reference-toggle-copy">
+                  <span>{t("shareDialog.title")}</span>
+                  <small>{t(shareConversationAvailable ? "shareDialog.description" : "pages.cases.shareConversationUnavailable")}</small>
+                </span>
+              </label>
+            ) : null}
             <label>
               {t("pages.cases.style")}
               <CaseCategoryMultiSelect

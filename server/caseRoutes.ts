@@ -1,4 +1,5 @@
 import type { Hono } from "hono";
+import { audit } from "./auditLog";
 import { UNCATEGORIZED_CASE_CATEGORY_ID, ensureCategoryIds } from "./categories";
 import { CategoryManagementError, createManagedContentCategory } from "./categoryManagement";
 import { generateCaseTitle, resolveCaseCategoryIds, suggestCaseFields } from "./caseSuggestions";
@@ -13,6 +14,18 @@ import { approvedCaseSql, makeId, normalizeIdList, normalizeReviewStatus, now, v
 import { requireUser } from "./auth";
 import { imageBatchResult, parseImageBatchIds } from "./imageBatch";
 import { invalidateLibraryFacetCache } from "./libraryRoutes";
+import {
+  attachCaseSessionShare,
+  caseSessionShareAssociation,
+  caseSessionShareAssociationAction,
+  caseSessionShareMetadata,
+  caseSessionShareMetadataByGroupIds,
+  createOrReuseSessionShareSnapshot,
+  detachCaseSessionShare,
+  SessionShareError,
+  sessionShareSnapshotForImages,
+  type SessionShareSnapshot
+} from "./sessionShareService";
 
 type CaseItemRow = {
   id: string;
@@ -92,6 +105,8 @@ type PublicCaseItem = {
   categoryIds: string[];
   categoryNames: string[];
   includeReferences: boolean;
+  conversationSharePath: string | null;
+  conversationShareAvailable: boolean;
   reviewStatus: ReviewStatus;
   reviewRequestedAt: string;
   reviewedAt: string;
@@ -296,6 +311,7 @@ function publicVisibleCaseDetail(caseId: string, userId: string) {
   const item = resolveVisibleCaseItem(caseId, userId);
   if (!item) return null;
   const groupId = groupIdFromItem(item);
+  const shareMetadata = caseSessionShareMetadata(groupId, item.user_id === userId ? item.user_id : null);
   const categoryRows = getAll<{ id: string; name: string }>(
     appDb,
     `select distinct case_categories.id, case_categories.name, case_categories.sort_order
@@ -374,6 +390,7 @@ function publicVisibleCaseDetail(caseId: string, userId: string) {
     categoryIds: visibleCategories.map((category) => category.id),
     categoryNames: visibleCategories.map((category) => category.name),
     includeReferences: item.include_references !== 0,
+    ...shareMetadata,
     reviewStatus: normalizeReviewStatus(item.review_status),
     reviewRequestedAt: item.review_requested_at ?? "",
     reviewedAt: item.reviewed_at ?? "",
@@ -503,6 +520,7 @@ api.get("/cases", async (c) => {
     if (!categoryIds.includes(item.category_id)) categoryIds.push(item.category_id);
     caseGroupCategoryIds.set(groupId, categoryIds);
   }
+  const shareMetadataByGroupId = caseSessionShareMetadataByGroupIds([...caseGroupCategoryIds.keys()]);
 
   function toPublicCaseItem(item: CaseItemRow): PublicCaseItem {
     const groupId = groupIdFromItem(item);
@@ -547,6 +565,7 @@ api.get("/cases", async (c) => {
       categoryIds: visibleCategoryIds,
       categoryNames: visibleCategoryIds.map((categoryId) => categoryNameById.get(categoryId)).filter((name): name is string => Boolean(name)),
       includeReferences: item.include_references !== 0,
+      ...(shareMetadataByGroupId.get(groupId) ?? { conversationSharePath: null, conversationShareAvailable: false }),
       reviewStatus: normalizeReviewStatus(item.review_status),
       reviewRequestedAt: item.review_requested_at ?? "",
       reviewedAt: item.reviewed_at ?? "",
@@ -923,91 +942,132 @@ api.post("/cases", async (c) => {
       });
     }
   }
-  if (orderedImages.length > 0) {
-    orderedImages.forEach((image, index) => {
-      run(
-        appDb,
-        `insert into case_group_images (
-          id, group_id, user_id, image_id, asset_id, image_url, sort_order, is_cover, created_at
-        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        makeId("caseimg"),
-        groupId,
-        user.id,
-        image.id,
-        null,
-        imageUrlFromImageId(image.id),
-        index,
-        image.id === coverImage?.id ? 1 : 0,
-        createdAt
-      );
-    });
-  } else if (asset) {
-    run(
-      appDb,
-      `insert into case_group_images (
-        id, group_id, user_id, image_id, asset_id, image_url, sort_order, is_cover, created_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      makeId("caseimg"),
-      groupId,
-      user.id,
-      null,
-      asset.id,
-      assetUrlFromAssetId(asset.id),
-      0,
-      1,
-      createdAt
-    );
+  const shareConversation = body.shareConversation === true;
+  let shareSnapshot: SessionShareSnapshot | null = null;
+  if (shareConversation) {
+    if (orderedImages.length === 0) return c.json({ error: "只有关联会话的绘画图片可以分享绘画链接" }, 400);
+    try {
+      shareSnapshot = sessionShareSnapshotForImages(user.id, orderedImages.map((image) => image.id));
+    } catch (error) {
+      if (error instanceof SessionShareError) return c.json({ error: error.message }, error.status);
+      throw error;
+    }
   }
-
-  const caseItems: Array<Record<string, string | number | boolean | string[]>> = [];
   const reviewState = caseReviewState(createdAt);
-  for (const categoryId of targetCategoryIds) {
-    const id = makeId("case");
-    run(
-      appDb,
-      `insert into case_items (
-        id, group_id, category_id, user_id, image_id, asset_id, include_references,
-        review_status, review_requested_at, reviewed_at, reviewed_by, reject_reason,
-        title, prompt, image_url, created_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      id,
-      groupId,
-      categoryId,
-      user.id,
-      coverImage?.id ?? null,
-      asset?.id ?? null,
-      includeReferences,
-      reviewState.reviewStatus,
-      reviewState.reviewRequestedAt,
-      reviewState.reviewedAt,
-      reviewState.reviewedBy,
-      reviewState.rejectReason,
-      title,
-      prompt,
-      coverImageUrl,
-      createdAt
-    );
-    caseItems.push({
-      id,
-      groupId,
-      categoryId,
-      categoryIds: targetCategoryIds,
-      title,
-      prompt,
-      imageUrl: coverImageUrl,
-      imageOriginalUrl: coverImageUrl,
-      imagePreviewUrl: coverImage ? imageUrlFromImageId(coverImage.id, "preview") : asset ? assetUrlFromAssetId(asset.id, "preview") : coverImageUrl,
-      imageThumbnailUrl: coverImage ? imageUrlFromImageId(coverImage.id, "thumb") : asset ? assetUrlFromAssetId(asset.id, "thumb") : coverImageUrl,
-      imageWidth: coverImage?.image_width ?? asset?.image_width ?? 0,
-      imageHeight: coverImage?.image_height ?? asset?.image_height ?? 0,
-      imageFileSize: coverImage?.image_file_size ?? asset?.size ?? 0,
-      imageCount: orderedImages.length || (asset ? 1 : 0),
-      useCount: 0,
-      canDelete: true,
-      reviewStatus: reviewState.reviewStatus,
-      reviewRequestedAt: reviewState.reviewRequestedAt,
-      reviewedAt: reviewState.reviewedAt ?? "",
-      rejectReason: reviewState.rejectReason
+  let caseItems: Array<Record<string, string | number | boolean | string[]>>;
+  try {
+    caseItems = appDb.transaction(() => {
+      if (orderedImages.length > 0) {
+        orderedImages.forEach((image, index) => {
+          run(
+            appDb,
+            `insert into case_group_images (
+              id, group_id, user_id, image_id, asset_id, image_url, sort_order, is_cover, created_at
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            makeId("caseimg"),
+            groupId,
+            user.id,
+            image.id,
+            null,
+            imageUrlFromImageId(image.id),
+            index,
+            image.id === coverImage?.id ? 1 : 0,
+            createdAt
+          );
+        });
+      } else if (asset) {
+        run(
+          appDb,
+          `insert into case_group_images (
+            id, group_id, user_id, image_id, asset_id, image_url, sort_order, is_cover, created_at
+          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          makeId("caseimg"),
+          groupId,
+          user.id,
+          null,
+          asset.id,
+          assetUrlFromAssetId(asset.id),
+          0,
+          1,
+          createdAt
+        );
+      }
+      const createdItems: Array<Record<string, string | number | boolean | string[]>> = [];
+      for (const categoryId of targetCategoryIds) {
+        const id = makeId("case");
+        run(
+          appDb,
+          `insert into case_items (
+            id, group_id, category_id, user_id, image_id, asset_id, include_references,
+            review_status, review_requested_at, reviewed_at, reviewed_by, reject_reason,
+            title, prompt, image_url, created_at
+          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id,
+          groupId,
+          categoryId,
+          user.id,
+          coverImage?.id ?? null,
+          asset?.id ?? null,
+          includeReferences,
+          reviewState.reviewStatus,
+          reviewState.reviewRequestedAt,
+          reviewState.reviewedAt,
+          reviewState.reviewedBy,
+          reviewState.rejectReason,
+          title,
+          prompt,
+          coverImageUrl,
+          createdAt
+        );
+        createdItems.push({
+          id,
+          groupId,
+          categoryId,
+          categoryIds: targetCategoryIds,
+          title,
+          prompt,
+          imageUrl: coverImageUrl,
+          imageOriginalUrl: coverImageUrl,
+          imagePreviewUrl: coverImage ? imageUrlFromImageId(coverImage.id, "preview") : asset ? assetUrlFromAssetId(asset.id, "preview") : coverImageUrl,
+          imageThumbnailUrl: coverImage ? imageUrlFromImageId(coverImage.id, "thumb") : asset ? assetUrlFromAssetId(asset.id, "thumb") : coverImageUrl,
+          imageWidth: coverImage?.image_width ?? asset?.image_width ?? 0,
+          imageHeight: coverImage?.image_height ?? asset?.image_height ?? 0,
+          imageFileSize: coverImage?.image_file_size ?? asset?.size ?? 0,
+          imageCount: orderedImages.length || (asset ? 1 : 0),
+          useCount: 0,
+          canDelete: true,
+          includeReferences: includeReferences === 1,
+          reviewStatus: reviewState.reviewStatus,
+          reviewRequestedAt: reviewState.reviewRequestedAt,
+          reviewedAt: reviewState.reviewedAt ?? "",
+          rejectReason: reviewState.rejectReason
+        });
+      }
+      if (shareSnapshot) {
+        const creation = createOrReuseSessionShareSnapshot({
+          userId: user.id,
+          sessionId: shareSnapshot.sessionId,
+          messageIds: shareSnapshot.messageIds,
+          includeBranches: false,
+          includeReferences: includeReferences === 1
+        });
+        attachCaseSessionShare(groupId, creation.row.id);
+      }
+      return createdItems;
+    })();
+  } catch (error) {
+    if (error instanceof SessionShareError) return c.json({ error: error.message }, error.status);
+    throw error;
+  }
+  if (shareSnapshot) {
+    const attached = getOne<{ share_id: string }>(appDb, "select share_id from case_session_shares where group_id = ?", groupId);
+    audit("case.share.attach", {
+      shareId: attached?.share_id ?? "",
+      sessionId: shareSnapshot.sessionId,
+      messageCount: shareSnapshot.messageIds.length,
+      includeBranches: false,
+      includeReferences: includeReferences === 1,
+      groupId
     });
   }
   return c.json({
@@ -1127,30 +1187,95 @@ api.patch("/cases/:caseId", async (c) => {
   const hasCategoryIds = Object.prototype.hasOwnProperty.call(body, "categoryIds");
   const hasCategoryId = Object.prototype.hasOwnProperty.call(body, "categoryId");
   const hasIncludeReferences = Object.prototype.hasOwnProperty.call(body, "includeReferences");
+  const hasShareConversation = Object.prototype.hasOwnProperty.call(body, "shareConversation");
   const categoryIds = hasCategoryIds ? normalizeIdList(body.categoryIds) : normalizeIdList(body.categoryId);
   if (!title || !prompt) return c.json({ error: "请填写标题和描述" }, 400);
   const item = resolveOwnedCaseItem(caseId, user.id);
   if (!item) return c.json({ error: "灵感不存在" }, 404);
   const groupId = groupIdFromItem(item);
   const nextIncludeReferences = hasIncludeReferences ? (body.includeReferences !== false ? 1 : 0) : (item.include_references !== 0 ? 1 : 0);
-  const reviewState = caseReviewState(now());
-  if (!hasCategoryIds && !hasCategoryId) {
-    run(
+  const currentShareAssociation = caseSessionShareAssociation(groupId);
+  const nextShareConversation = hasShareConversation ? body.shareConversation === true : Boolean(currentShareAssociation);
+  const shareAssociationAction = caseSessionShareAssociationAction({
+    current: currentShareAssociation,
+    nextEnabled: nextShareConversation,
+    nextIncludeReferences: nextIncludeReferences === 1
+  });
+  let shareSnapshot: SessionShareSnapshot | null = null;
+  if (shareAssociationAction === "attach") {
+    const groupImageIds = getAll<{ image_id: string | null }>(
       appDb,
-      `update case_items
-       set title = ?, prompt = ?, include_references = ?,
-           review_status = ?, review_requested_at = ?, reviewed_at = ?, reviewed_by = ?, reject_reason = ''
-       where group_id = ? and user_id = ?`,
-      title,
-      prompt,
-      nextIncludeReferences,
-      reviewState.reviewStatus,
-      reviewState.reviewRequestedAt,
-      reviewState.reviewedAt,
-      reviewState.reviewedBy,
+      "select image_id from case_group_images where group_id = ? and user_id = ? order by sort_order asc, rowid asc",
       groupId,
       user.id
-    );
+    ).map((row) => row.image_id ?? "").filter(Boolean);
+    try {
+      shareSnapshot = sessionShareSnapshotForImages(user.id, groupImageIds);
+    } catch (error) {
+      if (error instanceof SessionShareError) return c.json({ error: error.message }, error.status);
+      throw error;
+    }
+  }
+  const reviewState = caseReviewState(now());
+  const updateShareAssociation = () => {
+    if (shareAssociationAction === "preserve") return;
+    if (shareAssociationAction === "detach") {
+      detachCaseSessionShare(groupId);
+      return;
+    }
+    if (!shareSnapshot) throw new SessionShareError("分享会话状态已变化，请刷新后重试", 409);
+    const creation = createOrReuseSessionShareSnapshot({
+      userId: user.id,
+      sessionId: shareSnapshot.sessionId,
+      messageIds: shareSnapshot.messageIds,
+      includeBranches: false,
+      includeReferences: nextIncludeReferences === 1
+    });
+    attachCaseSessionShare(groupId, creation.row.id);
+  };
+  const auditShareAssociation = () => {
+    if (shareAssociationAction === "detach") {
+      audit("case.share.detach", { shareId: currentShareAssociation?.shareId ?? "", groupId, source: "edit" });
+      return;
+    }
+    if (!shareSnapshot) return;
+    const attached = getOne<{ share_id: string }>(appDb, "select share_id from case_session_shares where group_id = ?", groupId);
+    audit("case.share.attach", {
+      shareId: attached?.share_id ?? "",
+      sessionId: shareSnapshot.sessionId,
+      messageCount: shareSnapshot.messageIds.length,
+      includeBranches: false,
+      includeReferences: nextIncludeReferences === 1,
+      groupId,
+      source: "edit"
+    });
+  };
+  if (!hasCategoryIds && !hasCategoryId) {
+    try {
+      appDb.transaction(() => {
+        run(
+          appDb,
+          `update case_items
+           set title = ?, prompt = ?, include_references = ?,
+               review_status = ?, review_requested_at = ?, reviewed_at = ?, reviewed_by = ?, reject_reason = ''
+           where group_id = ? and user_id = ?`,
+          title,
+          prompt,
+          nextIncludeReferences,
+          reviewState.reviewStatus,
+          reviewState.reviewRequestedAt,
+          reviewState.reviewedAt,
+          reviewState.reviewedBy,
+          groupId,
+          user.id
+        );
+        updateShareAssociation();
+      })();
+    } catch (error) {
+      if (error instanceof SessionShareError) return c.json({ error: error.message }, error.status);
+      throw error;
+    }
+    auditShareAssociation();
     return c.json({ caseItems: [{ id: item.id, groupId, categoryIds: [item.category_id], title, prompt, reviewStatus: reviewState.reviewStatus }] });
   }
   const targetCategoryIds = categoryIds.length > 0 ? categoryIds : [UNCATEGORIZED_CASE_CATEGORY_ID];
@@ -1172,58 +1297,67 @@ api.patch("/cases/:caseId", async (c) => {
     .sort()[0] ?? now();
   const cover = coverGroupImage(groupId);
   const coverImageUrl = cover?.image_id ? imageUrlFromImageId(cover.image_id) : cover?.asset_id ? assetUrlFromAssetId(cover.asset_id) : cover?.image_url ?? item.image_url;
-  for (const categoryId of targetCategoryIds) {
-    const existing = rowsByCategory.get(categoryId);
-    if (existing) {
-      run(
-        appDb,
-        `update case_items
-         set title = ?, prompt = ?, include_references = ?,
-             review_status = ?, review_requested_at = ?, reviewed_at = ?, reviewed_by = ?, reject_reason = ''
-         where id = ? and user_id = ?`,
-        title,
-        prompt,
-        nextIncludeReferences,
-        reviewState.reviewStatus,
-        reviewState.reviewRequestedAt,
-        reviewState.reviewedAt,
-        reviewState.reviewedBy,
-        existing.id,
-        user.id
-      );
-      caseItems.push({ id: existing.id, groupId, categoryIds: targetCategoryIds, title, prompt, reviewStatus: reviewState.reviewStatus });
-      continue;
-    }
-    const id = makeId("case");
-    run(
-      appDb,
-      `insert into case_items (
-        id, group_id, category_id, user_id, image_id, asset_id, include_references,
-        review_status, review_requested_at, reviewed_at, reviewed_by, reject_reason,
-        title, prompt, image_url, created_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      id,
-      groupId,
-      categoryId,
-      user.id,
-      cover?.image_id ?? item.image_id,
-      cover?.asset_id ?? item.asset_id,
-      nextIncludeReferences,
-      reviewState.reviewStatus,
-      reviewState.reviewRequestedAt,
-      reviewState.reviewedAt,
-      reviewState.reviewedBy,
-      reviewState.rejectReason,
-      title,
-      prompt,
-      coverImageUrl,
-      createdAt
-    );
-    caseItems.push({ id, groupId, categoryIds: targetCategoryIds, title, prompt, reviewStatus: reviewState.reviewStatus });
+  try {
+    appDb.transaction(() => {
+      for (const categoryId of targetCategoryIds) {
+        const existing = rowsByCategory.get(categoryId);
+        if (existing) {
+          run(
+            appDb,
+            `update case_items
+             set title = ?, prompt = ?, include_references = ?,
+                 review_status = ?, review_requested_at = ?, reviewed_at = ?, reviewed_by = ?, reject_reason = ''
+             where id = ? and user_id = ?`,
+            title,
+            prompt,
+            nextIncludeReferences,
+            reviewState.reviewStatus,
+            reviewState.reviewRequestedAt,
+            reviewState.reviewedAt,
+            reviewState.reviewedBy,
+            existing.id,
+            user.id
+          );
+          caseItems.push({ id: existing.id, groupId, categoryIds: targetCategoryIds, title, prompt, reviewStatus: reviewState.reviewStatus });
+          continue;
+        }
+        const id = makeId("case");
+        run(
+          appDb,
+          `insert into case_items (
+            id, group_id, category_id, user_id, image_id, asset_id, include_references,
+            review_status, review_requested_at, reviewed_at, reviewed_by, reject_reason,
+            title, prompt, image_url, created_at
+          ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id,
+          groupId,
+          categoryId,
+          user.id,
+          cover?.image_id ?? item.image_id,
+          cover?.asset_id ?? item.asset_id,
+          nextIncludeReferences,
+          reviewState.reviewStatus,
+          reviewState.reviewRequestedAt,
+          reviewState.reviewedAt,
+          reviewState.reviewedBy,
+          reviewState.rejectReason,
+          title,
+          prompt,
+          coverImageUrl,
+          createdAt
+        );
+        caseItems.push({ id, groupId, categoryIds: targetCategoryIds, title, prompt, reviewStatus: reviewState.reviewStatus });
+      }
+      for (const row of sourceRows) {
+        if (!selectedCategoryIds.has(row.category_id)) run(appDb, "delete from case_items where id = ? and user_id = ?", row.id, user.id);
+      }
+      updateShareAssociation();
+    })();
+  } catch (error) {
+    if (error instanceof SessionShareError) return c.json({ error: error.message }, error.status);
+    throw error;
   }
-  for (const row of sourceRows) {
-    if (!selectedCategoryIds.has(row.category_id)) run(appDb, "delete from case_items where id = ? and user_id = ?", row.id, user.id);
-  }
+  auditShareAssociation();
   return c.json({ caseItems });
 });
 
@@ -1256,15 +1390,18 @@ api.delete("/cases/:caseId", async (c) => {
   if (!item) return c.json({ error: "灵感不存在" }, 404);
   const groupId = groupIdFromItem(item);
   const source = caseUsageSourceFromCaseItem(item);
-  run(
-    appDb,
-    "delete from case_favorites where source_user_id = ? and source_type = ? and source_id = ?",
-    source.sourceUserId || "",
-    source.sourceType,
-    source.sourceId
-  );
-  run(appDb, "delete from case_group_images where group_id = ? and user_id = ?", groupId, user.id);
-  run(appDb, "delete from case_items where group_id = ? and user_id = ?", groupId, user.id);
+  appDb.transaction(() => {
+    run(
+      appDb,
+      "delete from case_favorites where source_user_id = ? and source_type = ? and source_id = ?",
+      source.sourceUserId || "",
+      source.sourceType,
+      source.sourceId
+    );
+    detachCaseSessionShare(groupId);
+    run(appDb, "delete from case_group_images where group_id = ? and user_id = ?", groupId, user.id);
+    run(appDb, "delete from case_items where group_id = ? and user_id = ?", groupId, user.id);
+  })();
   return c.json({ ok: true });
 });
 }

@@ -1,7 +1,7 @@
 import type { LibraryImageCard, Message, WorkImage } from "../types";
 import { imageCreatedTime } from "./imageTimeline";
 
-export function workImageFromMessage(message: Message): WorkImage | null {
+export function workImageFromMessage(message: Message, sessionId: string | null = null): WorkImage | null {
   if (!message.imageUrl || !message.imageId) return null;
   return {
     id: message.imageId,
@@ -11,7 +11,7 @@ export function workImageFromMessage(message: Message): WorkImage | null {
     thumbnailUrl: message.imageThumbnailUrl ?? message.imagePreviewUrl ?? message.imageUrl,
     prompt: message.imagePrompt ?? message.content,
     originPrompt: message.imageOriginPrompt ?? message.imagePrompt ?? message.content,
-    sessionId: null,
+    sessionId,
     jobId: null,
     kind: message.imageKind ?? "generation",
     size: message.imageSize ?? "",

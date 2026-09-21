@@ -1462,7 +1462,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
     const latestAssistantImage = [...visibleBranchMessages]
       .reverse()
       .find((message) => message.role === "assistant" && message.imageUrl && message.imageId);
-    const continuityImage = latestAssistantImage ? workImageFromMessage(latestAssistantImage) : null;
+    const continuityImage = latestAssistantImage ? workImageFromMessage(latestAssistantImage, sessionId ?? null) : null;
     const sourceImage = editImage;
     const selectedCaseReferences = selectedCaseMaterials.map(sourceReferenceFromCaseMaterial);
     const hasSelectedCaseMaterials = selectedCaseReferences.length > 0;
@@ -1666,6 +1666,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
   const { closeImageEditor, imageEditor, mergeImageEditorImages, openImageEditor } = useImageEditorLauncher({
     editorImageRequest,
     messageList: visibleBranchMessages,
+    sessionId,
     setEditorImageRequest,
     setMaterialPickerOpen,
     setSelectedAssets,
@@ -1747,8 +1748,8 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
     const latestAssistantImage = [...visibleBranchMessages]
       .reverse()
       .find((message) => message.role === "assistant" && message.imageUrl && message.imageId);
-    return latestAssistantImage ? workImageFromMessage(latestAssistantImage) : null;
-  }, [currentScopeBusy, imageEditor, visibleBranchMessages]);
+    return latestAssistantImage ? workImageFromMessage(latestAssistantImage, sessionId ?? null) : null;
+  }, [currentScopeBusy, imageEditor, sessionId, visibleBranchMessages]);
   const latestCompletedImageJobImageId = useMemo(() => {
     if (currentScopeBusy || imageEditor) return "";
     for (let index = imageJobs.length - 1; index >= 0; index -= 1) {
@@ -2539,6 +2540,7 @@ export function ChatPage({ user, sessionActions }: { user: User; sessionActions?
         {showMessageSkeleton ? <ChatMessageSkeleton /> : null}
         <ConversationView
           items={renderItems}
+          sessionId={sessionId}
           downloadBaseName={sessionActions?.title}
           isSubmitting={currentViewSubmitting}
           failedJobIds={failedJobIds}
