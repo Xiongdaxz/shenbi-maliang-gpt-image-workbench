@@ -5,6 +5,8 @@ import { previewChangelogSync, syncSelectedChangelogFromMarkdown } from "./chang
 import { configDb, getAll, getOne, run } from "./db";
 import type { ChangelogEntryRow } from "./types";
 import { makeId, now } from "./utils";
+import { buildAppUpdatePayload } from "./appUpdate";
+import { applicationVersion } from "./appVersion";
 
 export type ChangelogEntry = {
   id: string;
@@ -120,6 +122,17 @@ function entryPayload(body: Record<string, unknown>) {
 }
 
 export function registerChangelogRoutes(api: Hono) {
+  api.get("/app-update", async (c) => {
+    const user = await requireUser(c);
+    if (!user) return c.json({ error: "未登录" }, 401);
+    c.header("Cache-Control", "private, no-store");
+    return c.json(buildAppUpdatePayload(
+      readChangelogEntries(),
+      c.req.query("clientVersion"),
+      applicationVersion()
+    ));
+  });
+
   api.get("/changelog", async (c) => {
     const user = await requireUser(c);
     if (!user) return c.json({ error: "未登录" }, 401);

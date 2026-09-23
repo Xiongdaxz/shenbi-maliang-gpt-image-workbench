@@ -23,6 +23,10 @@
     "scripts/package-maliang-codex-plugin.ts",
     "scripts/run-chatgpt-web-bridge-tests.ts",
     "scripts/setup-chatgpt-web-python.ts",
+    "scripts/build-app-update-sprite.ts",
+    "scripts/start-app-update-preview.ts",
+    "scripts/seed-app-update-preview.ts",
+    "scripts/seed-app-update-preview.test.ts",
     "scripts/start-server.ts",
     "vite.config.ts",
     "tailwind.config.ts"

@@ -30,6 +30,7 @@ import "./styles/settings-dialog.css";
 import "./styles/responsive.css";
 import "./styles/appearance.css";
 import "./styles/rtl.css";
+import "./styles/app-update.css";
 
 clearPromptTemplateFormDraftCache();
 installRuntimeErrorReporting();

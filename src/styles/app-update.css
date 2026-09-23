@@ -1,0 +1,644 @@
+:root {
+  --app-update-paper: rgba(255, 253, 246, 0.97);
+  --app-update-paper-strong: #fffdf7;
+  --app-update-ink: #183a2a;
+  --app-update-muted: #6f756e;
+  --app-update-green: #2f7d56;
+  --app-update-green-hover: #286b49;
+  --app-update-primary-text: #ffffff;
+  --app-update-gold: #bd8b3e;
+  --app-update-border: rgba(47, 125, 86, 0.24);
+  --app-update-shadow: 0 24px 70px rgba(32, 62, 43, 0.2), 0 8px 24px rgba(80, 58, 24, 0.1);
+}
+
+html[data-appearance="dark"] {
+  --app-update-paper: rgba(36, 34, 28, 0.98);
+  --app-update-paper-strong: #29271f;
+  --app-update-ink: #f4eddd;
+  --app-update-muted: #bcb4a5;
+  --app-update-green: #79b991;
+  --app-update-green-hover: #90c9a5;
+  --app-update-primary-text: #13271d;
+  --app-update-gold: #d4ad68;
+  --app-update-border: rgba(212, 173, 104, 0.28);
+  --app-update-shadow: 0 26px 76px rgba(0, 0, 0, 0.48), 0 8px 24px rgba(0, 0, 0, 0.34);
+}
+
+.app-update-reminder {
+  position: fixed;
+  right: 18px;
+  bottom: 16px;
+  z-index: 132;
+  width: min(472px, calc(100vw - 24px));
+  height: 250px;
+  pointer-events: none;
+  isolation: isolate;
+}
+
+.app-update-card {
+  position: absolute;
+  right: 0;
+  bottom: 12px;
+  width: 360px;
+  min-height: 220px;
+  overflow: hidden;
+  border: 1px solid var(--app-update-border);
+  border-radius: 22px 22px 22px 10px;
+  padding: 22px 22px 18px 30px;
+  color: var(--app-update-ink);
+  background:
+    radial-gradient(circle at 93% 12%, rgba(241, 178, 104, 0.2), transparent 26%),
+    radial-gradient(circle at 12% 94%, rgba(83, 165, 139, 0.17), transparent 31%),
+    linear-gradient(130deg, rgba(255, 255, 255, 0.5), transparent 55%),
+    var(--app-update-paper);
+  box-shadow: var(--app-update-shadow);
+  backdrop-filter: blur(18px) saturate(1.08);
+  transform: translate3d(calc(100% + 34px), 0, 0);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.app-update-card::before {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  inset: 0;
+  opacity: 0.42;
+  background-image:
+    linear-gradient(88deg, transparent 0 48%, rgba(79, 100, 76, 0.045) 49% 50%, transparent 51%),
+    linear-gradient(4deg, transparent 0 46%, rgba(116, 91, 50, 0.035) 47% 48%, transparent 49%);
+  background-size: 31px 27px, 37px 33px;
+}
+
+.app-update-reminder.is-pulling .app-update-card {
+  animation: appUpdateCardPull 760ms cubic-bezier(0.22, 0.86, 0.28, 1.08) both;
+}
+
+.app-update-reminder.is-card .app-update-card {
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.app-update-reminder.is-retracting .app-update-card {
+  animation: appUpdateCardRetract 520ms cubic-bezier(0.5, 0, 0.82, 0.2) both;
+}
+
+.app-update-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.app-update-card-close,
+.app-update-dialog-close {
+  display: grid;
+  place-items: center;
+  border: 0;
+  color: var(--app-update-muted);
+  background: transparent;
+}
+
+.app-update-card-close {
+  position: absolute;
+  top: 11px;
+  right: 11px;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+}
+
+.app-update-card-close:hover,
+.app-update-dialog-close:hover {
+  color: var(--app-update-ink);
+  background: rgba(47, 125, 86, 0.1);
+}
+
+.app-update-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--app-update-green);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.app-update-title-brush {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  object-fit: contain;
+}
+
+.app-update-card h3 {
+  margin: 7px 44px 4px 0;
+  font-family: "Noto Serif SC", "Songti SC", "STSong", serif;
+  font-size: 20px;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+}
+
+.app-update-version-line {
+  margin: 0;
+  color: var(--app-update-ink);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+.app-update-version-line span {
+  margin: 0 3px;
+  color: var(--app-update-gold);
+}
+
+.app-update-summary {
+  margin: 12px 0 3px;
+  color: var(--app-update-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.app-update-date {
+  color: var(--app-update-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-update-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.app-update-card-actions button,
+.app-update-dialog-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.app-update-card-actions .primary-btn,
+.app-update-dialog-actions .primary-btn {
+  color: var(--app-update-primary-text);
+  background: var(--app-update-green);
+}
+
+.app-update-card-actions .primary-btn:hover,
+.app-update-dialog-actions .primary-btn:hover {
+  background: var(--app-update-green-hover);
+}
+
+.app-update-success-bloom {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 180;
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  color: #c59649;
+  background:
+    radial-gradient(circle, rgba(255, 253, 246, 0.96) 0 22%, rgba(89, 177, 147, 0.34) 23% 38%, transparent 68%);
+  animation: appUpdateSuccessBloom 1.55s cubic-bezier(0.16, 0.8, 0.28, 1) both;
+}
+
+.app-update-success-bloom svg {
+  position: absolute;
+  left: 45px;
+  top: 45px;
+}
+
+.app-update-success-bloom span {
+  position: absolute;
+  left: 52px;
+  top: 52px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #54ad90;
+  animation: appUpdateSuccessDrop 1.35s ease-out both;
+}
+
+.app-update-success-bloom span:nth-child(1) { --drop-x: -43px; --drop-y: -31px; background: #eb9d7d; }
+.app-update-success-bloom span:nth-child(2) { --drop-x: 46px; --drop-y: -24px; background: #5bb99a; animation-delay: 70ms; }
+.app-update-success-bloom span:nth-child(3) { --drop-x: 24px; --drop-y: 43px; background: #d8a852; animation-delay: 120ms; }
+
+.app-update-mascot-trigger {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  z-index: 3;
+  width: 132px;
+  height: 178px;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  transform: translate3d(340px, 0, 0);
+  pointer-events: auto;
+  filter: drop-shadow(0 12px 12px rgba(24, 58, 42, 0.2));
+}
+
+.app-update-mascot-trigger:focus-visible {
+  outline: 3px solid rgba(47, 125, 86, 0.42);
+  outline-offset: 3px;
+  border-radius: 42px;
+}
+
+.app-update-mascot-trigger:disabled {
+  cursor: default;
+}
+
+.app-update-mascot-sprite {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 132px;
+  height: 132px;
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  background-size: 600% 100%;
+  opacity: 0;
+}
+
+.app-update-mascot-idle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 132px;
+  height: 132px;
+}
+
+.app-update-mascot-idle {
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  opacity: 1;
+  transition: transform 180ms cubic-bezier(0.22, 0.8, 0.24, 1), filter 180ms ease;
+}
+
+.app-update-mascot-glow {
+  position: absolute;
+  right: 16px;
+  bottom: 10px;
+  width: 96px;
+  height: 60px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(94, 198, 166, 0.26), transparent 69%);
+  filter: blur(5px);
+}
+
+.app-update-reminder.is-mascot .app-update-mascot-trigger:hover .app-update-mascot-idle {
+  transform: translate3d(0, -5px, 0) scale(1.06);
+  filter: drop-shadow(0 15px 16px rgba(24, 58, 42, 0.24));
+}
+
+.app-update-reminder.is-pulling .app-update-mascot-trigger {
+  animation: appUpdateMascotPull 760ms cubic-bezier(0.2, 0.8, 0.24, 1) both;
+}
+
+.app-update-reminder.is-retracting .app-update-mascot-trigger {
+  animation: appUpdateMascotRetract 520ms cubic-bezier(0.5, 0, 0.82, 0.2) both;
+}
+
+.app-update-reminder.is-pulling .app-update-mascot-sprite {
+  opacity: 1;
+  animation: appUpdateMascotFrames 760ms steps(5, end) both;
+}
+
+.app-update-reminder.is-pulling .app-update-mascot-idle,
+.app-update-reminder.is-card .app-update-mascot-idle,
+.app-update-reminder.is-retracting .app-update-mascot-idle {
+  opacity: 0;
+}
+
+.app-update-reminder.is-card .app-update-mascot-trigger {
+  transform: translate3d(0, 0, 0);
+}
+
+.app-update-reminder.is-card .app-update-mascot-sprite {
+  background-position: 100% 0;
+  opacity: 1;
+}
+
+.app-update-reminder.is-retracting .app-update-mascot-sprite {
+  background-position: 100% 0;
+  opacity: 1;
+}
+
+.app-update-mascot-bubble {
+  position: absolute;
+  right: 70px;
+  top: 0;
+  width: max-content;
+  max-width: 168px;
+  border: 1px solid var(--app-update-border);
+  border-radius: 15px 15px 4px 15px;
+  padding: 8px 11px;
+  color: var(--app-update-ink);
+  background: var(--app-update-paper-strong);
+  box-shadow: 0 10px 28px rgba(32, 62, 43, 0.15);
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  animation: appUpdateBubbleIn 260ms ease-out 220ms both;
+}
+
+.app-update-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 152;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: var(--app-overlay-bg);
+  backdrop-filter: blur(5px);
+  animation: backdropIn 150ms ease both;
+}
+
+.app-update-dialog {
+  width: min(720px, calc(100vw - 32px));
+  height: min(560px, calc(100vh - 40px));
+  min-height: 420px;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  border: 1px solid var(--app-update-border);
+  border-radius: 24px;
+  color: var(--app-update-ink);
+  background: var(--app-update-paper);
+  box-shadow: var(--app-modal-shadow);
+  animation: modalIn 180ms cubic-bezier(0.2, 0.8, 0.24, 1) both;
+}
+
+.app-update-dialog-hero {
+  position: relative;
+  min-height: 136px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  padding: 27px 70px 25px 34px;
+  background:
+    radial-gradient(circle at 20% 110%, rgba(79, 177, 151, 0.3), transparent 38%),
+    linear-gradient(130deg, rgba(255, 255, 255, 0.48), transparent),
+    var(--app-update-paper-strong);
+}
+
+.app-update-dialog-hero h2 {
+  margin: 6px 0 5px;
+  font-family: "Noto Serif SC", "Songti SC", "STSong", serif;
+  font-size: 27px;
+  line-height: 1.2;
+}
+
+.app-update-dialog-hero p {
+  margin: 0;
+  color: var(--app-update-muted);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-update-dialog-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+}
+
+.app-update-dialog-content {
+  overflow: auto;
+  padding: 24px 30px 30px;
+  scrollbar-gutter: stable;
+}
+
+.app-update-log-entry + .app-update-log-entry {
+  margin-top: 22px;
+  padding-top: 22px;
+  border-top: 1px solid var(--app-update-border);
+}
+
+.app-update-log-entry > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.app-update-log-entry > header strong {
+  color: var(--app-update-green);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-update-log-entry > header time {
+  color: var(--app-update-muted);
+  font-size: 12px;
+}
+
+.app-update-log-entry .markdown-view {
+  color: var(--app-body-text);
+  font-size: 14px;
+  line-height: 1.72;
+}
+
+.app-update-log-entry .markdown-view > :first-child {
+  margin-top: 0;
+}
+
+.app-update-log-entry .markdown-view > :last-child {
+  margin-bottom: 0;
+}
+
+.app-update-log-empty {
+  min-height: 230px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  color: var(--app-update-muted);
+  text-align: center;
+}
+
+.app-update-log-empty svg {
+  color: var(--app-update-green);
+}
+
+.app-update-log-empty strong {
+  color: var(--app-update-ink);
+}
+
+.app-update-log-more {
+  margin: 22px 0 0;
+  color: var(--app-update-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.app-update-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid var(--app-update-border);
+  padding: 16px 24px;
+  background: color-mix(in srgb, var(--app-update-paper-strong) 92%, transparent);
+}
+
+@keyframes appUpdateMascotPull {
+  0% { transform: translate3d(340px, 0, 0); }
+  26% { transform: translate3d(292px, 2px, 0) rotate(2deg); }
+  68% { transform: translate3d(64px, 1px, 0) rotate(-2deg); }
+  86% { transform: translate3d(-8px, -2px, 0) rotate(1deg); }
+  100% { transform: translate3d(0, 0, 0) rotate(0); }
+}
+
+@keyframes appUpdateMascotRetract {
+  0% { transform: translate3d(0, 0, 0); }
+  34% { transform: translate3d(54px, -2px, 0) rotate(1deg); }
+  100% { transform: translate3d(340px, 0, 0) rotate(0); }
+}
+
+@keyframes appUpdateMascotFrames {
+  from { background-position: 0 0; }
+  to { background-position: 100% 0; }
+}
+
+@keyframes appUpdateCardPull {
+  0%, 16% { transform: translate3d(calc(100% + 34px), 0, 0); opacity: 0; }
+  30% { opacity: 1; }
+  82% { transform: translate3d(-10px, 0, 0); opacity: 1; }
+  100% { transform: translate3d(0, 0, 0); opacity: 1; }
+}
+
+@keyframes appUpdateCardRetract {
+  0% { transform: translate3d(0, 0, 0); opacity: 1; }
+  70% { opacity: 1; }
+  100% { transform: translate3d(calc(100% + 34px), 0, 0); opacity: 0; }
+}
+
+@keyframes appUpdateBubbleIn {
+  from { opacity: 0; transform: translate3d(8px, 7px, 0) scale(0.92); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes appUpdateSuccessBloom {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.25) rotate(-12deg); }
+  28% { opacity: 1; transform: translate(-50%, -50%) scale(1.08) rotate(4deg); }
+  72% { opacity: 0.92; transform: translate(-50%, -50%) scale(0.94) rotate(0); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.24); }
+}
+
+@keyframes appUpdateSuccessDrop {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.3); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--drop-x), var(--drop-y)) scale(1.1); }
+}
+
+@media (max-width: 620px) {
+  .app-update-reminder {
+    right: 8px;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    width: calc(100vw - 16px);
+    height: 344px;
+  }
+
+  .app-update-card {
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    min-height: 216px;
+    border-radius: 20px;
+    padding-left: 22px;
+    transform: translate3d(0, calc(100% + 20px), 0);
+  }
+
+  .app-update-mascot-trigger {
+    width: 112px;
+    height: 154px;
+    transform: translate3d(calc(100vw - 136px), 0, 0);
+  }
+
+  .app-update-mascot-sprite,
+  .app-update-mascot-idle {
+    width: 112px;
+    height: 112px;
+  }
+
+  .app-update-mascot-bubble {
+    right: 62px;
+  }
+
+  .app-update-reminder.is-card .app-update-mascot-trigger {
+    transform: translate3d(8px, -188px, 0);
+  }
+
+  .app-update-dialog-backdrop {
+    align-items: end;
+    padding: 10px;
+  }
+
+  .app-update-dialog {
+    width: 100%;
+    height: min(86vh, 660px);
+    min-height: 0;
+    border-radius: 22px;
+  }
+
+  .app-update-dialog-hero {
+    min-height: 124px;
+    padding: 24px 58px 22px 24px;
+  }
+
+  .app-update-dialog-hero h2 {
+    font-size: 23px;
+  }
+
+  .app-update-dialog-content {
+    padding: 20px;
+  }
+
+  .app-update-dialog-actions {
+    padding: 14px 16px max(14px, env(safe-area-inset-bottom));
+  }
+
+  @keyframes appUpdateMascotPull {
+    0% { transform: translate3d(calc(100vw - 136px), 0, 0); }
+    44% { transform: translate3d(calc(55vw - 80px), -80px, 0) rotate(-3deg); }
+    82% { transform: translate3d(3px, -196px, 0) rotate(2deg); }
+    100% { transform: translate3d(8px, -188px, 0); }
+  }
+
+  @keyframes appUpdateMascotRetract {
+    0% { transform: translate3d(8px, -188px, 0); }
+    42% { transform: translate3d(calc(55vw - 80px), -80px, 0) rotate(-2deg); }
+    100% { transform: translate3d(calc(100vw - 136px), 0, 0); }
+  }
+
+  @keyframes appUpdateCardPull {
+    0%, 16% { transform: translate3d(0, calc(100% + 20px), 0); opacity: 0; }
+    32% { opacity: 1; }
+    84% { transform: translate3d(0, -8px, 0); opacity: 1; }
+    100% { transform: translate3d(0, 0, 0); opacity: 1; }
+  }
+
+  @keyframes appUpdateCardRetract {
+    0% { transform: translate3d(0, 0, 0); opacity: 1; }
+    72% { opacity: 1; }
+    100% { transform: translate3d(0, calc(100% + 20px), 0); opacity: 0; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-update-reminder *,
+  .app-update-dialog,
+  .app-update-dialog-backdrop {
+    animation: none !important;
+    transition: none !important;
+  }
+}

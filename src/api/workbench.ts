@@ -1,5 +1,6 @@
 import type {
   AssetItem,
+  AppUpdateInfo,
   AvatarHistoryEntry,
   CaseCategory,
   ChatSession,
@@ -755,6 +756,8 @@ export const api = {
     request<PagedResponse<{ entries: ChangelogEntry[] }>>(
       `/api/changelog${queryString({ limit: params?.limit, offset: params?.offset, keyword: params?.keyword })}`
     ),
+  appUpdate: (clientVersion: string, init?: RequestInit) =>
+    request<AppUpdateInfo>(`/api/app-update${queryString({ clientVersion })}`, init),
   sessions: (params?: SessionQuery, init?: RequestInit) =>
     request<PagedResponse<{ sessions: ChatSession[] }>>(
       `/api/sessions${queryString({

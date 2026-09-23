@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, BellRing, Cable, Check, Copy, Database, Github, KeyRound, Leaf, Link2, Monitor, Moon, Palette, Pencil, ScrollText, Search, Settings, Smile, Sun, Sunset, Trash2, UserRound, Volume1, Volume2, VolumeOff, X } from "lucide-react";
+import { Archive, BellRing, Cable, Check, Copy, Database, Github, KeyRound, Leaf, Link2, Monitor, Moon, Palette, Pencil, RefreshCw, ScrollText, Search, Settings, Smile, Sun, Sunset, Trash2, UserRound, Volume1, Volume2, VolumeOff, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api, type ExternalMcpConnection } from "../../api";
 import {
@@ -10,6 +10,9 @@ import {
   type LanguagePreference
 } from "../../i18n";
 import { cx } from "../../lib/cx";
+import { markAppUpdateRefreshPending } from "../../lib/appUpdateReminder";
+import { APP_VERSION } from "../../lib/appVersion";
+import { displayVersion } from "../../lib/semver";
 import { copyTextToClipboard } from "../../lib/clipboard";
 import { useAppearanceMode } from "../../hooks/useAppearanceMode";
 import { useInfinitePageLoader } from "../../hooks/useInfinitePageLoader";
@@ -186,7 +189,6 @@ export function AppSettingsDialog({
   const pluginInstallCopiedTimerRef = useRef<number | null>(null);
   const [changelogSearchInput, setChangelogSearchInput] = useState("");
   const [changelogSearchKeyword, setChangelogSearchKeyword] = useState("");
-  const [latestChangelogVersion, setLatestChangelogVersion] = useState("");
   const settingsContentRef = useRef<HTMLDivElement | null>(null);
   const { mode: appearanceMode, setMode: setAppearanceMode } = useAppearanceMode();
   const { showToast } = useToast();
@@ -241,6 +243,13 @@ export function AppSettingsDialog({
       lastPage.pageInfo.hasMore ? lastPage.pageInfo.offset + lastPage.pageInfo.limit : undefined
     ),
     enabled: open && activeSection === "about"
+  });
+  const appUpdate = useQuery({
+    queryKey: ["app-update", APP_VERSION],
+    queryFn: ({ signal }) => api.appUpdate(APP_VERSION, { signal }),
+    enabled: open && activeSection === "about",
+    staleTime: 30_000,
+    refetchOnWindowFocus: "always"
   });
   const branding = useQuery({
     queryKey: ["branding"],
@@ -440,9 +449,6 @@ export function AppSettingsDialog({
   const changelogLoading = changelog.isLoading || changelogSearchPending;
   const hasChangelogSearch = Boolean(changelogSearchKeyword);
   const visibleChangelogEntries = changelogSearchPending ? [] : entries;
-  useEffect(() => {
-    if (!changelogSearchKeyword && entries[0]?.version) setLatestChangelogVersion(entries[0].version);
-  }, [changelogSearchKeyword, entries]);
   const changelogLoadMoreRef = useInfinitePageLoader({
     fetchNextPage: () => changelog.fetchNextPage(),
     hasNextPage: !changelogSearchPending && Boolean(changelog.hasNextPage),
@@ -570,7 +576,7 @@ export function AppSettingsDialog({
 
   if (!open) return null;
 
-  const latestVersion = latestChangelogVersion || (!changelogSearchKeyword ? entries[0]?.version ?? "" : "");
+  const serverVersion = appUpdate.data?.serverVersion ?? "";
   const pluginVersion = pluginInstallLinks.data?.pluginVersion.trim() ?? "";
   const avatarSource = user.username?.trim() || user.account?.trim() || "U";
   const avatarText = avatarSource.slice(0, 1).toUpperCase();
@@ -1172,14 +1178,37 @@ export function AppSettingsDialog({
                 <div className="settings-row settings-about-version-row">
                   <div>
                     <strong>{t("settings.about.currentVersion")}</strong>
-                    <span>{latestVersion || "-"}</span>
+                    <span dir="ltr">{displayVersion(APP_VERSION)}</span>
                   </div>
-                  {showGithubEntry ? (
-                    <a className="secondary-btn" href={PROJECT_REPOSITORY_URL} target="_blank" rel="noreferrer">
-                      <Github size={15} />
-                      GitHub
-                    </a>
-                  ) : null}
+                  <div className="settings-about-version-actions">
+                    {showGithubEntry ? (
+                      <a className="secondary-btn" href={PROJECT_REPOSITORY_URL} target="_blank" rel="noreferrer">
+                        <Github size={15} />
+                        GitHub
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="settings-row settings-about-version-row">
+                  <div>
+                    <strong>{t("settings.about.latestVersion")}</strong>
+                    <span dir="ltr">{serverVersion ? displayVersion(serverVersion) : appUpdate.isLoading ? t("common.loadingEllipsis") : "-"}</span>
+                  </div>
+                  <div className="settings-about-version-actions">
+                    {appUpdate.data?.updateAvailable ? (
+                      <button
+                        className="primary-btn"
+                        type="button"
+                        onClick={() => {
+                          markAppUpdateRefreshPending(window.sessionStorage, serverVersion);
+                          window.location.reload();
+                        }}
+                      >
+                        <RefreshCw size={15} />
+                        {t("appUpdate.refreshAction")}
+                      </button>
+                    ) : serverVersion ? <span className="settings-version-status is-current"><Check size={14} />{t("settings.about.upToDate")}</span> : null}
+                  </div>
                 </div>
               </div>
               <div className="settings-changelog">

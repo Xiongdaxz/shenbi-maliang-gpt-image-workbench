@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { api } from "./api";
 import { SharedWorkbenchShell } from "./components/SharedWorkbenchShell";
+import { AppUpdateNotifier } from "./components/AppUpdateNotifier";
 import { WorkbenchShell } from "./components/WorkbenchShell";
 import { useAppearanceMode } from "./hooks/useAppearanceMode";
 import { useI18n, useSyncI18nPreference } from "./i18n";
@@ -90,7 +91,12 @@ export default function App() {
     }
     return (
       <ToastProvider>
-        {me.data?.user ? <WorkbenchShell user={me.data.user} /> : <SharedWorkbenchShell />}
+        {me.data?.user ? (
+          <>
+            <WorkbenchShell user={me.data.user} />
+            <AppUpdateNotifier />
+          </>
+        ) : <SharedWorkbenchShell />}
       </ToastProvider>
     );
   }
@@ -113,6 +119,7 @@ export default function App() {
   return (
     <ToastProvider>
       <WorkbenchShell user={me.data.user} />
+      <AppUpdateNotifier />
     </ToastProvider>
   );
 }

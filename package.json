@@ -1,13 +1,14 @@
 {
   "name": "gpt-image-workbench",
   "private": true,
-  "version": "0.1.78",
+  "version": "0.1.79",
   "license": "MIT",
   "type": "module",
   "scripts": {
     "dev:web": "vite --host 0.0.0.0",
     "dev:api": "bun --watch server/index.ts",
     "build": "tsc -b && vite build",
+    "build:app-update-sprite": "bun scripts/build-app-update-sprite.ts",
     "test": "bun test",
     "test:chatgpt-web-bridge": "bun scripts/run-chatgpt-web-bridge-tests.ts",
     "setup:chatgpt-web": "bun scripts/setup-chatgpt-web-python.ts",
@@ -15,6 +16,8 @@
     "smoke:mcp": "bun scripts/smoke-external-mcp.ts",
     "start": "bun scripts/start-server.ts",
     "restart": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/restart.ps1",
+    "preview:app-update": "bun scripts/start-app-update-preview.ts",
+    "seed:app-update-preview": "bun scripts/seed-app-update-preview.ts",
     "check": "tsc -b"
   },
   "dependencies": {

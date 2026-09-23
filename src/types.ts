@@ -706,6 +706,13 @@ export type ChangelogEntry = {
   updatedAt: string;
 };
 
+export type AppUpdateInfo = {
+  serverVersion: string;
+  updateAvailable: boolean;
+  entries: ChangelogEntry[];
+  hasMore: boolean;
+};
+
 export type ChatSession = {
   id: string;
   title: string;

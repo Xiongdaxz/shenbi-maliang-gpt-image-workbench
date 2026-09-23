@@ -173,6 +173,37 @@
   white-space: nowrap;
 }
 
+.settings-about-version-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.settings-about-version-actions .primary-btn,
+.settings-about-version-actions .secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-version-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.settings-version-status.is-current {
+  color: #2f7d56;
+}
+
+html[data-appearance="dark"] .settings-version-status.is-current {
+  color: #79b991;
+}
+
 .settings-content h2 {
   margin: 0;
   color: var(--app-text);

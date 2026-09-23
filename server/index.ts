@@ -81,6 +81,7 @@ import { registerBackupRoutes, startBackupScheduler } from "./backupRoutes";
 import { invalidatePublicBrandingCache, registerBrandingRoutes } from "./branding";
 import { registerCaseRoutes } from "./caseRoutes";
 import { registerChangelogRoutes } from "./changelogRoutes";
+import { staticAssetCacheControl } from "./staticAssetCache";
 import { registerFileRoutes } from "./fileRoutes";
 import { registerExternalMcpOAuthRoutes } from "./externalMcpOAuth";
 import { EXTERNAL_MCP_CLIENT_IP_HEADER } from "./externalMcpAuth";
@@ -3556,12 +3557,19 @@ app.use("/share/*", async (c, next) => {
   c.header("X-Frame-Options", "DENY");
   c.header("X-Robots-Tag", "noindex, nofollow, noarchive");
 });
-app.use("*", serveStatic({ root: "./dist" }));
+app.use("*", serveStatic({
+  root: "./dist",
+  onFound: (filePath, c) => {
+    const cacheControl = staticAssetCacheControl(filePath);
+    if (cacheControl) c.header("Cache-Control", cacheControl);
+  }
+}));
 app.get("*", async (c) => {
   const indexPath = path.join(ROOT, "dist", "index.html");
   if (!existsSync(indexPath)) {
     return c.text("API server is running. Run `bun run build` before using the single-service UI.", 200);
   }
+  c.header("Cache-Control", "no-store");
   return c.html(await readFile(indexPath, "utf8"));
 });
 

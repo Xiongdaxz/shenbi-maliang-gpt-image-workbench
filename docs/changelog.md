@@ -2,6 +2,18 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.79 - 2026-09-23
+
+### 中文
+
+- 网页端检测到有新版本时，会在右下角显示小马良更新入口；点击后可查看当前版本与新版之间的更新内容，并一键刷新。收起提醒或选择稍后更新后，入口仍会保留，直到成功更新。
+- “关于”页面现在分别显示当前网页版本和服务端版本，并在有新版本时提供刷新入口，便于确认更新状态。
+
+### English
+
+- When a newer version is available, Little Maliang appears in the lower-right corner of the web app. Users can open the update card to review changes since their current version and refresh in one click. The reminder remains available after dismissal until the update succeeds.
+- About now shows the current web version and server version separately, with a refresh action when an update is available so users can check their update status.
+
 ## v0.1.78 - 2026-09-21
 
 ### 中文
