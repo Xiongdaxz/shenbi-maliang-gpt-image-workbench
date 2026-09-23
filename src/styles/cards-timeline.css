@@ -8,6 +8,7 @@
 .image-virtual-grid {
   position: relative;
   width: 100%;
+  overflow-anchor: none;
 }
 
 .image-virtual-grid-row {
@@ -16,7 +17,6 @@
   right: 0;
   display: grid;
   align-items: start;
-  will-change: transform;
 }
 
 .case-grid {
@@ -25,6 +25,7 @@
 
 .case-virtual-grid {
   width: 100%;
+  overflow-anchor: none;
 }
 
 .case-virtual-grid-row {
@@ -138,6 +139,13 @@
   opacity: 0;
   animation: none;
   transition: opacity 180ms ease;
+}
+
+.image-virtual-grid .image-load-shell img,
+.case-virtual-grid .image-load-shell img,
+.image-virtual-grid .image-load-shell.loaded .image-load-skeleton,
+.case-virtual-grid .image-load-shell.loaded .image-load-skeleton {
+  transition-duration: 120ms;
 }
 
 .case-card img,

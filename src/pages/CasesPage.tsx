@@ -19,6 +19,7 @@ import { ImageDownloadMenu } from "../components/ImageDownloadMenu";
 import { InspirationLeaderboardDialog } from "../components/InspirationLeaderboardDialog";
 import { ImagePreviewModal } from "../components/ImagePreviewModal";
 import { LibraryEmptyState } from "../components/LibraryEmptyState";
+import { LibraryPageLoadError } from "../components/LibraryPageLoadError";
 import { PageHeader } from "../components/PageHeader";
 import { PromptReferenceLinksDialog } from "../components/PromptReferenceLinksDialog";
 import { SearchHistoryInput } from "../components/SearchHistoryInput";
@@ -638,13 +639,13 @@ export function CasesPage({
     }
   });
   const caseLoadMoreRef = useInfinitePageLoader({
-    fetchNextPage: () => cases.fetchNextPage(),
+    fetchNextPage: cases.fetchNextPage,
     hasNextPage: Boolean(cases.hasNextPage),
     isFetchNextPageError: cases.isFetchNextPageError,
     isFetchingNextPage: cases.isFetchingNextPage,
     autoLoad: loadingToBottom,
-    rootMargin: "320px",
-    scrollIdleDelayMs: 260
+    rootMargin: "1600px",
+    scrollIdleDelayMs: 16
   });
   const hasCaseFilters = selectedCategoryIds.length > 0 || mineOnly || favoriteOnly || Boolean(keyword.trim());
   const useCasePrompt = (item: GalleryCaseItem) => {
@@ -917,6 +918,7 @@ export function CasesPage({
           getKey={(item) => item.groupId || item.id}
           minColumnWidth={210}
           estimateCardHeight={(width) => width + 85}
+          overscanMultiplier={2}
           gap={16}
           mobileGap={10}
           className="case-virtual-grid"
@@ -1033,6 +1035,7 @@ export function CasesPage({
         )
       ) : null}
       <div ref={caseLoadMoreRef} className="page-load-sentinel" aria-hidden="true" />
+      {cases.isFetchNextPageError ? <LibraryPageLoadError onRetry={() => void cases.fetchNextPage()} /> : null}
       <ScrollJumpButton className="page-scroll-jump-btn" scrollJump={scrollJump} onClick={jumpToScrollEdge} />
       {previewIndex !== null ? (
         <ImagePreviewModal

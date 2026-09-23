@@ -1,11 +1,21 @@
 import { describe, expect, test } from "bun:test";
 import {
   AUTOMATIC_PROVIDER_ROUTE_ORDER,
+  defaultProviderSelectionId,
   executeAutomaticProviderRoutes,
   shouldRetryResponsesAsStream
 } from "./providerRuntime";
 
 describe("provider automatic routing", () => {
+  test("uses the same default channel selection for Web and MCP requests", () => {
+    const providers = [{ id: "cpa-primary" }, { id: "cpa-backup" }];
+    expect(defaultProviderSelectionId("auto", providers)).toBe("auto");
+    expect(defaultProviderSelectionId("cpa", providers)).toBe("cpa-primary");
+    expect(defaultProviderSelectionId("api", providers)).toBe("cpa-primary");
+    expect(defaultProviderSelectionId("chatgpt_web", providers)).toBe("cpa-primary");
+    expect(defaultProviderSelectionId("cpa", [])).toBe("auto");
+  });
+
   test("tries Responses before falling back to Images API", () => {
     expect([...AUTOMATIC_PROVIDER_ROUTE_ORDER]).toEqual(["responses", "images_api"]);
   });

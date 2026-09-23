@@ -113,6 +113,30 @@ export function createInfinitePageLoadScheduler({
   };
 }
 
+type PageLoadPointerTarget = Pick<ReturnType<typeof createInfinitePageLoadScheduler>, "handlePointerStart" | "handlePointerEnd">;
+
+export function createPageLoadPointerController() {
+  let active = false;
+  let scheduler: PageLoadPointerTarget | null = null;
+  return {
+    bind(nextScheduler: PageLoadPointerTarget) {
+      scheduler = nextScheduler;
+      if (active) scheduler.handlePointerStart();
+    },
+    unbind(currentScheduler: PageLoadPointerTarget) {
+      if (scheduler === currentScheduler) scheduler = null;
+    },
+    handlePointerStart() {
+      active = true;
+      scheduler?.handlePointerStart();
+    },
+    handlePointerEnd() {
+      active = false;
+      scheduler?.handlePointerEnd();
+    }
+  };
+}
+
 type InfiniteAutoLoadRequest = {
   fetchNextPage: () => Promise<unknown>;
   hasNextPage: boolean;
@@ -163,6 +187,9 @@ export function useInfinitePageLoader({
 }: UseInfinitePageLoaderOptions) {
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const retryArmedRef = useRef(false);
+  const pointerControllerRef = useRef<ReturnType<typeof createPageLoadPointerController> | null>(null);
+  if (!pointerControllerRef.current) pointerControllerRef.current = createPageLoadPointerController();
+  const pointerController = pointerControllerRef.current;
   const [autoLoadCompletion, setAutoLoadCompletion] = useState(0);
   const autoLoadControllerRef = useRef<ReturnType<typeof createInfiniteAutoLoadController> | null>(null);
   if (!autoLoadControllerRef.current) {
@@ -177,6 +204,26 @@ export function useInfinitePageLoader({
   }, [isFetchNextPageError]);
 
   useEffect(() => () => autoLoadController.setEnabled(false), [autoLoadController]);
+
+  useEffect(() => {
+    if (scrollIdleDelayMs <= 0) return;
+    const handlePointerStart = () => {
+      pointerController.handlePointerStart();
+    };
+    const handlePointerEnd = () => {
+      pointerController.handlePointerEnd();
+    };
+    window.addEventListener("pointerdown", handlePointerStart, { capture: true, passive: true });
+    window.addEventListener("pointerup", handlePointerEnd, { capture: true, passive: true });
+    window.addEventListener("pointercancel", handlePointerEnd, { capture: true, passive: true });
+    window.addEventListener("blur", handlePointerEnd);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerStart, true);
+      window.removeEventListener("pointerup", handlePointerEnd, true);
+      window.removeEventListener("pointercancel", handlePointerEnd, true);
+      window.removeEventListener("blur", handlePointerEnd);
+    };
+  }, [pointerController, scrollIdleDelayMs]);
 
   useEffect(() => {
     autoLoadController.setEnabled(autoLoad);
@@ -210,6 +257,7 @@ export function useInfinitePageLoader({
         if (isFetchNextPageError) retryArmedRef.current = true;
       }
     });
+    pointerController.bind(scheduler);
     const observer = new IntersectionObserver(
       (entries) => {
         const intersects = entries.some((entry) => entry.isIntersecting);
@@ -220,21 +268,16 @@ export function useInfinitePageLoader({
     observer.observe(sentinel);
     if (scrollIdleDelayMs > 0) {
       scrollTarget.addEventListener("scroll", scheduler.handleScroll, { passive: true });
-      window.addEventListener("pointerdown", scheduler.handlePointerStart, { capture: true, passive: true });
-      window.addEventListener("pointerup", scheduler.handlePointerEnd, { capture: true, passive: true });
-      window.addEventListener("pointercancel", scheduler.handlePointerEnd, { capture: true, passive: true });
     }
     return () => {
+      pointerController.unbind(scheduler);
       scheduler.dispose();
       observer.disconnect();
       if (scrollIdleDelayMs > 0) {
         scrollTarget.removeEventListener("scroll", scheduler.handleScroll);
-        window.removeEventListener("pointerdown", scheduler.handlePointerStart, true);
-        window.removeEventListener("pointerup", scheduler.handlePointerEnd, true);
-        window.removeEventListener("pointercancel", scheduler.handlePointerEnd, true);
       }
     };
-  }, [autoLoad, fetchNextPage, hasNextPage, isFetchNextPageError, isFetchingNextPage, rootMargin, rootRef, scrollIdleDelayMs]);
+  }, [autoLoad, fetchNextPage, hasNextPage, isFetchNextPageError, isFetchingNextPage, pointerController, rootMargin, rootRef, scrollIdleDelayMs]);
 
   return sentinelRef;
 }

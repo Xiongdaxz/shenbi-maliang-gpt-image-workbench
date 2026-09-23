@@ -138,6 +138,7 @@ export async function deleteUserAccount(userId: string) {
     run(appDb, "delete from search_history where user_id = ?", userId);
     run(appDb, "delete from prompt_color_schemes where user_id = ?", userId);
     run(appDb, "delete from user_preferences where user_id = ?", userId);
+    run(appDb, "delete from user_snake_progress where user_id = ?", userId);
     run(appDb, "delete from user_avatar_history where user_id = ?", userId);
     run(appDb, "delete from user_auth_sessions where user_id = ?", userId);
     run(appDb, "delete from image_job_cancel_requests where user_id = ?", userId);

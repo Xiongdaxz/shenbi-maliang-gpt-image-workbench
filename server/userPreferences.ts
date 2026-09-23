@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { appDb, getOne, run } from "./db";
 import { enabledImageTaskSoundIds } from "./imageTaskSounds";
 import type { UserPreferencesRow } from "./types";
+import { normalizeSnakeScoreMode, type SnakeScoreMode } from "../src/lib/snakeScoreMode";
 import { now } from "./utils";
 import {
   cloneDefaultPromptOptimizeStyleGroups,
@@ -32,6 +33,7 @@ export type PublicUserPreferences = {
   language: LanguagePreference;
   imagePreviewWheelMode: ImagePreviewWheelMode;
   imagePreviewOpenMode: ImagePreviewOpenMode;
+  snakeScoreMode: SnakeScoreMode;
   editSuggestionsEnabled: boolean;
   editSuggestionTone: EditSuggestionTone;
   autoUploadPastedAssets: boolean;
@@ -70,6 +72,7 @@ export function defaultUserPreferences(availableSoundIds: readonly string[] = []
     language: "auto",
     imagePreviewWheelMode: "pan",
     imagePreviewOpenMode: "contain",
+    snakeScoreMode: "keep",
     editSuggestionsEnabled: true,
     editSuggestionTone: "default",
     autoUploadPastedAssets: true,
@@ -108,6 +111,7 @@ function publicUserPreferences(
     language: normalizeLanguagePreference(row.language),
     imagePreviewWheelMode: normalizeImagePreviewWheelMode(row.image_preview_wheel_mode),
     imagePreviewOpenMode: normalizeImagePreviewOpenMode(row.image_preview_open_mode),
+    snakeScoreMode: normalizeSnakeScoreMode(row.snake_score_mode),
     editSuggestionsEnabled: Boolean(row.edit_suggestions_enabled),
     editSuggestionTone: normalizeEditSuggestionTone(row.edit_suggestion_tone),
     autoUploadPastedAssets: row.auto_upload_pasted_assets !== 0,
@@ -154,6 +158,8 @@ export function saveUserPreferencesToDb(
     input.imagePreviewWheelMode === undefined ? current.imagePreviewWheelMode : normalizeImagePreviewWheelMode(input.imagePreviewWheelMode);
   const imagePreviewOpenMode =
     input.imagePreviewOpenMode === undefined ? current.imagePreviewOpenMode : normalizeImagePreviewOpenMode(input.imagePreviewOpenMode);
+  const snakeScoreMode =
+    input.snakeScoreMode === undefined ? current.snakeScoreMode : normalizeSnakeScoreMode(input.snakeScoreMode);
   const editSuggestionsEnabled =
     typeof input.editSuggestionsEnabled === "boolean" ? input.editSuggestionsEnabled : current.editSuggestionsEnabled;
   const editSuggestionTone =
@@ -191,16 +197,17 @@ export function saveUserPreferencesToDb(
   run(
     db,
     `insert into user_preferences (
-      user_id, language, image_preview_wheel_mode, image_preview_open_mode,
+      user_id, language, image_preview_wheel_mode, image_preview_open_mode, snake_score_mode,
       edit_suggestions_enabled, edit_suggestion_tone, auto_upload_pasted_assets,
       image_task_sound_enabled, image_task_browser_notification_enabled,
       image_task_sound_volume, image_task_success_sound_id, image_task_failure_sound_id,
       prompt_optimize_styles_json, prompt_optimize_custom_instruction, updated_at
-    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     on conflict(user_id) do update set
       language = excluded.language,
       image_preview_wheel_mode = excluded.image_preview_wheel_mode,
       image_preview_open_mode = excluded.image_preview_open_mode,
+      snake_score_mode = excluded.snake_score_mode,
       edit_suggestions_enabled = excluded.edit_suggestions_enabled,
       edit_suggestion_tone = excluded.edit_suggestion_tone,
       auto_upload_pasted_assets = excluded.auto_upload_pasted_assets,
@@ -216,6 +223,7 @@ export function saveUserPreferencesToDb(
     language,
     imagePreviewWheelMode,
     imagePreviewOpenMode,
+    snakeScoreMode,
     editSuggestionsEnabled ? 1 : 0,
     editSuggestionTone,
     autoUploadPastedAssets ? 1 : 0,

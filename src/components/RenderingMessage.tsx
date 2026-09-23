@@ -183,6 +183,7 @@ export const RenderingMessage = memo(function RenderingMessage({
   const [titleIndex, setTitleIndex] = useState(0);
   const [titleSettled, setTitleSettled] = useState(true);
   const [snakeActive, setSnakeActive] = useState(false);
+  const [snakeScore, setSnakeScore] = useState<number | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationElapsedRef = useRef(0);
@@ -191,6 +192,7 @@ export const RenderingMessage = memo(function RenderingMessage({
   useEffect(() => {
     animationElapsedRef.current = 0;
     setSnakeActive(false);
+    setSnakeScore(null);
   }, [mode]);
 
   useEffect(() => {
@@ -403,12 +405,13 @@ export const RenderingMessage = memo(function RenderingMessage({
             <button
               type="button"
               className="rendering-game-back"
-              onClick={() => setSnakeActive(false)}
+              onClick={() => { setSnakeScore(null); setSnakeActive(false); }}
               aria-label={t("rendering.snake.backToLoading")}
             >
               <ArrowLeft size={16} />
             </button>
-            <span>{t("rendering.snake.shortInstructions")}</span>
+            <span className="rendering-game-instructions">{t("rendering.snake.shortInstructions")}</span>
+            {snakeScore !== null ? <span className="rendering-snake-score" aria-hidden="true">{t("rendering.snake.score", { score: snakeScore })}</span> : null}
           </>
         ) : titles[titleIndex] ?? titles[0]}
     </span>
@@ -416,7 +419,11 @@ export const RenderingMessage = memo(function RenderingMessage({
   const card = (
     <div ref={cardRef} className={cx("rendering-card", snakeActive && "is-snake-active")}>
       {snakeActive ? (
-        <RenderingSnakeGame t={t} onExit={() => setSnakeActive(false)} />
+        <RenderingSnakeGame
+          t={t}
+          onScoreChange={setSnakeScore}
+          onExit={() => { setSnakeScore(null); setSnakeActive(false); }}
+        />
       ) : (
         <>
           <div className="rendering-dot-field" aria-hidden="true">
@@ -426,7 +433,7 @@ export const RenderingMessage = memo(function RenderingMessage({
             type="button"
             className="rendering-game-start"
             aria-label={t("rendering.playSnake")}
-            onClick={() => setSnakeActive(true)}
+            onClick={() => { setSnakeScore(null); setSnakeActive(true); }}
           />
         </>
       )}

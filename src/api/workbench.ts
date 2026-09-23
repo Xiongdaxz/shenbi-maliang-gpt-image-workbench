@@ -64,6 +64,8 @@ export type PageInfo = {
   hasMore: boolean;
 };
 
+export type SnakeProgress = { score: number; revision: number };
+
 export type PagedResponse<T> = {
   pageInfo: PageInfo;
 } & T;
@@ -742,6 +744,17 @@ export const api = {
       method: "POST",
       body: JSON.stringify(preferences)
     }),
+  snakeProgress: (init?: RequestInit) => request<SnakeProgress>("/api/snake/progress", init),
+  saveSnakeProgress: (score: number, revision: number, expectedUserId: string) =>
+    request<SnakeProgress>("/api/snake/progress", {
+      method: "POST",
+      keepalive: true,
+      body: JSON.stringify({ score, revision, expectedUserId })
+    }),
+  resetSnakeProgress: (expectedUserId: string) => request<SnakeProgress>("/api/snake/progress/reset", {
+    method: "POST",
+    body: JSON.stringify({ expectedUserId })
+  }),
   suggestUsername: () => request<{ username: string; usernames?: string[] }>("/api/auth/username-suggestion", { method: "POST" }),
   uploadAvatar: (form: FormData) =>
     request<{ user: User }>("/api/auth/avatar", {

@@ -166,6 +166,10 @@ export function enabledProvidersForCurrentMode() {
   return sortProvidersForRuntime(enabledProviderRows().filter((provider) => providerMatchesImageMode(provider, settings)));
 }
 
+export function defaultProviderSelectionId(mode: ImageGenerationSettings["mode"], providers: readonly Pick<RuntimeProviderRow, "id">[]) {
+  return mode === "auto" ? AUTO_PROVIDER_ID : providers[0]?.id ?? AUTO_PROVIDER_ID;
+}
+
 export function providerChainById(id?: string) {
   const settings = imageGenerationSettings();
   const normalizedId = String(id ?? "").trim();

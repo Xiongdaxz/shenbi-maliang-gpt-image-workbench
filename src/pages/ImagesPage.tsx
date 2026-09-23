@@ -15,6 +15,7 @@ import { ImageBatchDownloadDialog } from "../components/images/ImageBatchDownloa
 import { ImageBatchResultDialog } from "../components/images/ImageBatchResultDialog";
 import { ImageBatchToolbar, type ImageBatchAction } from "../components/images/ImageBatchToolbar";
 import { LibraryEmptyState } from "../components/LibraryEmptyState";
+import { LibraryPageLoadError } from "../components/LibraryPageLoadError";
 import { PageHeader } from "../components/PageHeader";
 import { SearchHistoryInput } from "../components/SearchHistoryInput";
 import { ScrollJumpButton } from "../components/ScrollJumpButton";
@@ -378,13 +379,13 @@ export function ImagesPage({
     }
   });
   const imageLoadMoreRef = useInfinitePageLoader({
-    fetchNextPage: () => images.fetchNextPage(),
+    fetchNextPage: images.fetchNextPage,
     hasNextPage: Boolean(images.hasNextPage),
     isFetchNextPageError: images.isFetchNextPageError,
     isFetchingNextPage: images.isFetchingNextPage,
     autoLoad: loadingToBottom,
-    rootMargin: "320px",
-    scrollIdleDelayMs: 260
+    rootMargin: "1600px",
+    scrollIdleDelayMs: 16
   });
 
   useEffect(() => {
@@ -859,6 +860,7 @@ export function ImagesPage({
           getKey={(image) => image.id}
           minColumnWidth={GRID_MIN_CARD_WIDTH}
           estimateCardHeight={(cardWidth) => Math.ceil(cardWidth * 1.25) + 2}
+          overscanMultiplier={2}
           gap={GRID_GAP}
           mobileGap={GRID_MOBILE_GAP}
           className="image-virtual-grid"
@@ -1114,6 +1116,7 @@ export function ImagesPage({
         )
       ) : null}
       <div ref={imageLoadMoreRef} className="page-load-sentinel" aria-hidden="true" />
+      {images.isFetchNextPageError ? <LibraryPageLoadError onRetry={() => void images.fetchNextPage()} /> : null}
       <ScrollJumpButton className="page-scroll-jump-btn" scrollJump={scrollJump} onClick={jumpToScrollEdge} />
       {openImageId && openImagePreviewItems.length > 0 ? (
         <ImagePreviewModal

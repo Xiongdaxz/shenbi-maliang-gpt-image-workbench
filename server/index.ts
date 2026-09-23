@@ -115,6 +115,7 @@ import {
 import { registerSafetyReviewRoutes } from "./safetyReview";
 import { registerStarterCopyRoutes, startStarterCopyScheduler } from "./starterCopyRoutes";
 import { registerUserRoutes } from "./userRoutes";
+import { registerSnakeProgressRoutes } from "./snakeProgressRoutes";
 import { migrateExistingFilesToSecureStorage } from "./secureFiles";
 import { saveSmtpSettings, sendSmtpTestEmail, smtpSettings } from "./smtp";
 import { normalizePhone as normalizeSmsPhone, saveSmsSettings, sendSmsTest, smsSettings, validMainlandPhone } from "./sms";
@@ -327,6 +328,7 @@ api.onError((error, c) => {
 api.get("/health", (c) => c.json({ ok: true }));
 
 registerUserRoutes(api);
+registerSnakeProgressRoutes(api);
 
 registerSessionShareRoutes(api);
 

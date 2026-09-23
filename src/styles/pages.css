@@ -2017,6 +2017,24 @@ html:is([data-appearance="dark"], [data-appearance="maliang"], [data-appearance=
 
 .page-load-sentinel {
   height: 1px;
+  overflow-anchor: none;
+}
+
+.page-load-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px 0 24px;
+  color: var(--app-muted);
+  font-size: 13px;
+}
+
+.page-load-error .secondary-btn {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .case-add-tag {

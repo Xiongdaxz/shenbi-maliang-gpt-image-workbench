@@ -6,7 +6,7 @@ import { appDb, configDb, getAll, getOne, run } from "./db";
 import { audit } from "./auditLog";
 import { defaultTeamId } from "./categories";
 import { publicBranding } from "./branding";
-import { enabledProvidersForCurrentMode } from "./providerRuntime";
+import { defaultProviderSelectionId, enabledProvidersForCurrentMode } from "./providerRuntime";
 import { imageOriginPromptsByImageIds, imageReferencesByImageIds, publicUser, toProvider } from "./serializers";
 import { imageGenerationSettings } from "./settingsStore";
 import { replayImageJobEventsFromDb, streamImageJobEvents } from "./imageJobEvents";
@@ -805,7 +805,7 @@ api.get("/providers", async (c) => {
   const rows = enabledProvidersForCurrentMode();
   const providers = rows.map((row) => toProvider(row, false));
   const autoProvider =
-    settings.mode === "auto" && providers.length > 0
+    defaultProviderSelectionId(settings.mode, rows) === AUTO_PROVIDER_ID && providers.length > 0
       ? {
           ...providers[0],
           id: AUTO_PROVIDER_ID,

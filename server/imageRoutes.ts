@@ -3,7 +3,6 @@ import { applyAssetFieldSuggestionsToImages, ensureAssetFieldSuggestionsForImage
 import { caseMaterialReferenceFromSource, caseMaterialSourcesByIds } from "./caseMaterialSources";
 import { applyCaseFieldSuggestionsToImages, ensureCaseFieldSuggestionsForImage } from "./caseSuggestions";
 import {
-  AUTO_PROVIDER_ID,
   DEFAULT_IMAGE_MODEL,
   IMAGE_JOB_RUNNING_TIMEOUT_MS,
   IMAGE_JOB_TIMEOUT_ERROR,
@@ -45,7 +44,7 @@ import {
 import { boundedPaginationFromQuery, pageInfo } from "./pagination";
 import { invalidateLibraryFacetCache } from "./libraryRoutes";
 import { imageDateSearchConditions } from "./imageSearch";
-import { callProviderChain, providerChainById, providerRequestWasCancelled } from "./providerRuntime";
+import { callProviderChain, defaultProviderSelectionId, enabledProvidersForCurrentMode, providerChainById, providerRequestWasCancelled } from "./providerRuntime";
 import { providerResponseSnapshot } from "./responseSnapshots";
 import { reviewConversationPrompt } from "./safetyReview";
 import {
@@ -555,7 +554,8 @@ function autoRetryCountFromError(error: unknown, fallback: number) {
 }
 
 function providerSelectionId(value: unknown) {
-  return String(value ?? "").trim() || AUTO_PROVIDER_ID;
+  return String(value ?? "").trim()
+    || defaultProviderSelectionId(imageGenerationSettings().mode, enabledProvidersForCurrentMode());
 }
 
 function errorMessage(error: unknown, fallback: string) {

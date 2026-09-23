@@ -47,6 +47,7 @@ function createUserPreferencesTable(db: Database) {
     language text not null default 'auto',
     image_preview_wheel_mode text not null default 'pan',
     image_preview_open_mode text not null default 'contain',
+    snake_score_mode text not null default 'keep',
     edit_suggestions_enabled integer not null default 1,
     edit_suggestion_tone text not null default 'default',
     auto_upload_pasted_assets integer not null default 1,
@@ -64,6 +65,7 @@ function createUserPreferencesTable(db: Database) {
 describe("image task sound preferences", () => {
   test("uses the documented defaults and clamps volume", () => {
     const defaults = defaultUserPreferences();
+    expect(defaults.snakeScoreMode).toBe("keep");
     expect(defaults.imageTaskSoundEnabled).toBe(true);
     expect(defaults.imageTaskBrowserNotificationEnabled).toBe(false);
     expect(defaults.imageTaskSoundVolume).toBe(DEFAULT_IMAGE_TASK_SOUND_VOLUME);
@@ -119,6 +121,7 @@ describe("image task sound preferences", () => {
     createUserPreferencesTable(db);
     const availableSoundIds = ["maliang-001", "maliang-002", "maliang-004"];
     const saved = saveUserPreferencesToDb(db, "user_1", {
+      snakeScoreMode: "keep",
       imageTaskSoundEnabled: false,
       imageTaskBrowserNotificationEnabled: true,
       imageTaskSoundVolume: 88,
@@ -126,6 +129,7 @@ describe("image task sound preferences", () => {
       imageTaskFailureSoundId: "missing-sound"
     }, availableSoundIds);
     expect(saved.imageTaskSoundEnabled).toBe(false);
+    expect(saved.snakeScoreMode).toBe("keep");
     expect(saved.imageTaskBrowserNotificationEnabled).toBe(true);
     expect(saved.imageTaskSoundVolume).toBe(88);
     expect(saved.imageTaskSuccessSoundId).toBe("maliang-004");
@@ -136,6 +140,14 @@ describe("image task sound preferences", () => {
     const normalized = userPreferencesFromDb(db, "user_1", availableSoundIds);
     expect(normalized.imageTaskSuccessSoundId).toBe("maliang-001");
     expect(normalized.imageTaskFailureSoundId).toBe("maliang-002");
+  });
+
+  test("keeps an explicit restart choice when other preferences are saved", () => {
+    const db = new Database(":memory:");
+    databases.push(db);
+    createUserPreferencesTable(db);
+    expect(saveUserPreferencesToDb(db, "user_1", { snakeScoreMode: "restart" }).snakeScoreMode).toBe("restart");
+    expect(saveUserPreferencesToDb(db, "user_1", { language: "en-US" }).snakeScoreMode).toBe("restart");
   });
 
   test("does not overwrite temporarily unavailable sound ids when saving another preference", () => {

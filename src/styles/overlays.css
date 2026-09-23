@@ -982,17 +982,27 @@
 }
 
 .rendering-title.game-help {
-  display: inline-flex;
+  display: flex;
+  width: 100%;
   align-items: center;
   gap: 4px;
   overflow: hidden;
   color: #64748b;
 }
 
-.rendering-title.game-help > span {
+.rendering-game-instructions {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.rendering-title .rendering-snake-score {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--app-text);
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
 }
 
 .rendering-game-back {
@@ -1095,6 +1105,26 @@
   transform: translate(-50%, -50%);
   backdrop-filter: blur(12px);
   pointer-events: none;
+}
+
+.rendering-snake-status-action {
+  pointer-events: auto;
+  cursor: pointer;
+  font: inherit;
+}
+
+.rendering-snake-status-action:hover:not(:disabled) {
+  filter: brightness(1.04);
+  transform: translate(-50%, -50%) scale(1.03);
+}
+
+.rendering-snake-status-action:focus-visible {
+  outline: 2px solid var(--control-focus-border);
+  outline-offset: 3px;
+}
+
+.rendering-snake-status-action:disabled {
+  cursor: wait;
 }
 
 .rendering-snake-status strong {

@@ -2,6 +2,22 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.80 - 2026-09-24
+
+### 中文
+
+- 图片生成等待时的贪吃蛇现在可按账号保留分数，并在下次打开时按分数恢复蛇身长度；也可在设置中选择每次重新开始或手动清零，撞到自己后会重置分数。
+- “我的图片”和“灵感空间”的连续加载更平稳：滚动接近列表末尾时提前加载下一页，减少卡片跳动；加载失败时可直接重试。
+- AI 客户端通过马良生图或改图时，未指定渠道会跟随网页当前的渠道模式；选择单一模式时使用该模式的默认渠道，自动模式继续按既定顺序尝试可用渠道。
+- “关于”页面在当前网页版本高于服务端版本时会明确提示；AI 客户端的改图工具说明也已与实际默认模型保持一致。
+
+### English
+
+- Snake during image generation can now save a score to the signed-in account and restore the snake's length from that score next time. Users can instead start from zero each time or reset the saved score in Settings; colliding with the snake clears the score.
+- Continuous loading in My Images and Inspiration is smoother: the next page loads before users reach the end, cards shift less, and a failed page can be retried directly.
+- When an AI client generates or edits images through Maliang without choosing a channel, it now follows the web app's current channel mode. A single mode uses its default channel, while Automatic keeps the configured fallback order.
+- About now clearly indicates when the open web page is newer than the server. The AI client's image-edit tool description also matches its actual default model.
+
 ## v0.1.79 - 2026-09-23
 
 ### 中文

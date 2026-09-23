@@ -29,7 +29,11 @@ function MeasuredRow({
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
-    const update = () => onHeight(index, rowKey, Math.ceil(element.getBoundingClientRect().height));
+    const update = () => {
+      if (!element.isConnected) return;
+      const height = Math.ceil(element.getBoundingClientRect().height);
+      if (height > 0) onHeight(index, rowKey, height);
+    };
     update();
     const observer = new ResizeObserver(update);
     observer.observe(element);
@@ -48,6 +52,7 @@ export function VirtualizedResponsiveGrid<T>({
   gap = 16,
   mobileGap = 10,
   mobileColumns = 2,
+  overscanMultiplier = 1,
   className,
   rowClassName,
   scrollRootRef
@@ -60,6 +65,7 @@ export function VirtualizedResponsiveGrid<T>({
   gap?: number;
   mobileGap?: number;
   mobileColumns?: number;
+  overscanMultiplier?: number;
   className?: string;
   rowClassName?: string;
   scrollRootRef?: RefObject<HTMLElement | null>;
@@ -83,11 +89,9 @@ export function VirtualizedResponsiveGrid<T>({
   const layoutKey = `${columns}:${Math.round(columnWidth)}`;
   const estimatedHeight = Math.max(1, Math.ceil(estimateCardHeight(columnWidth)));
   const rowCount = Math.ceil(items.length / columns);
+  // A new page may fill the last partial row; its existing cards should stay mounted.
   const rowKeys = useMemo(
-    () => Array.from({ length: rowCount }, (_, index) => {
-      const keys = items.slice(index * columns, index * columns + columns).map(getKey);
-      return `${layoutKey}:${keys.join("\u0000")}`;
-    }),
+    () => Array.from({ length: rowCount }, (_, index) => `${layoutKey}:${getKey(items[index * columns])}`),
     [columns, getKey, items, layoutKey, rowCount]
   );
   const activeRowKeys = useMemo(() => new Set(rowKeys), [rowKeys]);
@@ -157,7 +161,7 @@ export function VirtualizedResponsiveGrid<T>({
   metricsRef.current = metrics;
   estimatedHeightRef.current = estimatedHeight;
   const totalHeight = metrics.length ? metrics.at(-1)!.top + metrics.at(-1)!.height : 0;
-  const range = useVirtualRange(metrics, containerRef, `${layoutKey}:${items.length}`, scrollRootRef);
+  const range = useVirtualRange(metrics, containerRef, `${layoutKey}:${items.length}`, scrollRootRef, overscanMultiplier);
   const flushPendingHeights = useCallback(() => {
     heightFrameRef.current = 0;
     const pending = Array.from(pendingHeightsRef.current.entries());
@@ -200,6 +204,7 @@ export function VirtualizedResponsiveGrid<T>({
   }, [scrollRootRef]);
 
   const onHeight = useCallback((index: number, rowKey: string, height: number) => {
+    if (!Number.isFinite(height) || height <= 0) return;
     const currentHeight = pendingHeightsRef.current.get(rowKey)?.height
       ?? measuredHeightsRef.current[rowKey]
       ?? estimatedHeightRef.current;

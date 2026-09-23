@@ -636,6 +636,7 @@ export function initAppDb() {
       language text not null default 'auto',
       image_preview_wheel_mode text not null default 'pan',
       image_preview_open_mode text not null default 'contain',
+      snake_score_mode text not null default 'keep',
       edit_suggestions_enabled integer not null default 1,
       edit_suggestion_tone text not null default 'default',
       auto_upload_pasted_assets integer not null default 1,
@@ -661,6 +662,9 @@ export function initAppDb() {
   }
   if (!tableColumnExists(appDb, "user_preferences", "image_preview_open_mode")) {
     appDb.run("alter table user_preferences add column image_preview_open_mode text not null default 'contain'");
+  }
+  if (!tableColumnExists(appDb, "user_preferences", "snake_score_mode")) {
+    appDb.run("alter table user_preferences add column snake_score_mode text not null default 'keep'");
   }
   if (!tableColumnExists(appDb, "user_preferences", "edit_suggestion_tone")) {
     appDb.run("alter table user_preferences add column edit_suggestion_tone text not null default 'default'");
@@ -692,6 +696,17 @@ export function initAppDb() {
     appDb,
     "update user_preferences set image_preview_open_mode = 'contain' where image_preview_open_mode not in ('contain', 'actual')"
   );
+  run(appDb, "update user_preferences set snake_score_mode = 'keep' where snake_score_mode not in ('restart', 'keep')");
+
+  appDb.run(`
+    create table if not exists user_snake_progress (
+      user_id text primary key,
+      score integer not null default 0 check(score >= 0),
+      revision integer not null default 0 check(revision >= 0),
+      updated_at text not null,
+      foreign key (user_id) references users(id) on delete cascade
+    )
+  `);
 
   appDb.run(`
     create table if not exists prompt_color_schemes (

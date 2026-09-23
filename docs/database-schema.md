@@ -66,6 +66,7 @@
 | `language` | 用户界面语言偏好：`auto` 自动检测，或 `zh-CN`、`zh-TW`、`en-US`、`ja-JP`、`ko-KR`、`es-ES`、`fr-FR`、`de-DE`、`pt-BR`、`ru-RU`、`fa-IR` |
 | `image_preview_wheel_mode` | 完整图片预览的滚轮行为：`zoom` 缩放图片、`pan` 平移查看超出窗口的区域；新偏好默认 `pan` |
 | `image_preview_open_mode` | 完整图片预览的默认打开方式：`contain` 适应窗口、`actual` 按 100% 原始尺寸显示 |
+| `snake_score_mode` | 贪吃蛇分数模式：`keep`（默认）延续账号已保存分数并按分数恢复蛇身长度，`restart` 每次从 0 开始；不保存蛇的位置和食物，已有明确选择保持不变 |
 | `edit_suggestions_enabled` | 对话页图片续改建议开关，`0` 关闭、`1` 开启 |
 | `edit_suggestion_tone` | 图片续改建议倾向：`default` 默认均衡、`practical` 实用优化、`creative` 创意扩展、`detail` 细节修复 |
 | `auto_upload_pasted_assets` | 输入框粘贴图片是否自动保存到素材库，`0` 关闭、`1` 开启；关闭后仅作为本次消息引用素材保存 |
@@ -77,6 +78,18 @@
 | `prompt_optimize_styles_json` | 用户自定义 AI优化风格 JSON，保存主风格、子风格、排序、显示状态和自定义优化指令；为空时使用系统默认风格 |
 | `prompt_optimize_custom_instruction` | 用户在输入区 AI优化风格里的自定义补充指令 |
 | `updated_at` | 更新时间 |
+
+### user_snake_progress
+
+贪吃蛇按用户保存的分数；与通用偏好分开，避免游戏计分写入覆盖其他设置。
+写入和重置请求必须携带与当前登录账号一致的用户 ID，避免延迟重试落到切换后的账号。客户端保存同一用户、同一 `revision` 下尚未确认写入的分数，重新打开游戏时继续同步；重置后的旧分数不会恢复。
+
+| 字段 | 说明 |
+| --- | --- |
+| `user_id` | 用户 ID，主键；删除用户时清理 |
+| `score` | 已保存分数，非负整数；设置中手动重置或贪吃蛇撞到自身结束时归零 |
+| `revision` | 重置代数；重置后递增，拒绝重置前仍在途的分数写入 |
+| `updated_at` | 最近保存或重置时间 |
 
 ### app_migrations
 

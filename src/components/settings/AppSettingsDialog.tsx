@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, BellRing, Cable, Check, Copy, Database, Github, KeyRound, Leaf, Link2, Monitor, Moon, Palette, Pencil, RefreshCw, ScrollText, Search, Settings, Smile, Sun, Sunset, Trash2, UserRound, Volume1, Volume2, VolumeOff, X } from "lucide-react";
+import { Archive, BellRing, Cable, Check, Copy, Database, Github, Info, KeyRound, Leaf, Link2, Monitor, Moon, Palette, Pencil, RefreshCw, ScrollText, Search, Settings, Smile, Sun, Sunset, Trash2, UserRound, Volume1, Volume2, VolumeOff, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api, type ExternalMcpConnection } from "../../api";
 import {
@@ -12,7 +12,9 @@ import {
 import { cx } from "../../lib/cx";
 import { markAppUpdateRefreshPending } from "../../lib/appUpdateReminder";
 import { APP_VERSION } from "../../lib/appVersion";
-import { displayVersion } from "../../lib/semver";
+import { compareSemver, displayVersion } from "../../lib/semver";
+import { normalizeSnakeScoreMode } from "../../lib/snakeScoreMode";
+import { discardPendingSnakeScoreBeforeRevision } from "../../lib/snakePendingScore";
 import { copyTextToClipboard } from "../../lib/clipboard";
 import { useAppearanceMode } from "../../hooks/useAppearanceMode";
 import { useInfinitePageLoader } from "../../hooks/useInfinitePageLoader";
@@ -167,6 +169,7 @@ export function AppSettingsDialog({
   const [promptStyleSettingsOpen, setPromptStyleSettingsOpen] = useState(false);
   const [promptColorSchemeSettingsOpen, setPromptColorSchemeSettingsOpen] = useState(false);
   const [sharedLinksOpen, setSharedLinksOpen] = useState(false);
+  const [snakeResetOpen, setSnakeResetOpen] = useState(false);
   const [pluginConnectionAction, setPluginConnectionAction] = useState<PluginConnectionAction>(null);
   const [pluginConnectionDetails, setPluginConnectionDetails] = useState<ExternalMcpConnection | null>(null);
   const [pluginConnectionLabelDraft, setPluginConnectionLabelDraft] = useState("");
@@ -194,6 +197,9 @@ export function AppSettingsDialog({
   const { showToast } = useToast();
   const { language, resolvedLanguage, setLanguage, t } = useI18n();
   const queryClient = useQueryClient();
+  useEffect(() => {
+    if (!open) setSnakeResetOpen(false);
+  }, [open]);
   const sharedLinkCount = useQuery({
     queryKey: ["session-share-links", "count"],
     queryFn: ({ signal }) => api.sessionShareLinks({ limit: 1, offset: 0 }, { signal }),
@@ -224,6 +230,10 @@ export function AppSettingsDialog({
     })),
     [t]
   );
+  const snakeScoreModeOptions = useMemo(() => ([
+    { value: "keep", label: t("settings.snake.mode.keep") },
+    { value: "restart", label: t("settings.snake.mode.restart") }
+  ]), [t]);
   const soundOptions = useMemo(
     () => imageTaskSounds.map((sound) => ({ value: sound.id, label: sound.name })),
     [imageTaskSounds]
@@ -250,6 +260,25 @@ export function AppSettingsDialog({
     enabled: open && activeSection === "about",
     staleTime: 30_000,
     refetchOnWindowFocus: "always"
+  });
+  const snakeProgress = useQuery({
+    queryKey: ["snake-progress", user.id],
+    queryFn: ({ signal }) => api.snakeProgress({ signal }),
+    enabled: open && activeSection === "general",
+    refetchOnWindowFocus: "always"
+  });
+  const resetSnakeProgress = useMutation({
+    mutationFn: async () => {
+      await queryClient.cancelQueries({ queryKey: ["snake-progress", user.id] });
+      return api.resetSnakeProgress(user.id);
+    },
+    onSuccess: (progress) => {
+      discardPendingSnakeScoreBeforeRevision(user.id, progress.revision);
+      queryClient.setQueryData(["snake-progress", user.id], progress);
+      setSnakeResetOpen(false);
+      showToast(t("settings.snake.resetSuccess"));
+    },
+    onError: () => showToast(t("settings.snake.resetFailed"), "error")
   });
   const branding = useQuery({
     queryKey: ["branding"],
@@ -353,6 +382,7 @@ export function AppSettingsDialog({
     autoUploadPastedAssets: user.preferences?.autoUploadPastedAssets ?? true,
     imagePreviewWheelMode: user.preferences?.imagePreviewWheelMode ?? "pan" as const,
     imagePreviewOpenMode: user.preferences?.imagePreviewOpenMode ?? "contain" as const,
+    snakeScoreMode: normalizeSnakeScoreMode(user.preferences?.snakeScoreMode),
     imageTaskSoundEnabled: user.preferences?.imageTaskSoundEnabled ?? true,
     imageTaskBrowserNotificationEnabled: user.preferences?.imageTaskBrowserNotificationEnabled ?? false,
     imageTaskSoundVolume: user.preferences?.imageTaskSoundVolume ?? DEFAULT_IMAGE_TASK_SOUND_VOLUME,
@@ -368,6 +398,7 @@ export function AppSettingsDialog({
     user.preferences?.editSuggestionsEnabled,
     user.preferences?.imagePreviewOpenMode,
     user.preferences?.imagePreviewWheelMode,
+    user.preferences?.snakeScoreMode,
     user.preferences?.imageTaskFailureSoundId,
     user.preferences?.imageTaskBrowserNotificationEnabled,
     user.preferences?.imageTaskSoundEnabled,
@@ -577,6 +608,7 @@ export function AppSettingsDialog({
   if (!open) return null;
 
   const serverVersion = appUpdate.data?.serverVersion ?? "";
+  const versionComparison = compareSemver(APP_VERSION, serverVersion);
   const pluginVersion = pluginInstallLinks.data?.pluginVersion.trim() ?? "";
   const avatarSource = user.username?.trim() || user.account?.trim() || "U";
   const avatarText = avatarSource.slice(0, 1).toUpperCase();
@@ -774,6 +806,42 @@ export function AppSettingsDialog({
                   menuWidth={340}
                   disabled={preferencesSaving}
                 />
+              </div>
+              <h3 className="settings-group-title">{t("settings.snake.title")}</h3>
+              <div className="settings-row settings-language-row">
+                <div>
+                  <strong>{t("settings.snake.mode.title")}</strong>
+                  <span>{t("settings.snake.desc")}</span>
+                </div>
+                <CustomSelect
+                  value={preferences.snakeScoreMode}
+                  options={snakeScoreModeOptions}
+                  onChange={(value) => {
+                    const nextMode = normalizeSnakeScoreMode(value);
+                    if (nextMode !== preferences.snakeScoreMode) onPreferencesChange({ snakeScoreMode: nextMode });
+                  }}
+                  className="settings-image-preview-select"
+                  menuClassName="settings-image-preview-menu"
+                  menuWidth={340}
+                  disabled={preferencesSaving}
+                />
+              </div>
+              <div className="settings-row">
+                <div>
+                  <strong>{snakeProgress.isPending
+                    ? t("common.loadingEllipsis")
+                    : snakeProgress.isError
+                      ? t("settings.snake.loadFailed")
+                      : t("settings.snake.savedScore", { score: snakeProgress.data?.score ?? 0 })}</strong>
+                </div>
+                <button
+                  type="button"
+                  className="danger-outline-btn"
+                  disabled={!snakeProgress.data?.score || resetSnakeProgress.isPending}
+                  onClick={() => setSnakeResetOpen(true)}
+                >
+                  {t("settings.snake.reset")}
+                </button>
               </div>
             </div>
           ) : activeSection === "sound" ? (
@@ -1207,7 +1275,11 @@ export function AppSettingsDialog({
                         <RefreshCw size={15} />
                         {t("appUpdate.refreshAction")}
                       </button>
-                    ) : serverVersion ? <span className="settings-version-status is-current"><Check size={14} />{t("settings.about.upToDate")}</span> : null}
+                    ) : versionComparison === 0 ? (
+                      <span className="settings-version-status is-current"><Check size={14} />{t("settings.about.upToDate")}</span>
+                    ) : versionComparison === 1 ? (
+                      <span className="settings-version-status"><Info size={14} />{t("settings.about.clientAhead")}</span>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -1363,6 +1435,17 @@ export function AppSettingsDialog({
           setPluginConnectionLabelDraft("");
           setPluginConnectionLabelEditing(false);
         }}
+      />
+      <ConfirmDialog
+        open={snakeResetOpen}
+        title={t("settings.snake.resetTitle")}
+        description={t("settings.snake.resetDescription")}
+        confirmText={t("settings.snake.reset")}
+        cancelText={t("common.cancel")}
+        destructive
+        backdropClassName="modal-backdrop-top"
+        onConfirm={() => { if (!resetSnakeProgress.isPending) resetSnakeProgress.mutate(); }}
+        onCancel={() => { if (!resetSnakeProgress.isPending) setSnakeResetOpen(false); }}
       />
       <ConfirmDialog
         open={Boolean(pluginConnectionAction)}

@@ -1,4 +1,4 @@
-import { useEffect, useState, type RefObject } from "react";
+import { useLayoutEffect, useState, type RefObject } from "react";
 
 export type VirtualMetric = { top: number; height: number };
 
@@ -19,11 +19,13 @@ export function useVirtualRange<T extends HTMLElement>(
   metrics: VirtualMetric[],
   containerRef: RefObject<T | null>,
   observeKey?: unknown,
-  scrollRootRef?: RefObject<HTMLElement | null>
+  scrollRootRef?: RefObject<HTMLElement | null>,
+  overscanMultiplier = 1
 ) {
   const [range, setRange] = useState({ start: 0, end: 0 });
 
-  useEffect(() => {
+  // Update before paint when a newly appended page changes the metrics.
+  useLayoutEffect(() => {
     let frame = 0;
     const updateRange = () => {
       const container = containerRef.current;
@@ -38,7 +40,7 @@ export function useVirtualRange<T extends HTMLElement>(
       const viewportTop = (scrollRoot ? scrollRoot.scrollTop : window.scrollY) - containerTop;
       const viewportHeight = scrollRoot?.clientHeight ?? window.innerHeight;
       const viewportBottom = viewportTop + viewportHeight;
-      const overscan = Math.min(1200, Math.max(600, viewportHeight));
+      const overscan = Math.min(1200, Math.max(600, viewportHeight)) * overscanMultiplier;
       const startPx = Math.max(0, viewportTop - overscan);
       const endPx = viewportBottom + overscan;
       const start = Math.min(metrics.length - 1, Math.max(0, lowerBound(metrics, startPx, true)));
@@ -61,7 +63,7 @@ export function useVirtualRange<T extends HTMLElement>(
       window.removeEventListener("resize", scheduleUpdate);
       rootObserver?.disconnect();
     };
-  }, [containerRef, metrics, observeKey, scrollRootRef]);
+  }, [containerRef, metrics, observeKey, overscanMultiplier, scrollRootRef]);
 
   return range;
 }

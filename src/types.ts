@@ -2,6 +2,7 @@ import type { AppearanceMode } from "./lib/appearance";
 import type { LanguagePreference } from "./i18n";
 import type { PromptOptimizeStyleGroup, PromptTemplateOptimizeStyle } from "./lib/promptOptimizeStyles";
 import type { ImageTaskSoundId } from "./lib/imageTaskSounds";
+import type { SnakeScoreMode } from "./lib/snakeScoreMode";
 
 export type EditSuggestionTone = "default" | "practical" | "creative" | "detail";
 export type ImagePreviewWheelMode = "zoom" | "pan";
@@ -14,6 +15,7 @@ export type UserPreferences = {
   autoUploadPastedAssets: boolean;
   imagePreviewWheelMode: ImagePreviewWheelMode;
   imagePreviewOpenMode: ImagePreviewOpenMode;
+  snakeScoreMode: SnakeScoreMode;
   imageTaskSoundEnabled: boolean;
   imageTaskBrowserNotificationEnabled: boolean;
   imageTaskSoundVolume: number;

@@ -350,7 +350,7 @@ async function createMaliangMcpServer(api: Hono) {
     description: "使用马良历史图片 imageIds 或已完成的一次性上传 uploadIds 提交异步改图任务。返回 jobId 后调用 maliang_get_image_job。",
     inputSchema: {
       prompt: z.string().trim().min(1).max(8000).describe("希望如何修改图片"),
-      model: EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.optional().describe("图片模型，默认使用 GPT Image 2.5 Flare"),
+      model: EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.optional().describe("图片模型，默认使用 GPT Image 2.5 Sunburst"),
       imageIds: z.array(z.string().trim().min(1)).max(8).optional().describe("当前账号中的马良历史图片 ID"),
       uploadIds: z.array(z.string().trim().min(1)).max(8).optional().describe("已上传完成的 MCP uploadId"),
       size: z.string().trim().optional(),

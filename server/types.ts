@@ -189,6 +189,7 @@ export type UserPreferencesRow = {
   language: string;
   image_preview_wheel_mode: string;
   image_preview_open_mode: string;
+  snake_score_mode: string;
   edit_suggestions_enabled: number;
   edit_suggestion_tone: string;
   auto_upload_pasted_assets: number;

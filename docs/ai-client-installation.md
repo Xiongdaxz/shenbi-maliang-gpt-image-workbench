@@ -15,6 +15,8 @@
 
 机器清单以当前正在执行任务的客户端身份为准，不能仅因同一台电脑存在 `codex` 命令就把 Codex 插件安装到其他 App。
 
+插件的文生图与改图工具调用同一服务内的 `/images/generate` 和 `/images/edit`，与网页创作区共用任务、渠道和上游路由。未指定渠道时，全局 `auto` 模式使用 CPA → ChatGPT Web → API 的渠道链；选定单一模式时使用该模式下网页默认展示的首个渠道。CPA/API 渠道自身的 `route_mode=auto` 先请求 Responses，失败或未取得可保存图片时回退 Images API；已有渠道保留其保存的路由设置。
+
 `/install/install.json`、`/mcp/install.json` 和 `/plugin/install.json` 都包含 `execution` 策略，要求当前智能体直接执行安装，并禁止把“读取到清单”“打开授权页”或“OAuth 动态注册成功”误报为安装完成。Codex、Claude Code、TRAE Work、WorkBuddy 以及未知的标准 MCP 客户端都必须由当前智能体写入真实配置、触发重新加载并完成验证；不得用 Python、`urllib`、`curl` 或临时 OAuth 回调脚本代替客户端内的真实安装。
 
 ## TRAE Work 项目级 MCP
@@ -101,7 +103,7 @@ Remote MCP 运行在马良服务器，不能直接读取 Codex 所在电脑的�
 
 `0.4.2` 在 `0.4.1` 的 MCP 2026-07-28 兼容基础上进一步加固上传、结果链接、DCR 能力执行、本地帮助器同源约束、专用 Marketplace 更新和插件归档缓存。用户复制的安装指令保持不变。
 
-Remote MCP OAuth 使用统一有效期策略：Access Token 默认 7 天，后台可设置 1～365 天；客户端动态注册声明 `refresh_token` 时，额外签发默认 90 天、可设置 30～3650 天的滚动 Refresh Token。Codex 已验证会在需要时自动刷新；其他客户端是否已经实际刷新，以用户设置“插件”连接详情中的“刷新时间”为准：出现刷新时间即表示客户端已经执行过刷新。服务重启不会主动清除数据库中的授权，配置变化只影响之后新签发或刷新的 Token。
+Remote MCP OAuth 使用统一有效期策略：Access Token 默认 7 天，后台可设置 1～365 天；客户端动态注册声明 `refresh_token` 时，额外签发默认 90 天、可设置 30～3650 天的滚动 Refresh Token。Codex 托管 OAuth 凭据，并应在 Access Token 到期或收到失效挑战时使用 Refresh Token 向 `/oauth/token` 换取新的一对令牌，再继续 MCP 请求。马良服务端只保存 Refresh Token 的哈希，图片工具必须先通过 MCP 鉴权，因此不能在生图函数内代替 Codex 刷新。连接详情中的“刷新时间”表示服务端确实收到过成功刷新；仅看到 Refresh Token 的未来到期时间，不能证明 Codex 当前保存着最新的令牌，或保证下次刷新成功。服务重启不会主动清除数据库中的授权，配置变化只影响之后新签发或刷新的 Token。
 
 `0.4.3` 禁止缓存授权绑定的图片结果，固定本地帮助器的文件大小与输出目录边界，并对 Node/Bun/PowerShell 自动更新下载执行流式硬限长。用户复制的安装指令仍保持不变。
 

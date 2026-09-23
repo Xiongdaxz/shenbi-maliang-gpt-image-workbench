@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createInfiniteAutoLoadController,
   createInfinitePageLoadScheduler,
+  createPageLoadPointerController,
   shouldFetchNextInfinitePage
 } from "./useInfinitePageLoader";
 
@@ -131,6 +132,41 @@ describe("infinite page loading", () => {
     timer.runPending();
     expect(fetchCount).toBe(1);
     scheduler.dispose();
+  });
+
+  test("keeps a held pointer active when the page-load observer is replaced", () => {
+    const timer = createManualTimer();
+    const pointer = createPageLoadPointerController();
+    let fetchCount = 0;
+    const createScheduler = () => createInfinitePageLoadScheduler({
+      canFetch: () => true,
+      cancelTimer: timer.cancelTimer,
+      delayMs: 16,
+      fetchNextPage: () => {
+        fetchCount += 1;
+        return Promise.resolve();
+      },
+      scheduleTimer: timer.scheduleTimer
+    });
+
+    const first = createScheduler();
+    pointer.bind(first);
+    first.setIntersecting(true);
+    pointer.handlePointerStart();
+    pointer.unbind(first);
+    first.dispose();
+
+    const replacement = createScheduler();
+    pointer.bind(replacement);
+    replacement.setIntersecting(true);
+    timer.runPending();
+    expect(fetchCount).toBe(0);
+
+    pointer.handlePointerEnd();
+    timer.runPending();
+    expect(fetchCount).toBe(1);
+    pointer.unbind(replacement);
+    replacement.dispose();
   });
 
   test("does not schedule or fetch after the observer scheduler is disposed", () => {
