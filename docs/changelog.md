@@ -2,6 +2,18 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.82 - 2026-09-29
+
+### 中文
+
+- 图片对比页的左侧图库在未固定时会短暂展示，随后自动收起；靠近左侧边缘即可展开。也可用图钉固定图库并手动展开或收起，浏览器会记住固定选择和展开状态。
+- 修复对比图库展开后连续加载过多图片、鼠标或触摸操作后未按预期收起的问题；图库只在滚动接近底部时加载下一页，拖动和纯净查看期间仍会暂时隐藏。
+
+### English
+
+- In image comparison, the left library briefly appears and then hides when unpinned; moving to the left edge opens it again. Users can pin it and open or close it manually, and the browser remembers the pin choice and expanded state.
+- Fixed the comparison library loading too many images after opening and failing to hide as expected after mouse or touch input. It now loads the next page only near the bottom and still hides temporarily during dragging or clean view.
+
 ## v0.1.81 - 2026-09-29
 
 ### 中文

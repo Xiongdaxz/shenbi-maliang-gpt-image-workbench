@@ -9,6 +9,7 @@ import { compareLayoutColumns, compareWantsOriginal, compareScale, compareViewIs
 import { cx } from "../../lib/cx";
 import { compareInfoHasKeyboardFocus } from "../../lib/imageCompareFocus";
 import type { CompareDisplayedResource } from "../../lib/imageCompareResource";
+import { readCompareLibraryCollapsed } from "../../lib/imageCompareLibraryVisibility";
 import { useImageCompare } from "../../store/imageCompare";
 import { useToast } from "../../ui";
 import type { ImagePreviewWheelMode, LibraryImageCard, LibraryPage, WorkImage } from "../../types";
@@ -62,8 +63,7 @@ export function ImageCompareWorkspace({ initial, ownerId, thumbnails, wheelMode,
   }, []);
   const [cleanView, setCleanView] = useState(false);
   const [recoveryControls, setRecoveryControls] = useState<HTMLDivElement | null>(null);
-  const [libraryCollapsed, setLibraryCollapsed] = useState(false);
-  const toggleLibraryCollapsed = useCallback(() => setLibraryCollapsed((value) => !value), []);
+  const [libraryCollapsed, setLibraryCollapsed] = useState(readCompareLibraryCollapsed);
   const [imageSource, setImageSource] = useState<CompareImageSource>("original");
   const [libraryRevealVersion, setLibraryRevealVersion] = useState(0);
   const revealActiveImage = useCallback(() => setLibraryRevealVersion((value) => value + 1), []);
@@ -273,7 +273,7 @@ export function ImageCompareWorkspace({ initial, ownerId, thumbnails, wheelMode,
     <section ref={setContent} className={cx("image-compare-workspace", dragging && "is-dragging", cleanView && "is-clean-view", libraryCollapsed && "library-collapsed")} aria-label={t("compare.title")} style={{ "--compare-top": "24px", "--compare-bottom": `${controlsHeight}px` } as CSSProperties}>
           <h1 className="sr-only">{t("compare.title")}</h1>
           <ImageCompareLibrary ownerId={ownerId} imageIds={draft.imageIds} activeId={draft.activeId} images={validImages} thumbnails={thumbnails}
-            onToggle={onLibraryToggle} dragging={chromeHidden} collapsed={libraryCollapsed} onToggleCollapsed={toggleLibraryCollapsed} revealVersion={libraryRevealVersion} />
+            onToggle={onLibraryToggle} dragging={chromeHidden} collapsed={libraryCollapsed} onCollapsedChange={setLibraryCollapsed} revealVersion={libraryRevealVersion} />
           <div ref={controls} className="image-compare-controls" inert={chromeHidden}>
           <div className="image-compare-view-card image-compare-island">
             <div className="image-compare-nav">

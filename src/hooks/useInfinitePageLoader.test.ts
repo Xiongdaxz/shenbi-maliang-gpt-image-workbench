@@ -133,6 +133,31 @@ describe("infinite page loading", () => {
     expect(fetchCount).toBe(1);
     scheduler.dispose();
   });
+  test("observer-driven library paging waits for the bottom and never drains pages after a request completes", async () => {
+    const timer = createManualTimer();
+    let fetchCount = 0, expanded = true;
+    const scheduler = createInfinitePageLoadScheduler({
+      canFetch: () => expanded,
+      cancelTimer: timer.cancelTimer,
+      delayMs: 48,
+      fetchNextPage: async () => { fetchCount += 1; },
+      scheduleTimer: timer.scheduleTimer
+    });
+    scheduler.setIntersecting(false);
+    scheduler.handleScroll(); timer.runPending();
+    expect(fetchCount).toBe(0);
+    scheduler.setIntersecting(true); timer.runPending();
+    expect(fetchCount).toBe(1);
+    await Promise.resolve();
+    expect(timer.pendingCount()).toBe(0);
+    // Appending the next page moves the bottom out of view.
+    scheduler.setIntersecting(false); scheduler.handleScroll(); timer.runPending();
+    expect(fetchCount).toBe(1);
+    scheduler.setIntersecting(true);
+    expanded = false; timer.runPending();
+    expect(fetchCount).toBe(1);
+    scheduler.dispose();
+  });
 
   test("keeps a held pointer active when the page-load observer is replaced", () => {
     const timer = createManualTimer();

@@ -1,14 +1,16 @@
 import { memo, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Check, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Pin, PinOff, RefreshCw } from "lucide-react";
 import { api } from "../../api";
 import { useCursorLibraryQuery } from "../../hooks/useCursorLibraryQuery";
 import { useInfinitePageLoader } from "../../hooks/useInfinitePageLoader";
+import { useCompareLibraryVisibility } from "../../hooks/useCompareLibraryVisibility";
 import { useI18n } from "../../i18n";
 import { cx } from "../../lib/cx";
 import { IMAGE_PAGE_SIZE } from "../../lib/pagination";
 import { compareLibraryScrollTop } from "../../lib/imageCompare";
 import { compareLibraryCandidates, rememberCompareCandidates, type CompareLibraryCandidate, type CompareLibrarySnapshot } from "../../lib/imageCompareLibrary";
+import { readCompareLibraryPinned, saveCompareLibraryPinned } from "../../lib/imageCompareLibraryVisibility";
 import type { WorkImage } from "../../types";
 import { CheckerboardImage } from "../CheckerboardImage";
 import { VirtualizedResponsiveGrid } from "../VirtualizedResponsiveGrid";
@@ -19,12 +21,15 @@ const candidateHeight = (width: number) => width * 1.2;
 type LibraryProps = {
   ownerId: string; imageIds: string[]; activeId: string; images: WorkImage[]; thumbnails: Record<string, string>;
   onToggle: (id: string) => void; dragging: boolean;
-  collapsed: boolean; onToggleCollapsed: () => void;
+  collapsed: boolean; onCollapsedChange: (collapsed: boolean) => void;
   revealVersion: number;
 };
-export const ImageCompareLibrary = memo(function ImageCompareLibrary({ ownerId, imageIds, activeId, images, thumbnails, onToggle, dragging, collapsed, onToggleCollapsed, revealVersion }: LibraryProps) {
+export const ImageCompareLibrary = memo(function ImageCompareLibrary({ ownerId, imageIds, activeId, images, thumbnails, onToggle, dragging, collapsed, onCollapsedChange, revealVersion }: LibraryProps) {
   const { t } = useI18n();
   const panelId = useId();
+  const zone = useRef<HTMLDivElement>(null);
+  const [pinned, setPinned] = useState(readCompareLibraryPinned);
+  const visibility = useCompareLibraryVisibility(zone, dragging, pinned, collapsed, onCollapsedChange);
   const scroller = useRef<HTMLDivElement>(null);
   const pointer = useRef<{ id: number; y: number; top: number; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
@@ -47,9 +52,9 @@ export const ImageCompareLibrary = memo(function ImageCompareLibrary({ ownerId, 
   useLayoutEffect(() => { setRemembered(snapshot); }, [snapshot]);
   const cards = useMemo(() => compareLibraryCandidates(snapshot, loaded), [snapshot, loaded]);
   const sentinel = useInfinitePageLoader({
-    autoLoad: !collapsed && !dragging,
+    autoLoad: false,
     rootRef: scroller, rootMargin: "400px", scrollIdleDelayMs: 48,
-    fetchNextPage: library.fetchNextPage, hasNextPage: Boolean(library.hasNextPage), isFetchingNextPage: library.isFetchingNextPage,
+    fetchNextPage: library.fetchNextPage, hasNextPage: !collapsed && !dragging && Boolean(library.hasNextPage), isFetchingNextPage: library.isFetchingNextPage,
     isFetchNextPageError: library.isFetchNextPageError
   });
   useLayoutEffect(() => {
@@ -76,8 +81,31 @@ export const ImageCompareLibrary = memo(function ImageCompareLibrary({ ownerId, 
     return () => { cancelAnimationFrame(frame); cancelAnimationFrame(settleFrame); };
   }, [activeId, revealVersion, collapsed, dragging, cards, library.isPending]);
   const toggleLabel = `${t(collapsed ? "common.expand" : "common.collapse")} · ${t("pages.images.title")}`;
-  return <><aside id={panelId} className={cx("image-compare-library image-compare-island", collapsed && "collapsed")} inert={dragging || collapsed} aria-hidden={dragging || collapsed} aria-label={t("compare.library.title")}>
-    <header aria-live="polite"><strong>{t("pages.images.title")}</strong><span dir="ltr">{imageIds.length}/{facets.data?.all ?? "—"}</span></header>
+  return <div ref={zone} className={cx("image-compare-library-zone", collapsed && "collapsed", pinned && "pinned")} inert={dragging} aria-hidden={dragging || undefined}
+    onPointerEnter={(event) => { if (event.pointerType !== "touch") visibility.enter(); }}
+    onPointerLeave={(event) => { if (event.pointerType !== "touch") visibility.leave(); }}
+    onPointerDown={(event) => {
+      if (event.button !== 0) return;
+      visibility.focus(false);
+      visibility.press(event.pointerType === "touch");
+      if (pinned && collapsed && event.pointerType === "touch" && event.target === event.currentTarget) visibility.togglePinned();
+    }}
+    onFocus={(event) => visibility.focus(event.target.matches(":focus-visible"))}
+    onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) visibility.focus(false); }}>
+    {pinned ? <button className={cx("image-compare-library-handle", collapsed && "collapsed")} type="button" aria-controls={panelId} aria-expanded={!collapsed}
+      aria-label={toggleLabel} data-tooltip={toggleLabel} onClick={visibility.togglePinned}>
+      {collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
+    </button> : <button className="image-compare-library-edge" type="button" data-tooltip-disabled aria-controls={panelId} aria-expanded={!collapsed}
+      aria-label={`${t("common.expand")} · ${t("pages.images.title")}`} onClick={visibility.reveal} />}
+    <aside id={panelId} className={cx("image-compare-library image-compare-island", collapsed && "collapsed")} inert={dragging || collapsed} aria-hidden={dragging || collapsed} aria-label={t("compare.library.title")}>
+    <header aria-live="polite">
+      <button type="button" className="image-compare-library-pin" aria-pressed={pinned}
+        aria-label={t(pinned ? "compare.library.unpin" : "compare.library.pin")} data-tooltip={t(pinned ? "compare.library.unpin" : "compare.library.pin")}
+        onClick={() => { const next = !pinned; setPinned(next); saveCompareLibraryPinned(next); }}>
+        {pinned ? <Pin size={14} /> : <PinOff size={14} />}
+      </button>
+      <strong>{t("pages.images.title")}</strong><span dir="ltr">{imageIds.length}/{facets.data?.all ?? "—"}</span>
+    </header>
     <div ref={scroller} className="image-compare-library-scroll"
       onPointerDown={(event) => {
         suppressClick.current = false;
@@ -117,17 +145,11 @@ export const ImageCompareLibrary = memo(function ImageCompareLibrary({ ownerId, 
       {!library.isPending && !library.isError && cards.length === 0 ? <div className="image-compare-library-status">{t("pages.images.empty")}</div> : null}
       <div ref={sentinel} className="image-compare-library-sentinel" aria-hidden="true" />
     </div>
-  </aside>
-    {collapsed ? <div className="image-compare-library-edge" aria-hidden="true" inert={dragging}
-      onPointerDown={(event) => { if (event.pointerType === "touch") onToggleCollapsed(); }} /> : null}
-    <button type="button" className={cx("image-compare-library-handle", collapsed && "collapsed")} onClick={onToggleCollapsed}
-      inert={dragging} aria-controls={panelId} aria-expanded={!collapsed} aria-label={toggleLabel} data-tooltip={toggleLabel}>
-      {collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
-    </button>
-  </>;
+    </aside>
+  </div>;
 }, (before, after) => before.ownerId === after.ownerId && before.activeId === after.activeId && before.dragging === after.dragging
   && before.revealVersion === after.revealVersion
-  && before.collapsed === after.collapsed && before.onToggleCollapsed === after.onToggleCollapsed
+  && before.collapsed === after.collapsed && before.onCollapsedChange === after.onCollapsedChange
   && before.onToggle === after.onToggle
   && before.imageIds.length === after.imageIds.length && before.imageIds.every((id, index) => id === after.imageIds[index] && before.thumbnails[id] === after.thumbnails[id])
   && before.images.length === after.images.length && before.images.every((image, index) => image === after.images[index]));
