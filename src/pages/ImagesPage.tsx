@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { CalendarArrowDown, CalendarArrowUp, CalendarDays, ChevronDown, ChevronUp, Heart, Images, LayoutGrid, ListChecks, Plus, Search, X } from "lucide-react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../api";
 import { AddAssetFromImageModal } from "../components/AddAssetFromImageModal";
 import { AddCaseModal, type AddCaseSource } from "../components/AddCaseModal";
@@ -14,6 +14,7 @@ import { ImageBatchDeleteDialog } from "../components/images/ImageBatchDeleteDia
 import { ImageBatchDownloadDialog } from "../components/images/ImageBatchDownloadDialog";
 import { ImageBatchResultDialog } from "../components/images/ImageBatchResultDialog";
 import { ImageBatchToolbar, type ImageBatchAction } from "../components/images/ImageBatchToolbar";
+import { ImageCompareWorkspace } from "../components/images/ImageCompareWorkspace";
 import { LibraryEmptyState } from "../components/LibraryEmptyState";
 import { LibraryPageLoadError } from "../components/LibraryPageLoadError";
 import { PageHeader } from "../components/PageHeader";
@@ -23,6 +24,8 @@ import { VirtualizedResponsiveGrid } from "../components/VirtualizedResponsiveGr
 import { useI18n } from "../i18n";
 import { type AssetUploadMode } from "../lib/assets";
 import { cx } from "../lib/cx";
+import { galleryCompareImageIds } from "../lib/imageCompare";
+import { lockImageComparePageScroll } from "../lib/imageComparePage";
 import { groupImagesByTimeline, imageCreatedTime, imageTimelineDateParts } from "../lib/imageTimeline";
 import { IMAGE_PAGE_SIZE } from "../lib/pagination";
 import { orderedWorkImages, workImageFromLibraryCard } from "../lib/workImages";
@@ -31,6 +34,7 @@ import { useCursorLibraryQuery } from "../hooks/useCursorLibraryQuery";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { useScrollJump } from "../hooks/useScrollJump";
 import { useWorkbench } from "../store/workbench";
+import { useImageCompare } from "../store/imageCompare";
 import type { ImageBatchResult, ImageDeleteImpact, ImagePreviewOpenMode, ImagePreviewWheelMode, LibraryImageCard, LibraryPage, WorkImage } from "../types";
 import { ConfirmDialog, useToast } from "../ui";
 
@@ -220,13 +224,72 @@ export function ImagesPage({
   imagePreviewOpenMode: ImagePreviewOpenMode;
 }) {
   const queryClient = useQueryClient();
+  const compareDraft = useImageCompare((state) => state.draft);
+  const location = useLocation();
+  const compareOpen = location.pathname === "/images/compare";
+  const compareOwnerId = useImageCompare((state) => state.ownerId);
+  const [comparingImageId, setComparingImageId] = useState<string | null>(null);
+  const comparisonRequest = useRef<AbortController | null>(null);
+  useLayoutEffect(() => {
+    setComparingImageId(null);
+    return () => { comparisonRequest.current?.abort(); comparisonRequest.current = null; };
+  }, [location.pathname, compareOwnerId]);
+  const closeCompare = useImageCompare((state) => state.close);
   const navigate = useNavigate();
+  const galleryScroll = useRef({ left: 0, top: 0 });
+  const wasComparing = useRef(compareOpen);
+  useLayoutEffect(() => {
+    if (!compareOpen) return;
+    galleryScroll.current = { left: window.scrollX, top: window.scrollY };
+    return lockImageComparePageScroll();
+  }, [compareOpen]);
+  useLayoutEffect(() => {
+    const previous = wasComparing.current;
+    wasComparing.current = compareOpen;
+    if (!previous || compareOpen) return;
+    closeCompare();
+    if (window.scrollX !== galleryScroll.current.left || window.scrollY !== galleryScroll.current.top) {
+      window.scrollTo({ ...galleryScroll.current, behavior: "instant" });
+    }
+  }, [compareOpen, closeCompare]);
   const [searchParams, setSearchParams] = useSearchParams();
+  const enterComparisonPage = (ids: string[]) => {
+    if (ids.length < 2 || ids.length > 4) return;
+    const comparison = useImageCompare.getState();
+    if (comparison.draft?.imageIds.length === ids.length && comparison.draft.imageIds.every((id, index) => id === ids[index])) comparison.resume();
+    else comparison.start(ids);
+    if (useImageCompare.getState().draft) navigate(`/images/compare${location.search}`, { state: { imageCompareFromGallery: true } });
+  };
+  const returnToGallery = () => {
+    closeCompare();
+    if (location.state?.imageCompareFromGallery || location.state?.imageCompareFromChat) navigate(-1);
+    else navigate(`/images${location.search}`, { replace: true });
+  };
   const setEditImage = useWorkbench((state) => state.setEditImage);
   const setEditorImageRequest = useWorkbench((state) => state.setEditorImageRequest);
   const setDraftPrompt = useWorkbench((state) => state.setDraftPrompt);
   const { showToast } = useToast();
   const { resolvedLanguage, t } = useI18n();
+  const compareImage = useCallback(async (image: WorkImage) => {
+    const ownerId = useImageCompare.getState().ownerId;
+    if (!ownerId || compareOpen || comparisonRequest.current) return;
+    const controller = new AbortController();
+    comparisonRequest.current = controller;
+    setComparingImageId(image.id);
+    try {
+      const ids = await galleryCompareImageIds(image, async (sessionId, limit) => {
+        const result = await api.libraryImages({ sessionId, limit, sort: "desc" }, { signal: controller.signal });
+        return result.items;
+      });
+      if (controller.signal.aborted || comparisonRequest.current !== controller || useImageCompare.getState().ownerId !== ownerId) return;
+      useImageCompare.getState().start(ids);
+      navigate(`/images/compare${location.search}`, { state: { imageCompareFromGallery: true } });
+    } catch (error) {
+      if (!controller.signal.aborted && useImageCompare.getState().ownerId === ownerId) showToast(error instanceof Error ? error.message : t("globalSearch.openUnavailable"), "error");
+    } finally {
+      if (comparisonRequest.current === controller) { comparisonRequest.current = null; setComparingImageId(null); }
+    }
+  }, [compareOpen, location.search, navigate, showToast, t]);
   const assetCategories = useQuery({ queryKey: ["asset-categories"], queryFn: api.assetCategories });
   const openImageId = searchParams.get("open")?.trim() ?? "";
   const urlKeyword = searchParams.get("keyword") ?? "";
@@ -371,6 +434,7 @@ export function ImagesPage({
     [collapsedTimelineGroupKey, imageList.length, keyword, timelineGroups.length, timelineSort, viewMode]
   );
   const { jumpToScrollEdge, loadingToBottom, scrollJump } = useScrollJump({
+    disabled: compareOpen,
     syncKey: imageScrollJumpKey,
     loadToBottom: {
       hasNextPage: Boolean(images.hasNextPage),
@@ -380,10 +444,10 @@ export function ImagesPage({
   });
   const imageLoadMoreRef = useInfinitePageLoader({
     fetchNextPage: images.fetchNextPage,
-    hasNextPage: Boolean(images.hasNextPage),
+    hasNextPage: !compareOpen && Boolean(images.hasNextPage),
     isFetchNextPageError: images.isFetchNextPageError,
     isFetchingNextPage: images.isFetchingNextPage,
-    autoLoad: loadingToBottom,
+    autoLoad: !compareOpen && loadingToBottom,
     rootMargin: "1600px",
     scrollIdleDelayMs: 16
   });
@@ -437,16 +501,16 @@ export function ImagesPage({
   }, [pendingBatchAction]);
 
   useEffect(() => {
-    if (!selectionMode) return;
+    if (!selectionMode || compareOpen) return;
     const visibleIds = new Set(imageList.map((image) => image.id));
     setSelectedImageIds((value) => {
       const next = new Set(Array.from(value).filter((id) => visibleIds.has(id)));
       return next.size === value.size ? value : next;
     });
-  }, [imageList, selectionMode]);
+  }, [imageList, selectionMode, compareOpen]);
 
   useEffect(() => {
-    if (!selectionMode || batchAssetOpen || batchCaseOpen || batchDownloadOpen || batchDeleteImpact || batchResult || caseSource) return;
+    if (!selectionMode || compareOpen || batchAssetOpen || batchCaseOpen || batchDownloadOpen || batchDeleteImpact || batchResult || caseSource) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
       event.preventDefault();
@@ -454,7 +518,7 @@ export function ImagesPage({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [batchAssetOpen, batchCaseOpen, batchDeleteImpact, batchDownloadOpen, batchResult, caseSource, exitBatchMode, selectionMode]);
+  }, [batchAssetOpen, batchCaseOpen, batchDeleteImpact, batchDownloadOpen, batchResult, caseSource, exitBatchMode, selectionMode, compareOpen]);
 
   const addAsset = useMutation({
     mutationFn: (payload: { image: WorkImage; name?: string; spaceMode: AssetUploadMode; categoryIds: string[] }) =>
@@ -874,10 +938,13 @@ export function ImagesPage({
               assetPending={addAsset.isPending}
               deletePending={deleteImage.isPending}
               favoritePending={setImageFavorite.isPending}
+              comparePending={comparingImageId === image.id}
+              compareDisabled={Boolean(comparingImageId)}
               selectionMode={selectionMode}
               selected={selectedImageIds.has(image.id)}
               selectionDisabled={Boolean(pendingBatchAction)}
               onOpenEditor={openEditor}
+              onCompare={compareImage}
               onAddCase={addCaseFromImage}
               onAddAsset={openAssetFromImage}
               onDelete={setDeleteTarget}
@@ -921,7 +988,7 @@ export function ImagesPage({
                   onClick={() => toggleTimelineGroup(row.group.key)}
                   aria-expanded={!row.collapsed}
                   aria-label={row.collapsed ? t("pages.images.expandTimelineNode", { date: row.group.dateLabel }) : t("pages.images.collapseTimelineNode", { date: row.group.dateLabel })}
-                  title={row.collapsed ? t("common.expand") : t("common.collapse")}
+                  data-library-tooltip data-tooltip={row.collapsed ? t("common.expand") : t("common.collapse")}
                 >
                   <strong>{row.group.dateLabel}</strong>
                   <span>{row.group.weekdayLabel}</span>
@@ -961,10 +1028,13 @@ export function ImagesPage({
                     assetPending={addAsset.isPending}
                     deletePending={deleteImage.isPending}
                     favoritePending={setImageFavorite.isPending}
+                    comparePending={comparingImageId === image.id}
+                    compareDisabled={Boolean(comparingImageId)}
                     selectionMode={selectionMode}
                     selected={selectedImageIds.has(image.id)}
                     selectionDisabled={Boolean(pendingBatchAction)}
                     onOpenEditor={openEditor}
+                    onCompare={compareImage}
                     onAddCase={addCaseFromImage}
                     onAddAsset={openAssetFromImage}
                     onDelete={setDeleteTarget}
@@ -981,6 +1051,8 @@ export function ImagesPage({
   }, [
     addAsset.isPending,
     addCaseFromImage,
+    compareImage,
+    comparingImageId,
     deleteImage.isPending,
     imageList,
     openEditor,
@@ -1001,7 +1073,8 @@ export function ImagesPage({
   ]);
 
   return (
-    <section className={cx("page-section", selectionMode && "image-batch-active")}>
+    <>
+    <section className={cx("page-section", selectionMode && "image-batch-active")} style={compareOpen ? { visibility: "hidden" } : undefined} inert={compareOpen} aria-hidden={compareOpen || undefined}>
       <PageHeader
         title={t("pages.images.title")}
         desc={t("pages.images.desc")}
@@ -1029,6 +1102,7 @@ export function ImagesPage({
           onAddAsset={() => setBatchAssetOpen(true)}
           onAddCase={() => setBatchCaseOpen(true)}
           onDownload={() => setBatchDownloadOpen(true)}
+          onCompare={() => enterComparisonPage(Array.from(selectedImageIds))}
           onDelete={() => previewImageBatchDelete.mutate(selectedImages.map((image) => image.id))}
           onExit={exitBatchMode}
         />
@@ -1042,7 +1116,7 @@ export function ImagesPage({
           onClick={() => setFavoriteOnly((value) => !value)}
           aria-label={favoriteOnly ? t("pages.images.cancelFavoriteOnly") : t("pages.images.favoriteOnly")}
           aria-pressed={favoriteOnly}
-          title={favoriteOnly ? t("pages.images.cancelFavoriteOnly") : t("pages.images.favoriteOnly")}
+          data-library-tooltip data-tooltip={favoriteOnly ? t("pages.images.cancelFavoriteOnly") : t("pages.images.favoriteOnly")}
         >
           <Heart size={17} fill={favoriteOnly ? "currentColor" : "none"} />
           <span className="filter-tab-count">{imageFilterCounts.favorite}</span>
@@ -1054,7 +1128,7 @@ export function ImagesPage({
             onClick={toggleAllTimelineGroups}
             disabled={timelineGroups.length === 0}
             aria-label={allTimelineGroupsCollapsed ? t("pages.images.expandAllTimeline") : t("pages.images.collapseAllTimeline")}
-            title={allTimelineGroupsCollapsed ? t("pages.images.expandAllTimeline") : t("pages.images.collapseAllTimeline")}
+            data-library-tooltip data-tooltip={allTimelineGroupsCollapsed ? t("pages.images.expandAllTimeline") : t("pages.images.collapseAllTimeline")}
           >
             {allTimelineGroupsCollapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
             {allTimelineGroupsCollapsed ? t("pages.images.expandAll") : t("pages.images.collapseAll")}
@@ -1074,7 +1148,7 @@ export function ImagesPage({
           type="button"
           onClick={() => setTimelineSort((value) => (value === "desc" ? "asc" : "desc"))}
           aria-label={t("pages.images.sort", { sort: timelineSort === "desc" ? t("pages.images.newToOld") : t("pages.images.oldToNew") })}
-          title={t("pages.images.sort", { sort: timelineSort === "desc" ? t("pages.images.newToOld") : t("pages.images.oldToNew") })}
+          data-library-tooltip data-tooltip={t("pages.images.sort", { sort: timelineSort === "desc" ? t("pages.images.newToOld") : t("pages.images.oldToNew") })}
         >
           {timelineSort === "desc" ? <CalendarArrowDown size={16} /> : <CalendarArrowUp size={16} />}
           {timelineSort === "desc" ? t("pages.images.newToOld") : t("pages.images.oldToNew")}
@@ -1118,7 +1192,7 @@ export function ImagesPage({
       <div ref={imageLoadMoreRef} className="page-load-sentinel" aria-hidden="true" />
       {images.isFetchNextPageError ? <LibraryPageLoadError onRetry={() => void images.fetchNextPage()} /> : null}
       <ScrollJumpButton className="page-scroll-jump-btn" scrollJump={scrollJump} onClick={jumpToScrollEdge} />
-      {openImageId && openImagePreviewItems.length > 0 ? (
+      {!compareOpen && openImageId && openImagePreviewItems.length > 0 ? (
         <ImagePreviewModal
           items={openImagePreviewItems}
           index={0}
@@ -1207,5 +1281,31 @@ export function ImagesPage({
         onCancel={() => setDeleteTarget(null)}
       />
     </section>
+    {compareOpen && compareDraft && compareOwnerId ? <ImageCompareWorkspace
+      key={compareOwnerId}
+      initial={compareDraft}
+      ownerId={compareOwnerId}
+      thumbnails={Object.fromEntries(imageList.filter((item) => compareDraft.imageIds.includes(item.id)).map((item) => [item.id, item.thumbnailUrl]))}
+      wheelMode={imagePreviewWheelMode}
+      onClose={(unavailableIds) => {
+        if (unavailableIds.length) {
+          const excluded = new Set(unavailableIds);
+          setSelectedImageIds((ids) => new Set([...ids].filter((id) => !excluded.has(id))));
+          void queryClient.invalidateQueries({ queryKey: ["images"] });
+        }
+        returnToGallery();
+      }}
+      onEdit={(image, comparisonImages) => {
+        setDraftPrompt("");
+        setEditImage(null);
+        setEditorImageRequest({ image, images: comparisonImages, totalImageCount: comparisonImages.length });
+        closeCompare();
+        navigate("/");
+      }}
+    /> : compareOpen ? <section className="image-compare-workspace image-compare-empty">
+      <h1>{t("compare.title")}</h1><p>{t("compare.selectHint")}</p>
+      <button type="button" className="secondary-btn" onClick={returnToGallery}>{t("compare.back")}</button>
+    </section> : null}
+    </>
   );
 }

@@ -4,6 +4,7 @@ import { messageThreadRenderKey, type ChatRenderItem, type MessageRevision } fro
 import { formatImageAnnotationMessageDisplayText } from "../../lib/imageAnnotations";
 import type { ImageJob, Message, WorkImage } from "../../types";
 import { ChatMessage, ChatMessageThread } from "./ChatMessages";
+import { ImageCompareResultsContext } from "./ImageCompareButton";
 
 type MessageEditPayload = {
   rootId: string;
@@ -53,7 +54,7 @@ function navigatorMessagePreview(message: Message) {
   return content.replace(/\s+/g, " ").trim();
 }
 
-function visibleAssistantImages(items: ChatRenderItem[]) {
+export function visibleAssistantImages(items: ChatRenderItem[]) {
   const messages: Message[] = [];
   const seen = new Set<string>();
   const append = (message: Message | null | undefined) => {
@@ -116,10 +117,9 @@ export function ConversationView({
   const navigatorJumpFallbackTimerRef = useRef<number | null>(null);
   const navigatorJumpSettleTimerRef = useRef<number | null>(null);
   const [activeTurnId, setActiveTurnId] = useState("");
-  const sharedResultMessages = useMemo(
-    () => (mode === "shared-readonly" ? visibleAssistantImages(items) : []),
-    [items, mode]
-  );
+  const resultMessages = useMemo(() => visibleAssistantImages(items), [items]);
+  const sharedResultMessages = mode === "shared-readonly" ? resultMessages : undefined;
+  const compareResultIds = useMemo(() => mode === "workspace" ? resultMessages.map((message) => message.imageId!) : [], [resultMessages, mode]);
   const navigatorEntries = useMemo(
     () =>
       items
@@ -298,7 +298,7 @@ export function ConversationView({
   };
 
   return (
-    <>
+    <ImageCompareResultsContext.Provider value={compareResultIds}>
       {items.map((item, index) => {
         const navigatorEntry = navigatorEntriesByItemIndex.get(index);
         const setTurnElement = navigatorEntry
@@ -411,6 +411,6 @@ export function ConversationView({
           </div>
         </nav>
       ) : null}
-    </>
+    </ImageCompareResultsContext.Provider>
   );
 }

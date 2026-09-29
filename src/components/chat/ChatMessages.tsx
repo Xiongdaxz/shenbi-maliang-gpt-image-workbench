@@ -6,6 +6,7 @@ import { CheckerboardImage } from "../CheckerboardImage";
 import { ImageLightbox, type ImageLightboxState, type ImageLightboxTarget } from "../ImageLightbox";
 import { ImageDownloadMenu, type ImageDownloadSource } from "../ImageDownloadMenu";
 import { ImagePreviewModal, type ImagePreviewItem } from "../ImagePreviewModal";
+import { ImageCompareButton } from "./ImageCompareButton";
 import { EditReferenceArrowIcon, MessageEditIcon } from "../InlineIcons";
 import { RenderingMessage } from "../RenderingMessage";
 import { useI18n } from "../../i18n";
@@ -34,6 +35,7 @@ export type ChatMessageMode = "workspace" | "shared-readonly";
 export type ChatMessageCapabilities = {
   copyText: boolean;
   copyImage: boolean;
+  compareImage: boolean;
   editMessage: boolean;
   retry: boolean;
   editImage: boolean;
@@ -45,6 +47,7 @@ export type ChatMessageCapabilities = {
 const WORKSPACE_CHAT_MESSAGE_CAPABILITIES: ChatMessageCapabilities = {
   copyText: true,
   copyImage: true,
+  compareImage: true,
   editMessage: true,
   retry: true,
   editImage: true,
@@ -56,6 +59,7 @@ const WORKSPACE_CHAT_MESSAGE_CAPABILITIES: ChatMessageCapabilities = {
 const SHARED_READONLY_CHAT_MESSAGE_CAPABILITIES: ChatMessageCapabilities = {
   copyText: false,
   copyImage: false,
+  compareImage: false,
   editMessage: false,
   retry: false,
   editImage: false,
@@ -940,6 +944,7 @@ function AssistantImageGroup({
                 <Copy size={17} />
               </button>
             ) : null}
+            {capabilities.compareImage && image ? <ImageCompareButton image={image} groupImages={groupImages} /> : null}
             <MessageMoreButton createdAt={activeMessage.createdAt} imageExecution={activeExecution} />
           </div>
         ) : null}
@@ -1391,6 +1396,7 @@ export function ChatMessage({
                 <Copy size={17} />
               </button>
             ) : null}
+            {capabilities.compareImage && image ? <ImageCompareButton image={image} /> : null}
             <MessageMoreButton createdAt={message.createdAt} imageExecution={imageExecution} />
           </div>
         </>

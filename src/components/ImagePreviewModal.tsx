@@ -928,7 +928,7 @@ export function ImagePreviewModal<TItem extends ImagePreviewItem>({
         style={{ "--case-preview-toolbar-height": `${previewToolbarHeight}px` } as CSSProperties}
         aria-label={ariaLabel}
       >
-        <button className="case-preview-close" type="button" onClick={closePreview} aria-label={t("imagePreview.close")}>
+        <button className="case-preview-close" type="button" onClick={closePreview} aria-label={t("imagePreview.close")} data-library-tooltip data-tooltip={t("imagePreview.close")}>
           <X size={18} />
         </button>
         <ImagePreviewStage

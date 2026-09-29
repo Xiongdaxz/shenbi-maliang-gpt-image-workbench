@@ -112,6 +112,7 @@ export function ImagePreviewStage({
         }}
         disabled={!canPrev}
         aria-label={t("imagePreview.previous")}
+        data-library-tooltip data-tooltip={t("imagePreview.previous")}
       >
         <ChevronLeft size={24} />
       </button>
@@ -184,6 +185,7 @@ export function ImagePreviewStage({
         }}
         disabled={!canNext}
         aria-label={t("imagePreview.next")}
+        data-library-tooltip data-tooltip={t("imagePreview.next")}
       >
         <ChevronRight size={24} />
       </button>
@@ -249,7 +251,7 @@ export function ImagePreviewItemThumbnails({
           onClick={() => onItemSelect(itemIndex)}
           aria-label={t("imageLightbox.viewNth", { index: itemIndex + 1 })}
           aria-pressed={itemIndex === index}
-          title={thumbnailItem.title}
+          data-library-tooltip data-tooltip={thumbnailItem.title}
         >
           <img src={thumbnailItem.thumbnailUrl ?? thumbnailItem.previewUrl ?? thumbnailItem.imageUrl} alt="" loading="lazy" />
         </button>
@@ -302,6 +304,7 @@ export function ImagePreviewToolbar({
                 onClick={() => onGroupImageSelect(imageIndex)}
                 aria-label={t("imagePreview.viewGroupNth", { index: imageIndex + 1 })}
                 aria-pressed={imageIndex === activeGroupImageIndex}
+                data-library-tooltip data-tooltip={t("imagePreview.viewGroupNth", { index: imageIndex + 1 })}
               >
                 <img src={image.imageThumbnailUrl ?? image.imagePreviewUrl ?? image.imageUrl} alt="" loading="lazy" />
                 {image.isCover ? <span className="case-preview-cover-dot">{t("pages.cases.cover")}</span> : null}
@@ -351,13 +354,13 @@ export function ImagePreviewToolbar({
         <div className="case-preview-controls">
           <div className="case-preview-control-row">
             <div className="case-preview-transform-tools" aria-label={t("imagePreview.tools")}>
-              <button className="case-preview-tool" type="button" onClick={onRotateLeft} aria-label={t("imagePreview.rotateLeft")} title={t("imagePreview.rotateLeft")}>
+              <button className="case-preview-tool" type="button" onClick={onRotateLeft} aria-label={t("imagePreview.rotateLeft")} data-library-tooltip data-tooltip={t("imagePreview.rotateLeft")}>
                 <RotateCcw size={unifiedToolbarControls ? 20 : 16} />
               </button>
-              <button className="case-preview-tool" type="button" onClick={onRotateRight} aria-label={t("imagePreview.rotateRight")} title={t("imagePreview.rotateRight")}>
+              <button className="case-preview-tool" type="button" onClick={onRotateRight} aria-label={t("imagePreview.rotateRight")} data-library-tooltip data-tooltip={t("imagePreview.rotateRight")}>
                 <RotateCw size={unifiedToolbarControls ? 20 : 16} />
               </button>
-              <button className="case-preview-tool" type="button" onClick={onZoomOut} aria-label={t("imagePreview.zoomOut")} title={t("imagePreview.zoomOut")}>
+              <button className="case-preview-tool" type="button" onClick={onZoomOut} aria-label={t("imagePreview.zoomOut")} data-library-tooltip data-tooltip={t("imagePreview.zoomOut")}>
                 <ZoomOut size={unifiedToolbarControls ? 20 : 16} />
               </button>
               <ImageZoomSlider
@@ -367,7 +370,7 @@ export function ImagePreviewToolbar({
                 label={zoomLabel}
                 onChange={onZoomChange}
               />
-              <button className="case-preview-tool" type="button" onClick={onZoomIn} aria-label={t("imagePreview.zoomIn")} title={t("imagePreview.zoomIn")}>
+              <button className="case-preview-tool" type="button" onClick={onZoomIn} aria-label={t("imagePreview.zoomIn")} data-library-tooltip data-tooltip={t("imagePreview.zoomIn")}>
                 <ZoomIn size={unifiedToolbarControls ? 20 : 16} />
               </button>
               {unifiedToolbarControls ? (
@@ -376,16 +379,16 @@ export function ImagePreviewToolbar({
                   type="button"
                   onClick={previewResetActive ? onReset : onOriginalSize}
                   aria-label={t(previewResetActive ? "imagePreview.reset" : "imagePreview.originalSize")}
-                  title={t(previewResetActive ? "imagePreview.reset" : "imagePreview.originalSize")}
+                  data-library-tooltip data-tooltip={t(previewResetActive ? "imagePreview.reset" : "imagePreview.originalSize")}
                 >
                   {previewResetActive ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
                 </button>
               ) : (
                 <>
-                  <button className="case-preview-tool" type="button" onClick={onReset} aria-label={t("imagePreview.reset")} title={t("imagePreview.reset")}>
+                  <button className="case-preview-tool" type="button" onClick={onReset} aria-label={t("imagePreview.reset")} data-library-tooltip data-tooltip={t("imagePreview.reset")}>
                     <RefreshCw size={15} />
                   </button>
-                  <button className="case-preview-tool" type="button" onClick={onOriginalSize} aria-label={t("imagePreview.originalSize")} title={t("imagePreview.originalSize")}>
+                  <button className="case-preview-tool" type="button" onClick={onOriginalSize} aria-label={t("imagePreview.originalSize")} data-library-tooltip data-tooltip={t("imagePreview.originalSize")}>
                     <Maximize2 size={15} />
                   </button>
                 </>
@@ -403,7 +406,7 @@ export function ImagePreviewToolbar({
                         type="button"
                         onClick={() => onReferencePreview(reference)}
                         aria-label={t("imagePreview.viewReference", { name: reference.name })}
-                        title={reference.name}
+                        data-library-tooltip data-tooltip={reference.name}
                       >
                         <CheckerboardImage src={reference.thumbnailUrl ?? reference.previewUrl ?? reference.url} alt={reference.name} loading="lazy" />
                       </button>
@@ -434,6 +437,7 @@ export function ReferenceLightbox({ reference, onClose }: ReferenceLightboxProps
         onMouseDown={(event) => event.stopPropagation()}
         onClick={onClose}
         aria-label={t("imagePreview.closeReference")}
+        data-library-tooltip data-tooltip={t("imagePreview.closeReference")}
       >
         <X size={20} />
       </button>
@@ -445,7 +449,7 @@ export function ReferenceLightbox({ reference, onClose }: ReferenceLightboxProps
         onMouseDown={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
         aria-label={t("imagePreview.downloadReference")}
-        title={t("imagePreview.downloadReference")}
+        data-library-tooltip data-tooltip={t("imagePreview.downloadReference")}
       >
         <Download size={20} />
       </a>

@@ -1,9 +1,11 @@
-import { Brush, Check, FolderOpen, Heart, Lightbulb } from "lucide-react";
+import { useLayoutEffect, useRef, useState } from "react";
+import { Brush, Check, Columns2, Heart, LoaderCircle } from "lucide-react";
 import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import type { WorkImage } from "../types";
 import { ImageDownloadMenu } from "./ImageDownloadMenu";
 import { SkeletonImage } from "./SkeletonImage";
+import { MyImageMoreMenu } from "./images/MyImageMoreMenu";
 
 export function MyImageCard({
   image,
@@ -13,10 +15,13 @@ export function MyImageCard({
   assetPending,
   deletePending,
   favoritePending,
+  comparePending = false,
+  compareDisabled = false,
   selectionMode = false,
   selected = false,
   selectionDisabled = false,
   onOpenEditor,
+  onCompare,
   onAddCase,
   onAddAsset,
   onDelete,
@@ -30,10 +35,13 @@ export function MyImageCard({
   assetPending: boolean;
   deletePending: boolean;
   favoritePending: boolean;
+  comparePending?: boolean;
+  compareDisabled?: boolean;
   selectionMode?: boolean;
   selected?: boolean;
   selectionDisabled?: boolean;
   onOpenEditor: (image: WorkImage) => void;
+  onCompare: (image: WorkImage) => void;
   onAddCase: (image: WorkImage) => void;
   onAddAsset: (image: WorkImage) => void;
   onDelete: (image: WorkImage) => void;
@@ -41,10 +49,24 @@ export function MyImageCard({
   onToggleSelected?: (image: WorkImage) => void;
 }) {
   const { t } = useI18n();
+  const frame = useRef<HTMLDivElement>(null);
+  const [narrow, setNarrow] = useState(compact);
+  const compactActions = compact || narrow;
+  useLayoutEffect(() => {
+    if (compact || !frame.current) return;
+    const element = frame.current;
+    const update = () => { const width = element.clientWidth; if (width > 0) setNarrow(width < 176); };
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    update();
+    return () => observer.disconnect();
+  }, [compact]);
   const thumbnailUrl = image.thumbnailUrl || image.previewUrl || image.url;
+  const downloadSource = { type: "image" as const, id: image.id,
+    downloadBaseName: image.suggestedCaseTitle?.trim() || image.suggestedAssetName?.trim() || image.originPrompt?.trim() || image.prompt };
   return (
     <article className={cx("image-card", compact && "compact", selectionMode && "selection-mode", selected && "selected")}>
-      <div className="image-card-frame">
+      <div ref={frame} className="image-card-frame">
         <button
           className="image-card-image-btn"
           type="button"
@@ -69,6 +91,7 @@ export function MyImageCard({
             onClick={() => onToggleSelected?.(image)}
             aria-label={selected ? t("pages.images.batch.unselectImage") : t("pages.images.batch.selectImage")}
             aria-pressed={selected}
+            data-library-tooltip data-tooltip={selected ? t("pages.images.batch.unselectImage") : t("pages.images.batch.selectImage")}
             disabled={selectionDisabled}
           >
             {selected ? <Check size={16} strokeWidth={3} /> : null}
@@ -79,42 +102,22 @@ export function MyImageCard({
           onClick={() => onToggleFavorite(image)}
           aria-label={image.favorited ? t("pages.images.unfavoriteImage") : t("pages.images.favoriteImage")}
           aria-pressed={image.favorited}
-          title={image.favorited ? t("pages.images.unfavoriteImage") : t("pages.images.favoriteImage")}
+          data-library-tooltip data-tooltip={image.favorited ? t("pages.images.unfavoriteImage") : t("pages.images.favoriteImage")}
           disabled={favoritePending}
         >
           <Heart size={16} fill={image.favorited ? "currentColor" : "none"} />
         </button>}
-        {!selectionMode ? <div className="case-card-actions image-card-actions">
-          <button className="case-action-icon" type="button" onClick={() => onOpenEditor(image)} aria-label={t("pages.images.editImage")} title={t("pages.images.editImage")}>
+        {!selectionMode ? <div className={cx("case-card-actions image-card-actions", compactActions && "narrow-actions")}>
+          <button className="case-action-icon" type="button" onClick={() => onOpenEditor(image)} aria-label={t("pages.images.editImage")} data-library-tooltip data-tooltip={t("pages.images.editImage")}>
             <Brush size={16} />
           </button>
-          <button
-            className="case-action-icon"
-            type="button"
-            onClick={() => onAddCase(image)}
-            aria-label={t("pages.cases.addToInspiration")}
-            title={t("pages.cases.addToInspiration")}
-          >
-            <Lightbulb size={16} />
+          <button className="case-action-icon" type="button" onClick={() => onCompare(image)} disabled={compareDisabled}
+            aria-label={t("compare.title")} data-library-tooltip data-tooltip={t(comparePending ? "common.loading" : "compare.title")} aria-busy={comparePending}>
+            {comparePending ? <LoaderCircle size={16} className="animate-spin" /> : <Columns2 size={16} />}
           </button>
-          <button
-            className="case-action-icon"
-            type="button"
-            onClick={() => onAddAsset(image)}
-            disabled={assetPending}
-            aria-label={t("pages.cases.addToAssets")}
-            title={t("pages.cases.addToAssets")}
-          >
-            <FolderOpen size={16} />
-          </button>
-          <ImageDownloadMenu
-            source={{
-              type: "image",
-              id: image.id,
-              downloadBaseName: image.suggestedCaseTitle?.trim() || image.suggestedAssetName?.trim() || image.originPrompt?.trim() || image.prompt
-            }}
-            className="case-action-icon"
-          />
+          <ImageDownloadMenu source={downloadSource} className="case-action-icon" libraryTooltip />
+          <MyImageMoreMenu assetPending={assetPending}
+            onAddCase={() => onAddCase(image)} onAddAsset={() => onAddAsset(image)} />
         </div> : null}
       </div>
     </article>

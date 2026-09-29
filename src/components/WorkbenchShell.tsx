@@ -9,6 +9,7 @@ import { api } from "../api";
 import { languagePreferenceLabel, useI18n, type LocaleCode, type Translate } from "../i18n";
 import type { AppearanceMode } from "../lib/appearance";
 import { cx } from "../lib/cx";
+import { isReturningFromImageCompare } from "../lib/imageComparePage";
 import { pauseRenderingMotion } from "../lib/renderingMotion";
 import { IMAGE_PAGE_SIZE } from "../lib/pagination";
 import { AssetsPage } from "../pages/AssetsPage";
@@ -31,6 +32,7 @@ import {
 import { imageTaskBrowserNotificationPath } from "../lib/imageTaskBrowserNotifications";
 import { cursorLibraryQueryOptions } from "../hooks/useCursorLibraryQuery";
 import { ProjectLogo } from "./ProjectLogo";
+import { ActionTooltip } from "./ActionTooltip";
 import { SearchChatModal } from "./SearchChatModal";
 import { ArchivedChatsDialog } from "./settings/ArchivedChatsDialog";
 import { AppSettingsDialog } from "./settings/AppSettingsDialog";
@@ -1237,6 +1239,8 @@ export function WorkbenchShell({ user }: { user: User }) {
     if (previousPath === location.pathname) return;
 
     activeMainRouteScrollPathRef.current = location.pathname;
+    // ImagesPage preserves and restores its own position across the comparison overlay.
+    if (isReturningFromImageCompare(previousPath, location.pathname)) return;
     if (!SIDEBAR_MAIN_NAV_PATH_SET.has(location.pathname)) return;
 
     window.scrollTo({
@@ -1265,6 +1269,8 @@ export function WorkbenchShell({ user }: { user: User }) {
     runningAnimation?.cancel();
     routeTransitionAnimationRef.current = null;
     stage.style.removeProperty("will-change");
+
+    if (location.pathname === "/images/compare" || previousPath === "/images/compare") return;
 
     const nextIndex = routeTransitionIndex(location.pathname);
     if (
@@ -1474,6 +1480,7 @@ export function WorkbenchShell({ user }: { user: User }) {
     };
 
     const handleGlobalShortcuts = (event: KeyboardEvent) => {
+      if (location.pathname === "/images/compare") return;
       if (event.defaultPrevented || event.altKey || isTypingTarget(event.target)) return;
       const withModifier = event.ctrlKey || event.metaKey;
       if (!withModifier) return;
@@ -1494,7 +1501,7 @@ export function WorkbenchShell({ user }: { user: User }) {
 
     window.addEventListener("keydown", handleGlobalShortcuts);
     return () => window.removeEventListener("keydown", handleGlobalShortcuts);
-  }, [openCurrentOrNewChat]);
+  }, [openCurrentOrNewChat, location.pathname]);
 
   const pendingPinSessionId = pinChat.isPending ? pinChat.variables?.sessionId ?? null : null;
   const globalSessionActionPending = renameChat.isPending || archiveChat.isPending || deleteChat.isPending;
@@ -1688,7 +1695,8 @@ export function WorkbenchShell({ user }: { user: User }) {
     });
 
   return (
-    <div className={cx("app-shell", sidebarCollapsed && "sidebar-collapsed", `sidebar-motion-${sidebarMotionState}`)}>
+    <div className={cx("app-shell", location.pathname === "/images/compare" && "image-compare-route", sidebarCollapsed && "sidebar-collapsed", `sidebar-motion-${sidebarMotionState}`)}>
+      <ActionTooltip key={location.pathname} container={typeof document === "undefined" ? null : document.body} selector="[data-library-tooltip]" hidden={location.pathname === "/images/compare"} />
       <button className="mobile-menu-btn" onClick={() => setMobileMenuOpen(true)} aria-label={t("sidebar.openMenu")}>
         <PanelLeft size={20} aria-hidden="true" />
       </button>
@@ -2251,7 +2259,7 @@ export function WorkbenchShell({ user }: { user: User }) {
               )}
             />
             <Route
-              path="/images"
+              path="/images/*"
               element={(
                 <PageRouteTransition key="images">
                   <ImagesPage

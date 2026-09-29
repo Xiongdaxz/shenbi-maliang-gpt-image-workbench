@@ -5,11 +5,13 @@ import { api } from "./api";
 import { SharedWorkbenchShell } from "./components/SharedWorkbenchShell";
 import { AppUpdateNotifier } from "./components/AppUpdateNotifier";
 import { WorkbenchShell } from "./components/WorkbenchShell";
+import { PageLoading } from "./components/PageLoading";
 import { useAppearanceMode } from "./hooks/useAppearanceMode";
-import { useI18n, useSyncI18nPreference } from "./i18n";
+import { useSyncI18nPreference } from "./i18n";
 import { useDocumentBranding } from "./lib/branding";
 import { LoginPage } from "./pages/LoginPage";
 import { ToastProvider } from "./ui";
+import { useImageCompare } from "./store/imageCompare";
 
 export default function App() {
   const location = useLocation();
@@ -17,10 +19,12 @@ export default function App() {
   const me = useQuery({ queryKey: ["me"], queryFn: api.me });
   const branding = useQuery({ queryKey: ["branding"], queryFn: api.branding });
   const loggedIn = Boolean(me.data?.user);
+  useEffect(() => {
+    if (!me.isLoading) useImageCompare.getState().bindOwner(me.data?.user?.id ?? null);
+  }, [me.isLoading, me.data?.user?.id]);
   const sharedRoute = /^\/share\/[^/]+\/?$/.test(location.pathname);
   const searchParams = new URLSearchParams(location.search);
   const authMode = searchParams.get("auth") === "register" ? "register" : searchParams.get("auth") === "login" ? "login" : null;
-  const { t } = useI18n();
 
   const safeNextPath = () => {
     const next = searchParams.get("next") ?? "";
@@ -28,7 +32,7 @@ export default function App() {
     try {
       const target = new URL(next, window.location.origin);
       if (target.origin !== window.location.origin) return "";
-      const allowedPages = ["/", "/cases", "/assets", "/images", "/image-provenance", "/prompt-templates", "/help"];
+      const allowedPages = ["/", "/cases", "/assets", "/images", "/images/compare", "/image-provenance", "/prompt-templates", "/help"];
       if (!allowedPages.includes(target.pathname) && target.pathname !== "/oauth/authorize") return "";
       return `${target.pathname}${target.search}`;
     } catch {
@@ -56,7 +60,7 @@ export default function App() {
   if (me.isLoading) {
     return (
       <ToastProvider>
-        <div className="center-screen">{t("common.loadingEllipsis")}</div>
+        <PageLoading />
       </ToastProvider>
     );
   }
@@ -64,7 +68,7 @@ export default function App() {
   if (loggedIn && authMode && authenticatedNextPath.startsWith("/oauth/authorize")) {
     return (
       <ToastProvider>
-        <div className="center-screen">{t("common.loadingEllipsis")}</div>
+        <PageLoading />
       </ToastProvider>
     );
   }

@@ -53,6 +53,15 @@ export const HELP_CATEGORIES: HelpCategory[] = [
 
 export const HELP_ARTICLES: HelpArticle[] = [
   {
+    id: "compare-images",
+    categoryId: "manage",
+    titleKey: "help.article.compareImages.title",
+    summaryKey: "help.article.compareImages.summary",
+    keywordsKey: "help.article.compareImages.keywords",
+    bodyKey: "help.article.compareImages.body",
+    action: { to: "/images", labelKey: "help.action.goImages" }
+  },
+  {
     id: "create-first-image",
     categoryId: "start",
     titleKey: "help.article.createFirstImage.title",

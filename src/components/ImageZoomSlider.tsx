@@ -7,8 +7,9 @@ type ImageZoomSliderProps = {
   max: number;
   min: number;
   onChange: (value: number) => void;
-  step?: number;
+  step?: number | "any";
   value: number;
+  tooltip?: string;
 };
 
 export function ImageZoomSlider({
@@ -18,7 +19,8 @@ export function ImageZoomSlider({
   min,
   onChange,
   step = 1,
-  value
+  value,
+  tooltip
 }: ImageZoomSliderProps) {
   const { t } = useI18n();
   const boundedMax = Math.max(min, max);
@@ -26,7 +28,7 @@ export function ImageZoomSlider({
   const progress = boundedMax === min ? 0 : ((boundedValue - min) / (boundedMax - min)) * 100;
 
   return (
-    <label className="image-zoom-slider" title={label}>
+    <label className="image-zoom-slider" title={tooltip ? undefined : label} data-tooltip={tooltip}>
       <input
         type="range"
         min={min}

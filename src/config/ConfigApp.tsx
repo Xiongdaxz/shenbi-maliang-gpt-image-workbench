@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, configApi } from "../api";
 import { ProjectLogo } from "../components/ProjectLogo";
+import { PageLoading } from "../components/PageLoading";
 import { useI18n } from "../i18n";
 import { useDocumentBranding } from "../lib/branding";
 import { ToastProvider } from "../ui";
@@ -15,7 +16,7 @@ export default function ConfigApp() {
   useDocumentBranding(branding.data);
 
   if (status.isLoading) {
-    return <div className="center-screen">{t("config.loading")}</div>;
+    return <PageLoading label={t("config.loading")} />;
   }
 
   if (status.data?.setupRequired) {

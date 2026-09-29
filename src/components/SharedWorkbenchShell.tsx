@@ -5,6 +5,7 @@ import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import { SharedConversationPage } from "../pages/SharedConversationPage";
 import { ProjectLogo } from "./ProjectLogo";
+import { ActionTooltip } from "./ActionTooltip";
 
 const guestNavigation = [
   { path: "/cases", labelKey: "sidebar.inspiration", icon: Lightbulb },
@@ -32,6 +33,7 @@ export function SharedWorkbenchShell() {
 
   return (
     <div className={cx("app-shell", "shared-guest-shell", sidebarCollapsed && "sidebar-collapsed", "sidebar-motion-expanded")}>
+      <ActionTooltip key={location.pathname} container={typeof document === "undefined" ? null : document.body} selector="[data-library-tooltip]" />
       <button className="mobile-menu-btn" type="button" onClick={() => setMobileMenuOpen(true)} aria-label={t("sidebar.openMenu")}>
         <PanelLeft size={20} aria-hidden="true" />
       </button>

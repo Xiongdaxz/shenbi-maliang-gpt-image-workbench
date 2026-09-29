@@ -1,0 +1,8 @@
+/* Shared with chat image actions: dark rounded bubble, arrow and gentle fade. */
+.action-tooltip { position: fixed; z-index: 1200; pointer-events: none; padding: 6px 8px; border-radius: 6px; color: #fff; background: rgba(17, 24, 39, 0.92); box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18); font-family: inherit; font-size: 12px; font-weight: 500; line-height: 1; max-width: min(280px, calc(100vw - 16px)); overflow-wrap: anywhere; animation: action-tip-in 140ms ease; }
+.action-tooltip::before { content: ""; position: absolute; border: 5px solid transparent; }
+.action-tooltip[data-side="top"]::before { top: 100%; left: var(--tip-arrow); transform: translateX(-50%); border-top-color: rgba(17, 24, 39, 0.92); }
+.action-tooltip[data-side="bottom"]::before { bottom: 100%; left: var(--tip-arrow); transform: translateX(-50%); border-bottom-color: rgba(17, 24, 39, 0.92); }
+.action-tooltip[data-side="right"]::before { right: 100%; top: var(--tip-arrow); transform: translateY(-50%); border-right-color: rgba(17, 24, 39, 0.92); }
+@keyframes action-tip-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .action-tooltip { animation: none; } }

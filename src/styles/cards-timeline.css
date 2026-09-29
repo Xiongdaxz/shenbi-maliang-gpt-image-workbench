@@ -448,6 +448,30 @@
   color: #b42318;
 }
 
+.image-card .case-card-actions.image-card-actions {
+  flex-wrap: nowrap;
+}
+
+.image-card:is(:hover, :focus-within, :has(.image-download-menu.open), :has(.image-card-more-trigger[aria-expanded="true"])) .case-card-actions.image-card-actions {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.image-card-actions .case-action-icon { flex-shrink: 0; }
+.image-card .image-card-actions.narrow-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 30px)); gap: 3px; }
+.image-card .image-card-actions.narrow-actions .case-action-icon { width: 100%; height: auto; aspect-ratio: 1; max-height: 30px; }
+.image-card-actions .case-action-icon:focus-visible, .image-card-more-menu button:focus-visible { outline: 2px solid var(--app-link); outline-offset: 2px; }
+
+.image-card-more-menu { position: fixed; z-index: 360; display: grid; gap: 3px; width: 192px; max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; padding: 6px; border: 1px solid var(--app-border); border-radius: 12px; background: color-mix(in srgb, var(--app-surface) 96%, transparent); color: var(--app-text); box-shadow: 0 12px 36px rgba(15, 23, 42, .18); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+.image-card-more-item { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 38px; padding: 9px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--app-text); font-size: 13px; text-align: start; }
+.image-card-more-item > svg { flex-shrink: 0; }
+.image-card-more-item > span { flex: 1; }
+.image-card-more-item:hover:not(:disabled) { background: var(--app-hover-bg); color: var(--app-text); }
+.image-card-more-item:disabled { opacity: .45; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) { .image-card .case-card-actions.image-card-actions { transition: none; } }
+
 .case-action-icon.case-favorite-btn {
   visibility: hidden;
   opacity: 0;

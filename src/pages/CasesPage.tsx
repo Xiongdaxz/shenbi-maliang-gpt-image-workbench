@@ -892,7 +892,7 @@ export function CasesPage({
             onClick={() => setFavoriteOnly((value) => !value)}
             aria-label={favoriteOnly ? t("pages.cases.cancelFavoriteOnly") : t("pages.cases.favoriteOnly")}
             aria-pressed={favoriteOnly}
-            title={favoriteOnly ? t("pages.cases.cancelFavoriteOnly") : t("pages.cases.favoriteOnly")}
+            data-library-tooltip data-tooltip={favoriteOnly ? t("pages.cases.cancelFavoriteOnly") : t("pages.cases.favoriteOnly")}
           >
             <Heart size={17} fill={favoriteOnly ? "currentColor" : "none"} />
             <span className="filter-tab-count">{caseFilterCounts.favorite}</span>
@@ -926,8 +926,8 @@ export function CasesPage({
           renderItem={(item, { index, eager, highPriority }) => {
             return (
               <article className="case-card" key={item.id}>
-              <div className="case-image-frame" title={(item.imageCount ?? 1) > 1 ? t("pages.cases.groupImage") : undefined}>
-                <button className="case-image-btn" type="button" onClick={() => selectPreviewIndex(index)}>
+              <div className="case-image-frame">
+                <button className="case-image-btn" type="button" onClick={() => selectPreviewIndex(index)} title={(item.imageCount ?? 1) > 1 ? t("pages.cases.groupImage") : undefined}>
                   <SkeletonImage
                     src={item.imageThumbnailUrl ?? item.imagePreviewUrl ?? item.imageUrl}
                     alt={item.title}
@@ -951,13 +951,13 @@ export function CasesPage({
                   onClick={() => toggleCaseFavorite(item)}
                   aria-label={item.favorited ? t("pages.cases.unfavorite") : t("pages.cases.favorite")}
                   aria-pressed={item.favorited}
-                  title={item.favorited ? t("pages.cases.unfavorite") : t("pages.cases.favorite")}
+                  data-library-tooltip data-tooltip={item.favorited ? t("pages.cases.unfavorite") : t("pages.cases.favorite")}
                   disabled={setCaseFavorite.isPending}
                 >
                   <Heart size={16} fill={item.favorited ? "currentColor" : "none"} />
                 </button>
                 <div className="case-card-actions">
-                  <button className="case-action-icon" type="button" onClick={() => useCasePrompt(item)} aria-label={t("pages.cases.usePrompt")} title={t("pages.cases.usePrompt")}>
+                  <button className="case-action-icon" type="button" onClick={() => useCasePrompt(item)} aria-label={t("pages.cases.usePrompt")} data-library-tooltip data-tooltip={t("pages.cases.usePrompt")}>
                     <Send size={16} />
                   </button>
                   {item.canDelete ? (
@@ -968,13 +968,13 @@ export function CasesPage({
                           type="button"
                           onClick={() => submitCaseReview.mutate(item.groupId || item.id)}
                           aria-label={t("pages.cases.resubmitReview")}
-                          title={t("pages.cases.resubmitReview")}
+                          data-library-tooltip data-tooltip={t("pages.cases.resubmitReview")}
                           disabled={submitCaseReview.isPending}
                         >
                           <RefreshCw size={16} />
                         </button>
                       ) : null}
-                      <button className="case-action-icon" type="button" onClick={() => void openCaseEditor(item)} aria-label={t("pages.cases.edit")} title={t("pages.cases.edit")}>
+                      <button className="case-action-icon" type="button" onClick={() => void openCaseEditor(item)} aria-label={t("pages.cases.edit")} data-library-tooltip data-tooltip={t("pages.cases.edit")}>
                         <Pencil size={16} />
                       </button>
                     </>
@@ -982,9 +982,10 @@ export function CasesPage({
                   <ImageDownloadMenu
                     source={item.downloadSourceType && item.downloadSourceId ? { type: item.downloadSourceType, id: item.downloadSourceId, downloadBaseName: item.title } : null}
                     className="case-action-icon"
+                    libraryTooltip
                   />
                   {item.canDelete ? (
-                    <button className="case-action-icon danger" type="button" onClick={() => setDeleteTarget(item)} aria-label={t("pages.cases.delete")} title={t("pages.cases.delete")}>
+                    <button className="case-action-icon danger" type="button" onClick={() => setDeleteTarget(item)} aria-label={t("pages.cases.delete")} data-library-tooltip data-tooltip={t("pages.cases.delete")}>
                       <Trash2 size={16} />
                     </button>
                   ) : null}
@@ -1065,12 +1066,12 @@ export function CasesPage({
                 onClick={() => toggleCaseFavorite(item)}
                 aria-label={item.favorited ? t("pages.cases.unfavorite") : t("pages.cases.favorite")}
                 aria-pressed={item.favorited}
-                title={item.favorited ? t("pages.cases.unfavorite") : t("pages.cases.favorite")}
+                data-library-tooltip data-tooltip={item.favorited ? t("pages.cases.unfavorite") : t("pages.cases.favorite")}
                 disabled={setCaseFavorite.isPending}
               >
                 <Heart size={16} fill={item.favorited ? "currentColor" : "none"} />
               </button>
-              <button className="case-preview-tool" type="button" onClick={() => useCasePrompt(item)} aria-label={t("pages.cases.usePrompt")} title={t("pages.cases.usePrompt")}>
+              <button className="case-preview-tool" type="button" onClick={() => useCasePrompt(item)} aria-label={t("pages.cases.usePrompt")} data-library-tooltip data-tooltip={t("pages.cases.usePrompt")}>
                 <Send size={16} />
               </button>
               {item.canDelete ? (
@@ -1081,13 +1082,13 @@ export function CasesPage({
                       type="button"
                       onClick={() => submitCaseReview.mutate(item.groupId || item.id)}
                       aria-label={t("pages.cases.resubmitReview")}
-                      title={t("pages.cases.resubmitReview")}
+                      data-library-tooltip data-tooltip={t("pages.cases.resubmitReview")}
                       disabled={submitCaseReview.isPending}
                     >
                       <RefreshCw size={16} />
                     </button>
                   ) : null}
-                  <button className="case-preview-tool" type="button" onClick={() => void openCaseEditor(item)} aria-label={t("pages.cases.edit")} title={t("pages.cases.edit")}>
+                  <button className="case-preview-tool" type="button" onClick={() => void openCaseEditor(item)} aria-label={t("pages.cases.edit")} data-library-tooltip data-tooltip={t("pages.cases.edit")}>
                     <Pencil size={16} />
                   </button>
                 </>
@@ -1098,7 +1099,7 @@ export function CasesPage({
                   type="button"
                   onClick={() => setCaseCover.mutate({ caseId: item.groupId || item.id, groupImage: item.activeGroupImage! })}
                   aria-label={item.isActiveGroupImageCover ? t("pages.cases.currentCover") : t("pages.cases.setCover")}
-                  title={item.isActiveGroupImageCover ? t("pages.cases.currentCover") : t("pages.cases.setCover")}
+                  data-library-tooltip data-tooltip={item.isActiveGroupImageCover ? t("pages.cases.currentCover") : t("pages.cases.setCover")}
                   disabled={Boolean(item.isActiveGroupImageCover) || setCaseCover.isPending}
                 >
                   <ImagesIcon size={16} />
@@ -1107,9 +1108,10 @@ export function CasesPage({
               <ImageDownloadMenu
                 source={item.downloadSourceType && item.downloadSourceId ? { type: item.downloadSourceType, id: item.downloadSourceId, downloadBaseName: item.title } : null}
                 className="case-preview-tool"
+                libraryTooltip
               />
               {item.canDelete ? (
-                <button className="case-preview-tool danger" type="button" onClick={() => setDeleteTarget(item)} aria-label={t("pages.cases.delete")} title={t("pages.cases.delete")}>
+                <button className="case-preview-tool danger" type="button" onClick={() => setDeleteTarget(item)} aria-label={t("pages.cases.delete")} data-library-tooltip data-tooltip={t("pages.cases.delete")}>
                   <Trash2 size={16} />
                 </button>
               ) : null}

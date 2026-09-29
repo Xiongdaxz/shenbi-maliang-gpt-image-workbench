@@ -1,4 +1,4 @@
-import { Download, FolderOpen, Heart, HeartOff, Lightbulb, ListChecks, Trash2, X } from "lucide-react";
+import { Columns2, Download, FolderOpen, Heart, HeartOff, Lightbulb, ListChecks, Trash2, X } from "lucide-react";
 import { useI18n } from "../../i18n";
 
 export type ImageBatchAction = "favorite" | "unfavorite" | "asset" | "case" | "download" | "delete";
@@ -15,6 +15,7 @@ export function ImageBatchToolbar({
   onAddAsset,
   onAddCase,
   onDownload,
+  onCompare,
   onDelete,
   onExit
 }: {
@@ -27,6 +28,7 @@ export function ImageBatchToolbar({
   onAddAsset: () => void;
   onAddCase: () => void;
   onDownload: () => void;
+  onCompare: () => void;
   onDelete: () => void;
   onExit: () => void;
 }) {
@@ -44,6 +46,12 @@ export function ImageBatchToolbar({
         <strong>{t("pages.images.batch.selected", { count: selectedCount })}</strong>
       </div>
       <div className="image-batch-actions">
+        <div className="image-batch-compare">
+          <button className="secondary-btn" type="button" disabled={pending || selectedCount < 2 || selectedCount > 4} onClick={onCompare} aria-describedby="image-compare-selection-hint">
+            <Columns2 size={16} />{t("compare.start", { count: selectedCount })}
+          </button>
+          <small id="image-compare-selection-hint">{selectedCount < 2 ? t("compare.selectHint") : selectedCount > 4 ? t("compare.limitHint") : ""}</small>
+        </div>
         <button className="secondary-btn" type="button" disabled={pending || loadedCount === 0} onClick={onToggleAllLoaded}>
           <ListChecks size={16} />
           {allLoadedSelected ? t("pages.images.batch.unselectLoaded") : t("pages.images.batch.selectLoaded")}

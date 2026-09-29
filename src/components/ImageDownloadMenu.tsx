@@ -29,8 +29,11 @@ type ImageDownloadMenuProps = {
   iconSize?: number;
   ariaLabel?: string;
   title?: string;
+  tooltip?: string;
+  libraryTooltip?: boolean;
   placement?: "top-end" | "bottom-end";
   stopMouseDownPropagation?: boolean;
+  portalContainer?: HTMLElement | null;
 };
 
 function formatDownloadFileSize(value: number | null | undefined) {
@@ -134,6 +137,34 @@ function startDownload(option: ImageDownloadOption, source: ImageDownloadSource)
   anchor.remove();
 }
 
+export function ImageDownloadOptions({ source, enabled = true, onDownload }: {
+  source: ImageDownloadSource | null | undefined;
+  enabled?: boolean;
+  onDownload: () => void;
+}) {
+  const { t } = useI18n();
+  const sourceId = source?.id ?? "";
+  const sourceToken = source?.type === "shared-image" ? source.token : "";
+  const sourceReady = Boolean(source && sourceId && (source.type !== "shared-image" || sourceToken));
+  const query = useQuery({
+    queryKey: ["image-download-options", source?.type, sourceId, sourceToken],
+    queryFn: () => fetchDownloadOptions(source as ImageDownloadSource),
+    enabled: enabled && sourceReady,
+    staleTime: 5 * 60 * 1000
+  });
+  const options = query.data?.options ?? [];
+  return <>
+    {query.isLoading || query.isFetching ? <div className="image-download-status" role="status">{t("common.loading")}</div> : null}
+    {query.isError ? <div className="image-download-status error" role="status">{t("download.optionsFailed")}</div> : null}
+    {!query.isLoading && !query.isError && options.length === 0 ? <div className="image-download-status">{t("download.noOptions")}</div> : null}
+    {!query.isLoading && !query.isError ? options.map((option) => <button key={option.variant} type="button" className="image-download-option" role="menuitem" data-tooltip-disabled
+      onClick={() => { if (source) { startDownload(option, source); onDownload(); } }}>
+      <span className="image-download-option-copy"><strong>{optionLabel(option, t)}</strong><small>{optionDescription(option, t)}</small></span>
+      <span className="image-download-option-meta">{optionMeta(option, t("download.unknownSize"))}</span>
+    </button>) : null}
+  </>;
+}
+
 export function ImageDownloadMenu({
   source,
   className,
@@ -141,8 +172,11 @@ export function ImageDownloadMenu({
   iconSize = 16,
   ariaLabel,
   title,
+  tooltip,
+  libraryTooltip = false,
   placement = "top-end",
-  stopMouseDownPropagation = false
+  stopMouseDownPropagation = false,
+  portalContainer
 }: ImageDownloadMenuProps) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -186,14 +220,6 @@ export function ImageDownloadMenu({
     }
     openPopover();
   };
-
-  const query = useQuery({
-    queryKey: ["image-download-options", source?.type, sourceId, sourceToken],
-    queryFn: () => fetchDownloadOptions(source as ImageDownloadSource),
-    enabled: open && sourceReady,
-    staleTime: 5 * 60 * 1000
-  });
-  const options = query.data?.options ?? [];
 
   useLayoutEffect(() => {
     if (!popoverVisible) return;
@@ -276,31 +302,9 @@ export function ImageDownloadMenu({
               event.stopPropagation();
             }}
           >
-            {query.isLoading || query.isFetching ? <div className="image-download-status">{t("common.loading")}</div> : null}
-            {query.isError ? <div className="image-download-status error">{t("download.optionsFailed")}</div> : null}
-            {!query.isLoading && !query.isError && options.length === 0 ? <div className="image-download-status">{t("download.noOptions")}</div> : null}
-            {!query.isLoading && !query.isError
-              ? options.map((option) => (
-                  <button
-                    key={option.variant}
-                    type="button"
-                    className="image-download-option"
-                    role="menuitem"
-                    onClick={() => {
-                      startDownload(option, source as ImageDownloadSource);
-                      closePopover();
-                    }}
-                  >
-                    <span className="image-download-option-copy">
-                      <strong>{optionLabel(option, t)}</strong>
-                      <small>{optionDescription(option, t)}</small>
-                    </span>
-                    <span className="image-download-option-meta">{optionMeta(option, t("download.unknownSize"))}</span>
-                  </button>
-                ))
-              : null}
+            <ImageDownloadOptions source={source} enabled={open} onDownload={closePopover} />
           </div>,
-          document.body
+          portalContainer ?? document.body
         )
       : null;
 
@@ -325,7 +329,9 @@ export function ImageDownloadMenu({
         disabled={!sourceReady}
         aria-label={ariaLabel ?? t("download.image")}
         aria-expanded={open && !closing}
-        title={title ?? t("download.image")}
+        title={tooltip || libraryTooltip ? undefined : title ?? t("download.image")}
+        data-library-tooltip={libraryTooltip || undefined}
+        data-tooltip={tooltip ?? (libraryTooltip ? ariaLabel ?? t("download.image") : undefined)}
       >
         <Download size={iconSize} />
       </button>

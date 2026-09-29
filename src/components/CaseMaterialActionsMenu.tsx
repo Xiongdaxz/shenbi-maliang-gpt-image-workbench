@@ -129,7 +129,7 @@ export function CaseMaterialActionsMenu({ buttonClassName, onUseAsMaterial, onAd
         aria-label={t("pages.cases.moreActions")}
         aria-haspopup="menu"
         aria-expanded={open && !closing}
-        title={t("common.more")}
+        data-library-tooltip data-tooltip={t("common.more")}
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();

@@ -11,6 +11,7 @@
 - `ChatPage` 继续负责私有会话查询、分支选择、生成任务、编辑器和 `ChatComposer`，以 `mode="workspace"` 使用 `ConversationView`。
 - `SharedConversationPage` 只读取公共 DTO，经现有 `buildChatRenderState` 生成渲染项，再以 `mode="shared-readonly"` 使用同一个 `ConversationView`。
 - `ConversationView` 复用 `ChatMessage`、`ChatMessageThread`、图片组、时间和灯箱。共享 DTO 会把创建时已经选定的可见分支扁平化为只读主序列，避免私有分支/修订元数据再次影响公共渲染。共享模式通过显式 capabilities 关闭 `copyText`、`copyImage`、`editMessage`、`retry`、`editImage`、`addCase` 和 `addAsset`，而不是仅用 CSS 隐藏。
+- 私有图片消息新增的 `compareImage` 同样在共享模式强制关闭；共享页不通过对比功能加载查看者的「我的图片」列表。
 - 下载菜单在共享模式只接受 `{ type: "shared-image", token, id }`，不会回退到当前登录用户的私有图片接口。
 - 已登录查看者由 `WorkbenchShell` 承载 `/share/:token`，保留自己的导航、设置和会话历史；共享会话不会写入其历史。
 - 未登录查看者由 `SharedWorkbenchShell` 承载同一路由，复用品牌、导航、侧栏收起和移动抽屉。最近会话区为空，工作台导航统一拦截到登录流程，不加载个人会话或个人设置数据。

@@ -600,7 +600,7 @@ export function AssetsPage({
               </button>
               <span className={cx("asset-space-badge", asset.space, asset.shared && "is-shared", assetReviewEnabled && `share-status-${asset.shareStatus}`)}>{assetSpaceLabelText(asset)}</span>
               <div className="asset-card-actions">
-                <button type="button" onClick={() => useAssetInNewChat(asset)} aria-label={t("pages.assets.useAsset")} title={t("pages.assets.useAsset")}>
+                <button type="button" onClick={() => useAssetInNewChat(asset)} aria-label={t("pages.assets.useAsset")} data-library-tooltip data-tooltip={t("pages.assets.useAsset")}>
                   <Send size={16} />
                 </button>
                 {asset.canEdit ? (
@@ -611,7 +611,7 @@ export function AssetsPage({
                         onClick={() => updateShare.mutate({ assetId: asset.id, shared: !(asset.shared || asset.shareStatus === "pending") })}
                         disabled={updateShare.isPending}
                         aria-label={asset.shared || asset.shareStatus === "pending" ? t("pages.assets.cancelShare") : t(assetReviewEnabled ? "pages.assets.submitShare" : "pages.assets.share")}
-                        title={asset.shared || asset.shareStatus === "pending" ? t("pages.assets.cancelShare") : t(assetReviewEnabled ? "pages.assets.submitShare" : "pages.assets.share")}
+                        data-library-tooltip data-tooltip={asset.shared || asset.shareStatus === "pending" ? t("pages.assets.cancelShare") : t(assetReviewEnabled ? "pages.assets.submitShare" : "pages.assets.share")}
                       >
                         {asset.shared || asset.shareStatus === "pending" ? <X size={16} /> : <Share2 size={16} />}
                       </button>
@@ -620,7 +620,7 @@ export function AssetsPage({
                       type="button"
                       onClick={() => setEditTarget(asset)}
                       aria-label={t("pages.assets.editAsset")}
-                      title={t("pages.assets.editAsset")}
+                      data-library-tooltip data-tooltip={t("pages.assets.editAsset")}
                     >
                       <Pencil size={16} />
                     </button>
@@ -629,7 +629,7 @@ export function AssetsPage({
                       type="button"
                       onClick={() => setDeleteTarget(asset)}
                       aria-label={t("pages.assets.deleteAsset")}
-                      title={t("pages.assets.deleteAsset")}
+                      data-library-tooltip data-tooltip={t("pages.assets.deleteAsset")}
                     >
                       <Trash2 size={16} />
                     </button>
@@ -696,7 +696,7 @@ export function AssetsPage({
           }}
           renderActions={(item) => (
             <>
-              <button className="case-preview-tool" type="button" onClick={() => useAssetInNewChat(item)} aria-label={t("pages.assets.useAsset")} title={t("pages.assets.useAsset")}>
+              <button className="case-preview-tool" type="button" onClick={() => useAssetInNewChat(item)} aria-label={t("pages.assets.useAsset")} data-library-tooltip data-tooltip={t("pages.assets.useAsset")}>
                 <Send size={16} />
               </button>
               {item.canEdit ? (
@@ -708,19 +708,19 @@ export function AssetsPage({
                       onClick={() => updateShare.mutate({ assetId: item.id, shared: !(item.shared || item.shareStatus === "pending") })}
                       disabled={updateShare.isPending}
                       aria-label={item.shared || item.shareStatus === "pending" ? t("pages.assets.cancelShare") : t(assetReviewEnabled ? "pages.assets.submitShare" : "pages.assets.share")}
-                      title={item.shared || item.shareStatus === "pending" ? t("pages.assets.cancelShare") : t(assetReviewEnabled ? "pages.assets.submitShare" : "pages.assets.share")}
+                      data-library-tooltip data-tooltip={item.shared || item.shareStatus === "pending" ? t("pages.assets.cancelShare") : t(assetReviewEnabled ? "pages.assets.submitShare" : "pages.assets.share")}
                     >
                       {item.shared || item.shareStatus === "pending" ? <X size={16} /> : <Share2 size={16} />}
                     </button>
                   ) : null}
-                  <button className="case-preview-tool" type="button" onClick={() => setEditTarget(item)} aria-label={t("pages.assets.editAsset")} title={t("pages.assets.editAsset")}>
+                  <button className="case-preview-tool" type="button" onClick={() => setEditTarget(item)} aria-label={t("pages.assets.editAsset")} data-library-tooltip data-tooltip={t("pages.assets.editAsset")}>
                     <Pencil size={16} />
                   </button>
                 </>
               ) : null}
-              <ImageDownloadMenu source={{ type: "asset", id: item.id, downloadBaseName: item.name }} className="case-preview-tool" />
+              <ImageDownloadMenu source={{ type: "asset", id: item.id, downloadBaseName: item.name }} className="case-preview-tool" libraryTooltip />
               {item.canEdit ? (
-                <button className="case-preview-tool danger" type="button" onClick={() => setDeleteTarget(item)} aria-label={t("pages.assets.deleteAsset")} title={t("pages.assets.deleteAsset")}>
+                <button className="case-preview-tool danger" type="button" onClick={() => setDeleteTarget(item)} aria-label={t("pages.assets.deleteAsset")} data-library-tooltip data-tooltip={t("pages.assets.deleteAsset")}>
                   <Trash2 size={16} />
                 </button>
               ) : null}

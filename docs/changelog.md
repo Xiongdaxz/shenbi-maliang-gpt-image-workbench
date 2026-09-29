@@ -2,6 +2,20 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.81 - 2026-09-29
+
+### 中文
+
+- 「我的图片」现在可选择 2～4 张图片进入全屏对比，按需同步或分别缩放、平移，并切换原图与预览图；对比时仍可收藏、下载或继续编辑当前图片。
+- 对话结果和图库卡片新增选图对比入口；对比页可继续从个人图库增减图片，同一标签页刷新后可恢复本轮选择，手机上可在双观察窗中切换已选图片。
+- 「我的图片」的卡片操作更集中，图片、灵感和素材相关图标提示更清晰；登录和配置页面等待加载时显示品牌 Logo 与状态文字。
+
+### English
+
+- My Images now lets users compare 2–4 images in a full-screen workspace, zoom and pan them together or independently, and switch between originals and previews. Favorites, downloads, and continued editing remain available during comparison.
+- Image results in conversations and cards in My Images now offer a comparison shortcut. Users can add or remove images from their library, restore the current selection after refreshing the same tab, and switch selected images between two viewing panes on mobile.
+- Image-card actions are more focused in My Images, icon tips are clearer across images, Inspiration, and Assets, and the sign-in and configuration loading screens now show the brand logo with status text.
+
 ## v0.1.80 - 2026-09-24
 
 ### 中文
