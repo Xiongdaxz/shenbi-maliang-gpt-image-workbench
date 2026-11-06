@@ -1,4 +1,5 @@
 import type { AppearanceMode } from "./lib/appearance";
+export type { CreativeProfile, CreativeProfileKind, ProfileDetails, ProfileAsset, ProductVariant, ProfileSelection, ProfileContext, ImageSetItemInput, ImageSetInput, ImageSetRun, ImageSetItem, ImageSet, ImageSetList } from "./types/imageSets";
 import type { LanguagePreference } from "./i18n";
 import type { PromptOptimizeStyleGroup, PromptTemplateOptimizeStyle } from "./lib/promptOptimizeStyles";
 import type { ImageTaskSoundId } from "./lib/imageTaskSounds";
@@ -455,6 +456,7 @@ export type ImageAccount = {
   email: string;
   accountType: string;
   status: "normal" | "limited" | "abnormal" | "disabled";
+  enabled?: boolean;
   quota: number;
   usedQuota: number;
   remainingQuota: number;
@@ -485,6 +487,11 @@ export type ImageAccount = {
   codexUsageError: string;
   priority: number;
   accessToken: string;
+  authSource?: string;
+  authStatus?: string;
+  tokenExpiresAt?: string;
+  authRefreshedAt?: string;
+  authError?: string;
   hasAuthJson: boolean;
   authJson: string;
   hasAuthInfoJson: boolean;

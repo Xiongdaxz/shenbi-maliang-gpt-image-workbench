@@ -42,6 +42,7 @@ import type {
   User
 } from "../types";
 import { request } from "./client";
+import type { CodexOAuthSessionResult } from "../types/codexOAuth";
 
 type ConfigPageInfo = {
   limit: number;
@@ -500,6 +501,12 @@ export const configApi = {
       };
       accounts: ImageAccount[];
     }>("/api/config/image-accounts"),
+  createCodexOAuthSession: (targetAccountId = "") => request<CodexOAuthSessionResult>("/api/config/codex-oauth/sessions", { method: "POST", body: JSON.stringify({ targetAccountId }) }),
+  setImageAccountEnabled: (id: string, enabled: boolean) => request<{ account: ImageAccount }>(`/api/config/image-accounts/${encodeURIComponent(id)}/enabled`, { method: "PATCH", body: JSON.stringify({ enabled }) }),
+  codexOAuthSession: (id: string) => request<CodexOAuthSessionResult>(`/api/config/codex-oauth/sessions/${encodeURIComponent(id)}`),
+  submitCodexOAuthCallback: (id: string, callbackUrl: string) => request<CodexOAuthSessionResult>(`/api/config/codex-oauth/sessions/${encodeURIComponent(id)}/callback`, { method: "POST", body: JSON.stringify({ callbackUrl }) }),
+  cancelCodexOAuthSession: (id: string) => request<CodexOAuthSessionResult>(`/api/config/codex-oauth/sessions/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  attachCodexOAuthChannel: (id: string, channelId: string) => request<{ ok: boolean }>(`/api/config/codex-oauth/sessions/${encodeURIComponent(id)}/channel`, { method: "POST", body: JSON.stringify({ channelId }) }),
   imageAccount: (id: string) =>
     request<{ account: ImageAccount | null }>(`/api/config/image-accounts/${encodeURIComponent(id)}`),
   refreshImageAccountUsage: (id?: string) =>

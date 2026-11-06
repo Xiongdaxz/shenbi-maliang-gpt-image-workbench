@@ -22,7 +22,7 @@ export const STUDIO_CODEX_CLIENT_VERSION = /^\d+\.\d+\.\d+$/.test(configuredCode
   ? configuredCodexClientVersion
   : "0.154.0";
 export const STUDIO_CODEX_USER_AGENT =
-  `codex-tui/${STUDIO_CODEX_CLIENT_VERSION} (Mac OS 26.3.1; arm64) iTerm.app/3.6.9 (codex-tui; ${STUDIO_CODEX_CLIENT_VERSION})`;
+  `codex-tui/${STUDIO_CODEX_CLIENT_VERSION} (Mac OS 26.5.2; arm64) iTerm.app/3.6.11 (codex-tui; ${STUDIO_CODEX_CLIENT_VERSION})`;
 export const STUDIO_LEGACY_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36";
 

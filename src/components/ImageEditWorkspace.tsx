@@ -29,8 +29,10 @@ import {
   DEFAULT_IMAGE_QUALITY,
   imageModelQualities,
   isImageQualitySupported,
+  normalizeImageComplexity,
   normalizeImageModel,
   normalizeImageQuality,
+  type ImageComplexity,
   type ImageModelId,
   type ImageQuality
 } from "../lib/imageModels";
@@ -81,6 +83,7 @@ export type ImageEditorState = {
   initialImageCount?: number;
   initialImageModel?: ImageModelId;
   initialQuality?: ImageQuality;
+  initialComplexity?: ImageComplexity;
   discardDraftOnClose?: boolean;
 };
 
@@ -94,6 +97,8 @@ type ImageEditWorkspaceProps = {
   initialImageCount?: number;
   initialImageModel?: ImageModelId;
   initialQuality?: ImageQuality;
+  initialComplexity?: ImageComplexity;
+  enableImageComplexity?: boolean;
   sizeOptions: SizeOption[];
   selectedSize: string;
   isSubmitting: boolean;
@@ -109,7 +114,7 @@ type ImageEditWorkspaceProps = {
   onActiveImageChange?: (imageId: string) => void;
   onLoadMoreImages?: (direction: "newer" | "older") => void;
   onLockedRequest: () => void;
-  onPickSize: (image: WorkImage, option: SizeOption, imageCount: number, imageModel: ImageModelId, quality: ImageQuality) => void;
+  onPickSize: (image: WorkImage, option: SizeOption, imageCount: number, imageModel: ImageModelId, quality: ImageQuality, complexity?: ImageComplexity) => void;
   onOpenCasePicker: () => void;
   onToggleMaterialPicker: () => void;
   onSubmitEdit: (payload: {
@@ -118,6 +123,7 @@ type ImageEditWorkspaceProps = {
     imageCount: number;
     imageModel: ImageModelId;
     quality: ImageQuality;
+    complexity?: ImageComplexity;
     background?: ImageBackgroundOption;
     editIntent?: ImageEditIntent;
     imageAnnotations?: Array<{ xPercent: number; yPercent: number; instruction: string }>;
@@ -178,6 +184,8 @@ export function ImageEditWorkspace({
   initialImageCount,
   initialImageModel,
   initialQuality,
+  initialComplexity,
+  enableImageComplexity = false,
   sizeOptions,
   selectedSize,
   isSubmitting,
@@ -208,6 +216,7 @@ export function ImageEditWorkspace({
     normalizeImageModel(initialImageModel, DEFAULT_EDIT_IMAGE_MODEL),
     initialQuality ?? DEFAULT_IMAGE_QUALITY
   ));
+  const [complexity, setComplexity] = useState<ImageComplexity | undefined>(() => normalizeImageComplexity(initialImageModel, initialComplexity));
   const [brushSize, setBrushSize] = useState(80);
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
@@ -288,6 +297,7 @@ export function ImageEditWorkspace({
   const selectImageModel = (nextModel: ImageModelId) => {
     setImageModel(nextModel);
     if (!isImageQualitySupported(nextModel, quality)) setQuality(DEFAULT_IMAGE_QUALITY);
+    setComplexity(current => normalizeImageComplexity(nextModel, current));
   };
 
   const activeImage = images.find((image) => image.id === activeId) ?? images[0];
@@ -1469,6 +1479,7 @@ export function ImageEditWorkspace({
         imageCount,
         imageModel,
         quality,
+        ...(complexity ? { complexity } : {}),
         editIntent: requestEditIntent,
         ...(annotationMode
           ? {
@@ -1508,6 +1519,7 @@ export function ImageEditWorkspace({
       imageCount,
       imageModel,
       quality,
+      ...(complexity ? { complexity } : {}),
       background: "transparent",
       sourceAssetIds: [],
       sourceCaseItemIds: []
@@ -1551,7 +1563,7 @@ export function ImageEditWorkspace({
         onMarkupZoomChange={setMarkupPreviewZoom}
         onRemoveBackground={submitRemoveBackground}
         onRemoveSubmit={submitFromEditor}
-        onPickSize={(option) => onPickSize(activeImage, option, imageCount, imageModel, quality)}
+        onPickSize={(option) => onPickSize(activeImage, option, imageCount, imageModel, quality, complexity)}
         onPreviewOriginalSize={showPreviewOriginalSize}
         onPreviewReset={resetPreviewTransform}
         onPreviewRotateLeft={() => setPreviewRotation((value) => value - 90)}
@@ -1857,12 +1869,14 @@ export function ImageEditWorkspace({
         previews={editorComposerPreviews}
         prompt={prompt}
         quality={quality}
+        complexity={complexity}
         qualityOptions={qualityOptions}
         selectedAssets={selectedAssets}
         onPromptChange={setPrompt}
         onImageCountChange={setImageCount}
         onImageModelChange={selectImageModel}
         onQualityChange={setQuality}
+        onComplexityChange={enableImageComplexity ? setComplexity : undefined}
         onLockedRequest={onLockedRequest}
         onClearAnnotations={clearAnnotations}
         onToggleAnnotationTooltips={() => setAnnotationTooltipsVisible((visible) => !visible)}

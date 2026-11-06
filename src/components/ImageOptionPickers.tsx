@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { Brain, Check, ChevronDown, Image as ImageIcon, ImagePlus, Layers2, Ratio } from "lucide-react";
+import { Brain, BrainCircuit, Check, ChevronDown, Image as ImageIcon, ImagePlus, Layers2, Ratio } from "lucide-react";
 import { useI18n, type Translate } from "../i18n";
 import type { ImageBackgroundOption } from "../lib/imageBackground";
 import {
@@ -10,7 +10,11 @@ import {
   type SizeOption
 } from "../lib/imageOptions";
 import { MAX_IMAGE_COUNT, MIN_IMAGE_COUNT } from "../lib/imagePromptCount";
-import { IMAGE_MODEL_OPTIONS, imageModelDisplayName, type ImageModelId } from "../lib/imageModels";
+import {
+  DEFAULT_GENERATION_IMAGE_MODEL, DEFAULT_IMAGE_QUALITY, GPT_IMAGE_26_COMPLEXITIES, IMAGE_MODEL_OPTIONS,
+  imageModelDisplayName, isGptImage26Model, normalizeImageComplexity, normalizeImageModel,
+  type ImageComplexity, type ImageModelId
+} from "../lib/imageModels";
 
 function sizePreviewStyle(previewRatio?: string, box = 22) {
   const match = previewRatio?.match(/^(\d+)\s*\/\s*(\d+)$/);
@@ -54,7 +58,7 @@ export function ModelPicker({
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
-  const selected = IMAGE_MODEL_OPTIONS.find((item) => item.value === value) ?? IMAGE_MODEL_OPTIONS[0];
+  const selected = normalizeImageModel(value, DEFAULT_GENERATION_IMAGE_MODEL);
 
   useEffect(() => {
     if (!open) return;
@@ -79,7 +83,7 @@ export function ModelPicker({
         <span className="size-trigger-icon model-trigger-icon" aria-hidden="true">
           <Brain size={15} />
         </span>
-        <span>{imageModelDisplayName(selected.value)}</span>
+        <span>{imageModelDisplayName(selected)}</span>
         <ChevronDown size={15} className={open ? "open" : ""} />
       </button>
       {open ? (
@@ -272,16 +276,51 @@ export function SizePicker({
 export function QualityPicker({
   value,
   options,
-  onChange
+  onChange,
+  model,
+  complexity,
+  onComplexityChange
 }: {
   value: string;
   options: QualityOption[];
   onChange: (value: string) => void;
+  model: ImageModelId;
+  complexity?: ImageComplexity;
+  onComplexityChange?: (value?: ImageComplexity) => void;
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
+  const [selectedTab, setSelectedTab] = useState<"quality" | "complexity" | null>(null);
+  const tab = selectedTab ?? "quality";
+  const [cardStyle, setCardStyle] = useState<CSSProperties>();
+  const id = useId();
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const panelsRef = useRef<HTMLDivElement | null>(null);
+  const qualityTabRef = useRef<HTMLButtonElement | null>(null);
+  const complexityTabRef = useRef<HTMLButtonElement | null>(null);
+  const hasComplexity = isGptImage26Model(model) && Boolean(onComplexityChange);
   const selected = value ? options.find((item) => item.value === value) : null;
+  const onComplexityTab = tab === "complexity";
+  const complexityOptions: QualityOption[] = GPT_IMAGE_26_COMPLEXITIES.map(key => ({
+    value: key, label: t(`picker.complexity.${key}`), description: t(`picker.complexity.${key}Desc`)
+  }));
+
+  function chooseQuality(next: string) {
+    onChange(next === value ? DEFAULT_IMAGE_QUALITY : next);
+  }
+
+  function closeCard() {
+    setOpen(false);
+    triggerRef.current?.focus();
+  }
+
+  function switchTab(next: "quality" | "complexity") {
+    if (next === tab) return;
+    if (panelsRef.current) panelsRef.current.scrollTop = 0;
+    setSelectedTab(next);
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -293,15 +332,72 @@ export function QualityPicker({
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [open]);
 
-  return (
-    <div className="size-picker quality-picker" ref={wrapRef}>
+  useLayoutEffect(() => {
+    if (!open || !hasComplexity) return;
+    function positionCard() {
+      const anchor = wrapRef.current?.getBoundingClientRect();
+      const card = cardRef.current;
+      if (!anchor || !card) return;
+      const gutter = 12;
+      const gap = 8;
+      const above = anchor.top - gap - gutter;
+      const below = window.innerHeight - anchor.bottom - gap - gutter;
+      const opensBelow = above < 300 && below > above;
+      const left = Math.min(Math.max(gutter, anchor.left), Math.max(gutter, window.innerWidth - card.offsetWidth - gutter));
+      setCardStyle({
+        left: left - anchor.left,
+        maxHeight: Math.max(0, opensBelow ? below : above),
+        ...(opensBelow ? { top: `calc(100% + ${gap}px)`, bottom: "auto" } : {})
+      });
+    }
+    positionCard();
+    qualityTabRef.current?.focus({ preventScroll: true });
+    window.addEventListener("resize", positionCard);
+    window.addEventListener("scroll", positionCard, true);
+    return () => {
+      window.removeEventListener("resize", positionCard);
+      window.removeEventListener("scroll", positionCard, true);
+    };
+  }, [open, hasComplexity]);
+
+  function renderOptions(choices: QualityOption[], selectedValue: string, choose: (value: string) => void, showValue = false) {
+    return choices.map(option => (
       <button
         type="button"
+        key={option.value}
+        role="option"
+        aria-selected={option.value === selectedValue}
+        className={option.value === selectedValue ? "active" : ""}
+        onClick={() => choose(option.value)}
+      >
+        <span className="quality-option-copy">
+          <strong>{qualityOptionLabel(option, t)}</strong>
+          <small>{showValue ? `${option.value} · ` : ""}{qualityOptionDescription(option, t)}</small>
+        </span>
+        {option.value === selectedValue ? <Check className="size-option-check" size={16} aria-hidden="true" /> : <span />}
+      </button>
+    ));
+  }
+
+  return (
+    <div className="size-picker quality-picker" ref={wrapRef} onKeyDown={(event) => {
+      if (!open || event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      closeCard();
+    }}>
+      <button
+        type="button"
+        ref={triggerRef}
         className="quality-picker-trigger"
-        data-tooltip={t(selected ? "picker.quality.tooltip" : "picker.qualityDefaultAuto")}
-        aria-haspopup="listbox"
+        data-tooltip={t(hasComplexity ? "picker.quality.settings" : selected ? "picker.quality.tooltip" : "picker.qualityDefaultAuto")}
+        aria-haspopup={hasComplexity ? "dialog" : "listbox"}
+        aria-controls={open ? `${id}-menu` : undefined}
         aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          if (!open) setSelectedTab(null);
+          setOpen(!open);
+        }}
       >
         <span className="size-trigger-icon quality-trigger-icon" aria-hidden="true">
           <ImageIcon size={15} />
@@ -309,27 +405,48 @@ export function QualityPicker({
         <span>{selected ? qualityOptionLabel(selected, t) : t("picker.quality")}</span>
         <ChevronDown size={15} className={open ? "open" : ""} />
       </button>
-      {open ? (
-        <div className="size-picker-menu quality-picker-menu" role="listbox">
-          {options.map((option) => (
-            <button
-              type="button"
-              key={option.value}
-              role="option"
-              aria-selected={option.value === value}
-              className={value && option.value === value ? "active" : ""}
-              onClick={() => {
-                onChange(option.value === value ? "auto" : option.value);
-                setOpen(false);
-              }}
-            >
-              <span className="quality-option-copy">
-                <strong>{qualityOptionLabel(option, t)}</strong>
-                <small>{option.value} · {qualityOptionDescription(option, t)}</small>
-              </span>
-              {option.value === value ? <Check className="size-option-check" size={16} /> : <span />}
+      {open && hasComplexity ? (
+        <div id={`${id}-menu`} ref={cardRef} className="size-picker-menu quality-picker-menu quality-settings-card"
+          role="dialog" aria-label={t("picker.quality.settings")} style={cardStyle}>
+          <div className="quality-settings-tabs" data-tab={tab} role="tablist" aria-label={t("picker.quality.settings")} onKeyDown={(event) => {
+            if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+            event.preventDefault();
+            const next = event.key === "Home" ? "quality" : event.key === "End" ? "complexity" : onComplexityTab ? "quality" : "complexity";
+            switchTab(next);
+            (next === "quality" ? qualityTabRef : complexityTabRef).current?.focus();
+          }}>
+            <button type="button" id={`${id}-quality`} ref={qualityTabRef} role="tab" aria-controls={`${id}-quality-panel`}
+              aria-selected={!onComplexityTab} tabIndex={onComplexityTab ? -1 : 0} onClick={() => switchTab("quality")}>
+              <ImageIcon size={15} aria-hidden="true" />{t("picker.quality")}
             </button>
-          ))}
+            <button type="button" id={`${id}-complexity`} ref={complexityTabRef} role="tab" aria-controls={`${id}-complexity-panel`}
+              aria-selected={onComplexityTab} tabIndex={onComplexityTab ? 0 : -1} onClick={() => switchTab("complexity")}>
+              <BrainCircuit size={15} aria-hidden="true" />{t("picker.complexity")}
+            </button>
+          </div>
+          <div className="quality-settings-panels" ref={panelsRef}>
+            <div id={`${id}-quality-panel`} className="quality-settings-panel" data-slide={selectedTab === "quality" ? "quality" : undefined}
+              role="tabpanel" aria-labelledby={`${id}-quality`} aria-hidden={onComplexityTab} inert={onComplexityTab}>
+              <div className="quality-settings-options" role="listbox" aria-labelledby={`${id}-quality`}>
+                {renderOptions(options, value, chooseQuality)}
+              </div>
+            </div>
+            <div id={`${id}-complexity-panel`} className="quality-settings-panel" data-slide={onComplexityTab ? "complexity" : undefined}
+              role="tabpanel" aria-labelledby={`${id}-complexity`} aria-hidden={!onComplexityTab} inert={!onComplexityTab}>
+              <div className="quality-settings-options" role="listbox" aria-labelledby={`${id}-complexity`}>
+                {renderOptions(complexityOptions, complexity ?? "", (next) => {
+                  onComplexityChange?.(next === complexity ? undefined : normalizeImageComplexity(model, next));
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : open ? (
+        <div id={`${id}-menu`} className="size-picker-menu quality-picker-menu" role="listbox">
+          {renderOptions(options, value, (next) => {
+            chooseQuality(next);
+            closeCard();
+          }, true)}
         </div>
       ) : null}
     </div>

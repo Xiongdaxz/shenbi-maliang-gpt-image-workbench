@@ -3,7 +3,20 @@ import type { Messages } from "./types";
 
 const imageModelMessages: Record<LocaleCode, Messages> = {
   "zh-CN": {
-    "chatMessages.imageModel": "图片模型",
+    "picker.model.flare26Desc": "新版快速生图，适合日常迭代",
+    "picker.model.sunburst26Desc": "新版精细构图与编辑，适合细节要求高的创作",
+    "picker.quality.settings": "图片设置",
+    "picker.complexity": "复杂度",
+    "picker.complexity.tooltip": "选择 GPT Image 2.6 的图片复杂度",
+    "picker.complexity.low": "低",
+    "picker.complexity.lowDesc": "适合简单构图或局部调整",
+    "picker.complexity.medium": "中",
+    "picker.complexity.mediumDesc": "兼顾构图与生成时间",
+    "picker.complexity.high": "高",
+    "picker.complexity.highDesc": "适合复杂布局和细节关系",
+    "chatMessages.requestedImageModel": "请求模型",
+    "chatMessages.actualImageModel": "实际模型",
+    "chatMessages.upstreamModelUnavailable": "上游未返回",
     "chatMessages.languageModel": "语言模型",
     "composer.inputExpand": "展开输入框",
     "composer.inputCollapse": "收起输入框",
@@ -24,7 +37,20 @@ const imageModelMessages: Record<LocaleCode, Messages> = {
     "picker.quality.maxDesc": "最高质量，适合最终精修"
   },
   "zh-TW": {
-    "chatMessages.imageModel": "圖片模型",
+    "picker.model.flare26Desc": "新版快速生圖，適合日常迭代",
+    "picker.model.sunburst26Desc": "新版精細構圖與編輯，適合細節要求高的創作",
+    "picker.quality.settings": "圖片設定",
+    "picker.complexity": "複雜度",
+    "picker.complexity.tooltip": "選擇 GPT Image 2.6 的圖片複雜度",
+    "picker.complexity.low": "低",
+    "picker.complexity.lowDesc": "適合簡單構圖或局部調整",
+    "picker.complexity.medium": "中",
+    "picker.complexity.mediumDesc": "兼顧構圖與生成時間",
+    "picker.complexity.high": "高",
+    "picker.complexity.highDesc": "適合複雜佈局和細節關係",
+    "chatMessages.requestedImageModel": "請求模型",
+    "chatMessages.actualImageModel": "實際模型",
+    "chatMessages.upstreamModelUnavailable": "上游未回傳",
     "chatMessages.languageModel": "語言模型",
     "composer.inputExpand": "展開輸入框",
     "composer.inputCollapse": "收起輸入框",
@@ -45,7 +71,24 @@ const imageModelMessages: Record<LocaleCode, Messages> = {
     "picker.quality.maxDesc": "最高品質，適合最終精修"
   },
   "en-US": {
-    "chatMessages.imageModel": "Image model",
+    "picker.model.flare26": "GPT Image 2.6 Flare",
+    "picker.model.flare26Short": "2.6 Flare",
+    "picker.model.sunburst26": "GPT Image 2.6 Sunburst",
+    "picker.model.sunburst26Short": "2.6 Sunburst",
+    "picker.model.flare26Desc": "New image model for fast iteration",
+    "picker.model.sunburst26Desc": "New image model for detailed compositions and edits",
+    "picker.quality.settings": "Image settings",
+    "picker.complexity": "Complexity",
+    "picker.complexity.tooltip": "Choose GPT Image 2.6 image complexity",
+    "picker.complexity.low": "Low",
+    "picker.complexity.lowDesc": "For simple layouts or focused edits",
+    "picker.complexity.medium": "Medium",
+    "picker.complexity.mediumDesc": "Balance planning and generation time",
+    "picker.complexity.high": "High",
+    "picker.complexity.highDesc": "For complex layouts and detail relationships",
+    "chatMessages.requestedImageModel": "Requested model",
+    "chatMessages.actualImageModel": "Actual model",
+    "chatMessages.upstreamModelUnavailable": "Not reported",
     "chatMessages.languageModel": "Language model",
     "composer.inputExpand": "Expand input",
     "composer.inputCollapse": "Collapse input",
@@ -66,7 +109,9 @@ const imageModelMessages: Record<LocaleCode, Messages> = {
     "picker.quality.maxDesc": "Highest quality for final refinement"
   },
   "ja-JP": {
-    "chatMessages.imageModel": "画像モデル",
+    "chatMessages.requestedImageModel": "リクエストモデル",
+    "chatMessages.actualImageModel": "実際のモデル",
+    "chatMessages.upstreamModelUnavailable": "提供元からの報告なし",
     "chatMessages.languageModel": "言語モデル",
     "composer.inputExpand": "入力欄を展開",
     "composer.inputCollapse": "入力欄を折りたたむ",
@@ -87,7 +132,9 @@ const imageModelMessages: Record<LocaleCode, Messages> = {
     "picker.quality.maxDesc": "最終仕上げ向けの最高品質"
   },
   "ko-KR": {
-    "chatMessages.imageModel": "이미지 모델",
+    "chatMessages.requestedImageModel": "요청 모델",
+    "chatMessages.actualImageModel": "실제 모델",
+    "chatMessages.upstreamModelUnavailable": "제공자 응답에 없음",
     "chatMessages.languageModel": "언어 모델",
     "composer.inputExpand": "입력창 펼치기",
     "composer.inputCollapse": "입력창 접기",
@@ -108,7 +155,9 @@ const imageModelMessages: Record<LocaleCode, Messages> = {
     "picker.quality.maxDesc": "최종 보정용 최고 품질"
   },
   "es-ES": {
-    "chatMessages.imageModel": "Modelo de imagen",
+    "chatMessages.requestedImageModel": "Modelo solicitado",
+    "chatMessages.actualImageModel": "Modelo usado",
+    "chatMessages.upstreamModelUnavailable": "Sin informar",
     "chatMessages.languageModel": "Modelo de lenguaje",
     "composer.inputExpand": "Ampliar entrada",
     "composer.inputCollapse": "Contraer entrada",
@@ -129,7 +178,9 @@ const imageModelMessages: Record<LocaleCode, Messages> = {
     "picker.quality.maxDesc": "Máxima calidad para el acabado final"
   },
   "fr-FR": {
-    "chatMessages.imageModel": "Modèle d’image",
+    "chatMessages.requestedImageModel": "Modèle demandé",
+    "chatMessages.actualImageModel": "Modèle utilisé",
+    "chatMessages.upstreamModelUnavailable": "Non communiqué",
     "chatMessages.languageModel": "Modèle de langage",
     "composer.inputExpand": "Agrandir la saisie",
     "composer.inputCollapse": "Réduire la saisie",
@@ -150,7 +201,9 @@ const imageModelMessages: Record<LocaleCode, Messages> = {
     "picker.quality.maxDesc": "Qualité maximale pour la finition"
   },
   "de-DE": {
-    "chatMessages.imageModel": "Bildmodell",
+    "chatMessages.requestedImageModel": "Angefragtes Modell",
+    "chatMessages.actualImageModel": "Verwendetes Modell",
+    "chatMessages.upstreamModelUnavailable": "Nicht gemeldet",
     "chatMessages.languageModel": "Sprachmodell",
     "composer.inputExpand": "Eingabe vergrößern",
     "composer.inputCollapse": "Eingabe verkleinern",
@@ -171,7 +224,9 @@ const imageModelMessages: Record<LocaleCode, Messages> = {
     "picker.quality.maxDesc": "Höchste Qualität für die Endbearbeitung"
   },
   "pt-BR": {
-    "chatMessages.imageModel": "Modelo de imagem",
+    "chatMessages.requestedImageModel": "Modelo solicitado",
+    "chatMessages.actualImageModel": "Modelo usado",
+    "chatMessages.upstreamModelUnavailable": "Não informado",
     "chatMessages.languageModel": "Modelo de linguagem",
     "composer.inputExpand": "Expandir entrada",
     "composer.inputCollapse": "Recolher entrada",
@@ -192,7 +247,9 @@ const imageModelMessages: Record<LocaleCode, Messages> = {
     "picker.quality.maxDesc": "Qualidade máxima para o acabamento final"
   },
   "ru-RU": {
-    "chatMessages.imageModel": "Модель изображения",
+    "chatMessages.requestedImageModel": "Запрошенная модель",
+    "chatMessages.actualImageModel": "Фактическая модель",
+    "chatMessages.upstreamModelUnavailable": "Не указана сервисом",
     "chatMessages.languageModel": "Языковая модель",
     "composer.inputExpand": "Развернуть поле ввода",
     "composer.inputCollapse": "Свернуть поле ввода",
@@ -213,7 +270,9 @@ const imageModelMessages: Record<LocaleCode, Messages> = {
     "picker.quality.maxDesc": "Максимальное качество для финальной обработки"
   },
   "fa-IR": {
-    "chatMessages.imageModel": "مدل تصویر",
+    "chatMessages.requestedImageModel": "مدل درخواستی",
+    "chatMessages.actualImageModel": "مدل استفاده‌شده",
+    "chatMessages.upstreamModelUnavailable": "ارائه‌دهنده اعلام نکرده",
     "chatMessages.languageModel": "مدل زبانی",
     "composer.inputExpand": "باز کردن کادر ورودی",
     "composer.inputCollapse": "بستن کادر ورودی",

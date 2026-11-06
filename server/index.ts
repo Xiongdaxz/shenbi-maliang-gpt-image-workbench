@@ -90,6 +90,9 @@ import { registerExternalMcpProtocolRoute } from "./externalMcpServer";
 import { registerExternalMcpUploadRoutes } from "./externalMcpUploads";
 import { registerExternalMcpResultRoutes } from "./externalMcpResults";
 import { registerImageRoutes, startInterruptedImageJobRecovery } from "./imageRoutes";
+import { registerImageSetRoutes, startImageSetScheduler } from "./imageSetRoutes";
+import { SERIES_CREATION_AVAILABLE } from "../src/lib/releaseFeatures";
+import { ensureAllCreativeDefaults } from "./creativeDefaults";
 import { registerImageProvenanceRoutes } from "./imageProvenanceRoutes";
 import {
   migrateEncryptedImageTaskSounds,
@@ -125,6 +128,9 @@ import { deleteUserAccount } from "./userDeletion";
 import { registerInternalDistributionRoutes } from "./internalDistributionRoutes";
 import { registerSiteSettingsRoutes } from "./siteSettingsRoutes";
 import { registerRuntimeLogRoutes } from "./runtimeLogRoutes";
+import { registerCodexOAuthRoutes, codexOAuthSessions } from "./codexOAuthRoutes";
+import { codexCredentials, startCodexCredentialRefresh } from "./codexCredentials";
+import { effectiveImageAccountStatus, setImageAccountEnabled } from "./imageAccountStatus";
 import { resolveDebugSettingsUpdate } from "./debugSettings";
 import {
   initializeRuntimeLogging,
@@ -337,6 +343,7 @@ registerBrandingRoutes(api);
 registerSiteSettingsRoutes(api);
 
 registerRuntimeLogRoutes(api);
+registerCodexOAuthRoutes(api);
 
 registerExternalMcpSettingsRoutes(api);
 
@@ -352,6 +359,7 @@ registerPromptColorSchemeRoutes(api);
 registerPromptTemplateRoutes(api);
 
 registerImageRoutes(api);
+registerImageSetRoutes(api, SERIES_CREATION_AVAILABLE);
 
 registerImageProvenanceRoutes(api);
 
@@ -1375,7 +1383,7 @@ api.get("/config/image-accounts", (c) => {
   return c.json({
     summary: {
       total: accounts.length,
-      available: accounts.filter((account) => account.status === "normal").length,
+      available: accounts.filter((account) => account.status === "normal" && account.authStatus !== "reauth_required").length,
       totalQuota: accounts.reduce((sum, account) => sum + Math.max(0, Number(account.quota) || 0), 0),
       remainingQuota: accounts.reduce((sum, account) => sum + Math.max(0, Number(account.remainingQuota) || 0), 0),
       usageTracked: accounts.filter((account) => account.codexUsageUpdatedAt).length,
@@ -1700,7 +1708,8 @@ function importAccountDescriptor(row: ImageAccountRow) {
     name: row.name ?? "",
     remoteName: row.remote_name ?? "",
     email: row.email ?? "",
-    accountId: authMeta.accountId || infoMeta.accountId || ""
+    authSource: row.auth_source || "legacy",
+    accountId: (row.auth_source === "codex_oauth" ? codexCredentials.identity(row.id)?.upstream_account_id : "") || authMeta.accountId || infoMeta.accountId || ""
   };
 }
 
@@ -1747,7 +1756,8 @@ function buildImageAccountImportPreview(items: ParsedImageAccountImport[]) {
     const batchDuplicate = !item.error && duplicateKey ? seen.get(duplicateKey) : "";
     if (!item.error && duplicateKey && !batchDuplicate) seen.set(duplicateKey, item.rowId);
     const duplicate = item.error ? null : findImportDuplicate(item, descriptors);
-    const error = item.error || (batchDuplicate ? "批量内容中存在重复账号" : "");
+    const error = item.error || (batchDuplicate ? "批量内容中存在重复账号" : "") ||
+      (duplicate?.account.authSource === "codex_oauth" ? "该账号由 ChatGPT OAuth 管理，请通过重新授权更新凭据" : "");
     return {
       rowId: item.rowId,
       sourceName: item.sourceName,
@@ -1797,6 +1807,7 @@ function upsertImportedImageAccount(item: ParsedImageAccountImport, channelId: s
   const existing = duplicate
     ? getOne<ImageAccountRow>(configDb, "select * from image_accounts where id = ?", duplicate.account.id)
     : null;
+  if (existing?.auth_source === "codex_oauth") throw new Error("该账号由 ChatGPT OAuth 管理，请通过重新授权更新凭据");
   const name = item.displayName || item.email || item.remoteName || existing?.name || "图片账号";
   const remoteName = item.remoteName || existing?.remote_name || null;
   const email = item.email || existing?.email || "";
@@ -1967,6 +1978,18 @@ api.post("/config/image-accounts", async (c) => {
   return c.json({ account: row ? toImageAccount(row, false) : null });
 });
 
+api.patch("/config/image-accounts/:id/enabled", async (c) => {
+  const blocked = requireConfig(c);
+  if (blocked) return blocked;
+  const body = await c.req.json().catch(() => null);
+  if (!body || typeof body.enabled !== "boolean") return c.json({ error: "请提供有效的账号启用状态" }, 400);
+  const accountId = c.req.param("id");
+  const row = setImageAccountEnabled(configDb, accountId, body.enabled);
+  if (!row) return c.json({ error: "图片账号不存在" }, 404);
+  audit("image_account.enabled", { accountId, enabled: body.enabled });
+  return c.json({ account: toImageAccount(row) });
+});
+
 api.patch("/config/image-accounts/:id", async (c) => {
   const blocked = requireConfig(c);
   if (blocked) return blocked;
@@ -1974,6 +1997,9 @@ api.patch("/config/image-accounts/:id", async (c) => {
   const existing = getOne<ImageAccountRow>(configDb, "select * from image_accounts where id = ?", accountId);
   if (!existing) return c.json({ error: "图片账号不存在" }, 404);
   const body = await c.req.json().catch(() => ({}));
+  if (existing.auth_source === "codex_oauth" && [body.accessToken, body.authJson, body.authInfoJson].some(value => typeof value === "string" && value.trim() && !value.includes("****"))) {
+    return c.json({ error: "该账号由 ChatGPT OAuth 管理，请通过重新授权更新凭据" }, 400);
+  }
   const rawAuthJson = typeof body.authJson === "string" ? body.authJson : existing.auth_json ?? "";
   const authJson = rawAuthJson.includes("****") ? existing.auth_json ?? "" : rawAuthJson.trim();
   const rawAuthInfoJson = typeof body.authInfoJson === "string" ? body.authInfoJson : existing.auth_info_json ?? "";
@@ -2007,6 +2033,7 @@ api.patch("/config/image-accounts/:id", async (c) => {
     accountId
   );
   audit("image_account.update", { accountId });
+  if (Object.prototype.hasOwnProperty.call(body, "status")) setImageAccountEnabled(configDb, accountId, body.status !== "disabled");
   const row = getOne<ImageAccountRow>(configDb, "select * from image_accounts where id = ?", accountId);
   return c.json({ account: row ? toImageAccount(row, false) : null });
 });
@@ -2017,7 +2044,14 @@ api.delete("/config/image-accounts/:id", (c) => {
   const accountId = c.req.param("id");
   const existing = getOne<ImageAccountRow>(configDb, "select * from image_accounts where id = ?", accountId);
   if (!existing) return c.json({ error: "图片账号不存在" }, 404);
-  run(configDb, "delete from image_accounts where id = ?", accountId);
+  configDb.transaction(() => {
+    codexCredentials.remove(accountId);
+    run(configDb, "delete from image_accounts where id = ?", accountId);
+    for (const provider of getAll<ProviderRow>(configDb, "select * from provider_configs where channel = 'chatgpt_web'")) {
+      const ids = normalizeIdList(provider.web_account_ids);
+      if (ids.includes(accountId)) run(configDb, "update provider_configs set web_account_ids = ?, updated_at = ? where id = ?", JSON.stringify(ids.filter(id => id !== accountId)), now(), provider.id);
+    }
+  })();
   audit("image_account.delete", { accountId, name: existing.name, email: existing.email });
   return c.json({ ok: true });
 });
@@ -2106,7 +2140,7 @@ function normalizeProviderConfigPath(channel: string, value: unknown, kind: "gen
   return path || "/v1/images/generations";
 }
 
-function providerForModelDiscovery(raw: Record<string, unknown>) {
+async function providerForModelDiscovery(raw: Record<string, unknown>) {
   const id = String(raw.id ?? "").trim();
   const existing = id ? getOne<ProviderRow>(configDb, "select * from provider_configs where id = ?", id) : null;
   const channel = normalizeProviderChannel(String(raw.channel ?? existing?.channel ?? inferChannelFromType(String(raw.type ?? existing?.type ?? "api"))));
@@ -2151,6 +2185,11 @@ function providerForModelDiscovery(raw: Record<string, unknown>) {
   for (const accountId of webAccountIds) {
     const account = getOne<ImageAccountRow>(configDb, "select * from image_accounts where id = ?", accountId);
     if (!account) continue;
+    if (account.auth_source === "codex_oauth") {
+      const grant = await codexCredentials.fresh(account.id);
+      provider.api_key_value = grant.tokens.accessToken; provider.web_account_id = grant.identity.accountId;
+      provider.web_cookies = ""; break;
+    }
     const authMeta = account.auth_json ? extractAuthJsonMeta(account.auth_json) : { accessToken: "", cookies: "", accountId: "" };
     const infoMeta = account.auth_info_json ? extractAuthJsonMeta(account.auth_info_json) : { accessToken: "", cookies: "", accountId: "" };
     const accessToken = account.access_token || authMeta.accessToken || infoMeta.accessToken || "";
@@ -2163,14 +2202,14 @@ function providerForModelDiscovery(raw: Record<string, unknown>) {
   return provider;
 }
 
-api.get("/config/providers/:id/models-cache", (c) => {
+api.get("/config/providers/:id/models-cache", async (c) => {
   const blocked = requireConfig(c);
   if (blocked) return blocked;
   const id = c.req.param("id").trim();
   if (!getOne<ProviderRow>(configDb, "select * from provider_configs where id = ?", id)) {
     return c.json({ error: "渠道不存在" }, 404);
   }
-  const provider = providerForModelDiscovery({ id });
+  const provider = await providerForModelDiscovery({ id });
   c.header("Cache-Control", "no-store");
   return c.json({ catalog: readProviderModelCatalogCache(configDb, provider) });
 });
@@ -2180,7 +2219,7 @@ api.post("/config/providers/models", async (c) => {
   if (blocked) return blocked;
   const raw = await c.req.json().catch(() => ({})) as Record<string, unknown>;
   try {
-    const provider = providerForModelDiscovery(raw);
+    const provider = await providerForModelDiscovery(raw);
     const result = await fetchProviderModelCatalog(provider);
     const cachedResult = writeProviderModelCatalogCache(configDb, provider, result);
     audit("provider.models", {
@@ -2797,7 +2836,7 @@ function buildConfigStatistics(range: StatisticsRange) {
     )
   );
   const providers = getAll<ProviderRow>(configDb, "select * from provider_configs");
-  const accounts = getAll<ImageAccountRow>(configDb, "select * from image_accounts");
+  const accounts = getAll<ImageAccountRow>(configDb, "select * from image_accounts").map(account => ({ ...account, status: effectiveImageAccountStatus(account) }));
   const latestSyncRun = getOne<{ status: string; message: string; finished_at: string }>(
     configDb,
     "select status, message, finished_at from cpa_sync_runs order by started_at desc limit 1"
@@ -3617,6 +3656,14 @@ runtimeLog({
 });
 
 startInterruptedImageJobRecovery();
+startImageSetScheduler();
+// Lists await their user's import; other parts of the workbench can start immediately.
+if (SERIES_CREATION_AVAILABLE) {
+  void ensureAllCreativeDefaults().catch(error => console.warn("默认品牌资料初始化未完成，打开列表时将继续重试", error));
+}
 startStarterCopyScheduler();
 scheduleCpaSync();
 startBackupScheduler();
+startCodexCredentialRefresh();
+const codexSessionSweep = setInterval(() => codexOAuthSessions.sweep(), 60000);
+codexSessionSweep.unref();

@@ -58,8 +58,9 @@ export function CheckerboardImage({
   onError,
   onLoad,
   src,
+  whiteBackground = false,
   ...props
-}: ImgHTMLAttributes<HTMLImageElement>) {
+}: ImgHTMLAttributes<HTMLImageElement> & { whiteBackground?: boolean }) {
   const imageRef = useRef<HTMLImageElement | null>(null);
   const analysisVersionRef = useRef(0);
   const cancelAnalysisRef = useRef<(() => void) | null>(null);
@@ -71,7 +72,7 @@ export function CheckerboardImage({
     analysisVersionRef.current = version;
     cancelAnalysisRef.current?.();
     cancelAnalysisRef.current = null;
-    if (!srcKey) {
+    if (!srcKey || whiteBackground) {
       setTransparentSrc("");
       return;
     }
@@ -88,7 +89,7 @@ export function CheckerboardImage({
       if (cacheKey) rememberTransparency(cacheKey, transparent);
       setTransparentSrc(transparent ? srcKey : "");
     });
-  }, [srcKey]);
+  }, [srcKey, whiteBackground]);
 
   useEffect(() => {
     const image = imageRef.current;
@@ -108,7 +109,8 @@ export function CheckerboardImage({
     <img
       {...props}
       ref={imageRef}
-      className={cx(className, transparentSrc === srcKey && Boolean(srcKey) && "image-alpha-checkerboard")}
+      className={cx(className, whiteBackground && "image-white-background", !whiteBackground && transparentSrc === srcKey && Boolean(srcKey) && "image-alpha-checkerboard")}
+      style={whiteBackground ? { ...props.style, backgroundColor: "#fff", backgroundImage: "none" } : props.style}
       src={src}
       onLoad={(event) => {
         updateTransparency(event.currentTarget);

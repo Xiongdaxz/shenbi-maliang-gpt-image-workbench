@@ -25,8 +25,10 @@ import {
   DEFAULT_EDIT_IMAGE_MODEL,
   DEFAULT_GENERATION_IMAGE_MODEL,
   DEFAULT_IMAGE_QUALITY,
-  GPT_IMAGE_25_QUALITIES,
-  IMAGE_MODEL_IDS
+  GPT_IMAGE_26_COMPLEXITIES,
+  GPT_IMAGE_EXTENDED_QUALITIES,
+  IMAGE_MODEL_IDS,
+  imageModelDisplayName
 } from "../src/lib/imageModels";
 
 type McpToolExtra = {
@@ -48,7 +50,7 @@ export const EXTERNAL_MCP_IMAGE_COUNT_SCHEMA = z.number()
 export const EXTERNAL_MCP_IMAGE_BACKGROUND_SCHEMA = z.enum(["auto", "opaque", "transparent"]);
 export const EXTERNAL_MCP_IMAGE_OUTPUT_FORMAT_SCHEMA = z.enum(["png", "webp"]);
 export const EXTERNAL_MCP_IMAGE_MODEL_SCHEMA = z.enum(IMAGE_MODEL_IDS);
-export const EXTERNAL_MCP_IMAGE_QUALITY_SCHEMA = z.enum(["auto", ...GPT_IMAGE_25_QUALITIES]);
+export const EXTERNAL_MCP_IMAGE_QUALITY_SCHEMA = z.enum([DEFAULT_IMAGE_QUALITY, ...GPT_IMAGE_EXTENDED_QUALITIES]);
 
 function toolError(message: string) {
   return { isError: true as const, content: [{ type: "text" as const, text: message }] };
@@ -265,9 +267,10 @@ async function createMaliangMcpServer(api: Hono) {
     description: "提交一个异步文生图任务，返回 jobId。随后调用 maliang_get_image_job 获取结果。",
     inputSchema: {
       prompt: z.string().trim().min(1).max(8000).describe("图片描述或绘图提示词"),
-      model: EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.optional().describe("图片模型：Flare 适合快速生成，Sunburst 适合精修，也可使用 GPT Image 2 兼容模式"),
+      model: EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.optional().describe(`图片模型：GPT Image 2.6、2.5 的 Flare/Sunburst，或 GPT Image 2；默认 ${imageModelDisplayName(DEFAULT_GENERATION_IMAGE_MODEL)}`),
       size: z.string().trim().optional().describe("图片尺寸，例如 1024x1024、1024x1536 或 1536x1024"),
       quality: EXTERNAL_MCP_IMAGE_QUALITY_SCHEMA.optional().describe("生成质量：auto、low、medium、high、xhigh 或 max"),
+      complexity: z.enum(GPT_IMAGE_26_COMPLEXITIES).optional().describe("仅 GPT Image 2.6：出图前的规划复杂度，省略时使用模型默认值"),
       imageCount: EXTERNAL_MCP_IMAGE_COUNT_SCHEMA.optional()
         .describe(`生成数量，范围 ${MIN_IMAGE_COUNT}-${MAX_IMAGE_COUNT}，默认 ${MIN_IMAGE_COUNT}；提示词中明确指定的数量优先`),
       background: EXTERNAL_MCP_IMAGE_BACKGROUND_SCHEMA.optional()
@@ -287,6 +290,7 @@ async function createMaliangMcpServer(api: Hono) {
         model: input.model ?? DEFAULT_GENERATION_IMAGE_MODEL,
         ...(input.size ? { size: input.size } : {}),
         quality: input.quality ?? DEFAULT_IMAGE_QUALITY,
+        ...(input.complexity ? { complexity: input.complexity } : {}),
         ...(input.imageCount ? { n: input.imageCount } : {}),
         ...(input.background ? { background: input.background } : {}),
         ...(input.outputFormat ? { outputFormat: input.outputFormat } : {}),
@@ -350,11 +354,12 @@ async function createMaliangMcpServer(api: Hono) {
     description: "使用马良历史图片 imageIds 或已完成的一次性上传 uploadIds 提交异步改图任务。返回 jobId 后调用 maliang_get_image_job。",
     inputSchema: {
       prompt: z.string().trim().min(1).max(8000).describe("希望如何修改图片"),
-      model: EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.optional().describe("图片模型，默认使用 GPT Image 2.5 Sunburst"),
+      model: EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.optional().describe(`图片模型，默认使用 ${imageModelDisplayName(DEFAULT_EDIT_IMAGE_MODEL)}`),
       imageIds: z.array(z.string().trim().min(1)).max(8).optional().describe("当前账号中的马良历史图片 ID"),
       uploadIds: z.array(z.string().trim().min(1)).max(8).optional().describe("已上传完成的 MCP uploadId"),
       size: z.string().trim().optional(),
       quality: EXTERNAL_MCP_IMAGE_QUALITY_SCHEMA.optional(),
+      complexity: z.enum(GPT_IMAGE_26_COMPLEXITIES).optional().describe("仅 GPT Image 2.6：改图前的规划复杂度，省略时使用模型默认值"),
       imageCount: EXTERNAL_MCP_IMAGE_COUNT_SCHEMA.optional()
         .describe(`生成数量，范围 ${MIN_IMAGE_COUNT}-${MAX_IMAGE_COUNT}，默认 ${MIN_IMAGE_COUNT}；提示词中明确指定的数量优先`),
       background: EXTERNAL_MCP_IMAGE_BACKGROUND_SCHEMA.optional()
@@ -386,6 +391,7 @@ async function createMaliangMcpServer(api: Hono) {
       const payload = await internalImageRequest(api, "/images/edit", context.token, context.resource, {
         prompt: input.prompt,
         model: input.model ?? DEFAULT_EDIT_IMAGE_MODEL,
+        ...(input.complexity ? { complexity: input.complexity } : {}),
         sourceImageIds: imageIds,
         sourceAssetIds,
         ...(input.size ? { size: input.size } : {}),

@@ -354,6 +354,14 @@ async function requestImagePromptPlanModel(
   }
 }
 
+export async function requestCreativeImagePlan(messages: PromptModelMessage[], userId: string, signal?: AbortSignal) {
+  const provider = resolveLanguageModelProvider("image.prompt_plan");
+  if (!provider) throw new Error("尚未配置规划模型，可直接手工编辑方案");
+  const timeout = combinedTimeoutSignal(signal);
+  try { return await requestImagePromptPlanModel(provider, messages, { userId, jobId: "", signal: timeout.signal }); }
+  finally { timeout.dispose(); }
+}
+
 export async function resolveImagePromptPlan(
   input: ImagePromptPlanRequest,
   requestModel?: ImagePromptPlanModelRequest

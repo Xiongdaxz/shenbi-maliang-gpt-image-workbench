@@ -1,4 +1,5 @@
 import type { ProviderConfig } from "../../types";
+import { DEFAULT_CHATGPT_WEB_IMAGE_MODEL } from "../../lib/imageModels";
 
 const ACCOUNT_USAGE_AUTO_REFRESH_STORAGE_KEY = "gpt-image.config.accountUsageAutoRefreshAt";
 const ACCOUNT_USAGE_AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
@@ -208,6 +209,7 @@ export function providerWithChannelDefaults(
     channel
   };
   if (channel === "chatgpt_web") {
+    const quotaMode = provider.quotaMode || "codex_first";
     return {
       ...common,
       type: "chatgpt-web",
@@ -217,8 +219,8 @@ export function providerWithChannelDefaults(
       generationPath: "/f/conversation",
       editPath: "/f/conversation",
       responsesPath: "/codex/responses",
-      model: "gpt-image-2.5-sunburst",
-      quotaMode: provider.quotaMode || "codex_first",
+      model: quotaMode === "official_only" ? "gpt-image-2.5-sunburst" : DEFAULT_CHATGPT_WEB_IMAGE_MODEL,
+      quotaMode,
       webAccountMode: provider.webAccountMode || "priority",
       proxyEnabled: true
     };

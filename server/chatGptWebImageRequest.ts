@@ -1,4 +1,5 @@
 import { isTransparentImageRequest } from "../src/lib/imageBackground";
+import { isGptImage26Model } from "../src/lib/imageModels";
 import { normalizeQuotaMode } from "./utils";
 
 export type ChatGptWebQuota = "codex" | "official";
@@ -11,6 +12,7 @@ export function resolveChatGptWebImageQuotaOrder(
   payload: Record<string, unknown>
 ): ChatGptWebQuota[] {
   const normalizedQuotaMode = normalizeQuotaMode(String(quotaMode ?? ""));
+  if (isGptImage26Model(payload.model)) return normalizedQuotaMode === "official_only" ? [] : ["codex"];
   if (isTransparentImageRequest(payload)) {
     return normalizedQuotaMode === "codex_only" ? [] : ["official"];
   }

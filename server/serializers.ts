@@ -3,6 +3,7 @@ import { defaultTeamId } from "./categories";
 import { normalizeAppearanceMode } from "./appearanceMode";
 import { appDb, getAll, getOne } from "./db";
 import { userPreferences } from "./userPreferences";
+import { effectiveImageAccountStatus } from "./imageAccountStatus";
 import type { ImageAccountRow, ImageAssetReferenceRow, ImageRow, RuntimeProviderRow, UserRow } from "./types";
 import {
   inferChannelFromType,
@@ -103,7 +104,8 @@ export function toImageAccount(row: ImageAccountRow, includeSecret = false) {
     channelId: row.channel_id ?? "",
     email: row.email,
     accountType: row.account_type,
-    status: normalizeImageAccountStatus(row.status),
+    status: effectiveImageAccountStatus(row),
+    enabled: effectiveImageAccountStatus(row) !== "disabled",
     quota: row.quota,
     usedQuota: row.used_quota,
     remainingQuota: Math.max(0, row.quota - row.used_quota),
@@ -123,6 +125,11 @@ export function toImageAccount(row: ImageAccountRow, includeSecret = false) {
     codexUsageUpdatedAt: row.codex_usage_updated_at ?? "",
     codexUsageError: row.codex_usage_error ?? "",
     priority: row.priority,
+    authSource: row.auth_source || "legacy",
+    authStatus: row.auth_status || "",
+    tokenExpiresAt: row.token_expires_at || "",
+    authRefreshedAt: row.auth_refreshed_at || "",
+    authError: row.auth_error || "",
     accessToken: includeSecret ? row.access_token ?? "" : maskSecret(row.access_token),
     hasAuthJson: Boolean(row.auth_json),
     authJson: includeSecret ? row.auth_json ?? "" : row.auth_json ? "******" : "",

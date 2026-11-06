@@ -73,6 +73,13 @@ export async function deleteUserAccount(userId: string) {
   ]);
 
   const deleteAppRecords = appDb.transaction(() => {
+    run(appDb, "delete from image_set_runs where set_id in (select id from image_sets where user_id=?)", userId);
+    run(appDb, "delete from image_set_items where set_id in (select id from image_sets where user_id=?)", userId);
+    run(appDb, "delete from image_sets where user_id=?", userId);
+    run(appDb, "delete from creative_session_context where user_id=?", userId);
+    run(appDb, "delete from image_job_profile_context where user_id=?", userId);
+    run(appDb, "delete from creative_profiles where user_id=?", userId);
+    run(appDb, "delete from creative_example_seeds where user_id=?", userId);
     run(appDb, "update images set parent_image_id = null where parent_image_id in (select id from images where user_id = ?)", userId);
     run(appDb, "update image_jobs set result_image_id = null where result_image_id in (select id from images where user_id = ?)", userId);
     run(appDb, "update image_asset_references set source_asset_id = null where source_asset_id in (select id from assets where user_id = ?)", userId);

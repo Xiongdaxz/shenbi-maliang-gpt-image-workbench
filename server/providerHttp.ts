@@ -31,11 +31,11 @@ function retryDelay(attempt: number) {
   return new Promise((resolve) => setTimeout(resolve, Math.min(1500, 300 * (attempt + 1))));
 }
 
-async function fetchWithConfiguredRetry(input: RequestInfo | URL, init: RequestInit, useProxy: boolean) {
+async function fetchWithConfiguredRetry(input: RequestInfo | URL, init: RequestInit, useProxy: boolean, retryOverride?: number) {
   const settings = proxySettings();
   const finalInit = { ...init } as ProxyRequestInit;
   if (useProxy) finalInit.proxy = settings.url;
-  const retryCount = useProxy ? settings.retryCount : 0;
+  const retryCount = retryOverride ?? (useProxy ? settings.retryCount : 0);
   let lastError: unknown;
   for (let attempt = 0; attempt <= retryCount; attempt += 1) {
     try {
@@ -51,6 +51,11 @@ async function fetchWithConfiguredRetry(input: RequestInfo | URL, init: RequestI
 
 export async function providerFetch(provider: ProviderRow, input: RequestInfo | URL, init: RequestInit) {
   return fetchWithConfiguredRetry(input, init, shouldUseProxy(provider));
+}
+
+// A lost image response does not prove the request was rejected; do not replay its POST in the proxy layer.
+export async function providerFetchOnce(provider: ProviderRow, input: RequestInfo | URL, init: RequestInit) {
+  return fetchWithConfiguredRetry(input, init, shouldUseProxy(provider), 0);
 }
 
 export async function proxyFetch(input: RequestInfo | URL, init: RequestInit) {

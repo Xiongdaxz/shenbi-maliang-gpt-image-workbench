@@ -12,12 +12,14 @@ import { cx } from "../lib/cx";
 import { isReturningFromImageCompare } from "../lib/imageComparePage";
 import { pauseRenderingMotion } from "../lib/renderingMotion";
 import { IMAGE_PAGE_SIZE } from "../lib/pagination";
+import { SERIES_CREATION_AVAILABLE, isSeriesCreationPath } from "../lib/releaseFeatures";
 import { AssetsPage } from "../pages/AssetsPage";
 import { CasesPage } from "../pages/CasesPage";
 import { ChatPage } from "../pages/ChatPage";
 import { ImagesPage } from "../pages/ImagesPage";
 import { InspirationBarragePage } from "../pages/InspirationBarragePage";
 import { ImageProvenancePage } from "../pages/ImageProvenancePage";
+import { ImageSetsPage } from "../pages/ImageSetsPage";
 import { PromptTemplateEditorPage, PromptTemplatesPage } from "../pages/PromptTemplatesPage";
 import { SharedConversationPage } from "../pages/SharedConversationPage";
 import { useWorkbench } from "../store/workbench";
@@ -99,6 +101,7 @@ const SIDEBAR_MAIN_NAV_PATHS = ["/cases", "/assets", "/images"];
 const SIDEBAR_MAIN_NAV_PATH_SET = new Set<string>([
   ...SIDEBAR_MAIN_NAV_PATHS,
   "/image-provenance",
+  ...(SERIES_CREATION_AVAILABLE ? ["/image-sets"] : []),
   "/prompt-templates"
 ]);
 const SESSION_GROUP_COLLAPSE_STORAGE_KEY = "gpt-image.sidebar.session-groups.collapsed";
@@ -125,7 +128,7 @@ function routeTransitionIndex(path: string) {
   if (path === "/cases" || path.startsWith("/cases/")) return 0;
   if (path === "/assets") return 1;
   if (path === "/images") return 2;
-  if (path === "/image-provenance" || path === "/prompt-templates" || path.startsWith("/prompt-templates/")) return 3;
+  if (path === "/image-provenance" || path === "/prompt-templates" || path.startsWith("/prompt-templates/") || (SERIES_CREATION_AVAILABLE && isSeriesCreationPath(path))) return 3;
   if (path === "/help") return 4;
   return -1;
 }
@@ -395,6 +398,7 @@ export function WorkbenchShell({ user }: { user: User }) {
   const navigate = useNavigate();
   const location = useLocation();
   const moreRouteActive = location.pathname === "/image-provenance"
+    || (SERIES_CREATION_AVAILABLE && isSeriesCreationPath(location.pathname))
     || location.pathname === "/prompt-templates"
     || location.pathname.startsWith("/prompt-templates/");
   const { showToast } = useToast();
@@ -1271,6 +1275,7 @@ export function WorkbenchShell({ user }: { user: User }) {
     stage.style.removeProperty("will-change");
 
     if (location.pathname === "/images/compare" || previousPath === "/images/compare") return;
+    if (SERIES_CREATION_AVAILABLE && [previousPath, location.pathname].every(isSeriesCreationPath)) return;
 
     const nextIndex = routeTransitionIndex(location.pathname);
     if (
@@ -1359,7 +1364,7 @@ export function WorkbenchShell({ user }: { user: User }) {
     navigateMainRoute(path);
   }, [navigateMainRoute, pauseRenderingBeforeRouteNavigation, setMobileMenuOpen]);
 
-  const handleMoreToolSelect = useCallback((path: "/prompt-templates" | "/image-provenance") => {
+  const handleMoreToolSelect = useCallback((path: "/prompt-templates" | "/image-provenance" | "/image-sets") => {
     pauseRenderingBeforeRouteNavigation();
     setMoreMenuOpen(false);
     setMobileMenuOpen(false);
@@ -2245,6 +2250,10 @@ export function WorkbenchShell({ user }: { user: User }) {
             />
             <Route path="/cases/barrage" element={<PageRouteTransition key="cases-barrage"><InspirationBarragePage /></PageRouteTransition>} />
             <Route path="/image-provenance" element={<PageRouteTransition key="image-provenance"><ImageProvenancePage /></PageRouteTransition>} />
+            <Route path="/image-sets/*" element={SERIES_CREATION_AVAILABLE
+              ? <PageRouteTransition key="image-sets"><ImageSetsPage user={user} /></PageRouteTransition>
+              : <Navigate to="/" replace />}
+            />
             <Route path="/prompt-templates" element={<PageRouteTransition key="prompt-templates"><PromptTemplatesPage /></PageRouteTransition>} />
             <Route path="/prompt-templates/:templateId/edit" element={<PageRouteTransition key="prompt-template-editor"><PromptTemplateEditorPage /></PageRouteTransition>} />
             <Route

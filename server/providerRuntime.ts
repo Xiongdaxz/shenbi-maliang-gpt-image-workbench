@@ -15,6 +15,10 @@ import {
 } from "./constants";
 import { logProviderRequest } from "./auditLog";
 import { selectAvailableChatGptWebAccount } from "./chatGptWebAccountPool";
+import { codexCredentials } from "./codexCredentials";
+import { effectiveImageAccountStatus } from "./imageAccountStatus";
+import { buildCodexNativeImageRequest, codexNativeImageHeaders, codexNativeImageResult, useCodexNativeImages } from "./codexImageRequest";
+import { canRetryImageStatus, ImageRequestError, imageRequestErrors } from "./imageRequestErrors";
 import { chatGptWebPythonBridgeUnavailableMessage } from "./chatGptWebPythonRuntime";
 import {
   CHATGPT_WEB_TRANSPARENT_BACKGROUND_QUOTA_ERROR,
@@ -26,11 +30,12 @@ import {
   resolveImageBackgroundOption
 } from "../src/lib/imageBackground";
 import { DRAWING_REFERENCE_REQUEST_KEY } from "../src/lib/drawingReference";
-import { isImageModelId } from "../src/lib/imageModels";
+import { isGptImage26Model, isImageModelId, normalizeImageComplexity } from "../src/lib/imageModels";
 import { configDb, getAll, getOne, run } from "./db";
 import { readImageDimensions } from "./imageDimensions";
 import { ROOT } from "./paths";
-import { providerFetch, providerHeaders, proxyFetch, withProviderRequestTimeout } from "./providerHttp";
+import { providerFetch, providerFetchOnce, providerHeaders, proxyFetch, withProviderRequestTimeout } from "./providerHttp";
+import { readProviderModelCatalogCache } from "./providerModelCache";
 import { cpaAccount, imageGenerationSettings, proxySettings } from "./settingsStore";
 import type {
   CpaRemoteAuthFile,
@@ -48,6 +53,7 @@ import {
   normalizeImageAccountStatus,
   normalizePath,
   normalizeProviderChannel,
+  normalizeQuotaMode,
   normalizeRouteMode,
   normalizeWebAccountMode,
   now,
@@ -170,18 +176,40 @@ export function defaultProviderSelectionId(mode: ImageGenerationSettings["mode"]
   return mode === "auto" ? AUTO_PROVIDER_ID : providers[0]?.id ?? AUTO_PROVIDER_ID;
 }
 
-export function providerChainById(id?: string) {
+function isPublicOpenAiImagesProvider(provider: ProviderRow) {
+  const channel = normalizeProviderChannel(provider.channel || inferChannelFromType(provider.type));
+  if (channel !== "api") return false;
+  try { return new URL(provider.base_url).origin === "https://api.openai.com"; } catch { return false; }
+}
+
+export function providersForImageModel(providers: RuntimeProviderRow[], model: unknown) {
+  if (!isGptImage26Model(model)) return providers;
+  const compatible = providers.filter(provider => {
+    if (normalizeRouteMode(provider.route_mode) === "responses") return false;
+    const channel = normalizeProviderChannel(provider.channel || inferChannelFromType(provider.type));
+    if (channel === "chatgpt_web") return normalizeQuotaMode(provider.quota_mode || "") !== "official_only";
+    if (isPublicOpenAiImagesProvider(provider)) return true;
+    // CPA 8.0.55 and some compatible endpoints do not accept these IDs. Only use them after discovery.
+    return readProviderModelCatalogCache(configDb, provider)?.imageModels.includes(model) === true;
+  });
+  if (!compatible.length) {
+    throw new ImageRequestError("GPT Image 2.6 需要支持该模型的图片直连接口。请选择 ChatGPT Codex 或 OpenAI Images 渠道；CPA 请先升级至 8.0.56 并刷新模型列表。", false);
+  }
+  return compatible;
+}
+
+export function providerChainById(id?: string, model?: unknown) {
   const settings = imageGenerationSettings();
   const normalizedId = String(id ?? "").trim();
   const rows = enabledProvidersForCurrentMode();
   if (!normalizedId || normalizedId === AUTO_PROVIDER_ID) {
     if (rows.length === 0) throw new Error(`当前${imageModeLabel(settings.mode)}下没有可用的渠道配置`);
-    return rows;
+    return providersForImageModel(rows, model);
   }
 
   const row = rows.find((provider) => provider.id === normalizedId) ?? null;
   if (!row) throw new Error(`当前${imageModeLabel(settings.mode)}不能使用该渠道`);
-  return [row];
+  return providersForImageModel([row], model);
 }
 
 export function providerById(id?: string) {
@@ -877,6 +905,7 @@ async function upsertRemoteImageAccount(file: CpaRemoteAuthFile, timestamp: stri
     email,
     email
   );
+  if (existing?.auth_source === "codex_oauth") return "skipped";
   const displayName = String(file.label ?? "").trim() || email || remoteName;
   const accountType = inferCpaPlanType(file) || existing?.account_type || "";
   const priority = Number(file.priority ?? existing?.priority ?? 0) || 0;
@@ -900,7 +929,8 @@ async function upsertRemoteImageAccount(file: CpaRemoteAuthFile, timestamp: stri
   const usageRecentRequests = remoteRecentUsage(file);
   const resolvedAccountType = usage.planType || accountType || meta.accountType || existing?.account_type || "";
   const resolvedEmail = email || meta.email || existing?.email || "";
-  const resolvedStatus = imageAccountStatusFromUsage(normalizeRemoteImageAccountStatus(file), usage);
+  const remoteStatus = normalizeRemoteImageAccountStatus(file);
+  const resolvedStatus = remoteStatus === "disabled" && existing?.local_enabled !== 1 ? "disabled" : imageAccountStatusFromUsage(remoteStatus, usage);
   if (existing) {
     run(
       configDb,
@@ -1042,10 +1072,20 @@ export async function refreshImageAccountUsages(accountId?: string) {
   let failed = 0;
   let skipped = 0;
   for (const row of rows) {
-    const authJson = row.auth_json ?? "";
-    const usage = await accountUsageSnapshot(authJson, row.access_token ?? "");
+    let authJson = row.auth_json ?? "";
+    let accessToken = row.access_token ?? "";
+    if (row.auth_source === "codex_oauth") {
+      try {
+        const grant = await codexCredentials.fresh(row.id);
+        authJson = JSON.stringify({ account_id: grant.identity.accountId }); accessToken = grant.tokens.accessToken;
+      } catch (error) {
+        run(configDb, "update image_accounts set codex_usage_error = ? where id = ?", error instanceof Error ? error.message : "授权凭据不可用", row.id);
+        failed += 1; continue;
+      }
+    }
+    const usage = await accountUsageSnapshot(authJson, accessToken);
     if (usage.ok) {
-      const nextStatus = imageAccountStatusFromUsage(row.status, usage);
+      const nextStatus = row.status === "disabled" && row.local_enabled !== 1 ? "disabled" : imageAccountStatusFromUsage(row.status, usage);
       run(
         configDb,
         `update image_accounts set
@@ -1072,7 +1112,7 @@ export async function refreshImageAccountUsages(accountId?: string) {
         row.id
       );
       updated += 1;
-    } else if (authJson || row.access_token) {
+    } else if (authJson || accessToken) {
       run(
         configDb,
         "update image_accounts set codex_usage_error = ?, updated_at = ? where id = ?",
@@ -1284,6 +1324,7 @@ function providerHttpErrorMessage(status: number, text: string) {
 }
 
 function chatGptWebRouteLabel(routeMode: string) {
+  if (routeMode.includes("codex_images")) return "ChatGPT 账号图片直连";
   if (routeMode.includes("codex_responses")) return "ChatGPT 官网 Codex Responses";
   if (routeMode.includes("prepare")) return "ChatGPT 官网会话准备";
   if (routeMode.includes("conversation")) return "ChatGPT 官网会话链路";
@@ -1379,6 +1420,8 @@ function buildImageEditForm(payload: Record<string, unknown>) {
   form.set("prompt", String(payload.prompt ?? ""));
   if (payload.size) form.set("size", String(payload.size));
   if (payload.quality) form.set("quality", String(payload.quality));
+  const complexity = normalizeImageComplexity(payload.model, payload.complexity);
+  if (complexity) form.set("complexity", complexity);
   if (payload.n) form.set("n", String(payload.n));
   if (payload.background) form.set("background", String(payload.background));
   if (payload.output_format) form.set("output_format", String(payload.output_format));
@@ -1624,10 +1667,13 @@ async function callImagesApiProvider(
   payload: Record<string, unknown>,
   context: ProviderRequestContext = {}
 ) {
-  const endpoint = normalizePath(
-    provider.base_url,
-    mode === "generation" ? provider.generation_path : provider.edit_path
-  );
+  const image26 = isGptImage26Model(payload.model);
+  const endpoint = image26 && isPublicOpenAiImagesProvider(provider)
+    ? `https://api.openai.com/v1/images/${mode === "generation" ? "generations" : "edits"}`
+    : normalizePath(provider.base_url, mode === "generation" ? provider.generation_path : provider.edit_path);
+  if (image26 && /\/responses(?:$|[/?#])/i.test(endpoint)) {
+    throw new ImageRequestError("GPT Image 2.6 不能使用 Responses 地址，请配置 Images 生成或编辑接口。", false);
+  }
   const responseJson = mode === "edit"
     ? await executeProviderFormRequest(provider, mode, "images_api", endpoint, buildImageEditForm(payload), context)
     : await executeProviderJsonRequest(provider, mode, "images_api", endpoint, payload, "application/json", context);
@@ -1839,9 +1885,10 @@ function selectedChatGptWebAccountRows(provider: ProviderRow) {
 }
 
 function chatGptWebAccountUnavailableReason(account: ImageAccountRow) {
-  const status = normalizeImageAccountStatus(account.status);
+  const status = effectiveImageAccountStatus(account);
   if (status === "disabled") return `账号「${account.name}」已禁用`;
   if (status === "abnormal") return `账号「${account.name}」状态异常`;
+  if (account.auth_source === "codex_oauth") return account.auth_status === "reauth_required" ? `账号「${account.name}」需要重新授权` : "";
   if (!imageAccountAuthMeta(account).accessToken) return `账号「${account.name}」缺少 Access Token`;
   return "";
 }
@@ -2327,10 +2374,12 @@ async function executeStudioJsonRequest(
   context: ProviderRequestContext = {}
 ) {
   const started = performance.now();
+  const nativeImages = routeMode === "chatgpt_web_codex_images_api";
   let statusCode: number | null = null;
   try {
     const { response, text } = await withProviderRequestTimeout(async (signal) => {
-      const response = await providerFetch(provider, endpoint, {
+      const requestFetch = nativeImages ? providerFetchOnce : providerFetch;
+      const response = await requestFetch(provider, endpoint, {
         method: "POST",
         headers,
         body: JSON.stringify(payload),
@@ -2341,10 +2390,14 @@ async function executeStudioJsonRequest(
 
     statusCode = response.status;
     if (!response.ok) {
-      throw new Error(chatGptWebHttpErrorMessage(response.status, text, chatGptWebRouteLabel(routeMode)));
+      const message = chatGptWebHttpErrorMessage(response.status, text, chatGptWebRouteLabel(routeMode));
+      throw nativeImages ? new ImageRequestError(message, canRetryImageStatus(response.status), response.status) : new Error(message);
     }
 
     const parsed = parseProviderResponse(text);
+    if (nativeImages && parsed && typeof parsed === "object" && "error" in parsed && (parsed as { error?: unknown }).error) {
+      throw new ImageRequestError(`ChatGPT 图片接口返回错误：${httpErrorDetail(text).slice(0, 400)}`, false, response.status);
+    }
     logProviderRequest({
       provider,
       operation,
@@ -2358,6 +2411,9 @@ async function executeStudioJsonRequest(
     });
     return parsed;
   } catch (error) {
+    const failure = nativeImages && !(error instanceof ImageRequestError) && !providerRequestWasCancelled(error, context.signal)
+      ? new ImageRequestError("图片请求结果无法确认，请确认任务结果后重试", false, statusCode ?? undefined, true)
+      : error;
     logProviderRequest({
       provider,
       operation,
@@ -2366,11 +2422,11 @@ async function executeStudioJsonRequest(
       statusCode,
       durationMs: performance.now() - started,
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: failure instanceof Error ? failure.message : String(failure),
       sourceAccountId,
       ...providerRequestLogContext(context)
     });
-    throw error;
+    throw failure;
   }
 }
 
@@ -3191,7 +3247,20 @@ async function callChatGptWebQuotaProvider(
   settings: ChatGptWebSettings,
   context: ProviderRequestContext = {}
 ) {
-  if (quota === "codex") return callChatGptWebCodexResponsesProvider(provider, mode, payload, settings, context);
+  if (quota === "codex") {
+    if (!useCodexNativeImages(provider.route_mode, payload)) return callChatGptWebCodexResponsesProvider(provider, mode, payload, settings, context);
+    const request = buildCodexNativeImageRequest(mode, payload, provider.model || DEFAULT_IMAGE_MODEL);
+    const headers = codexNativeImageHeaders({ accessToken: settings.accessToken, accountId: settings.accountId, requestId: crypto.randomUUID() });
+    const routeMode = "chatgpt_web_codex_images_api";
+    const responseJson = await executeStudioJsonRequest(provider, mode, routeMode,
+      chatGptWebEndpoint(settings, request.path), request.body, headers, settings.sourceAccountId, context);
+    const result = codexNativeImageResult(responseJson);
+    return attachImageModelExecution(attachSourceAccountContext(result.response, settings.sourceAccountId), {
+      requestedModel: String(payload.model || provider.model || DEFAULT_IMAGE_MODEL), actualModel: result.actualModel,
+      actualLanguageModel: "", actualRouteMode: routeMode, requestedQuality: String(payload.quality || "auto"),
+      actualQuality: result.actualQuality, modelFallbackReason: result.modelFallbackReason
+    });
+  }
   return callChatGptWebConversationProvider(
     provider,
     mode,
@@ -3227,14 +3296,24 @@ async function callChatGptWebProvider(
   if (quotaOrder.length === 0) throw new Error(CHATGPT_WEB_TRANSPARENT_BACKGROUND_QUOTA_ERROR);
   const lease = await acquireChatGptWebSettings(provider, sourceReferenceAccountId(payload), context.signal);
   const errors: string[] = [];
+  const failures: unknown[] = [];
   try {
-    for (const quota of quotaOrder) {
+    const sourceId = lease.settings.sourceAccountId;
+    const managed = sourceId && getOne<ImageAccountRow>(configDb, "select * from image_accounts where id = ?", sourceId)?.auth_source === "codex_oauth";
+    if (managed) {
+      const grant = await codexCredentials.fresh(sourceId!);
+      lease.settings.accessToken = grant.tokens.accessToken; lease.settings.accountId = grant.identity.accountId;
+      lease.settings.cookies = "";
+    }
+    const allowedQuotas = managed ? quotaOrder.filter(quota => quota === "codex") : quotaOrder;
+    if (allowedQuotas.length === 0) throw new Error("该账号只支持 Codex 额度，请选择支持 Codex 的渠道配置");
+    for (const quota of allowedQuotas) {
       assertProviderRequestActive(context);
       try {
         const responseJson = await callChatGptWebQuotaProvider(provider, mode, payload, quota, lease.settings, context);
         const requestedModel = String(payload.model ?? provider.model ?? "").trim() || DEFAULT_IMAGE_MODEL;
         const requestedQuality = String(payload.quality ?? "").trim() || "auto";
-        return attachImageModelExecution(responseJson, {
+        return attachImageModelExecution(responseJson, providerImageExecution(responseJson, {
           requestedModel,
           actualModel: quota === "official" ? "chatgpt-web-auto" : requestedModel,
           actualLanguageModel: quota === "codex" ? resolveResponsesModel(provider) : "",
@@ -3242,13 +3321,15 @@ async function callChatGptWebProvider(
           requestedQuality,
           actualQuality: quota === "official" ? "auto" : requestedQuality,
           modelFallbackReason: ""
-        });
+        }));
       } catch (error) {
         if (providerRequestWasCancelled(error, context.signal)) throw new ProviderRequestCancelledError();
+        if (error instanceof ImageRequestError && error.haltFallback) throw error;
         errors.push(`${quota === "codex" ? "Codex 额度" : "官网额度"}失败：${error instanceof Error ? error.message : String(error)}`);
+        failures.push(error);
       }
     }
-    throw new Error(errors.join("; ") || "ChatGPT 官网渠道调用失败");
+    throw imageRequestErrors(errors, failures, "ChatGPT 官网渠道调用失败");
   } finally {
     lease.release();
   }
@@ -3300,6 +3381,12 @@ export async function callProvider(
   const routeMode = normalizeRouteMode(provider.route_mode);
   const hasMask = typeof payload.mask === "string" && payload.mask.trim();
   const channel = normalizeProviderChannel(provider.channel || inferChannelFromType(provider.type));
+  if (isGptImage26Model(payload.model)) {
+    providersForImageModel([provider], payload.model);
+    return channel === "chatgpt_web"
+      ? callChatGptWebProvider(provider, mode, payload, context)
+      : callImagesApiProvider(provider, mode, payload, context);
+  }
   if (channel === "chatgpt_web") {
     return callChatGptWebProvider(provider, mode, payload, context);
   }
@@ -3331,6 +3418,10 @@ function payloadForProvider(provider: RuntimeProviderRow, payload: Record<string
       ? requestedModel
       : String(provider.model || "").trim() || DEFAULT_IMAGE_MODEL
   };
+  const image26 = isGptImage26Model(nextPayload.model);
+  const complexity = normalizeImageComplexity(nextPayload.model, nextPayload.complexity);
+  if (complexity) nextPayload.complexity = complexity;
+  else delete nextPayload.complexity;
   const inheritedSourceBackground = nextPayload[INHERITED_SOURCE_BACKGROUND_REQUEST_KEY] === true;
   delete nextPayload[INHERITED_SOURCE_BACKGROUND_REQUEST_KEY];
   const resolvedBackground = resolveImageBackgroundOption(
@@ -3341,19 +3432,19 @@ function payloadForProvider(provider: RuntimeProviderRow, payload: Record<string
   if (resolvedBackground === "transparent") {
     const outputFormat = String(nextPayload.output_format ?? "").trim().toLowerCase();
     nextPayload.output_format = outputFormat === "webp" ? "webp" : "png";
-  } else {
+  } else if (channel !== "chatgpt_web" || provider.quota_mode === "official_only" || !useCodexNativeImages(provider.route_mode, nextPayload)) {
     delete nextPayload.output_format;
   }
   delete nextPayload[DRAWING_REFERENCE_REQUEST_KEY];
-  if (isGptImage2Family(nextPayload.model)) {
+  if (isGptImage2Family(nextPayload.model) && channel !== "chatgpt_web") {
     delete nextPayload.input_fidelity;
   }
-  if (shouldRequestOpenAiCompatibleBase64(provider)) {
+  if (!image26 && shouldRequestOpenAiCompatibleBase64(provider)) {
     nextPayload.response_format = "b64_json";
   } else {
     delete nextPayload.response_format;
   }
-  if (channel !== "chatgpt_web" && !(channel === "cpa" && hasMask)) {
+  if (channel !== "chatgpt_web" && (image26 || !(channel === "cpa" && hasMask))) {
     delete nextPayload.sourceReference;
   }
   if (channel !== "chatgpt_web") {
@@ -3472,7 +3563,8 @@ export async function callProviderChain<T = undefined>(
   onProviderResponse?: ProviderChainResponseHandler<T>
 ) {
   const errors: string[] = [];
-  for (const provider of providers) {
+  const failures: unknown[] = [];
+  for (const provider of providersForImageModel(providers, payload.model)) {
     assertProviderRequestActive(context);
     try {
       const providerPayload = payloadForProvider(provider, payload);
@@ -3501,7 +3593,7 @@ export async function callProviderChain<T = undefined>(
         return { provider, responseJson, result, execution };
       };
       const channel = normalizeProviderChannel(provider.channel || inferChannelFromType(provider.type));
-      if (channel !== "chatgpt_web" && normalizeRouteMode(provider.route_mode) === "auto") {
+      if (!isGptImage26Model(providerPayload.model) && channel !== "chatgpt_web" && normalizeRouteMode(provider.route_mode) === "auto") {
         return await executeAutomaticProviderRoutes(
           executeProvider,
           (error) => providerRequestWasCancelled(error, context.signal)
@@ -3510,10 +3602,12 @@ export async function callProviderChain<T = undefined>(
       return await executeProvider();
     } catch (error) {
       if (providerRequestWasCancelled(error, context.signal)) throw new ProviderRequestCancelledError();
+      if (error instanceof ImageRequestError && error.haltFallback) throw error;
       errors.push(`${provider.name}：${error instanceof Error ? error.message : String(error)}`);
+      failures.push(error);
     }
   }
-  throw new Error(errors.join("; ") || `${mode === "edit" ? "图片编辑" : "图片生成"}没有可用渠道`);
+  throw imageRequestErrors(errors, failures, `${mode === "edit" ? "图片编辑" : "图片生成"}没有可用渠道`);
 }
 
 export async function callProviderGenerationWithProgress(
@@ -3523,7 +3617,7 @@ export async function callProviderGenerationWithProgress(
   context: ProviderRequestContext = {}
 ) {
   const providerPayload = payloadForProvider(provider, payload);
-  if (normalizeProviderChannel(provider.channel || inferChannelFromType(provider.type)) !== "chatgpt_web" && normalizeRouteMode(provider.route_mode) === "images_api") {
+  if (!isGptImage26Model(providerPayload.model) && normalizeProviderChannel(provider.channel || inferChannelFromType(provider.type)) !== "chatgpt_web" && normalizeRouteMode(provider.route_mode) === "images_api") {
     const endpoint = normalizePath(provider.base_url, provider.generation_path);
     try {
       const responseJson = await executeImagesApiStreamRequest(provider, endpoint, providerPayload, onImageResult, context);

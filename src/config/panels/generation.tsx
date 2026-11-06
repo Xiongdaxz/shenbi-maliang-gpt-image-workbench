@@ -17,6 +17,7 @@ import {
   ImageIcon,
   KeyRound,
   Lightbulb,
+  Link2,
   LoaderCircle,
   LogOut,
   Mail,
@@ -104,6 +105,8 @@ import {
   isGeneratedProviderName
 } from "../shared";
 import { useConfigCopy } from "../configCopy";
+import { CODEX_SESSION_STORAGE_KEY, CodexBindDialog } from "../components/CodexBindDialog";
+import type { CodexOAuthSessionResult } from "../../types/codexOAuth";
 
 const accountStatusLabels: Record<ImageAccount["status"], string> = {
   normal: "可用",
@@ -146,14 +149,6 @@ function AccountPlanTag({ value }: { value: string | null | undefined }) {
       data-account-tip={accountPlanTip(label)}
     >
       {accountPlanLabel(label)}
-    </span>
-  );
-}
-
-function AccountStatusTag({ status }: { status: ImageAccount["status"] }) {
-  return (
-    <span className={cx("account-tag", "account-status-tag", `status-${status}`)}>
-      {accountStatusLabels[status]}
     </span>
   );
 }
@@ -362,7 +357,7 @@ function AccountUsageCell({ account }: { account: ImageAccount }) {
           { label: "周限额", usedPercent: account.codexWeekUsedPercent, resetAt: account.codexWeekResetAt }
         ].filter((item) => item.usedPercent !== null || item.resetAt);
   const hasUsage = usageWindows.length > 0;
-  const missingToken = !account.accessToken && !account.hasAuthJson;
+  const missingToken = account.authSource !== "codex_oauth" && !account.accessToken && !account.hasAuthJson;
   return (
     <div className="account-usage-cell">
       {hasUsage ? (
@@ -385,6 +380,7 @@ function AccountUsageCell({ account }: { account: ImageAccount }) {
 }
 
 function AccountCpaStats({ account }: { account: ImageAccount }) {
+  if (account.authSource === "codex_oauth") return <span className="muted">—</span>;
   return (
     <div className="account-request-stats">
       <span>成功 {account.usageSuccessCount}</span>
@@ -408,6 +404,7 @@ function AccountLocalStats({ account }: { account: ImageAccount }) {
 }
 
 function accountAuthInfoLabel(account: ImageAccount) {
+  if (account.authSource === "codex_oauth") return account.authStatus === "reauth_required" ? "需要重新授权" : "已授权 / 自动续期";
   if (account.hasAuthJson && account.hasAuthInfoJson) return "授权 / 认证";
   if (account.hasAuthJson) return "授权";
   if (account.hasAuthInfoJson) return "认证";
@@ -514,6 +511,7 @@ function ImageAccountDialog({
           <label className="wide">
             访问令牌
             <input
+              disabled={account?.authSource === "codex_oauth"}
               value={form.accessToken ?? ""}
               onChange={(event) => setForm({ ...form, accessToken: event.target.value })}
               placeholder="可留空；保存后会脱敏显示"
@@ -522,6 +520,7 @@ function ImageAccountDialog({
           <label className="wide">
             授权 JSON
             <textarea
+              disabled={account?.authSource === "codex_oauth"}
               rows={5}
               value={form.authJson ?? ""}
               onChange={(event) => setForm((current) => applyAccountJsonMeta(current, event.target.value))}
@@ -537,11 +536,12 @@ function ImageAccountDialog({
           <label className="wide">
             认证信息 JSON
             <textarea
+              disabled={account?.authSource === "codex_oauth"}
               rows={4}
               value={form.authInfoJson ?? ""}
               onChange={(event) => setForm({ ...form, authInfoJson: event.target.value })}
               onBlur={() => setForm((current) => ({ ...current, authInfoJson: formatJsonTextareaValue(current.authInfoJson) }))}
-              placeholder="CPA 同步的 id_token / 账号认证信息"
+              placeholder={account?.authSource === "codex_oauth" ? "凭据由 ChatGPT OAuth 加密管理，请通过重新授权更新" : "id_token / 账号认证信息"}
             />
           </label>
           <label className="wide">
@@ -808,6 +808,23 @@ export function ImageAccountPoolPanel() {
   const [dialog, setDialog] = useState<{ mode: "create" | "edit"; account?: ImageAccount } | null>(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<ImageAccount | null>(null);
+  const [codexOpen, setCodexOpen] = useState(false);
+  const [codexTarget, setCodexTarget] = useState("");
+  const [codexSessionId, setCodexSessionId] = useState(() => { try { return sessionStorage.getItem(CODEX_SESSION_STORAGE_KEY) || ""; } catch { return ""; } });
+  const codexSession = useQuery({ queryKey: ["config-codex-oauth", codexSessionId], queryFn: () => configApi.codexOAuthSession(codexSessionId), enabled: Boolean(codexSessionId), retry: false });
+  const codexPending = ["waiting", "exchanging", "saving", "save_failed"].includes(codexSession.data?.session.status || "");
+  function changeCodexSession(id: string) {
+    setCodexSessionId(id);
+    try { if (id) sessionStorage.setItem(CODEX_SESSION_STORAGE_KEY, id); else sessionStorage.removeItem(CODEX_SESSION_STORAGE_KEY); } catch { /* backend session remains authoritative */ }
+  }
+  function openCodexBinding(targetAccountId = "") {
+    const current = queryClient.getQueryData<CodexOAuthSessionResult>(["config-codex-oauth", codexSessionId]);
+    const pending = current && ["waiting", "exchanging", "saving", "save_failed"].includes(current.session.status);
+    if (pending) {
+      if (targetAccountId && current.session.targetAccountId !== targetAccountId) showToast("已有授权正在进行，请先完成或结束该授权", "info");
+    } else { changeCodexSession(""); setCodexTarget(targetAccountId); }
+    setCodexOpen(true);
+  }
   const loadAccountForEdit = useMutation({
     mutationFn: (accountId: string) => configApi.imageAccount(accountId),
     onSuccess: (result) => {
@@ -848,6 +865,15 @@ export function ImageAccountPoolPanel() {
     }
   });
 
+  const toggleEnabled = useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => configApi.setImageAccountEnabled(id, enabled),
+    onSuccess: async (_result, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ["config-image-accounts"] });
+      showToast(variables.enabled ? "账号已启用" : "账号已禁用");
+    },
+    onError: (error) => showToast(error instanceof Error ? error.message : "账号状态保存失败", "error")
+  });
+
   useEffect(() => {
     if (didAutoRefreshUsage.current || !accounts.isSuccess) return;
     didAutoRefreshUsage.current = true;
@@ -871,8 +897,8 @@ export function ImageAccountPoolPanel() {
         </div>
         <div className="account-list-actions">
           <div className="account-pool-stats" aria-label="账号池统计">
-            <span><strong>{accounts.data?.summary.total ?? 0}</strong>账号</span>
-            <span><strong>{accounts.data?.summary.available ?? 0}</strong>可用</span>
+            <span><strong data-config-no-translate="true">{accounts.data?.summary.total ?? 0}</strong>账号</span>
+            <span><strong data-config-no-translate="true">{accounts.data?.summary.available ?? 0}</strong>可用</span>
           </div>
           <button className="secondary-btn" onClick={() => refreshUsage.mutate(undefined)} disabled={refreshUsage.isPending}>
             <RefreshCw className={refreshUsage.isPending ? "spin-icon" : undefined} size={16} />
@@ -882,9 +908,13 @@ export function ImageAccountPoolPanel() {
             <Upload size={16} />
             批量导入
           </button>
-          <button className="primary-btn" onClick={() => setDialog({ mode: "create" })}>
+          <button className="secondary-btn" onClick={() => setDialog({ mode: "create" })}>
             <Plus size={16} />
-            新增账号
+            手动添加
+          </button>
+          <button className="primary-btn" onClick={() => openCodexBinding()}>
+            <Link2 size={16} />
+            {codexPending ? "继续授权" : "绑定 ChatGPT"}
           </button>
         </div>
       </div>
@@ -913,12 +943,20 @@ export function ImageAccountPoolPanel() {
                   <td>
                     <strong>{account.name}</strong>
                     <small>{account.email || "未填写邮箱"}</small>
+                    {account.authSource === "codex_oauth" ? <small>ChatGPT OAuth</small> : null}
                   </td>
                   <td>
                     <AccountPlanTag value={account.accountType} />
                   </td>
                   <td>
-                    <AccountStatusTag status={account.status} />
+                    <div className="account-status-control">
+                      <SwitchControl checked={account.enabled ?? account.status !== "disabled"} disabled={toggleEnabled.isPending}
+                        ariaLabel={`${account.name}启用状态`}
+                        label={toggleEnabled.isPending && toggleEnabled.variables?.id === account.id ? "保存中" : (account.enabled ?? account.status !== "disabled") ? "已启用" : "已禁用"}
+                        onChange={(enabled) => toggleEnabled.mutate({ id: account.id, enabled })} />
+                      {account.status !== "disabled" && account.authStatus === "reauth_required" ? <small>待重新授权</small>
+                        : account.status !== "normal" && account.status !== "disabled" ? <small>{accountStatusLabels[account.status]}</small> : null}
+                    </div>
                   </td>
                   <td>
                     <AccountUsageCell account={account} />
@@ -929,10 +967,11 @@ export function ImageAccountPoolPanel() {
                   <td>
                     <AccountLocalStats account={account} />
                   </td>
-                  <td>{accountAuthInfoLabel(account)}</td>
+                  <td><span>{accountAuthInfoLabel(account)}</span>{account.authSource === "codex_oauth" ? <small>{account.localSuccessCount > 0 ? "图片能力已验证" : "图片能力待验证"}</small> : null}{account.authError ? <small>{account.authError}</small> : null}</td>
                   <td>{account.priority}</td>
-                  <td>{imageAccountSyncLabel(account.syncStatus)}</td>
+                  <td>{account.authSource === "codex_oauth" ? "本地维护" : imageAccountSyncLabel(account.syncStatus)}</td>
                   <td className="row-actions compact-actions">
+                    {account.authSource === "codex_oauth" ? <button className="account-action-icon secondary-btn" onClick={() => openCodexBinding(account.id)} aria-label="重新授权 ChatGPT" title="重新授权 ChatGPT"><KeyRound size={15} /></button> : null}
                     <button
                       className="account-action-icon secondary-btn"
                       onClick={() => refreshUsage.mutate(account.id)}
@@ -1012,6 +1051,7 @@ export function ImageAccountPoolPanel() {
           if (removeTarget) remove.mutate(removeTarget.id);
         }}
       />
+      <CodexBindDialog open={codexOpen} sessionId={codexSessionId} targetAccountId={codexTarget} providers={providers.data?.providers || []} onClose={() => setCodexOpen(false)} onSessionChange={changeCodexSession} />
     </section>
   );
 }

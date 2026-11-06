@@ -2865,6 +2865,16 @@ td .primary-btn {
   cursor: not-allowed;
 }
 
+.account-status-control {
+  display: grid;
+  gap: 6px;
+  min-width: 92px;
+}
+
+.account-status-control > small {
+  color: #b45309;
+}
+
 .switch-control:focus,
 .switch-control:focus-visible {
   outline: 0;

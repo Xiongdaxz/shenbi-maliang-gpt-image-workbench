@@ -1,4 +1,5 @@
-import type { Hono } from "hono";
+import type { Context, Hono } from "hono";
+import { prepareCreativeJob, creativeJobConflict, recordCreativeJob, type CreativeJobContext } from "./creativeJobContext";
 import { applyAssetFieldSuggestionsToImages, ensureAssetFieldSuggestionsForImage } from "./assetSuggestions";
 import { caseMaterialReferenceFromSource, caseMaterialSourcesByIds } from "./caseMaterialSources";
 import { applyCaseFieldSuggestionsToImages, ensureCaseFieldSuggestionsForImage } from "./caseSuggestions";
@@ -44,13 +45,15 @@ import {
 import { boundedPaginationFromQuery, pageInfo } from "./pagination";
 import { invalidateLibraryFacetCache } from "./libraryRoutes";
 import { imageDateSearchConditions } from "./imageSearch";
-import { callProviderChain, defaultProviderSelectionId, enabledProvidersForCurrentMode, providerChainById, providerRequestWasCancelled } from "./providerRuntime";
+import { callProviderChain, defaultProviderSelectionId, enabledProvidersForCurrentMode, providerChainById, providerRequestWasCancelled, providersForImageModel } from "./providerRuntime";
 import { providerResponseSnapshot } from "./responseSnapshots";
+import { canRetryImageRequest } from "./imageRequestErrors";
 import { reviewConversationPrompt } from "./safetyReview";
 import {
   fallbackImagePromptPlan,
   imageEditPromptHasExplicitGroups,
   resolveImagePromptPlan,
+  sharedImagePromptPlan,
   storedImagePromptPlan,
   type ImagePromptPlan
 } from "./imagePromptPlan";
@@ -99,11 +102,17 @@ import {
 import { isImageMarkupReferenceName } from "../src/lib/imageMarkup";
 import { resolveImageEditCount, resolvePromptImageCount } from "../src/lib/imagePromptCount";
 import {
+  IMAGE_MODEL_IDS,
+  isGptImage26Model,
   isImageModelId,
   isImageQualitySupported,
+  normalizeImageComplexity,
+  type ImageComplexity,
   type ImageModelId
 } from "../src/lib/imageModels";
 import type { ImageEditIntent } from "../src/lib/imageAnnotations";
+import type { SetRunRow, SetRunSnapshot } from "./imageSets";
+import { executeDemoImageSetRun } from "./imageSetDemo";
 import {
   INHERITED_SOURCE_BACKGROUND_REQUEST_KEY,
   isImageBackgroundOption,
@@ -132,6 +141,8 @@ function providerRequestPayload(requestPayload: Record<string, unknown>) {
   const payload = { ...requestPayload };
   delete payload[IMAGE_PROMPT_PLAN_REQUEST_KEY];
   delete payload[IMAGE_COMPLETION_CONCURRENCY_REQUEST_KEY];
+  delete payload._creativeDisplayPrompt;
+  delete payload._imageSet;
   return payload;
 }
 
@@ -162,7 +173,7 @@ function requestedImageModel(body: Record<string, unknown>, provider: RuntimePro
   }
   if (!isImageModelId(rawModel)) {
     return {
-      error: "model 仅支持 gpt-image-2.5-flare、gpt-image-2.5-sunburst 或 gpt-image-2",
+      error: `model 仅支持 ${IMAGE_MODEL_IDS.join("、")}`,
       model: DEFAULT_IMAGE_MODEL,
       explicit: true
     };
@@ -173,16 +184,25 @@ function requestedImageModel(body: Record<string, unknown>, provider: RuntimePro
 function normalizedImageRequestOptions(
   body: Record<string, unknown>,
   includeInputFidelity = false,
-  prompt: unknown = body.prompt
+  prompt: unknown = body.prompt,
+  model: unknown = body.model
 ) {
   const requestedBackground = requestOptionText(body, "background").toLowerCase();
   const outputFormat = requestOptionText(body, "outputFormat", "output_format").toLowerCase();
   const inputFidelity = requestOptionText(body, "inputFidelity", "input_fidelity").toLowerCase();
+  const requestedComplexity = requestOptionText(body, "complexity");
+  const complexity = normalizeImageComplexity(model, requestedComplexity);
   const payload: {
     background?: ImageBackgroundOption;
     output_format?: TransparentImageOutputFormat;
     input_fidelity?: ImageInputFidelityOption;
+    complexity?: ImageComplexity;
   } = {};
+
+  if (requestedComplexity && !complexity) {
+    return { error: isGptImage26Model(model) ? "complexity 仅支持 low、medium 或 high" : "复杂度仅支持 GPT Image 2.6", payload };
+  }
+  if (complexity) payload.complexity = complexity;
 
   if (requestedBackground && !isImageBackgroundOption(requestedBackground)) {
     return { error: "background 仅支持 auto、opaque 或 transparent", payload };
@@ -216,7 +236,8 @@ function normalizedImageRequestOptions(
 function imageRequestMessageMetadata(options: ReturnType<typeof normalizedImageRequestOptions>["payload"]) {
   return {
     ...(options.background ? { background: options.background } : {}),
-    ...(options.output_format ? { outputFormat: options.output_format } : {})
+    ...(options.output_format ? { outputFormat: options.output_format } : {}),
+    ...(options.complexity ? { complexity: options.complexity } : {})
   };
 }
 
@@ -578,7 +599,7 @@ function requestClientRequestId(body: Record<string, unknown>) {
   return String(body.clientRequestId ?? "").trim().slice(0, 160);
 }
 
-async function saveProviderImagesWithRetry({
+export async function saveProviderImagesWithRetry({
   providers,
   mode,
   requestPayload,
@@ -644,6 +665,7 @@ async function saveProviderImagesWithRetry({
       return { provider, responseJson, savedImages, execution, attemptNo: attempt, retryCount, maxAttempts };
     } catch (error) {
       if (providerRequestWasCancelled(error, signal)) throw error;
+      if (!canRetryImageRequest(error)) throw tagRetryError(error, attempt, retryCount);
       if (attempt < maxAttempts) {
         firstError = error;
         const retryLabel = retryCount === 1 ? "一次" : `第 ${attempt}/${retryCount} 次`;
@@ -1443,6 +1465,8 @@ async function runStoredImageJob({
   signal?: AbortSignal;
 }) {
   try {
+    const executionPrompt = String(requestPayload.prompt ?? job.prompt);
+    const displayPrompt = typeof requestPayload._creativeDisplayPrompt === "string" ? requestPayload._creativeDisplayPrompt : null;
     const existingImages = storedImageJobImages(job);
     const requestedImageCount = numberFromPayload(requestPayload.n, 1);
     const existingCompletionState = storedImageCompletionState(existingImages, requestedImageCount);
@@ -1480,7 +1504,7 @@ async function runStoredImageJob({
       const promptPlan = await ensureStoredImagePromptPlan({
         jobId: job.id,
         userId: job.user_id,
-        prompt: job.prompt,
+        prompt: executionPrompt,
         taskType: "generation",
         requestPayload,
         existingImageCount: existingImages.length,
@@ -1492,7 +1516,7 @@ async function runStoredImageJob({
         ? null
         : prepareImageEditSuggestionsForJob({
             userId: job.user_id,
-            prompt: job.prompt,
+            prompt: executionPrompt,
             kind: "generation",
             promptHistory: [job.prompt]
           });
@@ -1502,7 +1526,7 @@ async function runStoredImageJob({
         mode: "generation",
         requestPayload,
         promptPlan,
-        originalPrompt: job.prompt,
+        originalPrompt: executionPrompt,
         existingImageCount: existingImages.length,
         existingImageIndexes,
         concurrency: requestImageCompletionConcurrency(requestPayload),
@@ -1536,7 +1560,7 @@ async function runStoredImageJob({
               job.id,
               imageIndex,
               saved.file.path,
-              imagePrompt,
+              displayPrompt ?? imagePrompt,
               "generation",
               size,
               result.actualQuality || quality,
@@ -1699,7 +1723,7 @@ async function runStoredImageJob({
     const promptPlan = await ensureStoredImagePromptPlan({
       jobId: job.id,
       userId: job.user_id,
-      prompt: job.prompt,
+      prompt: executionPrompt,
       taskType: "edit",
       requestPayload,
       existingImageCount: existingImages.length,
@@ -1711,7 +1735,7 @@ async function runStoredImageJob({
       ? null
       : prepareImageEditSuggestionsForJob({
           userId: job.user_id,
-          prompt: job.prompt,
+          prompt: executionPrompt,
           kind: "edit",
           promptHistory: editPromptHistoryForSourceImage(primarySourceImage, job.prompt)
         });
@@ -1722,7 +1746,7 @@ async function runStoredImageJob({
       mode: "edit",
       requestPayload: retryPayload,
       promptPlan,
-      originalPrompt: job.prompt,
+      originalPrompt: executionPrompt,
       existingImageCount: existingImages.length,
       existingImageIndexes,
       concurrency: requestImageCompletionConcurrency(requestPayload),
@@ -1763,7 +1787,7 @@ async function runStoredImageJob({
             job.id,
             imageIndex,
             saved.file.path,
-            imagePrompt,
+            displayPrompt ?? imagePrompt,
             "edit",
             size,
             result.actualQuality || quality,
@@ -1874,8 +1898,9 @@ function startStoredImageJob(job: StoredImageJobRow, trigger: StoredImageJobTrig
   if (!job.session_id) throw new Error("任务缺少对话信息，无法重试");
   const retrySessionId = job.session_id;
   const requestPayload = safeJson<Record<string, unknown>>(job.request_json, {});
+  if (requestPayload._imageSetDemo === true || job.provider_id === "internal-demo") throw new Error("请在套图页面重试模拟任务");
   if (Object.keys(requestPayload).length === 0) throw new Error("任务请求信息不完整，无法重试");
-  const providers = providerChainById(job.provider_id);
+  const providers = requestPayload._imageSet === true ? imageSetProvidersFor({ providerId: job.provider_id, model: String(requestPayload.model || ""), quality: String(requestPayload.quality || "high"), size: String(requestPayload.size), referenceIds: retrySourceIds(job.source_image_ids).referenceIds }) : providerChainById(job.provider_id, requestPayload.model);
   const provider = providers[0];
   const messageMetadata = jobUserMessageMetadata(job.user_id, retrySessionId, job.id);
   const revisionMetadata = requestRevisionMetadata(messageMetadata);
@@ -1999,6 +2024,7 @@ export function startInterruptedImageJobRecovery() {
   let resumed = 0;
   let failed = 0;
   for (const job of interruptedJobs) {
+    if (job.provider_id === "internal-demo" || safeJson<Record<string, unknown>>(job.request_json, {})._imageSetDemo === true) continue;
     if (finalizeInterruptedImageJobIfComplete(job)) {
       resumed += 1;
       continue;
@@ -2024,6 +2050,73 @@ export function startInterruptedImageJobRecovery() {
     }
   }
   console.info(`图片任务启动恢复完成：接管 ${resumed} 个，失败 ${failed} 个`);
+}
+
+/** Uses the ordinary persistence/completion/recovery pipeline with an explicit single-output plan. */
+export function imageSetProvidersFor(snapshot: Pick<SetRunSnapshot, "providerId" | "model" | "quality" | "size" | "referenceIds" | "sourceImageId">) {
+  const providers = providerChainById(providerSelectionId(snapshot.providerId)).filter(provider => {
+    const sizes = safeJson<string[]>(provider.sizes, []);
+    if (sizes.length && !sizes.includes(snapshot.size)) return false;
+    if ((snapshot.referenceIds.length || snapshot.sourceImageId) && provider.route_mode === "images_api" && !provider.edit_path.trim()) return false;
+    return true;
+  });
+  if (!providers.length) throw new Error(`当前渠道不支持 ${snapshot.size} 或所需参考图片，请调整版位尺寸或渠道`);
+  const selected = requestedImageModel({ model: snapshot.model || undefined }, providers[0]);
+  if (selected.error) throw new Error(selected.error);
+  if (isImageModelId(selected.model) && !isImageQualitySupported(selected.model, snapshot.quality)) throw new Error("所选模型不支持当前质量");
+  return providersForImageModel(providers, selected.model);
+}
+export async function executeImageSetRun(userId: string, runRow: SetRunRow, snapshot: SetRunSnapshot, isActive: () => boolean) {
+  if (getOne(appDb, "select id from image_sets where id=? and user_id=? and execution_mode='demo'", runRow.set_id, userId)) return executeDemoImageSetRun(userId, runRow, snapshot, isActive);
+  const existing = getOne<StoredImageJobRow>(appDb, "select * from image_jobs where id=? and user_id=?", runRow.job_id, userId);
+  if (existing) {
+    if (existing.status === "cancelled") { run(appDb, "update image_jobs set status='failed' where id=? and status='cancelled'", existing.id); existing.status = "failed"; }
+    if (existing.status === "failed" && isActive()) startStoredImageJob(existing, "manual");
+    return;
+  }
+  if (!getOne(appDb, "select id from sessions where id=? and user_id=? and deleted_at is null", snapshot.sessionId, userId)) throw new Error("关联对话已删除，请重新确认套图方案");
+  const providers = imageSetProvidersFor(snapshot);
+  const provider = providers[0];
+  const selection = requestedImageModel({ model: snapshot.model || undefined }, provider);
+  if (selection.error) throw new Error(selection.error);
+  const quality = requestImageQuality(snapshot.quality, provider.default_quality);
+  if (isImageModelId(selection.model) && !isImageQualitySupported(selection.model, quality)) throw new Error("所选模型不支持当前质量");
+  const review = await reviewConversationPrompt({ userId, sessionId: snapshot.sessionId, scene: "image_generation", prompt: snapshot.prompt });
+  if (review.blocked) throw new Error(review.message || "请调整图片描述");
+  if (!isActive()) return;
+  const references = messageSourceReferencesByIds(snapshot.referenceIds, userId);
+  if (references.some(r => !r)) throw new Error("任务参考快照缺失");
+  const sourceImage = snapshot.sourceImageId ? getOne<ImageRow>(appDb, "select * from images where id=? and user_id=?", snapshot.sourceImageId, userId) : null;
+  if (snapshot.sourceImageId && !sourceImage) throw new Error("编辑来源图片已删除");
+  const isEdit = references.length > 0 || Boolean(sourceImage);
+  const timestamp = now(), settings = imageGenerationSettings();
+  const payload: Record<string, unknown> = {
+    prompt: snapshot.prompt, model: selection.model, quality, size: snapshot.size, n: 1, _creativeDisplayPrompt: snapshot.displayPrompt ?? snapshot.prompt,
+    background: "auto", editIntent: "normal", _imageSet: true, _imagePromptPlan: sharedImagePromptPlan(1), _multiImageConcurrency: 1,
+    ...(isEdit ? { images: Array.from({ length: references.length + (sourceImage ? 1 : 0) }, () => ({ image_url: "[data-url]" })) } : {})
+  };
+  const branchMetadata = { branchId: runRow.id };
+  appDb.transaction(() => {
+    run(appDb, `insert into image_jobs (id,user_id,session_id,type,status,prompt,source_image_ids,provider_id,request_json,client_request_id,max_auto_retries,created_at,updated_at)
+      values (?,?,?,?,?,?,?,?,?,?,?,?,?)`, runRow.job_id, userId, snapshot.sessionId, isEdit ? "edit" : "generation", "running", snapshot.displayPrompt ?? snapshot.prompt,
+      JSON.stringify({ imageIds: sourceImage ? [sourceImage.id] : [], referenceIds: snapshot.referenceIds, assetIds: [], caseItemIds: [] }),
+      providerSelectionId(snapshot.providerId), JSON.stringify(payload), runRow.id, resolveImageResultRetryCount(settings.resultRetryCount), timestamp, timestamp);
+    insertMessage(userId, snapshot.sessionId, "user", snapshot.displayPrompt ?? snapshot.prompt, sourceImage?.id ?? null, {
+      jobId: runRow.job_id, clientRequestId: runRow.id, mode: isEdit ? "edit" : "generation", n: 1,
+      sourceImageIds: sourceImage ? [sourceImage.id] : [], sourceReferenceIds: snapshot.referenceIds, size: snapshot.size,
+      imageSetId: runRow.set_id, imageSetItemId: runRow.item_id, ...branchMetadata
+    });
+    run(appDb, "insert into image_job_profile_context (job_id,user_id,snapshot_json,created_at) values (?,?,?,?)",
+      runRow.job_id, userId, JSON.stringify(snapshot.profileContext), timestamp);
+  })();
+  const job = getOne<StoredImageJobRow>(appDb, "select * from image_jobs where id=?", runRow.job_id)!;
+  const controller = beginImageJobExecution(job.id);
+  emitJobStatus(userId, snapshot.sessionId, job.id, "running", job.type);
+  try {
+    await runStoredImageJob({ job, providers, provider, requestPayload: payload, retrySessionId: snapshot.sessionId,
+      revisionMetadata: {}, branchMetadata, maxAutoRetries: resolveImageResultRetryCount(settings.resultRetryCount), previousAutoRetryCount: 0,
+      nextManualRetryCount: 0, expectedRecoveryCount: 0, signal: controller.signal });
+  } finally { finishImageJobExecution(job.id, controller); }
 }
 
 export function registerImageRoutes(api: Hono) {
@@ -2313,10 +2406,14 @@ api.delete("/images/:imageId", async (c) => {
   return c.json({ ok: true });
 });
 
-api.post("/images/generate", async (c) => {
+async function handleGeneration(c: Context) {
   const user = await requireImageRouteUser(c);
   if (!user) return c.json({ error: "未登录" }, 401);
-  const body = await c.req.json().catch(() => ({}));
+  let body: Record<string, unknown> = await c.req.json().catch(() => ({}));
+  let creativeContext: CreativeJobContext | null = null;
+  try { const prepared = prepareCreativeJob(user.id, body); body = prepared.body; creativeContext = prepared.context; }
+  catch (error) { return c.json({ error: errorMessage(error, "档案不可用") }, 400); }
+  if (creativeContext && (normalizeIdList(body.sourceAssetIds).length || normalizeIdList(body.sourceReferenceIds).length)) return handleEditing(c, body, creativeContext);
   const clientRequestId = requestClientRequestId(body);
   cleanupExpiredImageJobCancelIntents();
   const prompt = String(body.prompt ?? "").trim();
@@ -2348,24 +2445,26 @@ api.post("/images/generate", async (c) => {
   } catch (error) {
     return c.json({ error: errorMessage(error, "渠道配置不可用") }, 400);
   }
-  const provider = providers[0];
-  const modelSelection = requestedImageModel(body, provider);
+  const modelSelection = requestedImageModel(body, providers[0]);
   if (modelSelection.error) return c.json({ error: modelSelection.error }, 400);
   const model = modelSelection.model;
+  try { providers = providersForImageModel(providers, model); }
+  catch (error) { return c.json({ error: errorMessage(error, "渠道配置不可用") }, 400); }
+  const provider = providers[0];
   const size = requestImageSize(body.size);
   const quality = requestImageQuality(body.quality, provider.default_quality);
   if (modelSelection.explicit && isImageModelId(model) && !isImageQualitySupported(model, quality)) {
     return c.json({ error: `${model} 不支持质量 ${quality}` }, 400);
   }
-  const imageCount = resolvePromptImageCount(prompt, body.n ?? body.imageCount);
-  const imageOptions = normalizedImageRequestOptions(body, false, prompt);
+  const imageCount = resolvePromptImageCount(creativeContext?.originalPrompt ?? prompt, body.n ?? body.imageCount);
+  const imageOptions = normalizedImageRequestOptions(body, false, prompt, model);
   if (imageOptions.error) return c.json({ error: imageOptions.error }, 400);
-  const sessionId = await ensureChatSession(user.id, String(body.sessionId ?? "") || null, prompt, clientRequestId);
+  const sessionId = await ensureChatSession(user.id, String(body.sessionId ?? "") || null, creativeContext?.originalPrompt ?? prompt, clientRequestId);
   if (imageJobCancelRequested(user.id, clientRequestId)) {
     deleteRequestEmptySessionRecord(user.id, sessionId, clientRequestId);
     return c.json({ cancelled: true, clientRequestId, sessionId }, 409);
   }
-  const webConversationContext = branchForkMessageId
+  const webConversationContext = creativeContext ? null : branchForkMessageId
     ? providerConversationContextFromMessage(user.id, sessionId, branchForkMessageId, "branch") ?? { placement: "branch" }
     : latestProviderConversationContextForBranch(user.id, sessionId, branchId);
   const timestamp = now();
@@ -2377,13 +2476,16 @@ api.post("/images/generate", async (c) => {
     size,
     quality,
     n: imageCount,
+    ...(creativeContext ? { _creativeDisplayPrompt: creativeContext.originalPrompt } : {}),
     [IMAGE_COMPLETION_CONCURRENCY_REQUEST_KEY]: generationSettings.multiImageConcurrency,
     ...imageOptions.payload,
     ...(webConversationContext ? { webConversationContext } : {})
   };
   const maxAutoRetries = resolveImageResultRetryCount(generationSettings.resultRetryCount);
 
-  insertMessage(user.id, sessionId, "user", prompt, null, {
+  const conflict = creativeJobConflict(user.id, creativeContext);
+  if (conflict) return c.json({ error: conflict }, 409);
+  insertMessage(user.id, sessionId, "user", creativeContext?.originalPrompt ?? prompt, null, {
     mode: "generation",
     jobId,
     clientRequestId,
@@ -2408,7 +2510,7 @@ api.post("/images/generate", async (c) => {
     sessionId,
     "generation",
     "running",
-    prompt,
+    creativeContext?.originalPrompt ?? prompt,
     "[]",
     selectedProviderId,
     JSON.stringify(requestPayload),
@@ -2417,6 +2519,7 @@ api.post("/images/generate", async (c) => {
     timestamp,
     timestamp
   );
+  recordCreativeJob(user.id, jobId, body, creativeContext);
   emitJobStatus(user.id, sessionId, jobId, "running", "generation");
   recordCasePromptUsage({
     caseItemId,
@@ -2485,7 +2588,7 @@ api.post("/images/generate", async (c) => {
               jobId,
               imageIndex,
               saved.file.path,
-              imagePrompt,
+              creativeContext?.originalPrompt ?? imagePrompt,
               "generation",
               size,
               result.actualQuality || quality,
@@ -2593,12 +2696,15 @@ api.post("/images/generate", async (c) => {
     clearImageJobCancelIntent(user.id, clientRequestId);
   });
   return c.json({ sessionId, job: job ? serializeJob(job) : null, image: null, images: [] }, 202);
-});
+}
 
-api.post("/images/edit", async (c) => {
+async function handleEditing(c: Context, override?: Record<string, unknown>, suppliedContext?: CreativeJobContext | null) {
   const user = await requireImageRouteUser(c);
   if (!user) return c.json({ error: "未登录" }, 401);
-  const body = await c.req.json().catch(() => ({}));
+  let body: Record<string, unknown> = override ?? await c.req.json().catch(() => ({}));
+  let creativeContext = suppliedContext ?? null;
+  if (!override) { try { const prepared = prepareCreativeJob(user.id, body); body = prepared.body; creativeContext = prepared.context; } catch (error) { return c.json({ error: errorMessage(error, "档案不可用") }, 400); } }
+  if (creativeContext?.existingJobId) { const old = getOne<StoredImageJobRow>(appDb, "select * from image_jobs where id=? and user_id=?", creativeContext.existingJobId, user.id); if (old) return c.json({ sessionId: old.session_id, job: serializeJob(old), image: null, images: [] }, 202); }
   const clientRequestId = requestClientRequestId(body);
   cleanupExpiredImageJobCancelIntents();
   const caseItemId = String(body.caseItemId ?? "").trim();
@@ -2656,10 +2762,12 @@ api.post("/images/edit", async (c) => {
   } catch (error) {
     return c.json({ error: errorMessage(error, "渠道配置不可用") }, 400);
   }
-  const provider = providers[0];
-  const modelSelection = requestedImageModel(body, provider);
+  const modelSelection = requestedImageModel(body, providers[0]);
   if (modelSelection.error) return c.json({ error: modelSelection.error }, 400);
   const model = modelSelection.model;
+  try { providers = providersForImageModel(providers, model); }
+  catch (error) { return c.json({ error: errorMessage(error, "渠道配置不可用") }, 400); }
+  const provider = providers[0];
   const size = requestImageSize(body.size);
   const quality = requestImageQuality(body.quality, provider.default_quality);
   if (modelSelection.explicit && isImageModelId(model) && !isImageQualitySupported(model, quality)) {
@@ -2671,12 +2779,12 @@ api.post("/images/edit", async (c) => {
     + sourceReferenceIds.length
     + sourceInlineImages.length;
   const imageCount = resolveImageEditCount(
-    editIntent === "annotation" ? extraPrompt : prompt,
+    creativeContext?.originalPrompt ?? (editIntent === "annotation" ? extraPrompt : prompt),
     body.n ?? body.imageCount,
     editIntent,
     sourceInputCount
   );
-  const imageOptions = normalizedImageRequestOptions(body, true, prompt);
+  const imageOptions = normalizedImageRequestOptions(body, true, prompt, model);
   if (imageOptions.error) return c.json({ error: imageOptions.error }, 400);
   const sourceImages = sourceImageIds.map((id) =>
     getOne<ImageRow>(appDb, "select * from images where id = ? and user_id = ?", id, user.id)
@@ -2738,7 +2846,7 @@ api.post("/images/edit", async (c) => {
   const sessionId = await ensureChatSession(
     user.id,
     String(body.sessionId ?? primarySourceImage?.session_id ?? "") || null,
-    prompt,
+    creativeContext?.originalPrompt ?? prompt,
     clientRequestId
   );
   if (imageJobCancelRequested(user.id, clientRequestId)) {
@@ -2774,7 +2882,7 @@ api.post("/images/edit", async (c) => {
   const fallbackConversationContext = branchForkMessageId
     ? providerConversationContextFromMessage(user.id, sessionId, branchForkMessageId, "branch") ?? { placement: "branch" }
     : latestSessionConversationContext ?? sourceImageConversationContext;
-  const webConversationContext = fallbackConversationContext;
+  const webConversationContext = creativeContext ? null : fallbackConversationContext;
   const jobId = makeId("job");
   let maskSnapshot = null;
   if (maskDataUrl) {
@@ -2802,6 +2910,7 @@ api.post("/images/edit", async (c) => {
     size,
     quality,
     n: imageCount,
+    ...(creativeContext ? { _creativeDisplayPrompt: creativeContext.originalPrompt } : {}),
     editIntent,
     [IMAGE_COMPLETION_CONCURRENCY_REQUEST_KEY]: generationSettings.multiImageConcurrency,
     images: imageUrls.map((image_url) => ({ image_url })),
@@ -2844,7 +2953,7 @@ api.post("/images/edit", async (c) => {
     user.id,
     sessionId,
     "user",
-    prompt,
+    creativeContext?.originalPrompt ?? prompt,
     hideReference || (!primarySourceImage && (sourceCaseReferences.length > 0 || existingSourceReferences.length > 0)) ? null : primarySourceImage?.id ?? null,
     {
       mode: "edit",
@@ -2922,6 +3031,8 @@ api.post("/images/edit", async (c) => {
     };
     run(appDb, "update messages set metadata = ? where id = ? and user_id = ?", JSON.stringify(metadata), userMessageId, user.id);
   }
+  const conflict = creativeJobConflict(user.id, creativeContext);
+  if (conflict) { await deleteImageJobArtifacts(user.id, jobId, clientRequestId); return c.json({ error: conflict }, 409); }
   run(
     appDb,
     `insert into image_jobs (
@@ -2933,7 +3044,7 @@ api.post("/images/edit", async (c) => {
     sessionId,
     "edit",
     "running",
-    prompt,
+    creativeContext?.originalPrompt ?? prompt,
     JSON.stringify({
       imageIds: sourceImageIds,
       assetIds: messageSourceReferences.length > 0 ? [] : sourceAssetIds,
@@ -2953,6 +3064,7 @@ api.post("/images/edit", async (c) => {
     timestamp,
     timestamp
   );
+  recordCreativeJob(user.id, jobId, body, creativeContext);
   emitJobStatus(user.id, sessionId, jobId, "running", "edit");
   recordCasePromptUsage({
     caseItemId,
@@ -3044,7 +3156,7 @@ api.post("/images/edit", async (c) => {
               jobId,
               imageIndex,
               saved.file.path,
-              imagePrompt,
+              creativeContext?.originalPrompt ?? imagePrompt,
               "edit",
               size,
               result.actualQuality || quality,
@@ -3155,7 +3267,10 @@ api.post("/images/edit", async (c) => {
     clearImageJobCancelIntent(user.id, clientRequestId);
   });
   return c.json({ sessionId, job: runningJob ? serializeJob(runningJob) : null, image: null, images: [] }, 202);
-});
+}
+
+api.post("/images/generate", handleGeneration);
+api.post("/images/edit", (c) => handleEditing(c));
 
 api.post("/image-jobs/cancel", async (c) => {
   const user = await requireUser(c);

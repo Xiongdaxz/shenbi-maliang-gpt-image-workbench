@@ -6,7 +6,9 @@ describe("image model picker messages", () => {
   test("covers every enabled locale", () => {
     for (const locale of LOCALE_CODES) {
       const messages = imageModelMessages[locale];
-      expect(messages["chatMessages.imageModel"], `missing image model detail label for ${locale}`).toBeTruthy();
+      for (const key of ["chatMessages.requestedImageModel", "chatMessages.actualImageModel", "chatMessages.upstreamModelUnavailable"]) {
+        expect(messages[key], `missing ${key} for ${locale}`).toBeTruthy();
+      }
       expect(messages["picker.model.flare"], `missing Flare label for ${locale}`).toBeTruthy();
       expect(messages["picker.model.sunburst"], `missing Sunburst label for ${locale}`).toBeTruthy();
       expect(messages["picker.model.compatible"], `missing compatibility label for ${locale}`).toBeTruthy();

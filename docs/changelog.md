@@ -2,6 +2,20 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.83 - 2026-11-07
+
+### 中文
+
+- ChatGPT 账号支持浏览器授权绑定、自动续期和启停。远程部署可手动提交回调地址；授权凭据在本地加密保存。
+- 生图、改图和马良插件新增 GPT Image 2.6 Flare、Sunburst，默认 Sunburst，原有模型仍可选。2.6 支持超高和极致质量，质量与复杂度可分别设置。
+- 出图详情分别展示请求模型和实际模型；官网未回传实际模型时明确标注。官网渠道按模型能力使用图片接口。
+
+### English
+
+- ChatGPT accounts can be connected through browser authorization, refreshed automatically, and enabled or disabled. Remote deployments can submit the callback URL manually. Credentials are encrypted locally.
+- Image generation, image editing, and the Maliang plugin support GPT Image 2.6 Flare and Sunburst. Sunburst is the default, and older models remain available. The 2.6 models offer extra-high and maximum quality and a separate complexity control.
+- Image details show the requested and reported models separately, including when ChatGPT does not report a model. ChatGPT routing selects an image endpoint based on model support.
+
 ## v0.1.82 - 2026-09-29
 
 ### 中文

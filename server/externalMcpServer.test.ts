@@ -47,7 +47,9 @@ describe("external MCP internal image requests", () => {
     expect(EXTERNAL_MCP_IMAGE_OUTPUT_FORMAT_SCHEMA.safeParse("jpeg").success).toBe(false);
   });
 
-  test("exposes GPT Image 2.5 model and quality choices", () => {
+  test("exposes GPT Image 2.6 and earlier model and quality choices", () => {
+    expect(EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.safeParse("gpt-image-2.6-flare").success).toBe(true);
+    expect(EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.safeParse("gpt-image-2.6-sunburst").success).toBe(true);
     expect(EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.safeParse("gpt-image-2.5-flare").success).toBe(true);
     expect(EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.safeParse("gpt-image-2.5-sunburst").success).toBe(true);
     expect(EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.safeParse("gpt-image-2").success).toBe(true);

@@ -53,11 +53,13 @@ export function SwitchControl({
   checked,
   disabled,
   label,
+  ariaLabel,
   onChange
 }: {
   checked: boolean;
   disabled?: boolean;
   label: string;
+  ariaLabel?: string;
   onChange: (checked: boolean) => void;
 }) {
   const configCopy = useConfigCopy();
@@ -68,6 +70,7 @@ export function SwitchControl({
       className={checked ? "switch-control checked" : "switch-control"}
       role="switch"
       aria-checked={checked}
+      aria-label={ariaLabel}
       disabled={disabled}
       onClick={() => onChange(!checked)}
     >

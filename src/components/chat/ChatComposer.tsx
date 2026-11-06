@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEventHandler, type CSSProperties, type RefObject } from "react";
-import { ArrowUp, Brush, BrushCleaning, ImageIcon, Lightbulb, LoaderCircle, Maximize2, Minimize2, Plus, RotateCw, Sparkles, Square, Undo2, WandSparkles, X } from "lucide-react";
+import { ArrowUp, Brush, BrushCleaning, Check, ImageIcon, Lightbulb, LoaderCircle, Maximize2, Minimize2, Palette, Plus, RotateCw, Sparkles, Square, Undo2, WandSparkles, X } from "lucide-react";
 import { ImageLightbox, type ImageLightboxState } from "../ImageLightbox";
 import { MaterialPickerDrawer } from "../MaterialPicker";
 import { BackgroundPicker, ImageCountStepper, ModelPicker, QualityPicker, SizePicker } from "../ImageOptionPickers";
@@ -27,7 +27,7 @@ import {
 import { useI18n } from "../../i18n";
 import type { QualityOption, SizeOption } from "../../lib/imageOptions";
 import type { ImageBackgroundOption } from "../../lib/imageBackground";
-import type { ImageModelId, ImageQuality } from "../../lib/imageModels";
+import type { ImageComplexity, ImageModelId, ImageQuality } from "../../lib/imageModels";
 import { shouldSubmitComposerOnEnter } from "../../lib/editorInput";
 import type { ComposerPromptTemplateDraft, ComposerPromptTemplatePanelDraft } from "../../store/workbench";
 import type { AssetItem, CaseMaterialItem, ImageEditSuggestion } from "../../types";
@@ -36,7 +36,7 @@ import { useComposerTextareaAutosize } from "../../hooks/useComposerTextareaAuto
 import { useFloatingComposerExpansion } from "../../hooks/useFloatingComposerExpansion";
 
 type QuickMenuSource = "plus" | "slash";
-const QUICK_MENU_ITEM_COUNT = 4;
+const QUICK_MENU_ITEM_COUNT = 5;
 const PROMPT_INPUT_OPTIMIZE_STYLE_STORAGE_KEY = "gpt-image.prompt-input-optimize-style";
 
 export type ChatComposerPreview = {
@@ -66,6 +66,7 @@ type ChatComposerProps = {
   imageCount: number;
   imageModel: ImageModelId;
   quality: ImageQuality;
+  complexity?: ImageComplexity;
   qualityOptions: QualityOption[];
   background: ImageBackgroundOption;
   promptColorSchemes: PromptColorScheme[];
@@ -88,6 +89,7 @@ type ChatComposerProps = {
   onImageCountChange: (value: number) => void;
   onImageModelChange: (value: ImageModelId) => void;
   onQualityChange: (value: ImageQuality) => void;
+  onComplexityChange?: (value?: ImageComplexity) => void;
   onPaste: ClipboardEventHandler<HTMLTextAreaElement>;
   onSelectedAssetsChange: (assets: AssetItem[]) => void;
   onSelectedCaseMaterialsChange: (caseMaterials: CaseMaterialItem[]) => void;
@@ -96,6 +98,8 @@ type ChatComposerProps = {
   onToggleAsset: (asset: AssetItem) => void;
   onOpenDrawing: () => void;
   onOpenCasePicker: () => void;
+  onOpenCreativeProfiles: () => void;
+  creativeProfileSelected: boolean;
   onToggleMaterialPicker: () => void;
   onPromptColorSchemeChange?: (state: { ids: string[]; injection: string; prompt: string }) => void;
   onPromptInputOptimizeStyleChange?: (value: PromptTemplateOptimizeStyle) => void;
@@ -160,6 +164,7 @@ export function ChatComposer({
   imageCount,
   imageModel,
   quality,
+  complexity,
   qualityOptions,
   background,
   promptColorSchemes,
@@ -182,6 +187,7 @@ export function ChatComposer({
   onImageCountChange,
   onImageModelChange,
   onQualityChange,
+  onComplexityChange,
   onPaste,
   onSelectedAssetsChange,
   onSelectedCaseMaterialsChange,
@@ -190,6 +196,8 @@ export function ChatComposer({
   onToggleAsset,
   onOpenDrawing,
   onOpenCasePicker,
+  onOpenCreativeProfiles,
+  creativeProfileSelected,
   onToggleMaterialPicker,
   onPromptColorSchemeChange,
   onPromptInputOptimizeStyleChange,
@@ -301,7 +309,7 @@ export function ChatComposer({
       document.removeEventListener("keydown", handleKeyDown, true);
       document.removeEventListener("pointerdown", handlePointerDown);
     };
-  }, [draftPrompt, quickMenuActiveIndex, quickMenuOpen, quickMenuSource]);
+  }, [busy, draftPrompt, quickMenuActiveIndex, quickMenuOpen, quickMenuSource]);
 
   useEffect(() => {
     return () => {
@@ -491,7 +499,11 @@ export function ChatComposer({
       openPromptTemplateFromMenu();
       return;
     }
-    openDrawingFromMenu();
+    if (quickMenuActiveIndex === 3) {
+      openDrawingFromMenu();
+      return;
+    }
+    openCreativeProfilesFromMenu();
   }
 
   function stopPromptTemplateTyping() {
@@ -574,6 +586,14 @@ export function ChatComposer({
     const panelDraft = promptTemplatePanelDraftRef.current ?? promptTemplateDraft?.panel ?? null;
     setPromptTemplateOpen(true);
     onPromptTemplateDraftChange?.({ open: true, panel: panelDraft });
+  }
+
+  function openCreativeProfilesFromMenu() {
+    if (busy) return;
+    selectQuickMenuItem();
+    if (materialPickerOpen) closeMaterialPickerWithMotion();
+    quickMenuRef.current?.querySelector<HTMLButtonElement>(".composer-tool-btn")?.focus({ preventScroll: true });
+    onOpenCreativeProfiles();
   }
 
   function collapsePromptTemplateOnInputFocus() {
@@ -973,11 +993,27 @@ export function ChatComposer({
                   <Brush size={17} />
                   <strong>{t("composer.drawing")}</strong>
                 </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={cx(quickMenuActiveIndex === 4 && "active")}
+                  aria-current={quickMenuActiveIndex === 4 ? "true" : undefined}
+                  disabled={busy}
+                  title={t("sets.profileHint")}
+                  onMouseEnter={() => setQuickMenuActiveIndex(4)}
+                  onFocus={() => setQuickMenuActiveIndex(4)}
+                  onClick={openCreativeProfilesFromMenu}
+                >
+                  <Palette size={17} />
+                  <strong>{t("sets.tabProfiles")}</strong>
+                  {creativeProfileSelected ? <Check size={15} aria-hidden="true" /> : null}
+                </button>
               </div>
             ) : null}
           </div>
           <ModelPicker value={imageModel} onChange={onImageModelChange} />
-          <QualityPicker value={quality} options={qualityOptions} onChange={(value) => onQualityChange(value as ImageQuality)} />
+          <QualityPicker model={imageModel} value={quality} options={qualityOptions} onChange={(value) => onQualityChange(value as ImageQuality)}
+            complexity={complexity} onComplexityChange={onComplexityChange} />
           <SizePicker value={size} options={sizeOptions} onChange={onSizeChange} />
           <BackgroundPicker value={background} onChange={onBackgroundChange} />
           <ImageCountStepper value={imageCount} onChange={onImageCountChange} />

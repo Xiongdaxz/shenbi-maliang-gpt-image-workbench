@@ -112,19 +112,21 @@ function messageImageIndex(message: Message) {
 }
 
 type ImageExecutionDetails = {
-  modelLabel: string;
+  requestedModelLabel: string;
+  actualModelLabel: string | null;
   languageModelLabel: string;
   qualityLabel: string;
-  fallbackReason: string;
 };
 
+function imageExecutionModelLabel(value: unknown) {
+  const model = typeof value === "string" ? value.trim() : "";
+  if (!model || model === "chatgpt-web-auto" || model === "chatgpt-codex-auto") return null;
+  return isImageModelId(model) ? imageModelDisplayName(model) : model;
+}
+
 function imageExecutionDetails(message: Message): ImageExecutionDetails | null {
-  const model = String(
-    message.metadata?.actualModel
-      ?? message.metadata?.requestedModel
-      ?? message.metadata?.model
-      ?? ""
-  ).trim();
+  const requestedModel = imageExecutionModelLabel(message.metadata?.requestedModel) ?? imageExecutionModelLabel(message.metadata?.model);
+  const reportedModel = String(message.metadata?.actualModel ?? "").trim();
   const languageModel = String(message.metadata?.actualLanguageModel ?? "").trim();
   const quality = String(
     message.metadata?.actualQuality
@@ -132,20 +134,12 @@ function imageExecutionDetails(message: Message): ImageExecutionDetails | null {
       ?? message.imageQuality
       ?? ""
   ).trim();
-  if (!model && !languageModel && !quality) return null;
-  const modelLabel = isImageModelId(model)
-    ? imageModelDisplayName(model)
-    : model === "chatgpt-web-auto"
-      ? "ChatGPT Auto"
-      : model || "-";
-  const fallbackReason = model === "chatgpt-web-auto"
-    ? ""
-    : String(message.metadata?.modelFallbackReason ?? "").trim();
+  if (!requestedModel && !reportedModel && !languageModel && !quality) return null;
   return {
-    modelLabel,
+    requestedModelLabel: requestedModel || "-",
+    actualModelLabel: imageExecutionModelLabel(reportedModel),
     languageModelLabel: languageModel || "-",
-    qualityLabel: quality || "auto",
-    fallbackReason
+    qualityLabel: quality || "auto"
   };
 }
 
@@ -362,29 +356,28 @@ function MessageMoreButton({
               onClick={(event) => event.stopPropagation()}
             >
               {imageExecution ? (
-                <>
-                  <dl className="message-more-image-details">
-                    <div>
-                      <dt>{t("chatMessages.imageModel")}</dt>
-                      <dd>{imageExecution.modelLabel}</dd>
-                    </div>
-                    <div>
-                      <dt>{t("chatMessages.languageModel")}</dt>
-                      <dd>{imageExecution.languageModelLabel}</dd>
-                    </div>
-                    <div>
-                      <dt>{t("picker.quality")}</dt>
-                      <dd>{imageExecution.qualityLabel}</dd>
-                    </div>
-                    <div>
-                      <dt>{t("chatMessages.messageTime")}</dt>
-                      <dd><time dateTime={createdAt || undefined}>{messageTimeLabel(createdAt, resolvedLanguage, t)}</time></dd>
-                    </div>
-                  </dl>
-                  {imageExecution.fallbackReason ? (
-                    <p className="message-more-image-note">{imageExecution.fallbackReason}</p>
-                  ) : null}
-                </>
+                <dl className="message-more-image-details">
+                  <div>
+                    <dt>{t("chatMessages.requestedImageModel")}</dt>
+                    <dd className="message-more-model-value">{imageExecution.requestedModelLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>{t("chatMessages.actualImageModel")}</dt>
+                    <dd className="message-more-model-value">{imageExecution.actualModelLabel ?? t("chatMessages.upstreamModelUnavailable")}</dd>
+                  </div>
+                  <div>
+                    <dt>{t("chatMessages.languageModel")}</dt>
+                    <dd>{imageExecution.languageModelLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>{t("picker.quality")}</dt>
+                    <dd>{imageExecution.qualityLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>{t("chatMessages.messageTime")}</dt>
+                    <dd><time dateTime={createdAt || undefined}>{messageTimeLabel(createdAt, resolvedLanguage, t)}</time></dd>
+                  </div>
+                </dl>
               ) : (
                 <time dateTime={createdAt || undefined}>{messageTimeLabel(createdAt, resolvedLanguage, t)}</time>
               )}

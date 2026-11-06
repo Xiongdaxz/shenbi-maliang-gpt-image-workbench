@@ -3,8 +3,10 @@ import { normalizeImageBackgroundOption, type ImageBackgroundOption } from "../l
 import {
   DEFAULT_GENERATION_IMAGE_MODEL,
   DEFAULT_IMAGE_QUALITY,
+  normalizeImageComplexity,
   normalizeImageModel,
   normalizeImageQuality,
+  type ImageComplexity,
   type ImageModelId,
   type ImageQuality
 } from "../lib/imageModels";
@@ -41,6 +43,7 @@ export type ImageEditorOpenRequest = {
   initialImageCount?: number;
   initialImageModel?: ImageModelId;
   initialQuality?: ImageQuality;
+  initialComplexity?: ImageComplexity;
   preserveSelectedAssets?: boolean;
   persistAcrossSessionChange?: boolean;
   discardDraftOnClose?: boolean;
@@ -56,6 +59,7 @@ export type PendingEditorCancellationReturn = {
   background: ImageBackgroundOption;
   imageModel: ImageModelId;
   quality: ImageQuality;
+  complexity?: ImageComplexity;
   promptInputOptimizeStyle: PromptTemplateOptimizeStyle;
   promptColorSchemeIds: string[];
   promptColorSchemeInjection: string;
@@ -95,6 +99,7 @@ export type ComposerSessionDraft = {
   background: ImageBackgroundOption;
   imageModel: ImageModelId;
   quality: ImageQuality;
+  complexity?: ImageComplexity;
   promptInputOptimizeStyle: PromptTemplateOptimizeStyle;
   promptColorSchemeIds: string[];
   promptColorSchemeId: string;
@@ -205,6 +210,7 @@ function normalizeComposerDraft(value: unknown): ComposerSessionDraft {
     background: normalizeImageBackgroundOption(draft.background),
     imageModel,
     quality: normalizeImageQuality(imageModel, draft.quality),
+    complexity: normalizeImageComplexity(imageModel, draft.complexity),
     promptColorSchemeIds,
     promptColorSchemeId: String(promptColorSchemeIds[0] || ""),
     promptColorSchemeInjection: String(draft.promptColorSchemeInjection || "")

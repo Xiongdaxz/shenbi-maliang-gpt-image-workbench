@@ -2,9 +2,10 @@ import type { AssetItem, CaseMaterialItem, Message, MessageSourceReferenceImage 
 import type { ImageAnnotation, ImageEditIntent } from "./imageAnnotations";
 import type { ImageBackgroundOption, TransparentImageOutputFormat } from "./imageBackground";
 import { isDrawingReferenceName } from "./drawingReference";
-import type { ImageModelId, ImageQuality } from "./imageModels";
+import type { ImageComplexity, ImageModelId, ImageQuality } from "./imageModels";
 
 export type SubmitRequest = {
+  profileSelection?: import("../types").ProfileSelection;
   clientRequestId: string;
   pendingScope: string;
   mode: "generation" | "edit";
@@ -15,6 +16,7 @@ export type SubmitRequest = {
   model?: ImageModelId;
   size?: string;
   quality?: ImageQuality;
+  complexity?: ImageComplexity;
   n?: number;
   background?: ImageBackgroundOption;
   outputFormat?: TransparentImageOutputFormat;

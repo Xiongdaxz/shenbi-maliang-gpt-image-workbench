@@ -1,23 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
-import { Ellipsis, ShieldCheck, Sparkles } from "lucide-react";
+import { Ellipsis, GalleryHorizontalEnd, ShieldCheck, Sparkles } from "lucide-react";
 import { api } from "../../api";
 import { useI18n } from "../../i18n";
 import { cx } from "../../lib/cx";
 import { OPENAI_VERIFY_WEB_URL } from "../../lib/imageProvenance";
+import { SERIES_CREATION_AVAILABLE } from "../../lib/releaseFeatures";
 
 const MORE_MENU_CLOSE_ANIMATION_MS = 120;
 const MORE_MENU_GAP = 6;
 const MORE_MENU_WIDTH = 190;
-const MORE_MENU_ESTIMATED_HEIGHT = 94;
+const MORE_MENU_ESTIMATED_HEIGHT = 138;
 const MORE_MENU_VIEWPORT_PADDING = 10;
 
 type MoreToolsMenuProps = {
   open: boolean;
   active: boolean;
   onOpenChange: (open: boolean) => void;
-  onSelect: (path: "/prompt-templates" | "/image-provenance") => void;
+  onSelect: (path: "/prompt-templates" | "/image-provenance" | "/image-sets") => void;
 };
 
 export function MoreToolsMenu({
@@ -113,7 +114,7 @@ export function MoreToolsMenu({
 
   useEffect(() => () => clearCloseTimer(), [clearCloseTimer]);
 
-  const choose = (path: "/prompt-templates" | "/image-provenance") => {
+  const choose = (path: "/prompt-templates" | "/image-provenance" | "/image-sets") => {
     clearCloseTimer();
     setClosing(false);
     onOpenChange(false);
@@ -160,6 +161,12 @@ export function MoreToolsMenu({
                 <Sparkles size={17} />
                 <span>{t("more.prompt.title")}</span>
               </button>
+              {SERIES_CREATION_AVAILABLE ? (
+                <button type="button" role="menuitem" onClick={() => choose("/image-sets")}>
+                  <GalleryHorizontalEnd size={17} />
+                  <span>{t("sets.title")}</span>
+                </button>
+              ) : null}
               {useOfficialWebVerifier ? (
                 <a
                   role="menuitem"

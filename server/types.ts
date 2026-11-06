@@ -425,6 +425,7 @@ export type ImageAccountRow = {
   email: string;
   account_type: string;
   status: string;
+  local_enabled?: number | null;
   quota: number;
   used_quota: number;
   usage_success_count: number;
@@ -446,6 +447,11 @@ export type ImageAccountRow = {
   access_token: string | null;
   auth_json: string | null;
   auth_info_json: string | null;
+  auth_source?: string;
+  auth_status?: string;
+  token_expires_at?: string;
+  auth_refreshed_at?: string;
+  auth_error?: string;
   note: string;
   sync_status: string;
   last_refreshed_at: string | null;

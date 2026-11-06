@@ -2557,6 +2557,142 @@
   max-width: min(240px, calc(100vw - 24px));
 }
 
+.quality-picker-menu.quality-settings-card {
+  width: min(360px, calc(100vw - 24px));
+  min-width: 0;
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px;
+  border-radius: 16px;
+  box-sizing: border-box;
+  overflow: hidden;
+  color: var(--app-text, #111827);
+}
+
+.quality-settings-tabs {
+  position: relative;
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+  border-radius: 11px;
+  background: var(--app-hover-bg, #f3f4f6);
+}
+
+.quality-settings-tabs::before {
+  content: "";
+  position: absolute;
+  inset-block: 3px;
+  inset-inline-start: 3px;
+  inline-size: calc((100% - 9px) / 2);
+  border-radius: 8px;
+  background: var(--app-menu-bg, #fff);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
+  transform: translateX(0);
+  transition: transform 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  pointer-events: none;
+}
+
+.quality-settings-tabs[data-tab="complexity"]::before {
+  transform: translateX(calc(100% + 3px));
+}
+
+.quality-settings-tabs[data-tab="complexity"]:dir(rtl)::before {
+  transform: translateX(calc(-100% - 3px));
+}
+
+.quality-settings-card .quality-settings-tabs button {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-height: 34px;
+  padding: 5px 6px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 650;
+  text-align: center;
+}
+
+.quality-picker-menu.quality-settings-card .quality-settings-tabs button:hover {
+  background: transparent;
+}
+
+.quality-settings-card button:focus-visible {
+  outline: 2px solid var(--app-text, #111827);
+  outline-offset: -2px;
+}
+
+.quality-settings-panels {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.quality-settings-panel {
+  grid-area: 1 / 1;
+  align-self: start;
+  min-width: 0;
+}
+
+.quality-settings-panel[aria-hidden="true"] {
+  visibility: hidden;
+}
+
+.quality-settings-panel[data-slide] {
+  animation: qualitySettingsSlideIn 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.quality-settings-panel[data-slide="quality"],
+.quality-settings-panel[data-slide="complexity"]:dir(rtl) {
+  --quality-settings-slide-from: -12px;
+}
+
+.quality-settings-panel[data-slide="complexity"],
+.quality-settings-panel[data-slide="quality"]:dir(rtl) {
+  --quality-settings-slide-from: 12px;
+}
+
+@keyframes qualitySettingsSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(var(--quality-settings-slide-from));
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quality-settings-tabs::before {
+    transition: none;
+  }
+
+  .quality-settings-card,
+  .quality-settings-panel[data-slide] {
+    animation: none;
+  }
+}
+
+.quality-settings-options {
+  display: grid;
+  gap: 2px;
+}
+
+.quality-settings-card .quality-settings-options button {
+  min-height: 46px;
+  padding: 7px 9px;
+}
+
 .background-picker-menu {
   width: min(286px, calc(100vw - 24px));
 }
@@ -2672,6 +2808,11 @@
 
 .quality-picker-menu .quality-option-copy small {
   max-width: calc(240px - 58px);
+}
+
+.quality-settings-card .quality-option-copy small {
+  max-width: none;
+  color: var(--app-subtle, #6b7280);
 }
 
 .model-picker-menu .model-option-copy small {

@@ -48,7 +48,7 @@ import type {
 } from "../types";
 import type { ImageAnnotation, ImageEditIntent } from "../lib/imageAnnotations";
 import type { ImageBackgroundOption, TransparentImageOutputFormat } from "../lib/imageBackground";
-import type { ImageModelId, ImageQuality } from "../lib/imageModels";
+import type { ImageComplexity, ImageModelId, ImageQuality } from "../lib/imageModels";
 import { ApiError, request } from "./client";
 import type { AppearanceMode } from "../lib/appearance";
 import type { PromptColorScheme, PromptColorSchemePayload } from "../lib/promptColorSchemes";
@@ -127,6 +127,9 @@ export type ImageProvenanceCheckResult = {
 };
 
 export type GenerateImagePayload = {
+  profileSelection?: import("../types").ProfileSelection;
+  imageSetId?: string;
+  imageSetItemId?: string;
   clientRequestId: string;
   sessionId?: string;
   providerId?: string;
@@ -135,6 +138,7 @@ export type GenerateImagePayload = {
   model?: ImageModelId;
   size?: string;
   quality?: ImageQuality;
+  complexity?: ImageComplexity;
   n?: number;
   background?: ImageBackgroundOption;
   outputFormat?: TransparentImageOutputFormat;
@@ -639,7 +643,10 @@ export type ExternalMcpConnection = {
   lastRefreshErrorAt: string;
 };
 
+import { imageSetsApi } from "./imageSets";
+
 export const api = {
+  ...imageSetsApi,
   me: () => request<{ user: User | null }>("/api/auth/me"),
   imageProvenanceCapabilities: () =>
     request<ImageProvenanceCapabilities>("/api/image-provenance/capabilities"),

@@ -33,7 +33,7 @@ import { CheckerboardImage } from "./CheckerboardImage";
 import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
 import type { QualityOption, SizeOption } from "../lib/imageOptions";
-import type { ImageModelId, ImageQuality } from "../lib/imageModels";
+import type { ImageComplexity, ImageModelId, ImageQuality } from "../lib/imageModels";
 import { formatImageAnnotationDisplayText, type ImageEditIntent } from "../lib/imageAnnotations";
 import { shouldSubmitComposerOnEnter } from "../lib/editorInput";
 import type { AssetItem, WorkImage } from "../types";
@@ -419,12 +419,14 @@ type ImageEditorComposerProps = {
   previews: EditorComposerPreview[];
   prompt: string;
   quality: ImageQuality;
+  complexity?: ImageComplexity;
   qualityOptions: QualityOption[];
   selectedAssets: AssetItem[];
   onPromptChange: (value: string) => void;
   onImageCountChange: (value: number) => void;
   onImageModelChange: (value: ImageModelId) => void;
   onQualityChange: (value: ImageQuality) => void;
+  onComplexityChange?: (value?: ImageComplexity) => void;
   onLockedRequest: () => void;
   onClearAnnotations: () => void;
   onToggleAnnotationTooltips: () => void;
@@ -452,12 +454,14 @@ export function ImageEditorComposer({
   previews,
   prompt,
   quality,
+  complexity,
   qualityOptions,
   selectedAssets,
   onPromptChange,
   onImageCountChange,
   onImageModelChange,
   onQualityChange,
+  onComplexityChange,
   onLockedRequest,
   onClearAnnotations,
   onToggleAnnotationTooltips,
@@ -654,7 +658,8 @@ export function ImageEditorComposer({
             ) : null}
           </div>
           <ModelPicker value={imageModel} onChange={onImageModelChange} />
-          <QualityPicker value={quality} options={qualityOptions} onChange={(value) => onQualityChange(value as ImageQuality)} />
+          <QualityPicker model={imageModel} value={quality} options={qualityOptions} onChange={(value) => onQualityChange(value as ImageQuality)}
+            complexity={complexity} onComplexityChange={onComplexityChange} />
           <ImageCountStepper value={imageCount} onChange={onImageCountChange} />
           <button
             type="button"

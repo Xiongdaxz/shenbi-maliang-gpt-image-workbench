@@ -28,7 +28,13 @@ type CustomSelectProps = {
   menuAutoWidth?: boolean;
   menuAutoWidthPadding?: number;
   ariaLabel?: string;
+  portalContainer?: HTMLElement | null;
 };
+
+const SelectMenuLayerContext = createContext<number | undefined>(undefined);
+export function SelectMenuLayer({ zIndex, children }: { zIndex: number; children: ReactNode }) {
+  return <SelectMenuLayerContext.Provider value={zIndex}>{children}</SelectMenuLayerContext.Provider>;
+}
 
 export function ModalPortal({ children }: { children: ReactNode }) {
   if (typeof document === "undefined") return <>{children}</>;
@@ -47,7 +53,8 @@ export function CustomSelect({
   menuWidth,
   menuAutoWidth = false,
   menuAutoWidthPadding = 0,
-  ariaLabel
+  ariaLabel,
+  portalContainer
 }: CustomSelectProps) {
   const [open, setOpen] = useState(false);
   const [menuStyle, setMenuStyle] = useState({ top: 0, left: 0, width: 0 });
@@ -56,6 +63,7 @@ export function CustomSelect({
   const selected = options.find((option) => option.value === value);
   const labelId = useId();
   const { t } = useI18n();
+  const menuZIndex = useContext(SelectMenuLayerContext);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -128,7 +136,7 @@ export function CustomSelect({
               className={`custom-select-menu ${menuPlacement === "top" ? "custom-select-menu-top" : ""} ${menuClassName ?? ""}`}
               role="listbox"
               aria-labelledby={labelId}
-              style={{ top: menuStyle.top, left: menuStyle.left, width: menuStyle.width }}
+              style={{ top: menuStyle.top, left: menuStyle.left, width: menuStyle.width, zIndex: menuZIndex }}
             >
               {options.map((option, index) => {
                 const active = option.value === value;
@@ -171,7 +179,7 @@ export function CustomSelect({
               })}
               {options.length === 0 ? <div className="custom-select-empty">{t("common.selectPlaceholder")}</div> : null}
             </div>,
-            document.body
+            portalContainer ?? document.body
           )
         : null}
     </div>

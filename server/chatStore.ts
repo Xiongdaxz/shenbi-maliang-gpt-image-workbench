@@ -466,6 +466,9 @@ async function deleteMessageSourceReferencesForJob(userId: string, jobId: string
 }
 
 export async function deleteImageJobArtifacts(userId: string, jobId: string, clientRequestId = "") {
+  // A set stop retains committed candidates and immutable reference snapshots.
+  if (jobId && getOne(appDb, "select name from sqlite_master where name='image_set_runs'")
+    && getOne(appDb, "select image_set_runs.id from image_set_runs join image_sets on image_sets.id=image_set_runs.set_id where image_set_runs.job_id=? and image_sets.user_id=?", jobId, userId)) return;
   const normalizedJobId = jobId.trim();
   if (normalizedJobId) {
     await deleteImagesMatching(userId, "select id from images where user_id = ? and job_id = ?", [userId, normalizedJobId]);
@@ -546,26 +549,34 @@ export async function deleteSessionRecords(userId: string, sessionId: string) {
   );
   run(appDb, "delete from image_jobs where user_id = ? and session_id = ?", userId, sessionId);
   run(appDb, "delete from messages where user_id = ? and session_id = ?", userId, sessionId);
-  const result = run(appDb, "delete from sessions where user_id = ? and id = ? and deleted_at is null", userId, sessionId);
-  return Number(result.changes ?? 0) > 0;
+  return appDb.transaction(() => {
+    const result = run(appDb, "delete from sessions where user_id = ? and id = ? and deleted_at is null", userId, sessionId);
+    const deleted = Number(result.changes ?? 0) > 0;
+    if (deleted) run(appDb, "delete from creative_session_context where user_id = ? and session_id = ?", userId, sessionId);
+    return deleted;
+  })();
 }
 
 export function deleteRequestEmptySessionRecord(userId: string, sessionId: string, clientRequestId: string) {
   const normalizedClientRequestId = clientRequestId.trim();
   if (!normalizedClientRequestId) return false;
-  const result = run(
-    appDb,
-    `delete from sessions
-     where id = ? and user_id = ? and client_request_id = ? and deleted_at is null
-       and not exists (select 1 from messages where messages.session_id = sessions.id and messages.user_id = ?)
-       and not exists (select 1 from image_jobs where image_jobs.session_id = sessions.id and image_jobs.user_id = ?)`,
-    sessionId,
-    userId,
-    normalizedClientRequestId,
-    userId,
-    userId
-  );
-  return Number(result.changes ?? 0) > 0;
+  return appDb.transaction(() => {
+    const result = run(
+      appDb,
+      `delete from sessions
+       where id = ? and user_id = ? and client_request_id = ? and deleted_at is null
+         and not exists (select 1 from messages where messages.session_id = sessions.id and messages.user_id = ?)
+         and not exists (select 1 from image_jobs where image_jobs.session_id = sessions.id and image_jobs.user_id = ?)`,
+      sessionId,
+      userId,
+      normalizedClientRequestId,
+      userId,
+      userId
+    );
+    const deleted = Number(result.changes ?? 0) > 0;
+    if (deleted) run(appDb, "delete from creative_session_context where user_id = ? and session_id = ?", userId, sessionId);
+    return deleted;
+  })();
 }
 
 export function deleteCancelledEmptySessionRecord(userId: string, sessionId: string, clientRequestId: string) {
@@ -627,7 +638,9 @@ export function deleteCancelledEmptySessionRecord(userId: string, sessionId: str
       userId,
       userId
     );
-    return Number(result.changes ?? 0) > 0;
+    const deleted = Number(result.changes ?? 0) > 0;
+    if (deleted) run(appDb, "delete from creative_session_context where user_id = ? and session_id = ?", userId, sessionId);
+    return deleted;
   });
 
   return deleteRecord();
@@ -648,8 +661,11 @@ export async function deleteAllSessionRecords(userId: string) {
   );
   run(appDb, "delete from image_jobs where user_id = ? and session_id in (select id from sessions where user_id = ?)", userId, userId);
   run(appDb, "delete from messages where user_id = ? and session_id in (select id from sessions where user_id = ?)", userId, userId);
-  const result = run(appDb, "delete from sessions where user_id = ?", userId);
-  return Number(result.changes ?? 0);
+  return appDb.transaction(() => {
+    const result = run(appDb, "delete from sessions where user_id = ?", userId);
+    run(appDb, "delete from creative_session_context where user_id = ?", userId);
+    return Number(result.changes ?? 0);
+  })();
 }
 
 function sourceAssetReference(metadata: Record<string, unknown>, userId: string) {

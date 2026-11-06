@@ -1,6 +1,10 @@
 import { readFileSync } from "node:fs";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { Database } from "bun:sqlite";
+import { DEFAULT_CHATGPT_WEB_IMAGE_MODEL } from "../src/lib/imageModels";
+import { initImageSetSchema } from "./imageSetSchema";
+import { initCodexCredentialSchema } from "./codexCredentials";
+import { initImageAccountStatusSchema } from "./imageAccountStatus";
 import {
   DEFAULT_IMAGE_MODEL,
   DEFAULT_IMAGE_QUALITIES,
@@ -537,6 +541,7 @@ export function migrateImageTaskSoundPreferences(db: Database) {
 }
 
 export function initAppDb() {
+  initImageSetSchema(appDb);
   appDb.run("PRAGMA journal_mode = MEMORY");
   appDb.run("PRAGMA foreign_keys = ON");
 
@@ -2599,6 +2604,8 @@ export function initConfigDb() {
       configDb.run(`alter table image_accounts add column ${column} ${definition}`);
     }
   }
+  initCodexCredentialSchema(configDb);
+  initImageAccountStatusSchema(configDb);
   if (tableColumnExists(configDb, "image_accounts", "codex_usage_plan_type")) {
     run(
       configDb,
@@ -2993,7 +3000,7 @@ export function seedProvider() {
       "/f/conversation",
       "/f/conversation",
       "/codex/responses",
-      DEFAULT_IMAGE_MODEL,
+      DEFAULT_CHATGPT_WEB_IMAGE_MODEL,
       DEFAULT_RESPONSES_MODEL,
       JSON.stringify(DEFAULT_IMAGE_SIZES),
       JSON.stringify(DEFAULT_IMAGE_QUALITIES),
