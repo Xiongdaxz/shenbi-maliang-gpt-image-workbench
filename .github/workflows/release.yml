@@ -148,7 +148,20 @@ jobs:
           $tagName = "${{ github.event.release.tag_name || inputs.tag_name || github.ref_name }}"
           $releaseVersion = $tagName -replace '^v', ''
           $archive = "shenbi-maliang-$releaseVersion-${{ matrix.archive_suffix }}.zip"
-          Compress-Archive -Path "release/shenbi-maliang" -DestinationPath "release/$archive" -Force
+          $archivePath = [IO.Path]::GetFullPath("release/$archive")
+          [IO.Compression.ZipFile]::CreateFromDirectory(
+            [IO.Path]::GetFullPath("release/shenbi-maliang"),
+            $archivePath, [IO.Compression.CompressionLevel]::Optimal, $true
+          )
+          $zip = [IO.Compression.ZipFile]::OpenRead($archivePath)
+          try {
+            foreach ($required in @(
+              "shenbi-maliang/distribution/codex-marketplace/plugins/maliang-image-generator/.codex-plugin/plugin.json",
+              "shenbi-maliang/distribution/codex-marketplace/plugins/maliang-image-generator/.mcp.json"
+            )) {
+              if (!$zip.GetEntry($required)) { throw "Missing plugin configuration in archive: $required" }
+            }
+          } finally { $zip.Dispose() }
 
       - name: Upload portable artifact
         uses: actions/upload-artifact@v7
@@ -258,7 +271,20 @@ jobs:
           $ErrorActionPreference = "Stop"
           $tagName = "${{ github.event.release.tag_name || inputs.tag_name || github.ref_name }}"
           $releaseVersion = $tagName -replace '^v', ''
-          Compress-Archive -Path "release/shenbi-maliang-source" -DestinationPath "release/shenbi-maliang-$releaseVersion-source-run.zip" -Force
+          $archivePath = [IO.Path]::GetFullPath("release/shenbi-maliang-$releaseVersion-source-run.zip")
+          [IO.Compression.ZipFile]::CreateFromDirectory(
+            [IO.Path]::GetFullPath("release/shenbi-maliang-source"),
+            $archivePath, [IO.Compression.CompressionLevel]::Optimal, $true
+          )
+          $zip = [IO.Compression.ZipFile]::OpenRead($archivePath)
+          try {
+            foreach ($required in @(
+              "shenbi-maliang-source/distribution/codex-marketplace/plugins/maliang-image-generator/.codex-plugin/plugin.json",
+              "shenbi-maliang-source/distribution/codex-marketplace/plugins/maliang-image-generator/.mcp.json"
+            )) {
+              if (!$zip.GetEntry($required)) { throw "Missing plugin configuration in archive: $required" }
+            }
+          } finally { $zip.Dispose() }
 
       - name: Upload source artifact
         uses: actions/upload-artifact@v7
