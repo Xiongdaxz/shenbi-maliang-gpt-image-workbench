@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
-import { readFileSync, renameSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { Hono } from "hono";
+import sharp from "sharp";
 import { configDb, getOne, run } from "./db";
 import { initAppDb, initConfigDb, seedProvider } from "./schema";
 import { CodexCredentialStore, initCodexCredentialSchema } from "./codexCredentials";
@@ -12,12 +14,17 @@ import { CONFIG_COOKIE } from "./constants";
 import { toImageAccount } from "./serializers";
 import type { ImageAccountRow, ProviderRow } from "./types";
 import { now } from "./utils";
-import { callProviderChain, providersForImageModel, refreshImageAccountUsages } from "./providerRuntime";
+import { callProviderChain, preferredDefaultImageModel, providersForImageModel, refreshImageAccountUsages } from "./providerRuntime";
 import { writeProviderModelCatalogCache } from "./providerModelCache";
+import { fetchProviderModelCatalog } from "./providerModels";
 import { effectiveImageAccountStatus, setImageAccountEnabled } from "./imageAccountStatus";
 import { saveProviderImagesWithRetry } from "./imageRoutes";
 import { saveGlobalSwitch } from "./globalSwitches";
-import { ImageRequestError } from "./imageRequestErrors";
+import { ImageRequestError, ImageResultSaveError } from "./imageRequestErrors";
+import { absoluteDataPath, DATA_DIR } from "./paths";
+import { secureImagePath } from "./secureFiles";
+import { DEFAULT_GENERATION_IMAGE_MODEL } from "../src/lib/imageModels";
+import { providerImageDownload } from "./providerHttp";
 
 initAppDb(); initConfigDb(); seedProvider();
 const keyFile = Bun.env.GPT_IMAGE_CODEX_KEY_PATH!;
@@ -133,6 +140,7 @@ await check("existing account usage path resolves encrypted tokens without CPA",
     const url=String(input);endpoints.push(url);
     assert.ok(url.startsWith("https://chatgpt.com/backend-api/") && /\/(wham|codex)\/usage$/.test(url));
     assert.equal(new Headers(init?.headers).get("Authorization"),"Bearer secret-access-usage-pool");
+    assert.equal(init?.redirect, "error");
     return Response.json({plan_type:"plus",rate_limit:{primary_window:{used_percent:25,reset_at:Math.floor(Date.now()/1000)+3600,limit_window_seconds:604800}}});
   }) as typeof fetch;
   try {
@@ -208,6 +216,194 @@ await check("a lost native image response is not replayed by proxy or result ret
     assert.equal(calls,1);
   } finally {globalThis.fetch=originalFetch;saveGlobalSwitch("proxy_service",false);}
 });
+await check("same-origin CPA and API image downloads preserve authentication", async () => {
+  const configured = getOne<ProviderRow>(configDb, "select * from provider_configs where channel='cpa' limit 1")!;
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ url: string; key: string | null }> = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    assert.equal(init?.method, "GET"); assert.equal(init?.redirect, "manual");
+    requests.push({ url: String(input), key: new Headers(init?.headers).get("authorization") });
+    return new Response("fixture-image");
+  }) as typeof fetch;
+  try {
+    for (const [channel, origin] of [["cpa", "http://127.0.0.1:8317"], ["api", "https://fixture-api.invalid"]]) {
+      await providerImageDownload({ ...configured, channel, base_url: origin, api_key_env: "", api_key_value: "fixture-download-key" }, origin + "/returned.png");
+    }
+    assert.deepEqual(requests.map(request => request.key), ["Bearer fixture-download-key", "Bearer fixture-download-key"]);
+  } finally { globalThis.fetch = originalFetch; }
+});
+await check("foreign image origins never receive provider keys, cookies or account identifiers", async () => {
+  const configured = getOne<ProviderRow>(configDb, "select * from provider_configs where channel='chatgpt_web' limit 1")!;
+  const provider = { ...configured, base_url: "https://fixture-provider.invalid", api_key_env: "", api_key_value: "fixture-download-key", web_cookies: "fixture-cookie=value", web_account_id: "fixture-account-id" };
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    requests++;
+    assert.deepEqual([...new Headers(init?.headers)], [["accept", "image/*"]]);
+    assert.equal(init?.redirect, "manual"); assert.equal(init?.credentials, "omit");
+    return new Response("fixture-image");
+  }) as typeof fetch;
+  try {
+    for (const origin of ["https://fixture-cdn.invalid", "https://fixture-provider.invalid:8443", "http://fixture-provider.invalid", "https://sub.fixture-provider.invalid"]) {
+      await providerImageDownload(provider, origin + "/returned.png?signature=fixture");
+    }
+    assert.equal(requests, 4);
+  } finally { globalThis.fetch = originalFetch; }
+});
+await check("real HTTP redirects preserve same-origin auth and remove cross-origin credentials", async () => {
+  const configured = getOne<ProviderRow>(configDb, "select * from provider_configs where channel='chatgpt_web' limit 1")!;
+  const headersSeen: Array<{ source: string; auth: string | null; cookie: string | null; account: string | null }> = [];
+  const observe = (source: string, request: Request) => headersSeen.push({ source, auth: request.headers.get("authorization"), cookie: request.headers.get("cookie"), account: request.headers.get("chatgpt-account-id") });
+  const asset = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch(request) { observe("asset", request); return new Response("fixture-image"); } });
+  const source = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch(request) {
+    observe("provider", request);
+    return Response.redirect(new URL(request.url).pathname === "/start" ? new URL("/redirect", request.url) : `http://127.0.0.1:${asset.port}/returned.png?signature=fixture`, 302);
+  } });
+  try {
+    const base = `http://127.0.0.1:${source.port}`;
+    const response = await providerImageDownload({ ...configured, proxy_enabled: 0, base_url: base, api_key_env: "", api_key_value: "fixture-download-key", web_cookies: "fixture-cookie=value", web_account_id: "fixture-account-id" }, base + "/start");
+    assert.equal(await response.text(), "fixture-image");
+    assert.deepEqual(headersSeen, [
+      { source: "provider", auth: "Bearer fixture-download-key", cookie: "fixture-cookie=value", account: "fixture-account-id" },
+      { source: "provider", auth: "Bearer fixture-download-key", cookie: "fixture-cookie=value", account: "fixture-account-id" },
+      { source: "asset", auth: null, cookie: null, account: null }
+    ]);
+  } finally { await source.stop(true); await asset.stop(true); }
+});
+await check("image downloads reject credential URLs, unsafe redirects and redirect loops", async () => {
+  const configured = getOne<ProviderRow>(configDb, "select * from provider_configs where channel='cpa' limit 1")!;
+  const provider = { ...configured, base_url: "https://fixture-provider.invalid", api_key_env: "", api_key_value: "fixture-download-key" };
+  const originalFetch = globalThis.fetch;
+  let requests = 0, location = "file:///fixture.png";
+  globalThis.fetch = (async () => { requests++; return new Response(null, { status: 302, headers: { location } }); }) as unknown as typeof fetch;
+  try {
+    await assert.rejects(providerImageDownload(provider, "https://fixture-user:fixture-pass@fixture-provider.invalid/returned.png"), /不含登录信息/);
+    assert.equal(requests, 0);
+    await assert.rejects(providerImageDownload(provider, provider.base_url + "/returned.png"), /HTTP 或 HTTPS/);
+    assert.equal(requests, 1);
+    location = "https://fixture-user:fixture-pass@fixture-provider.invalid/returned.png";
+    await assert.rejects(providerImageDownload(provider, provider.base_url + "/returned.png"), /不含登录信息/);
+    assert.equal(requests, 2);
+    requests = 0; location = "/loop";
+    await assert.rejects(providerImageDownload(provider, provider.base_url + "/returned.png"), /重定向次数过多/);
+    assert.equal(requests, 6);
+  } finally { globalThis.fetch = originalFetch; }
+});
+await check("API image result downloads persist cross-origin images without sharing the channel key", async () => {
+  const configured = getOne<ProviderRow>(configDb, "select * from provider_configs where channel='cpa' limit 1")!;
+  const provider = { ...configured, channel: "api", base_url: "https://fixture-api.invalid", route_mode: "images_api", api_key_env: "", api_key_value: "fixture-download-key" };
+  const png = await sharp({ create: { width: 24, height: 24, channels: 3, background: "#19334c" } }).png().toBuffer();
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ method: string; auth: string | null }> = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    requests.push({ method: init?.method ?? "GET", auth: new Headers(init?.headers).get("authorization") });
+    if (init?.method === "POST") return Response.json({ data: [{ url: "https://fixture-asset.invalid/returned.png" }] });
+    assert.equal(String(input), "https://fixture-asset.invalid/returned.png");
+    return new Response(new Uint8Array(png), { headers: { "content-type": "image/png" } });
+  }) as typeof fetch;
+  try {
+    const result = await saveProviderImagesWithRetry({ providers: [provider], mode: "generation", requestPayload: { prompt: "fixture", model: "gpt-image-2.5-sunburst" }, userId: "cross-origin-download-fixture", sessionId: null, retryCount: 0 });
+    assert.equal(result.savedImages.length, 1);
+    assert.deepEqual(requests, [{ method: "POST", auth: "Bearer fixture-download-key" }, { method: "GET", auth: null }]);
+  } finally { globalThis.fetch = originalFetch; }
+});
+await check("a returned image is downloaded again without resubmitting generation", async () => {
+  const saved = store.save(grant("retry-image-save"));
+  const configured = getOne<ProviderRow>(configDb, "select * from provider_configs where channel='chatgpt_web' limit 1")!;
+  const provider = { ...configured, route_mode: "images_api", quota_mode: "codex_only", base_url: "https://chatgpt.com/backend-api", web_account_ids: JSON.stringify([saved.accountId]) };
+  const png = await sharp({ create: { width: 24, height: 24, channels: 3, background: "#19334c" } }).png().toBuffer();
+  const originalFetch = globalThis.fetch;
+  let submitted = 0, downloads = 0;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "POST") {
+      submitted++;
+      assert.equal(String(input), "https://chatgpt.com/backend-api/codex/images/generations");
+      return Response.json({ data: [{ url: "https://fixture-image.invalid/returned.png" }] });
+    }
+    assert.equal(String(input), "https://fixture-image.invalid/returned.png");
+    downloads++;
+    return downloads === 1 ? new Response("temporary image download failure", { status: 503 })
+      : new Response(new Uint8Array(png), { headers: { "Content-Type": "image/png" } });
+  }) as typeof fetch;
+  try {
+    const result = await saveProviderImagesWithRetry({ providers: [provider], mode: "generation", requestPayload: { prompt: "fixture", model: "gpt-image-2.6-sunburst" }, userId: "retry-image-save-fixture", sessionId: null, retryCount: 1 });
+    assert.equal(submitted, 1); assert.equal(downloads, 2);
+    assert.equal(result.attemptNo, 1); assert.equal(result.savedImages.length, 1);
+  } finally { globalThis.fetch = originalFetch; }
+});
+await check("persistent disk failure after a valid response never replays the POST or falls back", async () => {
+  const configured = getOne<ProviderRow>(configDb, "select * from provider_configs where channel='cpa' limit 1")!;
+  const provider = { ...configured, base_url: "https://fixture-cpa.invalid", route_mode: "auto", responses_path: "/v1/responses" };
+  const backup = { ...provider, id: "save-fixture-backup", base_url: "https://fixture-backup.invalid", channel: "api" };
+  const userId = "persistent-save-error-fixture";
+  const blocker = path.dirname(absoluteDataPath(secureImagePath(userId, null, "placeholder")));
+  assert.ok(blocker.startsWith(DATA_DIR + path.sep));
+  mkdirSync(path.dirname(blocker), { recursive: true });
+  writeFileSync(blocker, "fixture obstruction", { flag: "wx" });
+  const png = (await sharp({ create: { width: 24, height: 24, channels: 3, background: "#19334c" } }).png().toBuffer()).toString("base64");
+  const originalFetch = globalThis.fetch;
+  const submitted: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "POST") submitted.push(String(input));
+    return Response.json({ data: [{ b64_json: png }] });
+  }) as typeof fetch;
+  try {
+    await assert.rejects(saveProviderImagesWithRetry({ providers: [provider, backup], mode: "generation", requestPayload: { prompt: "fixture", model: "gpt-image-2.5-sunburst" }, userId, sessionId: null, retryCount: 1 }),
+      error => error instanceof ImageResultSaveError && !error.retryable && error.haltFallback);
+    assert.deepEqual(submitted, ["https://fixture-cpa.invalid/v1/responses"]);
+  } finally { globalThis.fetch = originalFetch; unlinkSync(blocker); }
+});
+await check("a native HTTP success with an unconfirmed result does not replay the generation", async () => {
+  const saved = store.save(grant("native-incomplete-result"));
+  const configured = getOne<ProviderRow>(configDb, "select * from provider_configs where channel='chatgpt_web' limit 1")!;
+  const provider = { ...configured, route_mode: "images_api", quota_mode: "codex_only", base_url: "https://chatgpt.com/backend-api", web_account_ids: JSON.stringify([saved.accountId]) };
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  globalThis.fetch = (async () => { requests++; return Response.json({ data: [] }); }) as unknown as typeof fetch;
+  try {
+    await assert.rejects(saveProviderImagesWithRetry({ providers: [provider], mode: "generation", requestPayload: { prompt: "fixture", model: "gpt-image-2.6-sunburst" }, userId: "native-incomplete-fixture", sessionId: null, retryCount: 2 }), /确认任务结果/);
+    assert.equal(requests, 1);
+  } finally { globalThis.fetch = originalFetch; }
+});
+await check("omitted plugin defaults prefer 2.6 only in the selected compatible provider chain", () => {
+  const cpa = getOne<ProviderRow>(configDb, "select * from provider_configs where channel='cpa' limit 1")!;
+  const api = getOne<ProviderRow>(configDb, "select * from provider_configs where channel='api' limit 1")!;
+  const rollback = Symbol("restore test settings");
+  try {
+    configDb.transaction(() => {
+      run(configDb, "update provider_configs set enabled=0");
+      run(configDb, "update provider_configs set enabled=1,route_mode='responses',model='gpt-image-2.5-sunburst' where id=?", cpa.id);
+      run(configDb, "update provider_configs set enabled=1,route_mode='images_api',base_url='https://api.openai.com' where id=?", api.id);
+      run(configDb, "update image_generation_settings set mode='cpa' where id='default'");
+      assert.equal(preferredDefaultImageModel(DEFAULT_GENERATION_IMAGE_MODEL), undefined);
+      run(configDb, "update image_generation_settings set mode='auto' where id='default'");
+      assert.equal(preferredDefaultImageModel(DEFAULT_GENERATION_IMAGE_MODEL), "gpt-image-2.6-sunburst");
+      throw rollback;
+    })();
+  } catch (error) { if (error !== rollback) throw error; }
+});
+await check("actual image model is reported by the upstream image endpoint or tool only", async () => {
+  const configured = getOne<ProviderRow>(configDb, "select * from provider_configs where channel='api' limit 1")!;
+  const direct = { ...configured, route_mode: "images_api", base_url: "https://api.openai.com" };
+  const responses = { ...configured, route_mode: "responses", base_url: "https://fixture-api.invalid" };
+  const originalFetch = globalThis.fetch;
+  let reply: unknown;
+  globalThis.fetch = (async () => Response.json(reply)) as unknown as typeof fetch;
+  try {
+    const payload = { prompt: "fixture", model: "gpt-image-2.6-sunburst" };
+    reply = { data: [{ b64_json: "fixture-image" }], image_model_execution: { actualModel: "ignored-private-metadata" } };
+    const unknown = await callProviderChain([direct], "generation", payload);
+    assert.equal(unknown.execution.requestedModel, payload.model); assert.equal(unknown.execution.actualModel, "");
+    reply = { data: [{ b64_json: "fixture-image" }], model: "gpt-image-2.6-flare" };
+    assert.equal((await callProviderChain([direct], "generation", payload)).execution.actualModel, "gpt-image-2.6-flare");
+    const legacy = { ...payload, model: "gpt-image-2.5-sunburst" };
+    const tool = { type: "image_generation_call", status: "completed", result: "fixture-image" };
+    reply = { model: "gpt-6-astra", output: [tool] };
+    assert.equal((await callProviderChain([responses], "generation", legacy)).execution.actualModel, "");
+    reply = { model: "gpt-6-astra", output: [{ ...tool, model: "gpt-image-2.5-flare" }] };
+    assert.equal((await callProviderChain([responses], "generation", legacy)).execution.actualModel, "gpt-image-2.5-flare");
+  } finally { globalThis.fetch = originalFetch; }
+});
 await check("2.6 public API generation and edits use Images even in automatic mode", async () => {
   const configured=getOne<ProviderRow>(configDb,"select * from provider_configs where channel='api' limit 1")!;
   const provider={...configured,route_mode:"auto",base_url:"https://api.openai.com/v1",generation_path:"/v1/responses",api_key_env:"",api_key_value:"fixture-api-key"};
@@ -238,6 +434,7 @@ await check("2.6 Codex uses the bound account and never the website conversation
     requests++;assert.equal(String(input),"https://chatgpt.com/backend-api/codex/images/generations");
     const json=JSON.parse(String(init?.body));assert.equal(json.model,"gpt-image-2.6-flare");assert.equal(json.complexity,"high");assert.equal(json.quality,"max");assert.equal(json.reasoning,undefined);
     assert.equal(new Headers(init?.headers).get("authorization"),"Bearer secret-access-native-26");
+    assert.equal(init?.redirect, "error");
     return Response.json({data:[{b64_json:"fixture-image"}]});
   }) as typeof fetch;
   try {
@@ -247,6 +444,47 @@ await check("2.6 Codex uses the bound account and never the website conversation
     await assert.rejects(callProviderChain([{...provider,route_mode:"responses"}],"generation",{prompt:"fixture",model:"gpt-image-2.6-flare"}),/图片直连/);
     assert.equal(requests,1);
   } finally {globalThis.fetch=originalFetch;}
+});
+await check("bound OAuth rejects non-official final image and Responses URLs before fetch", async () => {
+  const saved = store.save(grant("oauth-destination"));
+  const configured = getOne<ProviderRow>(configDb, "select * from provider_configs where channel='chatgpt_web' limit 1")!;
+  const provider = { ...configured, route_mode: "images_api", quota_mode: "codex_only", base_url: "https://chatgpt.com/backend-api", web_account_ids: JSON.stringify([saved.accountId]) };
+  const generation = { prompt: "fixture", model: "gpt-image-2.6-sunburst" };
+  const denied = /OAuth 凭据仅允许发往 https:\/\/chatgpt\.com/;
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  globalThis.fetch = (async () => { requests++; throw new Error("Unexpected outbound request"); }) as unknown as typeof fetch;
+  try {
+    for (const base_url of ["https://chatgpt.com.fixture.invalid/backend-api", "http://chatgpt.com/backend-api", "https://chatgpt.com:444/backend-api", "https://fixture@chatgpt.com/backend-api"]) {
+      await assert.rejects(callProviderChain([{ ...provider, base_url }], "generation", generation), denied);
+    }
+    await assert.rejects(callProviderChain([{ ...provider, base_url: "https://fixture.invalid/backend-api" }], "edit", { ...generation, images: ["data:image/png;base64,AA=="] }), denied);
+    await assert.rejects(callProviderChain([{ ...provider, route_mode: "responses", responses_path: "https://fixture.invalid/codex/responses" }], "generation", { prompt: "fixture", model: "gpt-image-2" }), denied);
+    assert.equal(requests, 0);
+  } finally { globalThis.fetch = originalFetch; }
+});
+await check("catalog fetch limits bound OAuth without changing CPA or compatible API requests", async () => {
+  const configured = getOne<ProviderRow>(configDb, "select * from provider_configs where channel='chatgpt_web' limit 1")!;
+  const provider = { ...configured, api_key_env: "", api_key_value: "fixture-bound-oauth", base_url: "https://chatgpt.com/backend-api" };
+  const originalFetch = globalThis.fetch;
+  const sent: Array<{ origin: string; path: string; auth: string | null; redirect: RequestRedirect | undefined }> = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    sent.push({ origin: url.origin, path: url.pathname, auth: new Headers(init?.headers).get("authorization"), redirect: init?.redirect });
+    return Response.json({ models: [{ slug: "gpt-6-astra" }] });
+  }) as typeof fetch;
+  try {
+    await assert.rejects(fetchProviderModelCatalog({ ...provider, base_url: "https://fixture.invalid/backend-api" }, { boundCodexOAuth: true }), /OAuth 凭据仅允许发往/);
+    assert.equal(sent.length, 0);
+    await fetchProviderModelCatalog(provider, { boundCodexOAuth: true });
+    await fetchProviderModelCatalog({ ...provider, channel: "cpa", api_key_value: "fixture-cpa-key", base_url: "http://fixture-cpa.invalid", responses_path: "/v1/responses" });
+    await fetchProviderModelCatalog({ ...provider, channel: "api", api_key_value: "fixture-api-key", base_url: "https://fixture-api.invalid", responses_path: "/v1/responses" });
+    assert.deepEqual(sent, [
+      { origin: "https://chatgpt.com", path: "/backend-api/codex/models", auth: "Bearer fixture-bound-oauth", redirect: "error" },
+      { origin: "http://fixture-cpa.invalid", path: "/v1/models", auth: "Bearer fixture-cpa-key", redirect: undefined },
+      { origin: "https://fixture-api.invalid", path: "/v1/models", auth: "Bearer fixture-api-key", redirect: undefined }
+    ]);
+  } finally { globalThis.fetch = originalFetch; }
 });
 await check("2.6 auto routing skips old CPA and uses CPA Images when the exact model is advertised", async () => {
   const configured=getOne<ProviderRow>(configDb,"select * from provider_configs where channel='cpa' limit 1")!;
@@ -274,6 +512,7 @@ await check("explicit Responses selection retains its separate route", async () 
   const originalFetch=globalThis.fetch;
   globalThis.fetch=(async(input:RequestInfo | URL,init?:RequestInit)=>{
     assert.equal(String(input),"https://chatgpt.com/backend-api/codex/responses");
+    assert.equal(init?.redirect,"error");
     assert.ok(Array.isArray(JSON.parse(String(init?.body)).tools));
     return Response.json({output:[{type:"image_generation_call",status:"completed",result:"fixture-image"}]});
   }) as typeof fetch;

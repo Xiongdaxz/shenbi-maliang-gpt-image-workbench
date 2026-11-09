@@ -21,6 +21,7 @@ import { readCodexPluginVersion } from "./internalDistributionRoutes";
 import { LimitedRequestBodyError, requestWithLimitedBody } from "./limitedRequestBody";
 import type { ImageRow, UserRow } from "./types";
 import { MAX_IMAGE_COUNT, MIN_IMAGE_COUNT } from "../src/lib/imagePromptCount";
+import { preferredDefaultImageModel } from "./providerRuntime";
 import {
   DEFAULT_EDIT_IMAGE_MODEL,
   DEFAULT_GENERATION_IMAGE_MODEL,
@@ -267,7 +268,7 @@ async function createMaliangMcpServer(api: Hono) {
     description: "提交一个异步文生图任务，返回 jobId。随后调用 maliang_get_image_job 获取结果。",
     inputSchema: {
       prompt: z.string().trim().min(1).max(8000).describe("图片描述或绘图提示词"),
-      model: EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.optional().describe(`图片模型：GPT Image 2.6、2.5 的 Flare/Sunburst，或 GPT Image 2；默认 ${imageModelDisplayName(DEFAULT_GENERATION_IMAGE_MODEL)}`),
+      model: EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.optional().describe(`图片模型：GPT Image 2.6、2.5 的 Flare/Sunburst，或 GPT Image 2；优先使用 ${imageModelDisplayName(DEFAULT_GENERATION_IMAGE_MODEL)}，没有兼容渠道时使用当前渠道的默认模型`),
       size: z.string().trim().optional().describe("图片尺寸，例如 1024x1024、1024x1536 或 1536x1024"),
       quality: EXTERNAL_MCP_IMAGE_QUALITY_SCHEMA.optional().describe("生成质量：auto、low、medium、high、xhigh 或 max"),
       complexity: z.enum(GPT_IMAGE_26_COMPLEXITIES).optional().describe("仅 GPT Image 2.6：出图前的规划复杂度，省略时使用模型默认值"),
@@ -287,7 +288,7 @@ async function createMaliangMcpServer(api: Hono) {
     try {
       const payload = await internalImageRequest(api, "/images/generate", context.token, context.resource, {
         prompt: input.prompt,
-        model: input.model ?? DEFAULT_GENERATION_IMAGE_MODEL,
+        model: input.model ?? preferredDefaultImageModel(DEFAULT_GENERATION_IMAGE_MODEL),
         ...(input.size ? { size: input.size } : {}),
         quality: input.quality ?? DEFAULT_IMAGE_QUALITY,
         ...(input.complexity ? { complexity: input.complexity } : {}),
@@ -354,7 +355,7 @@ async function createMaliangMcpServer(api: Hono) {
     description: "使用马良历史图片 imageIds 或已完成的一次性上传 uploadIds 提交异步改图任务。返回 jobId 后调用 maliang_get_image_job。",
     inputSchema: {
       prompt: z.string().trim().min(1).max(8000).describe("希望如何修改图片"),
-      model: EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.optional().describe(`图片模型，默认使用 ${imageModelDisplayName(DEFAULT_EDIT_IMAGE_MODEL)}`),
+      model: EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.optional().describe(`图片模型；优先使用 ${imageModelDisplayName(DEFAULT_EDIT_IMAGE_MODEL)}，没有兼容渠道时使用当前渠道的默认模型`),
       imageIds: z.array(z.string().trim().min(1)).max(8).optional().describe("当前账号中的马良历史图片 ID"),
       uploadIds: z.array(z.string().trim().min(1)).max(8).optional().describe("已上传完成的 MCP uploadId"),
       size: z.string().trim().optional(),
@@ -390,7 +391,7 @@ async function createMaliangMcpServer(api: Hono) {
     try {
       const payload = await internalImageRequest(api, "/images/edit", context.token, context.resource, {
         prompt: input.prompt,
-        model: input.model ?? DEFAULT_EDIT_IMAGE_MODEL,
+        model: input.model ?? preferredDefaultImageModel(DEFAULT_EDIT_IMAGE_MODEL),
         ...(input.complexity ? { complexity: input.complexity } : {}),
         sourceImageIds: imageIds,
         sourceAssetIds,

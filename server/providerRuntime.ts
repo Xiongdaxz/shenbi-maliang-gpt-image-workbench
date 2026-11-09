@@ -30,11 +30,11 @@ import {
   resolveImageBackgroundOption
 } from "../src/lib/imageBackground";
 import { DRAWING_REFERENCE_REQUEST_KEY } from "../src/lib/drawingReference";
-import { isGptImage26Model, isImageModelId, normalizeImageComplexity } from "../src/lib/imageModels";
+import { isGptImage26Model, isImageModelId, normalizeImageComplexity, type ImageModelId } from "../src/lib/imageModels";
 import { configDb, getAll, getOne, run } from "./db";
 import { readImageDimensions } from "./imageDimensions";
 import { ROOT } from "./paths";
-import { providerFetch, providerFetchOnce, providerHeaders, proxyFetch, withProviderRequestTimeout } from "./providerHttp";
+import { providerFetch, providerFetchOnce, providerHeaders, proxyFetch, withProviderRequestTimeout, type ProviderFetchPolicy } from "./providerHttp";
 import { readProviderModelCatalogCache } from "./providerModelCache";
 import { cpaAccount, imageGenerationSettings, proxySettings } from "./settingsStore";
 import type {
@@ -182,9 +182,9 @@ function isPublicOpenAiImagesProvider(provider: ProviderRow) {
   try { return new URL(provider.base_url).origin === "https://api.openai.com"; } catch { return false; }
 }
 
-export function providersForImageModel(providers: RuntimeProviderRow[], model: unknown) {
+function compatibleProvidersForImageModel(providers: RuntimeProviderRow[], model: unknown) {
   if (!isGptImage26Model(model)) return providers;
-  const compatible = providers.filter(provider => {
+  return providers.filter(provider => {
     if (normalizeRouteMode(provider.route_mode) === "responses") return false;
     const channel = normalizeProviderChannel(provider.channel || inferChannelFromType(provider.type));
     if (channel === "chatgpt_web") return normalizeQuotaMode(provider.quota_mode || "") !== "official_only";
@@ -192,10 +192,21 @@ export function providersForImageModel(providers: RuntimeProviderRow[], model: u
     // CPA 8.0.55 and some compatible endpoints do not accept these IDs. Only use them after discovery.
     return readProviderModelCatalogCache(configDb, provider)?.imageModels.includes(model) === true;
   });
-  if (!compatible.length) {
+}
+
+export function providersForImageModel(providers: RuntimeProviderRow[], model: unknown) {
+  const compatible = compatibleProvidersForImageModel(providers, model);
+  if (isGptImage26Model(model) && !compatible.length) {
     throw new ImageRequestError("GPT Image 2.6 需要支持该模型的图片直连接口。请选择 ChatGPT Codex 或 OpenAI Images 渠道；CPA 请先升级至 8.0.56 并刷新模型列表。", false);
   }
   return compatible;
+}
+
+export function preferredDefaultImageModel(preferredModel: ImageModelId): ImageModelId | undefined {
+  const providers = enabledProvidersForCurrentMode();
+  const selectedId = defaultProviderSelectionId(imageGenerationSettings().mode, providers);
+  const selected = selectedId === AUTO_PROVIDER_ID ? providers : providers.filter(provider => provider.id === selectedId);
+  return compatibleProvidersForImageModel(selected, preferredModel).length ? preferredModel : undefined;
 }
 
 export function providerChainById(id?: string, model?: unknown) {
@@ -685,7 +696,7 @@ function parseCodexUsagePayload(payload: unknown): CodexUsageSnapshot {
   };
 }
 
-async function fetchCodexUsageSnapshot(accessToken: string, accountId: string): Promise<CodexUsageSnapshot> {
+async function fetchCodexUsageSnapshot(accessToken: string, accountId: string, policy?: ProviderFetchPolicy): Promise<CodexUsageSnapshot> {
   const headers: Record<string, string> = {
     Accept: "application/json",
     Authorization: `Bearer ${accessToken}`,
@@ -697,7 +708,7 @@ async function fetchCodexUsageSnapshot(accessToken: string, accountId: string): 
   for (const endpoint of endpoints) {
     try {
       const { status, text } = await withProviderRequestTimeout(async (signal) => {
-        const response = await proxyFetch(endpoint, { method: "GET", headers, signal });
+        const response = await proxyFetch(endpoint, { method: "GET", headers, signal }, policy);
         return { status: response.status, text: await response.text() };
       });
       if (status >= 200 && status < 300) {
@@ -817,7 +828,7 @@ function remoteRecentUsage(file: CpaRemoteAuthFile) {
   );
 }
 
-async function accountUsageSnapshot(authJson: string, accessToken: string) {
+async function accountUsageSnapshot(authJson: string, accessToken: string, policy?: ProviderFetchPolicy) {
   const meta = authJson ? extractAuthJsonMeta(authJson) : { accessToken: "", accountId: "" };
   const token = accessToken || meta.accessToken;
   if (!token) {
@@ -834,7 +845,7 @@ async function accountUsageSnapshot(authJson: string, accessToken: string) {
       error: "缺少 Access Token，无法查询 Codex 额度"
     };
   }
-  return fetchCodexUsageSnapshot(token, meta.accountId);
+  return fetchCodexUsageSnapshot(token, meta.accountId, policy);
 }
 
 function cpaRemoteAuthMatchesProvider(file: CpaRemoteAuthFile) {
@@ -1074,7 +1085,8 @@ export async function refreshImageAccountUsages(accountId?: string) {
   for (const row of rows) {
     let authJson = row.auth_json ?? "";
     let accessToken = row.access_token ?? "";
-    if (row.auth_source === "codex_oauth") {
+    const boundCodexOAuth = row.auth_source === "codex_oauth";
+    if (boundCodexOAuth) {
       try {
         const grant = await codexCredentials.fresh(row.id);
         authJson = JSON.stringify({ account_id: grant.identity.accountId }); accessToken = grant.tokens.accessToken;
@@ -1083,7 +1095,7 @@ export async function refreshImageAccountUsages(accountId?: string) {
         failed += 1; continue;
       }
     }
-    const usage = await accountUsageSnapshot(authJson, accessToken);
+    const usage = await accountUsageSnapshot(authJson, accessToken, { boundCodexOAuth });
     if (usage.ok) {
       const nextStatus = row.status === "disabled" && row.local_enabled !== 1 ? "disabled" : imageAccountStatusFromUsage(row.status, usage);
       run(
@@ -1833,6 +1845,7 @@ async function callImagesApiProviderWithSourceReferenceFallback(
 type ChatGptWebSettings = {
   baseUrl: string;
   accessToken: string;
+  boundCodexOAuth?: boolean;
   cookies: string;
   accountId: string;
   sourceAccountId: string;
@@ -1884,7 +1897,7 @@ function selectedChatGptWebAccountRows(provider: ProviderRow) {
   return ids.map((id) => byId.get(id)).filter((row): row is ImageAccountRow => Boolean(row));
 }
 
-function chatGptWebAccountUnavailableReason(account: ImageAccountRow) {
+export function chatGptWebAccountUnavailableReason(account: ImageAccountRow) {
   const status = effectiveImageAccountStatus(account);
   if (status === "disabled") return `账号「${account.name}」已禁用`;
   if (status === "abnormal") return `账号「${account.name}」状态异常`;
@@ -2313,8 +2326,8 @@ export type ProviderImageExecution = {
   modelFallbackReason: string;
 };
 
-const IMAGE_MODEL_EXECUTION_KEY = "image_model_execution";
-const PROVIDER_ROUTE_EXECUTION_KEY = "provider_route_execution";
+const IMAGE_MODEL_EXECUTION_KEY = Symbol("image_model_execution");
+const PROVIDER_ROUTE_EXECUTION_KEY = Symbol("provider_route_execution");
 
 type ProviderRouteExecution = Pick<ProviderImageExecution, "actualLanguageModel" | "actualRouteMode">;
 
@@ -2338,12 +2351,34 @@ function attachImageModelExecution(responseJson: unknown, execution: ProviderIma
   };
 }
 
+function reportedImageModel(response: Record<PropertyKey, unknown>, routeMode: string) {
+  const text = (value: unknown) => typeof value === "string" ? value.trim() : "";
+  const explicit = text(response.image_model);
+  if (explicit) return explicit;
+  const imagesApi = routeMode === "images_api" || routeMode === "images_api_stream";
+  if (imagesApi && text(response.model)) return text(response.model);
+  const records = (value: unknown): Record<string, unknown>[] => Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item))
+    : [];
+  const items = imagesApi
+    ? records(response.data)
+    : [
+        ...records(response.output),
+        ...records(response.events).flatMap(event => {
+          const result = event.response;
+          return result && typeof result === "object" ? records((result as Record<string, unknown>).output) : [];
+        })
+      ].filter(item => item.type === "image_generation_call");
+  const models = new Set(items.map(item => text(item.image_model) || text(item.model)).filter(Boolean));
+  return models.size === 1 ? [...models][0] : "";
+}
+
 function providerImageExecution(
   responseJson: unknown,
   fallback: ProviderImageExecution
 ): ProviderImageExecution {
   if (!responseJson || typeof responseJson !== "object" || Array.isArray(responseJson)) return fallback;
-  const responseRecord = responseJson as Record<string, unknown>;
+  const responseRecord = responseJson as Record<PropertyKey, unknown>;
   const value = responseRecord[IMAGE_MODEL_EXECUTION_KEY];
   const record = value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -2352,11 +2387,12 @@ function providerImageExecution(
   const routeRecord = routeValue && typeof routeValue === "object" && !Array.isArray(routeValue)
     ? routeValue as Record<string, unknown>
     : {};
+  const actualRouteMode = String(record.actualRouteMode ?? routeRecord.actualRouteMode ?? fallback.actualRouteMode);
   return {
     requestedModel: String(record.requestedModel ?? fallback.requestedModel),
-    actualModel: String(record.actualModel ?? fallback.actualModel),
+    actualModel: String(record.actualModel ?? (reportedImageModel(responseRecord, actualRouteMode) || fallback.actualModel)),
     actualLanguageModel: String(record.actualLanguageModel ?? routeRecord.actualLanguageModel ?? fallback.actualLanguageModel),
-    actualRouteMode: String(record.actualRouteMode ?? routeRecord.actualRouteMode ?? fallback.actualRouteMode),
+    actualRouteMode,
     requestedQuality: String(record.requestedQuality ?? fallback.requestedQuality),
     actualQuality: String(record.actualQuality ?? fallback.actualQuality),
     modelFallbackReason: String(record.modelFallbackReason ?? fallback.modelFallbackReason)
@@ -2371,7 +2407,8 @@ async function executeStudioJsonRequest(
   payload: Record<string, unknown>,
   headers: Record<string, string>,
   sourceAccountId = "",
-  context: ProviderRequestContext = {}
+  context: ProviderRequestContext = {},
+  policy?: ProviderFetchPolicy
 ) {
   const started = performance.now();
   const nativeImages = routeMode === "chatgpt_web_codex_images_api";
@@ -2384,7 +2421,7 @@ async function executeStudioJsonRequest(
         headers,
         body: JSON.stringify(payload),
         signal
-      });
+      }, policy);
       return { response, text: await response.text() };
     }, context.signal);
 
@@ -3234,7 +3271,8 @@ async function callChatGptWebCodexResponsesProvider(
     chatGptWebCodexResponsesPayload(provider, mode, payload),
     studioResponsesHeaders(settings),
     settings.sourceAccountId,
-    context
+    context,
+    { boundCodexOAuth: settings.boundCodexOAuth }
   );
   return attachSourceAccountContext(responseJson, settings.sourceAccountId);
 }
@@ -3253,7 +3291,8 @@ async function callChatGptWebQuotaProvider(
     const headers = codexNativeImageHeaders({ accessToken: settings.accessToken, accountId: settings.accountId, requestId: crypto.randomUUID() });
     const routeMode = "chatgpt_web_codex_images_api";
     const responseJson = await executeStudioJsonRequest(provider, mode, routeMode,
-      chatGptWebEndpoint(settings, request.path), request.body, headers, settings.sourceAccountId, context);
+      chatGptWebEndpoint(settings, request.path), request.body, headers, settings.sourceAccountId, context,
+      { boundCodexOAuth: settings.boundCodexOAuth });
     const result = codexNativeImageResult(responseJson);
     return attachImageModelExecution(attachSourceAccountContext(result.response, settings.sourceAccountId), {
       requestedModel: String(payload.model || provider.model || DEFAULT_IMAGE_MODEL), actualModel: result.actualModel,
@@ -3303,6 +3342,7 @@ async function callChatGptWebProvider(
     if (managed) {
       const grant = await codexCredentials.fresh(sourceId!);
       lease.settings.accessToken = grant.tokens.accessToken; lease.settings.accountId = grant.identity.accountId;
+      lease.settings.boundCodexOAuth = true;
       lease.settings.cookies = "";
     }
     const allowedQuotas = managed ? quotaOrder.filter(quota => quota === "codex") : quotaOrder;
@@ -3315,7 +3355,7 @@ async function callChatGptWebProvider(
         const requestedQuality = String(payload.quality ?? "").trim() || "auto";
         return attachImageModelExecution(responseJson, providerImageExecution(responseJson, {
           requestedModel,
-          actualModel: quota === "official" ? "chatgpt-web-auto" : requestedModel,
+          actualModel: quota === "official" ? "chatgpt-web-auto" : "",
           actualLanguageModel: quota === "codex" ? resolveResponsesModel(provider) : "",
           actualRouteMode: quota === "codex" ? "chatgpt_web_codex_responses" : "chatgpt_web_official",
           requestedQuality,
@@ -3348,6 +3388,7 @@ export async function executeAutomaticProviderRoutes<T>(
       return await attempt(route);
     } catch (error) {
       if (isCancelled(error)) throw new ProviderRequestCancelledError();
+      if (error instanceof ImageRequestError && error.haltFallback) throw error;
       const label = route === "responses" ? "Responses 接口" : "图片接口回退";
       errors.push(`${label}失败：${error instanceof Error ? error.message : String(error)}`);
     }
@@ -3582,7 +3623,7 @@ export async function callProviderChain<T = undefined>(
         }
         const execution = providerImageExecution(responseJson, {
           requestedModel,
-          actualModel: String(providerPayload.model ?? "").trim() || DEFAULT_IMAGE_MODEL,
+          actualModel: "",
           actualLanguageModel: "",
           actualRouteMode: "",
           requestedQuality,

@@ -4,6 +4,14 @@ export class ImageRequestError extends Error {
   }
 }
 
+export class ImageResultSaveError extends ImageRequestError {
+  constructor(cause: unknown) {
+    super("图片已返回，但本地保存失败，请检查存储后确认任务结果", false, undefined, true);
+    this.name = "ImageResultSaveError";
+    this.cause = cause;
+  }
+}
+
 export function canRetryImageRequest(error: unknown) {
   return !(error instanceof ImageRequestError && !error.retryable);
 }

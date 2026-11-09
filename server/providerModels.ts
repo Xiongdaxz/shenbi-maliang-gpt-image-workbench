@@ -1,4 +1,4 @@
-import { providerFetch, providerHeaders } from "./providerHttp";
+import { providerFetch, providerHeaders, type ProviderFetchPolicy } from "./providerHttp";
 import type { ProviderRow } from "./types";
 import { normalizePath, normalizeProviderChannel, safeJson } from "./utils";
 import { STUDIO_CODEX_CLIENT_VERSION } from "./constants";
@@ -122,7 +122,7 @@ function providerModelError(data: unknown, response: Response, text: string) {
   return text.trim() || response.statusText || `模型列表获取失败（HTTP ${response.status}）`;
 }
 
-export async function fetchProviderModelCatalog(provider: ProviderRow) {
+export async function fetchProviderModelCatalog(provider: ProviderRow, policy?: ProviderFetchPolicy) {
   const endpoint = providerModelListUrl(provider);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), PROVIDER_MODEL_LIST_TIMEOUT_MS);
@@ -132,7 +132,7 @@ export async function fetchProviderModelCatalog(provider: ProviderRow) {
       method: "GET",
       signal: controller.signal,
       headers: providerHeaders(provider, "", "application/json")
-    });
+    }, policy);
     const text = await response.text();
     const data = safeJson<unknown>(text, null);
     if (!response.ok) throw new Error(providerModelError(data, response, text));

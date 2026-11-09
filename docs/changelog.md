@@ -2,6 +2,24 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.84 - 2026-11-08
+
+### 中文
+
+- 加强账号凭据保护：绑定的 ChatGPT 凭据仅用于官方 HTTPS 服务；下载外链图片时不再携带渠道密钥、Cookie 或账号信息，跳转下载同样受保护。
+- 图片已返回但下载或保存失败时，只重试保存同一份结果，避免重复提交生图请求；结果无法确认时也不会自动重复请求。
+- 马良插件未指定模型时优先使用兼容渠道的 GPT Image 2.6 Sunburst；仅有旧渠道可用时沿用渠道默认模型，现有插件无需升级。
+- 刷新模型列表时自动跳过禁用、需要重新授权或凭据不可用的账号；没有可用账号时，读取模型缓存仍可正常完成。
+- 修正图片详情的实际模型显示：仅展示上游明确返回的图片模型，未返回时显示「上游未返回」，请求模型单独保留。
+
+### English
+
+- Improved credential protection: connected ChatGPT credentials are restricted to the official HTTPS service. External image downloads and their redirects no longer receive channel keys, cookies, or account information.
+- When a returned image cannot be downloaded or saved, only the same result is saved again, avoiding duplicate generation submissions. Unconfirmed results are not automatically resubmitted either.
+- When no model is specified, the Maliang plugin prefers GPT Image 2.6 Sunburst on a compatible channel and otherwise uses the available legacy channel's default model. Existing plugins do not need an update.
+- Model refresh skips disabled accounts, accounts requiring authorization, and unavailable credentials. Reading the model cache still completes normally when no account is available.
+- Corrected the reported image model in image details: only an explicit upstream image model is shown, with an unavailable status when absent. The requested model remains separate.
+
 ## v0.1.83 - 2026-11-07
 
 ### 中文

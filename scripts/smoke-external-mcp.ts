@@ -26,7 +26,7 @@ Bun.env.GPT_IMAGE_CONFIG_DB_PATH = ":memory:";
 Bun.env.APP_PUBLIC_URL = "";
 Bun.env.MALIANG_PUBLIC_BASE_URL = "";
 
-const [{ appDb, configDb }, { initAppDb, initConfigDb }, oauthModule, mcpModule, distributionModule] = await Promise.all([
+const [{ appDb, configDb }, { initAppDb, initConfigDb, seedProvider }, oauthModule, mcpModule, distributionModule] = await Promise.all([
   import("../server/db"),
   import("../server/schema"),
   import("../server/externalMcpOAuth"),
@@ -36,9 +36,17 @@ const [{ appDb, configDb }, { initAppDb, initConfigDb }, oauthModule, mcpModule,
 
 initAppDb();
 initConfigDb();
+seedProvider();
 
 const api = new Hono();
 const app = new Hono();
+const submittedInputs: Array<Record<string, unknown>> = [];
+for (const operation of ["generate", "edit"]) {
+  api.post(`/images/${operation}`, async (c) => {
+    submittedInputs.push(await c.req.json() as Record<string, unknown>);
+    return c.json({ sessionId: "smoke-image-session", job: { id: `smoke-${operation}-job`, status: "pending" } }, 202);
+  });
+}
 mcpModule.registerExternalMcpProtocolRoute(api);
 oauthModule.registerExternalMcpOAuthRoutes(app, api);
 distributionModule.registerInternalDistributionRoutes(app);
@@ -215,6 +223,17 @@ try {
   if (pluginManifest.version !== expectedPluginVersion) throw new Error("Plugin manifest version does not match plugin.json");
   if (serverVersion?.version !== pluginManifest.version) throw new Error("MCP server version did not match the plugin version source");
 
+  const generated = await client.callTool({ name: "maliang_generate_image", arguments: { prompt: "fixture legacy channel default" } });
+  const edited = await client.callTool({ name: "maliang_edit_image", arguments: { prompt: "fixture legacy edit default", imageIds: ["smoke-source-image"] } });
+  if (generated.isError || edited.isError || submittedInputs.length !== 2 || submittedInputs.some(input => Object.hasOwn(input, "model"))) {
+    throw new Error("Omitted generation/edit model did not preserve the legacy channel default");
+  }
+  const explicit = await client.callTool({ name: "maliang_generate_image", arguments: { prompt: "fixture explicit model", model: "gpt-image-2.5-sunburst" } });
+  if (explicit.isError || submittedInputs.at(-1)?.model !== "gpt-image-2.5-sunburst") throw new Error("An explicit image model was changed");
+  configDb.query("update provider_configs set enabled = 1, base_url = 'https://api.openai.com/v1', route_mode = 'images_api' where channel = 'api'").run();
+  const compatible = await client.callTool({ name: "maliang_generate_image", arguments: { prompt: "fixture compatible model default" } });
+  if (compatible.isError || submittedInputs.at(-1)?.model !== "gpt-image-2.6-sunburst") throw new Error("A compatible channel did not retain the 2.6 Sunburst default");
+
   console.log(JSON.stringify({
     issuer: metadata.issuer,
     applicationType: registration.application_type,
@@ -226,6 +245,10 @@ try {
     installInstruction: installManifest.userInstruction,
     pluginVersion: pluginManifest.version,
     serverVersion: serverVersion?.version,
+    legacyGenerationUsesChannelDefault: true,
+    legacyEditUsesChannelDefault: true,
+    explicitModelPreserved: true,
+    compatibleChannelPrefers26: true,
     tools: toolNames,
     deviceReported: reportData.reported,
     deviceName: reportData.deviceName,

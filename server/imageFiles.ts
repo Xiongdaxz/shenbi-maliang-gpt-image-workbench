@@ -2,7 +2,8 @@ import path from "node:path";
 import { appDb, run } from "./db";
 import { warmImageDerivatives } from "./imageDerivatives";
 import { readImageDimensions } from "./imageDimensions";
-import { providerFetch, providerHeaders, withProviderRequestTimeout } from "./providerHttp";
+import { ImageResultSaveError } from "./imageRequestErrors";
+import { providerImageDownload, withProviderRequestTimeout } from "./providerHttp";
 import { providerResponseErrorDetail } from "./responseSnapshots";
 import { deleteStoredFilesIfUnreferenced, readStoredFile, secureImagePath, secureImageReferencePath, writeEncryptedFile } from "./secureFiles";
 import type { ImageReferenceSourceAsset, ProviderImageContext, ProviderRow, SavedImageFile } from "./types";
@@ -244,11 +245,7 @@ async function saveImageUrl(provider: ProviderRow, imageUrl: string, imageId: st
     return saveBase64Image(imageUrl, imageId, userId, sessionId);
   }
   const { response, buffer } = await withProviderRequestTimeout(async (signal) => {
-    const response = await providerFetch(provider, absoluteProviderUrl(provider, imageUrl), {
-      method: "GET",
-      headers: providerHeaders(provider, "", "image/*"),
-      signal
-    });
+    const response = await providerImageDownload(provider, absoluteProviderUrl(provider, imageUrl), signal);
     const buffer = response.ok ? Buffer.from(await response.arrayBuffer()) : Buffer.alloc(0);
     return { response, buffer };
   });
@@ -312,10 +309,12 @@ export async function saveProviderImageResults(
   sessionId: string | null
 ): Promise<Array<{ id: string; file: SavedImageFile; providerContext: ProviderImageContext }>> {
   const saved: Array<{ id: string; file: SavedImageFile; providerContext: ProviderImageContext }> = [];
+  let hasImageResult = false;
   try {
     const responseMimeType = responseJson && typeof responseJson === "object" ? imageMimeTypeFromRecord(responseJson as Record<string, unknown>) : "";
     const imageItems = uniqueImageItems(findStructuredImageItems(responseJson));
     if (imageItems.length > 0) {
+      hasImageResult = true;
       for (const item of imageItems) {
         const id = makeImageId();
         const file = item.kind === "base64"
@@ -331,6 +330,7 @@ export async function saveProviderImageResults(
       ...findBase64Images(responseJson)
     ]);
     if (base64Values.length > 0) {
+      hasImageResult = true;
       for (const base64 of base64Values) {
         const id = makeImageId();
         saved.push({ id, file: await saveBase64Image(base64, id, userId, sessionId, responseMimeType), providerContext: providerImageContextFromRecord({}) });
@@ -340,6 +340,7 @@ export async function saveProviderImageResults(
 
     const imageUrls = uniqueImageValues(findImageUrls(responseJson));
     if (imageUrls.length > 0) {
+      hasImageResult = true;
       for (const imageUrl of imageUrls) {
         const id = makeImageId();
         saved.push({ id, file: await saveImageUrl(provider, imageUrl, id, userId, sessionId), providerContext: providerImageContextFromRecord({}) });
@@ -354,7 +355,7 @@ export async function saveProviderImageResults(
         console.warn("清理未完成的渠道图片结果失败", cleanupError);
       });
     }
-    throw error;
+    throw hasImageResult ? new ImageResultSaveError(error) : error;
   }
 }
 

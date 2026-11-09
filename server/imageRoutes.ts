@@ -47,7 +47,7 @@ import { invalidateLibraryFacetCache } from "./libraryRoutes";
 import { imageDateSearchConditions } from "./imageSearch";
 import { callProviderChain, defaultProviderSelectionId, enabledProvidersForCurrentMode, providerChainById, providerRequestWasCancelled, providersForImageModel } from "./providerRuntime";
 import { providerResponseSnapshot } from "./responseSnapshots";
-import { canRetryImageRequest } from "./imageRequestErrors";
+import { canRetryImageRequest, ImageRequestError, ImageResultSaveError } from "./imageRequestErrors";
 import { reviewConversationPrompt } from "./safetyReview";
 import {
   fallbackImagePromptPlan,
@@ -638,25 +638,42 @@ export async function saveProviderImagesWithRetry({
           isRetry: attempt > 1,
           signal
         },
-        async ({ provider, responseJson }) => {
-          onResponseJson?.(responseJson);
+        async ({ provider, responseJson, execution }) => {
           try {
-            return await saveProviderImageResults(responseJson, provider, () => makeId("img"), userId, sessionId);
+            onResponseJson?.(responseJson);
           } catch (error) {
-            markProviderRequestPostProcessFailure({
-              provider,
-              operation: mode,
-              jobId,
-              attemptNo: attempt,
-              error: errorMessage(error, `${imageOperationLabel(mode)}失败`),
-              responseSnapshot: providerResponseSnapshot(responseJson)
-            });
-            throw error;
+            throw new ImageResultSaveError(error);
+          }
+          for (let saveAttempt = 1; ; saveAttempt += 1) {
+            if (signal?.aborted) throw new Error("图片任务已取消");
+            try {
+              return await saveProviderImageResults(responseJson, provider, () => makeId("img"), userId, sessionId);
+            } catch (error) {
+              if (providerRequestWasCancelled(error, signal)) throw error;
+              if (error instanceof ImageResultSaveError && saveAttempt < maxAttempts) {
+                await Bun.sleep(Math.min(500, 100 * saveAttempt));
+                continue;
+              }
+              const failure = !(error instanceof ImageResultSaveError) && execution.actualRouteMode === "chatgpt_web_codex_images_api"
+                ? new ImageRequestError("图片请求结果无法确认，请确认任务结果后重试", false, 200, true)
+                : error;
+              try {
+                markProviderRequestPostProcessFailure({
+                  provider,
+                  operation: mode,
+                  jobId,
+                  attemptNo: attempt,
+                  error: errorMessage(error instanceof ImageResultSaveError ? error.cause : error, `${imageOperationLabel(mode)}失败`),
+                  responseSnapshot: providerResponseSnapshot(responseJson)
+                });
+              } catch { /* A logging error must not replace the decision to stop retrying. */ }
+              throw failure;
+            }
           }
         }
       );
       if (!savedImages) {
-        throw new Error(`${imageOperationLabel(mode)}失败：渠道没有返回可保存的图片`);
+        throw new ImageResultSaveError(new Error("渠道没有返回可保存的图片"));
       }
       if (signal?.aborted) {
         await deleteStoredFilesIfUnreferenced(savedImages.map((image) => image.file.path));

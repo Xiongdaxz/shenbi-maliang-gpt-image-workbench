@@ -69,7 +69,7 @@ import {
   safeJson
 } from "./utils";
 import { initAppDb, initConfigDb, seedCases, seedPromptReferenceLinks, seedPromptTemplates, seedProvider } from "./schema";
-import { pullCpaImageAccounts, refreshImageAccountUsages } from "./providerRuntime";
+import { chatGptWebAccountUnavailableReason, pullCpaImageAccounts, refreshImageAccountUsages } from "./providerRuntime";
 import {
   futureDate,
   isConfigAuthed,
@@ -129,6 +129,7 @@ import { registerInternalDistributionRoutes } from "./internalDistributionRoutes
 import { registerSiteSettingsRoutes } from "./siteSettingsRoutes";
 import { registerRuntimeLogRoutes } from "./runtimeLogRoutes";
 import { registerCodexOAuthRoutes, codexOAuthSessions } from "./codexOAuthRoutes";
+import { CodexAuthError } from "./codexOAuthProtocol";
 import { codexCredentials, startCodexCredentialRefresh } from "./codexCredentials";
 import { effectiveImageAccountStatus, setImageAccountEnabled } from "./imageAccountStatus";
 import { resolveDebugSettingsUpdate } from "./debugSettings";
@@ -2181,14 +2182,20 @@ async function providerForModelDiscovery(raw: Record<string, unknown>) {
     updated_at: timestamp
   };
 
-  if (channel !== "chatgpt_web") return provider;
+  if (channel !== "chatgpt_web") return { provider, boundCodexOAuth: false };
   for (const accountId of webAccountIds) {
     const account = getOne<ImageAccountRow>(configDb, "select * from image_accounts where id = ?", accountId);
-    if (!account) continue;
+    if (!account || chatGptWebAccountUnavailableReason(account)) continue;
     if (account.auth_source === "codex_oauth") {
-      const grant = await codexCredentials.fresh(account.id);
-      provider.api_key_value = grant.tokens.accessToken; provider.web_account_id = grant.identity.accountId;
-      provider.web_cookies = ""; break;
+      try {
+        const grant = await codexCredentials.fresh(account.id);
+        provider.api_key_value = grant.tokens.accessToken; provider.web_account_id = grant.identity.accountId;
+        provider.web_cookies = "";
+        return { provider, boundCodexOAuth: true };
+      } catch (error) {
+        if (!(error instanceof CodexAuthError)) throw error;
+        continue;
+      }
     }
     const authMeta = account.auth_json ? extractAuthJsonMeta(account.auth_json) : { accessToken: "", cookies: "", accountId: "" };
     const infoMeta = account.auth_info_json ? extractAuthJsonMeta(account.auth_info_json) : { accessToken: "", cookies: "", accountId: "" };
@@ -2199,7 +2206,7 @@ async function providerForModelDiscovery(raw: Record<string, unknown>) {
     provider.web_cookies = authMeta.cookies || infoMeta.cookies || provider.web_cookies;
     break;
   }
-  return provider;
+  return { provider, boundCodexOAuth: false };
 }
 
 api.get("/config/providers/:id/models-cache", async (c) => {
@@ -2209,7 +2216,7 @@ api.get("/config/providers/:id/models-cache", async (c) => {
   if (!getOne<ProviderRow>(configDb, "select * from provider_configs where id = ?", id)) {
     return c.json({ error: "渠道不存在" }, 404);
   }
-  const provider = await providerForModelDiscovery({ id });
+  const { provider } = await providerForModelDiscovery({ id });
   c.header("Cache-Control", "no-store");
   return c.json({ catalog: readProviderModelCatalogCache(configDb, provider) });
 });
@@ -2219,8 +2226,8 @@ api.post("/config/providers/models", async (c) => {
   if (blocked) return blocked;
   const raw = await c.req.json().catch(() => ({})) as Record<string, unknown>;
   try {
-    const provider = await providerForModelDiscovery(raw);
-    const result = await fetchProviderModelCatalog(provider);
+    const { provider, boundCodexOAuth } = await providerForModelDiscovery(raw);
+    const result = await fetchProviderModelCatalog(provider, { boundCodexOAuth });
     const cachedResult = writeProviderModelCatalogCache(configDb, provider, result);
     audit("provider.models", {
       id: provider.id,
