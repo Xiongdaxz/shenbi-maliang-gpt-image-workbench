@@ -2,6 +2,16 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.86 - 2026-11-13
+
+### 中文
+
+- 系列创作关闭时，输入框的「＋」菜单和斜杠菜单不再显示「品牌产品」。方向键只在可用选项之间切换。
+
+### English
+
+- When Series Studio is disabled, the composer no longer shows Brands & Products in its plus or slash menu. Arrow keys cycle only through the available options.
+
 ## v0.1.85 - 2026-11-13
 
 ### 中文

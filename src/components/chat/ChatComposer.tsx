@@ -29,6 +29,7 @@ import type { QualityOption, SizeOption } from "../../lib/imageOptions";
 import type { ImageBackgroundOption } from "../../lib/imageBackground";
 import type { ImageComplexity, ImageModelId, ImageQuality } from "../../lib/imageModels";
 import { shouldSubmitComposerOnEnter } from "../../lib/editorInput";
+import { SERIES_CREATION_AVAILABLE } from "../../lib/releaseFeatures";
 import type { ComposerPromptTemplateDraft, ComposerPromptTemplatePanelDraft } from "../../store/workbench";
 import type { AssetItem, CaseMaterialItem, ImageEditSuggestion } from "../../types";
 import { useToast } from "../../ui";
@@ -36,7 +37,7 @@ import { useComposerTextareaAutosize } from "../../hooks/useComposerTextareaAuto
 import { useFloatingComposerExpansion } from "../../hooks/useFloatingComposerExpansion";
 
 type QuickMenuSource = "plus" | "slash";
-const QUICK_MENU_ITEM_COUNT = 5;
+const QUICK_MENU_ITEM_COUNT = SERIES_CREATION_AVAILABLE ? 5 : 4;
 const PROMPT_INPUT_OPTIMIZE_STYLE_STORAGE_KEY = "gpt-image.prompt-input-optimize-style";
 
 export type ChatComposerPreview = {
@@ -503,7 +504,7 @@ export function ChatComposer({
       openDrawingFromMenu();
       return;
     }
-    openCreativeProfilesFromMenu();
+    if (SERIES_CREATION_AVAILABLE && quickMenuActiveIndex === 4) openCreativeProfilesFromMenu();
   }
 
   function stopPromptTemplateTyping() {
@@ -993,21 +994,23 @@ export function ChatComposer({
                   <Brush size={17} />
                   <strong>{t("composer.drawing")}</strong>
                 </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className={cx(quickMenuActiveIndex === 4 && "active")}
-                  aria-current={quickMenuActiveIndex === 4 ? "true" : undefined}
-                  disabled={busy}
-                  title={t("sets.profileHint")}
-                  onMouseEnter={() => setQuickMenuActiveIndex(4)}
-                  onFocus={() => setQuickMenuActiveIndex(4)}
-                  onClick={openCreativeProfilesFromMenu}
-                >
-                  <Palette size={17} />
-                  <strong>{t("sets.tabProfiles")}</strong>
-                  {creativeProfileSelected ? <Check size={15} aria-hidden="true" /> : null}
-                </button>
+                {SERIES_CREATION_AVAILABLE ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={cx(quickMenuActiveIndex === 4 && "active")}
+                    aria-current={quickMenuActiveIndex === 4 ? "true" : undefined}
+                    disabled={busy}
+                    title={t("sets.profileHint")}
+                    onMouseEnter={() => setQuickMenuActiveIndex(4)}
+                    onFocus={() => setQuickMenuActiveIndex(4)}
+                    onClick={openCreativeProfilesFromMenu}
+                  >
+                    <Palette size={17} />
+                    <strong>{t("sets.tabProfiles")}</strong>
+                    {creativeProfileSelected ? <Check size={15} aria-hidden="true" /> : null}
+                  </button>
+                ) : null}
               </div>
             ) : null}
           </div>
