@@ -773,7 +773,6 @@ export function externalMcpAuthorizationPageCsp(scriptNonce: string, redirectUri
 
 export function externalMcpAuthorizationSuccessPage(input: {
   callbackUrl: string;
-  clientName: string;
   scriptNonce: string;
   statusUrl: string;
 }) {
@@ -1256,11 +1255,24 @@ export function externalMcpAuthorizationServerMetadata(publicBaseUrl: string) {
   };
 }
 
-export function externalMcpAuthorizationCallbackMode(applicationType: string, redirectUri = "") {
+export function externalMcpAuthorizationCallbackMode(applicationType: string, redirectUri: string) {
   const normalized = applicationType.trim().toLowerCase();
-  return normalized === "web" || classifyExternalMcpRedirectUri(redirectUri) === "workbuddy"
-    ? "redirect" as const
-    : "background" as const;
+  const kind = classifyExternalMcpRedirectUri(redirectUri);
+  // Safari can block a public HTTPS page's background request to a loopback HTTP listener.
+  return normalized === "web" || kind === "workbuddy" || kind === "loopback" ? "redirect" : "background";
+}
+
+function loopbackCallbackSharesAuthorizationHost(c: Context, redirectUri: string, publicBaseUrl: string) {
+  if (classifyExternalMcpRedirectUri(redirectUri) !== "loopback") return false;
+  const callbackHost = new URL(redirectUri).hostname;
+  // Cookie scope ignores the port. Check both the request and configured public URL.
+  return [c.req.url, publicBaseUrl].some((value) => new URL(value).hostname === callbackHost);
+}
+
+function loopbackCallbackHostError(c: Context) {
+  return c.html(externalMcpAuthorizationErrorPage(
+    "马良站点与智能体回调使用了同一个本机主机名。为保护登录状态，请用不同的站点地址（例如马良的局域网 IP 或域名）重新添加 MCP，再从智能体发起授权。只更换端口无效。"
+  ), 400);
 }
 
 export type ExternalMcpConnectionListRow = ExternalMcpDeviceGrantRow & {
@@ -1502,7 +1514,6 @@ export function registerExternalMcpOAuthRoutes(app: Hono, api: Hono) {
     const state = String(c.req.query("state") ?? "");
     const codeChallenge = String(c.req.query("code_challenge") ?? "").trim();
     const codeChallengeMethod = String(c.req.query("code_challenge_method") ?? "").trim();
-    const resource = String(c.req.query("resource") ?? maliangMcpResourceUrl(c)).trim();
     const scopes = requestedScopes(c.req.query("scope"));
     const client = clientId ? getOne<OAuthClientRow>(appDb, "select * from oauth_clients where id = ?", clientId) : null;
     if (!client || !redirectUri || !clientRedirectUris(client).includes(redirectUri)) {
@@ -1518,9 +1529,13 @@ export function registerExternalMcpOAuthRoutes(app: Hono, api: Hono) {
     ) {
       return c.html(externalMcpAuthorizationErrorPage("授权请求必须使用 Authorization Code + PKCE S256，并且只能申请马良支持的权限。"), 400);
     }
-    if (resource !== maliangMcpResourceUrl(c)) {
+    const publicBaseUrl = maliangPublicBaseUrl(c);
+    const expectedResource = `${publicBaseUrl}/api/external-mcp/mcp`;
+    const resource = String(c.req.query("resource") ?? expectedResource).trim();
+    if (resource !== expectedResource) {
       return c.html(externalMcpAuthorizationErrorPage("授权请求的 MCP 资源地址不匹配。"), 400);
     }
+    if (loopbackCallbackSharesAuthorizationHost(c, redirectUri, publicBaseUrl)) return loopbackCallbackHostError(c);
     const user = await currentUser(c);
     if (!user) {
       const target = new URL(c.req.url);
@@ -1571,6 +1586,7 @@ export function registerExternalMcpOAuthRoutes(app: Hono, api: Hono) {
 
   app.post("/oauth/authorize", async (c) => {
     noStore(c);
+    c.header("Referrer-Policy", "no-referrer");
     let form: URLSearchParams;
     try {
       form = await readExternalMcpFormBody(c.req.raw);
@@ -1590,15 +1606,15 @@ export function registerExternalMcpOAuthRoutes(app: Hono, api: Hono) {
     if (!request || request.consumed_at || request.expires_at <= utcNow()) {
       return c.html(externalMcpAuthorizationErrorPage("授权请求已失效，请回到智能体重新连接。"), 400);
     }
+    const publicBaseUrl = maliangPublicBaseUrl(c);
+    if (loopbackCallbackSharesAuthorizationHost(c, request.redirect_uri, publicBaseUrl)) return loopbackCallbackHostError(c);
     if (decision !== "allow") {
       run(appDb, "update oauth_authorization_requests set consumed_at = ? where id = ? and consumed_at is null", now(), request.id);
-      return c.redirect(
-        redirectWithParams(request.redirect_uri, externalMcpAuthorizationResponseParams(maliangPublicBaseUrl(c), {
-          error: "access_denied",
-          state: request.state
-        })),
-        OAUTH_BROWSER_REDIRECT_STATUS
-      );
+      const callbackUrl = externalMcpAuthorizationRedirectUrl(request.redirect_uri, publicBaseUrl, {
+        error: "access_denied",
+        state: request.state
+      });
+      return c.redirect(callbackUrl, OAUTH_BROWSER_REDIRECT_STATUS);
     }
 
     const code = randomOAuthToken();
@@ -1676,20 +1692,16 @@ export function registerExternalMcpOAuthRoutes(app: Hono, api: Hono) {
       }
       throw error;
     }
-    const callbackUrl = redirectWithParams(request.redirect_uri, externalMcpAuthorizationResponseParams(maliangPublicBaseUrl(c), {
+    const callbackUrl = externalMcpAuthorizationRedirectUrl(request.redirect_uri, publicBaseUrl, {
       code,
       state: request.state
-    }));
-    const authorizedClient = getOne<{ client_name: string; application_type: string }>(
+    });
+    const registeredApplicationType = getOne<{ application_type: string }>(
       appDb,
-      "select client_name, application_type from oauth_clients where id = ?",
+      "select application_type from oauth_clients where id = ?",
       request.client_id
-    );
-    c.header("Referrer-Policy", "no-referrer");
-    if (externalMcpAuthorizationCallbackMode(
-      authorizedClient?.application_type ?? "native",
-      request.redirect_uri
-    ) === "redirect") {
+    )?.application_type ?? "native";
+    if (externalMcpAuthorizationCallbackMode(registeredApplicationType, request.redirect_uri) === "redirect") {
       return c.redirect(callbackUrl, OAUTH_BROWSER_REDIRECT_STATUS);
     }
     const scriptNonce = randomOAuthToken(18);
@@ -1697,7 +1709,6 @@ export function registerExternalMcpOAuthRoutes(app: Hono, api: Hono) {
     c.header("X-Frame-Options", "DENY");
     return c.html(externalMcpAuthorizationSuccessPage({
       callbackUrl,
-      clientName: authorizedClient?.client_name ?? "智能体",
       scriptNonce,
       statusUrl: `/oauth/authorize/status?request_id=${encodeURIComponent(request.id)}`
     }));

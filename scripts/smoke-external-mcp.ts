@@ -4,6 +4,7 @@ import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { Hono } from "hono";
+import { APP_COOKIE } from "../server/constants";
 
 const workspace = path.resolve(process.cwd());
 const smokeRoot = path.resolve(workspace, "tmp", `mcp-smoke-${randomUUID().replaceAll("-", "")}`);
@@ -23,7 +24,7 @@ await mkdir(smokeRoot, { recursive: true });
 Bun.env.GPT_IMAGE_DATA_DIR = path.join(smokeRoot, "data");
 Bun.env.GPT_IMAGE_APP_DB_PATH = ":memory:";
 Bun.env.GPT_IMAGE_CONFIG_DB_PATH = ":memory:";
-Bun.env.APP_PUBLIC_URL = "";
+Bun.env.APP_PUBLIC_URL = "https://maliang-smoke.example";
 Bun.env.MALIANG_PUBLIC_BASE_URL = "";
 
 const [{ appDb, configDb }, { initAppDb, initConfigDb, seedProvider }, oauthModule, mcpModule, distributionModule] = await Promise.all([
@@ -70,13 +71,15 @@ try {
   }
   const oauthResource = `${metadata.issuer}/api/external-mcp/mcp`;
 
+  const redirectUri = "http://127.0.0.1:43123/callback";
+
   const registrationResponse = await fetch(`${origin}/oauth/register`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       application_type: "native",
       client_name: "Maliang smoke agent",
-      redirect_uris: ["http://127.0.0.1:43123/callback"],
+      redirect_uris: [redirectUri],
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
       token_endpoint_auth_method: "none"
@@ -86,10 +89,11 @@ try {
     throw new Error(`Dynamic registration failed: HTTP ${registrationResponse.status} ${await registrationResponse.text()}`);
   }
   const registration = await registrationResponse.json() as { application_type?: string; client_id?: string };
-  if (!registration.client_id) throw new Error("Dynamic registration did not return client_id");
+  const clientId = registration.client_id;
+  if (!clientId) throw new Error("Dynamic registration did not return client_id");
   const registeredClient = appDb.query(
     "select application_type, device_name from oauth_clients where id = ?"
-  ).get(registration.client_id) as { application_type?: string; device_name?: string } | null;
+  ).get(clientId) as { application_type?: string; device_name?: string } | null;
   if (registeredClient?.application_type !== "native") throw new Error("DCR application_type was not persisted");
 
   const workBuddyRedirectUri = "workbuddy://workbuddy/mcp/custom-mcp%3Amaliang/oauth/callback";
@@ -154,34 +158,101 @@ try {
   const pluginManifest = await pluginResponse.json() as { version?: string };
   const expectedPluginVersion = await distributionModule.readCodexPluginVersion();
 
-  const token = `maliang-smoke-${randomUUID().replaceAll("-", "")}`;
-  const tokenHash = createHash("sha256").update(token).digest("hex");
   const createdAt = new Date().toISOString();
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  const sessionId = randomUUID();
   appDb.transaction(() => {
     appDb.query(
       "insert into users (id, username, password_hash, created_at, updated_at) values (?, ?, ?, ?, ?)"
     ).run("smoke-user", "smoke-user", "unused", createdAt, createdAt);
     appDb.query(
-      "insert into oauth_grants (id, user_id, client_id, scope, created_at, updated_at) values (?, ?, ?, ?, ?, ?)"
-    ).run("smoke-grant", "smoke-user", registration.client_id, "profile:read images:generate", createdAt, createdAt);
-    appDb.query(
-      `insert into oauth_access_tokens
-       (id, token_hash, family_id, grant_id, user_id, client_id, scope, resource, expires_at, created_at)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      "smoke-token",
-      tokenHash,
-      "smoke-family",
-      "smoke-grant",
-      "smoke-user",
-      registration.client_id,
-      "profile:read images:generate",
-      oauthResource,
-      expiresAt,
-      createdAt
-    );
+      "insert into user_auth_sessions (id, user_id, expires_at, created_at) values (?, ?, ?, ?)"
+    ).run(sessionId, "smoke-user", expiresAt, createdAt);
   })();
+
+  const verifier = randomUUID() + randomUUID();
+  const state = randomUUID();
+  const authorizationUrl = `${origin}/oauth/authorize`;
+  const authorizationParams = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    state,
+    code_challenge: createHash("sha256").update(verifier).digest("base64url"),
+    code_challenge_method: "S256",
+    resource: oauthResource,
+    scope: "profile:read images:generate"
+  });
+  const browserHeaders = { Cookie: `${APP_COOKIE}=${sessionId}` };
+  const consentUrl = authorizationUrl.replace("127.0.0.1", "localhost");
+  const loadConsent = async (params: URLSearchParams) => {
+    const consent = await fetch(`${consentUrl}?${params}`, { headers: browserHeaders, redirect: "manual" });
+    const requestId = (await consent.text()).match(/name="request_id" value="([^"]+)"/)?.[1];
+    if (!consent.ok || !requestId) throw new Error("OAuth consent form did not load");
+    return requestId;
+  };
+  const submitConsent = (pageUrl: string, requestId: string, decision: "allow" | "deny") => fetch(pageUrl, {
+    method: "POST",
+    redirect: "manual",
+    headers: browserHeaders,
+    body: new URLSearchParams({ request_id: requestId, decision })
+  });
+  const approved = await submitConsent(consentUrl, await loadConsent(authorizationParams), "allow");
+  const location = approved.headers.get("Location");
+  if (approved.status !== 303 || !location) throw new Error("OAuth consent did not navigate to the loopback callback");
+  if (approved.headers.get("Referrer-Policy") !== "no-referrer" || approved.headers.get("Cache-Control") !== "no-store") {
+    throw new Error("OAuth callback response is missing privacy headers");
+  }
+  const callback = new URL(location);
+  const code = callback.searchParams.get("code");
+  if (
+    `${callback.origin}${callback.pathname}` !== redirectUri || !code
+    || callback.searchParams.get("state") !== state || callback.searchParams.get("iss") !== metadata.issuer
+  ) throw new Error("OAuth callback did not preserve the registered destination, state and issuer");
+
+  const exchangeCode = (codeVerifier: string, callbackUri: string) => fetch(`${origin}/oauth/token`, {
+    method: "POST",
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      client_id: clientId,
+      code,
+      code_verifier: codeVerifier,
+      redirect_uri: callbackUri
+    })
+  });
+  const requireInvalidGrant = async (response: Response) => {
+    if (response.status !== 400 || (await response.json() as { error?: string }).error !== "invalid_grant") {
+      throw new Error("OAuth token exchange accepted an invalid grant");
+    }
+  };
+  await requireInvalidGrant(await exchangeCode("x".repeat(43), redirectUri));
+  await requireInvalidGrant(await exchangeCode(verifier, `${redirectUri}/other`));
+  const exchanged = await exchangeCode(verifier, redirectUri);
+  const { access_token: token } = await exchanged.json() as { access_token?: string };
+  if (!exchanged.ok || !token) throw new Error("OAuth callback code could not be exchanged for an access token");
+  await requireInvalidGrant(await exchangeCode(verifier, redirectUri));
+
+  // Different ports still share cookies for the same hostname.
+  const sameHostConsent = await fetch(`${authorizationUrl}?${authorizationParams}`, { headers: browserHeaders, redirect: "manual" });
+  if (sameHostConsent.status !== 400 || sameHostConsent.headers.has("Location")
+    || !(await sameHostConsent.text()).includes("只更换端口无效")) {
+    throw new Error("Same-host OAuth request did not explain the hostname conflict");
+  }
+  const pendingRequest = await loadConsent(authorizationParams);
+  const blockedResponses = [
+    await submitConsent(authorizationUrl, pendingRequest, "allow"),
+    await submitConsent(authorizationUrl, pendingRequest, "deny")
+  ];
+  for (const blocked of blockedResponses) {
+    if (blocked.status !== 400 || blocked.headers.has("Location") || !(await blocked.text()).includes("只更换端口无效")) {
+      throw new Error("Same-host OAuth submission should stop before issuing a callback");
+    }
+  }
+  const denied = await submitConsent(consentUrl, pendingRequest, "deny");
+  const denialLocation = denied.headers.get("Location");
+  const denialParams = denialLocation && new URL(denialLocation).searchParams;
+  if (denied.status !== 303 || !denialParams || denialParams.get("error") !== "access_denied"
+    || denialParams.get("state") !== state || denialParams.has("code")) throw new Error("OAuth cancellation did not return the expected callback");
 
   const transport = new StreamableHTTPClientTransport(new URL(endpoint), {
     requestInit: { headers: { Authorization: `Bearer ${token}` } }
@@ -239,6 +310,8 @@ try {
     applicationType: registration.application_type,
     workBuddyPrivateCallbackAccepted: workBuddyRegistration.redirect_uris?.[0] === workBuddyRedirectUri,
     workBuddyWebCallbackRejected: rejectedWorkBuddyWebResponse.status === 400,
+    loopbackAuthorizationRedirectVerified: true,
+    sameHostLoopbackBlocked: true,
     issuerResponseMetadataOmitted: !("authorization_response_iss_parameter_supported" in metadata),
     oversizedTokenBodyRejected: oversizedTokenResponse.status === 413,
     placeholderDeviceRejected: placeholderReport.isError,

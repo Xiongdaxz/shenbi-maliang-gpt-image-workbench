@@ -118,7 +118,7 @@
 | 字段 | 说明 |
 | --- | --- |
 | `id` | OAuth `client_id`，随机 UUID |
-| `application_type` | 动态注册客户端类型：`native` 的 loopback 回调使用授权页后台衔接，WorkBuddy 官方私有回调使用标准浏览器 303 交给操作系统唤起客户端；`web` 使用标准浏览器 303 重定向且回调必须为 HTTPS；旧记录默认为 `native` |
+| `application_type` | 动态注册客户端类型。`native` 的本机回调用浏览器 303 跳转，与授权站点同一主机名时拒绝回调。WorkBuddy 私有回调用 303 交给操作系统，原生 HTTPS 回调在允许授权后仍用后台请求。`web` 只接受 HTTPS 回调并使用 303；旧记录默认为 `native` |
 | `client_name` | 授权确认页和插件管理中展示的客户端名称 |
 | `client_uri` | 客户端动态注册时提供的应用主页；未提供时为空 |
 | `software_id` / `software_version` | 客户端提供的软件标识和版本；版本未显式提供时可从 User-Agent 推断 |

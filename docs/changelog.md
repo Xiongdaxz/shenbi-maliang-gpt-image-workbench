@@ -2,6 +2,18 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.85 - 2026-11-13
+
+### 中文
+
+- 修复 Mac 上用 Safari 连接马良时，点击「允许连接」后授权结果无法交回 Codex 的问题。远程马良站点会直接跳转到客户端的本机回调地址，TRAE Work 使用本机回调时也适用。现有插件无需升级，已连接的设备无需重新授权。
+- 本机部署时，如果马良站点和智能体回调使用同一主机名，授权页会提示改用局域网 IP 或域名，避免把网页登录状态发给回调端口。
+
+### English
+
+- Fixed an issue that prevented Safari on Mac from returning authorization to Codex after approval. Remote Maliang servers now redirect directly to the client's local callback. This also applies to TRAE Work when it uses a local callback. Existing plugins and connections do not need to be updated or reauthorized.
+- Local deployments now ask you to use a LAN address or domain if Maliang and the client callback share a hostname, protecting the web login session from being sent to the callback port.
+
 ## v0.1.84 - 2026-11-08
 
 ### 中文

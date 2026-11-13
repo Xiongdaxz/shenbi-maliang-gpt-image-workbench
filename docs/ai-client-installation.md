@@ -59,7 +59,7 @@ Codex 插件 Marketplace 使用 `ON_INSTALL` 授权策略。安装时优先由 C
 
 WorkBuddy 桌面端的 Remote MCP OAuth 可以使用 `workbuddy://workbuddy/mcp/{connectorId}/oauth/callback` 把浏览器授权结果交回应用。服务端只为 `application_type=native` 接受这一条客户端专属格式；`connectorId` 必须是以 `custom-mcp:` 或 `connector:` 开头的单个安全路径段。端口、账号信息、查询参数、锚点、控制字符、反斜杠、编码斜杠、其他 host、其他路径和其他私有 scheme 全部拒绝。该规则不依赖可伪造的 User-Agent，也不意味着任意桌面客户端都能注册自定义协议。
 
-授权确认页对 WorkBuddy 使用 `workbuddy:` CSP scheme source，显示 `workbuddy://workbuddy` 而不是 URL API 对非 HTTP(S) 协议产生的 `null` origin。用户允许后，服务端以 `303 See Other` 返回原始私有回调，由操作系统唤起 WorkBuddy；普通 native loopback 客户端仍使用授权页后台交付和 Token 状态轮询。Authorization Code 保存的 `redirect_uri` 与 Token 请求提交的值必须逐字一致，不能在 WorkBuddy 私有回调和 loopback 地址之间替换或做等价归一化。
+授权确认页对 WorkBuddy 使用 `workbuddy:` CSP scheme source，显示 `workbuddy://workbuddy` 而不是 URL API 对非 HTTP(S) 协议产生的 `null` origin。用户允许后，服务端以 `303 See Other` 返回原始私有回调，由操作系统唤起 WorkBuddy。Authorization Code 保存的 `redirect_uri` 与 Token 请求提交的值必须逐字一致，不能在 WorkBuddy 私有回调和 loopback 地址之间替换或做等价归一化。
 
 这项适配只消除 WorkBuddy 在私有回调被拒绝后回退、又在 Token 阶段重读原始地址造成的不一致。动态注册成功或浏览器显示允许成功仍不代表安装完成；必须继续确认 WorkBuddy 已获得 Token、完成 MCP initialize 和工具发现，并由当前安装智能体调用 `maliang_report_device` 与 `maliang_account_status`。Codex、TRAE Work、Claude Code 和其他客户端继续优先使用各自已经验证的 HTTPS 或 loopback 回调；只有拿到某个客户端稳定、可验证且边界明确的官方私有协议格式后，才单独增加适配。
 
@@ -129,7 +129,11 @@ Remote MCP OAuth 使用统一有效期策略：Access Token 默认 7 天，后�
 
 授权页首次提交后会立即锁定两个按钮并显示处理中，同时保留用户本次选择的“允许”或“取消”值。这样可避免本机回调尚未完成时因重复点击产生第二次 POST，覆盖第一次成功响应并把页面误导为“授权请求已失效”。处理中不要刷新、返回或再次提交；失败或超时时结束旧登录命令，再发起一次全新的登录并只使用新页面。
 
-WorkBuddy 私有回调和 web HTTPS 回调在授权表单处理完成后使用 `303 See Other`，明确要求浏览器把表单 POST 转换为回调 GET，避免依赖 `302` 对 POST 的兼容性行为。普通 native loopback 回调继续由同源成功页在后台发起 GET，并轮询服务端确认授权码已经换成 Token 后再显示成功。
+当马良站点和本机回调（`127.0.0.1`、`[::1]` 或 `localhost`）的主机名不同时，服务端使用 `303 See Other`，让浏览器把表单 POST 转为回调 GET 并直接导航。这样 Safari 无需从 HTTPS 授权页在后台请求本机 HTTP 端口，完成页由本机客户端提供，是否成功以客户端换取令牌为准。WorkBuddy 私有回调和 web HTTPS 回调沿用 `303`。
+
+本机部署时，马良站点与本机回调必须使用不同的主机名。不同端口仍会共享该主机的 Cookie，所以服务端拒绝向同主机名的本机回调交付授权结果。遇到此提示，请用马良的局域网 IP 或域名重新添加 MCP 并发起授权；不需要改写客户端生成的回调地址。native HTTPS 回调在允许授权后沿用后台交付与令牌状态轮询。
+
+这项兼容修复由马良服务端提供，现有插件无需重装。服务端更新后，在同一台 Mac 上保留前台的 `codex mcp login maliang`，用 Safari 打开它新生成的授权页并点击一次「允许连接」。
 
 授权页的 CSP `form-action` 除 `'self'` 外，只加入本次动态注册并校验通过的精确 HTTP(S) 回调 origin（例如 `http://127.0.0.1:57553`），或 WorkBuddy 专用的 `workbuddy:` scheme source。不能只保留 `'self'`，否则浏览器可能接受授权 POST、服务端也生成授权码，却静默拦截后续回调；也不能使用宽泛的 `http:`、任意私有 scheme 或任意来源放开回调。
 

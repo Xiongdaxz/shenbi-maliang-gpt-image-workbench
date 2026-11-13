@@ -286,10 +286,9 @@ describe("external MCP authorization page", () => {
     expect(externalMcpRedirectUriDisplay(callback)).toBe("workbuddy://workbuddy");
   });
 
-  test("renders a branded success confirmation with a return action while returning the OAuth callback in the background", () => {
+  test("renders a branded success confirmation for native HTTPS callbacks", () => {
     const html = externalMcpAuthorizationSuccessPage({
-      callbackUrl: "http://127.0.0.1:57553/callback/test?code=code_test&state=state_test",
-      clientName: "Codex <test>",
+      callbackUrl: "https://agent.example/callback/test?code=code_test&state=state_test",
       scriptNonce: "success_nonce",
       statusUrl: "/oauth/authorize/status?request_id=oauthreq_test"
     });
@@ -299,7 +298,7 @@ describe("external MCP authorization page", () => {
     expect(html).toContain('src="/image/logo-small.webp"');
     expect(html).toContain('<link rel="icon" type="image/webp" href="/image/logo-small.webp" />');
     expect(html).toContain('data-success-card');
-    expect(html).toContain('data-callback-url="http://127.0.0.1:57553/callback/test?code=code_test&amp;state=state_test"');
+    expect(html).toContain('data-callback-url="https://agent.example/callback/test?code=code_test&amp;state=state_test"');
     expect(html).toContain('data-status-url="/oauth/authorize/status?request_id=oauthreq_test"');
     expect(html).toContain('script nonce="success_nonce"');
     expect(html).toContain("fetch(callbackUrl");
@@ -307,7 +306,6 @@ describe("external MCP authorization page", () => {
     expect(html).toContain("fetch(statusUrl");
     expect(html).toContain('result.status === "succeeded"');
     expect(html).not.toContain(".then(complete");
-    expect(html).not.toContain("Codex &lt;test&gt;");
     expect(html).not.toContain("连接已安全建立");
     expect(html).toContain('href="/" data-success-action hidden>返回神笔马良</a>');
     expect(html).toContain("action.hidden = false");
@@ -325,9 +323,9 @@ describe("external MCP authorization page", () => {
     expect(html).toContain('href="/mcp">返回安装说明</a>');
   });
 
-  test("limits the success page callback connection to the registered loopback origin", () => {
-    expect(externalMcpAuthorizationSuccessPageCsp("success_nonce", "http://127.0.0.1:57553/callback/test")).toBe(
-      "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; script-src 'nonce-success_nonce'; connect-src 'self' http://127.0.0.1:57553; form-action 'none'; frame-ancestors 'none'; base-uri 'none'"
+  test("limits the success page callback connection to the registered HTTPS origin", () => {
+    expect(externalMcpAuthorizationSuccessPageCsp("success_nonce", "https://agent.example/callback/test")).toBe(
+      "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; script-src 'nonce-success_nonce'; connect-src 'self' https://agent.example; form-action 'none'; frame-ancestors 'none'; base-uri 'none'"
     );
   });
 
@@ -355,16 +353,16 @@ describe("external MCP authorization page", () => {
     expect(metadata).not.toHaveProperty("authorization_response_iss_parameter_supported");
   });
 
-  test("redirects web and WorkBuddy callbacks while keeping native loopback delivery in the background", () => {
-    expect(externalMcpAuthorizationCallbackMode("web")).toBe("redirect");
-    expect(externalMcpAuthorizationCallbackMode(" WEB ")).toBe("redirect");
+  test("navigates to native loopback, web and WorkBuddy callbacks", () => {
+    expect(externalMcpAuthorizationCallbackMode("web", "https://agent.example/oauth/callback")).toBe("redirect");
     expect(externalMcpAuthorizationCallbackMode(
       "native",
       "workbuddy://workbuddy/mcp/custom-mcp%3Amaliang/oauth/callback"
     )).toBe("redirect");
-    expect(externalMcpAuthorizationCallbackMode("native", "http://127.0.0.1:57553/oauth/callback")).toBe("background");
-    expect(externalMcpAuthorizationCallbackMode(" NATIVE ", "http://localhost:57553/oauth/callback")).toBe("background");
-    expect(externalMcpAuthorizationCallbackMode("")).toBe("background");
+    for (const host of ["127.0.0.1", "[::1]", "localhost"]) {
+      expect(externalMcpAuthorizationCallbackMode("native", `http://${host}:57553/oauth/callback`)).toBe("redirect");
+    }
+    expect(externalMcpAuthorizationCallbackMode("native", "https://agent.example/oauth/callback")).toBe("background");
   });
 
   test("reports authorization success only after the current code is consumed and a token exists", () => {
