@@ -200,7 +200,7 @@ Remote MCP Bearer Access Token，默认有效期 7 天，可在后台设置为 1
 | --- | --- |
 | `id` | Access Token 记录 ID |
 | `token_hash` | Access Token 的 SHA-256 摘要，唯一 |
-| `family_id` | Token 轮换家族 ID；Refresh Token 重放时用于整组撤销 |
+| `family_id` | Token 轮换家族 ID；新授权以成功兑换的授权码记录 ID 标记家族，便于核对本次授权是否签发令牌。Refresh Token 重放时仍用于整组撤销，已有家族不变 |
 | `grant_id` / `user_id` / `client_id` | 授权关系、用户和客户端 |
 | `scope` / `resource` | Token 权限和限定的 MCP 资源 |
 | `expires_at` / `revoked_at` | 过期和撤销时间 |

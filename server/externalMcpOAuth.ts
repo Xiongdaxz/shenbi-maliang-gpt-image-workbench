@@ -687,8 +687,9 @@ export function externalMcpAuthorizationPage(input: {
   requestId: string;
   scopes: string[];
   scriptNonce: string;
+  workBuddyStatusUrl?: string;
 }) {
-  const { clientName, callbackOrigin, userName, requestId, scopes, scriptNonce } = input;
+  const { clientName, callbackOrigin, userName, requestId, scopes, scriptNonce, workBuddyStatusUrl } = input;
   const permissionRows = scopes.map((scope) => {
     const permission = scope === "profile:read"
       ? { name: "读取账号信息", description: "识别当前账号并确认登录状态" }
@@ -711,11 +712,13 @@ export function externalMcpAuthorizationPage(input: {
     ul{list-style:none;padding:0;margin:24px 0;border-top:1px solid #eadfd4}li{display:flex;gap:12px;padding:16px 0;border-bottom:1px solid #eadfd4}.permission-icon{display:grid;place-items:center;flex:0 0 28px;height:28px;border:1px solid #efd8c8;border-radius:9px;background:#fff3e8;color:#b95c3d}.permission-icon svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}li strong{font-size:14px}li p{margin:4px 0 0;color:#756960;font-size:13px;line-height:1.55}
     .account,.client-warning{padding:12px 14px;border:1px solid #eee2d7;border-radius:12px;background:#faf5ee;color:#5f5148;font-size:13px}.client-warning{margin-top:10px;background:#fff8ed;border-color:#efd8c8;line-height:1.6}.client-warning strong{display:block;color:#8a442e}.callback{display:block;margin-top:4px;overflow-wrap:anywhere;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:#5c4438}.actions{display:grid;grid-template-columns:1fr 1.5fr;gap:12px;margin-top:22px}button{border:0;border-radius:12px;padding:13px 16px;font:inherit;font-weight:750;cursor:pointer;transition:opacity .15s ease,filter .15s ease,box-shadow .15s ease,transform .15s ease}button:not(:disabled):active{transform:translateY(1px)}button:disabled{cursor:wait;opacity:.62;box-shadow:none}.deny{background:#f0ebe5;color:#5b5049}.allow{background:#c96442;color:white;box-shadow:0 10px 24px rgba(166,75,47,.22)}.allow:hover{filter:brightness(.96)}.submit-status{margin:12px 0 0;color:#a54d30;font-size:13px;font-weight:700;line-height:1.55;text-align:center}.notice{margin:18px 0 0;color:#91847a;font-size:12px;line-height:1.65;text-align:center}
     @media(prefers-color-scheme:dark){:root{color-scheme:dark;background:#211a17;color:#f7efe8}body{background:radial-gradient(circle at 12% 8%,rgba(154,89,45,.23) 0,transparent 32%),radial-gradient(circle at 92% 88%,rgba(138,64,43,.17) 0,transparent 34%),#211a17}main{background:rgba(43,34,29,.97);border-color:#5b4639}.brand{color:#f2b394}.brand-icon{border-color:#684b39;background:#382a23}.lead,li p,.account{color:#c6b7ac}.client{color:#fff8f2}ul,li{border-color:#58463a}.permission-icon{border-color:#704a38;background:#3d2b23;color:#f0a280}.account{border-color:#58463a;background:#352a24}.client-warning{border-color:#704a38;background:#3d2b23;color:#d7c4b7}.client-warning strong{color:#f0a280}.callback{color:#ead8ca}.deny{background:#3c302a;color:#e8ddd5}.notice{color:#a9978a}}
+    .oauth-result{text-align:center;padding:24px 0 8px}.result-icon{display:grid;place-items:center;width:52px;height:52px;margin:0 auto;border-radius:50%;background:#fff3e8;color:#a54d30;font-size:24px;font-weight:800}.result-icon svg{display:none;width:26px;height:26px}.oauth-result[data-outcome="succeeded"] .result-icon{background:#e7f1e8;color:#36734a}.oauth-result[data-outcome="succeeded"] .result-icon svg{display:block}.oauth-result[data-outcome="succeeded"] .result-icon span{display:none}.oauth-result[data-outcome="cancelled"] .result-icon{display:none}.oauth-result h1{margin-top:16px}.result-action{display:inline-flex;align-items:center;justify-content:center;min-height:44px;margin-top:22px;padding:0 20px;border-radius:12px;text-decoration:none;font-weight:750}
   </style>
 </head>
 <body>
   <main>
     <div class="brand"><span class="brand-icon"><img src="/image/logo-small.webp" alt="" /></span><span>神笔马良</span></div>
+    <section data-oauth-consent>
     <h1>允许 <span class="client">${escapeHtml(clientName)}</span> 连接？</h1>
     <p class="lead">连接后，该智能体会通过你的马良账号使用以下功能。你的密码和登录凭据不会提供给智能体。</p>
     <ul>${permissionRows}</ul>
@@ -730,12 +733,74 @@ export function externalMcpAuthorizationPage(input: {
       <p class="submit-status" data-oauth-submit-status role="status" aria-live="polite" hidden>正在处理，请勿重复点击、刷新或返回…</p>
     </form>
     <p class="notice">授权后可前往神笔马良「设置 &gt; 插件」随时断开或移除。请只连接你信任的智能体。</p>
+    </section>
+    ${workBuddyStatusUrl ? `<section class="oauth-result" data-workbuddy-result data-status-url="${escapeHtml(workBuddyStatusUrl)}" hidden>
+      <div role="status">
+        <span class="result-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 12 4 4 8-8" /></svg><span>!</span></span>
+        <h1 data-oauth-result-title tabindex="-1"></h1>
+        <p class="lead" data-oauth-result-message></p>
+      </div>
+      <a class="result-action allow" href="/">返回神笔马良</a>
+    </section>` : ""}
   </main>
   <script nonce="${escapeHtml(scriptNonce)}">
     (() => {
       const form = document.querySelector("[data-oauth-authorize-form]");
       const status = document.querySelector("[data-oauth-submit-status]");
       if (!(form instanceof HTMLFormElement)) return;
+      const result = document.querySelector("[data-workbuddy-result]");
+      const workBuddyStatusUrl = result instanceof HTMLElement ? result.dataset.statusUrl : undefined;
+      const renderResult = (outcome, heading, message) => {
+        const consent = document.querySelector("[data-oauth-consent]");
+        const title = result.querySelector("[data-oauth-result-title]");
+        consent.hidden = true;
+        form.removeAttribute("aria-busy");
+        result.dataset.outcome = outcome;
+        result.hidden = false;
+        title.textContent = heading;
+        result.querySelector("[data-oauth-result-message]").textContent = message;
+        document.title = heading + " - 神笔马良";
+        if (document.hasFocus()) title.focus({ preventScroll: true });
+      };
+      const checkWorkBuddy = async (denied) => {
+        const deadline = Date.now() + 60000;
+        const checkInWorkBuddy = "请先回到 WorkBuddy 查看连接状态。如果仍未连接，请从 WorkBuddy 重新发起授权。";
+        do {
+          // Keep the form submission as a browser navigation so Edge can open the desktop app.
+          await new Promise((resolve) => window.setTimeout(resolve, 1000));
+          const controller = new AbortController();
+          const timeout = window.setTimeout(() => controller.abort(), 3000);
+          try {
+            const response = await fetch(workBuddyStatusUrl, {
+              credentials: "same-origin", cache: "no-store", redirect: "error",
+              headers: { Accept: "application/json" }, signal: controller.signal
+            });
+            if (response.ok) {
+              const { status: outcome } = await response.json();
+              if (outcome === "succeeded") {
+                renderResult("succeeded", "授权成功", "可以关闭此页，回到 WorkBuddy 继续使用神笔马良。");
+                return;
+              }
+              if (outcome === "failed") {
+                if (denied) renderResult("cancelled", "已取消授权", "本次未授予访问权限。你可以关闭此页。");
+                else renderResult("failed", "授权未完成", checkInWorkBuddy);
+                return;
+              }
+              if (outcome === "expired") {
+                renderResult("failed", "本次授权已过期", checkInWorkBuddy);
+                return;
+              }
+            } else if (response.status === 401 || response.status === 404) {
+              break;
+            }
+          } catch {
+            // The original page can survive the desktop handoff and resume polling later.
+          } finally {
+            window.clearTimeout(timeout);
+          }
+        } while (Date.now() < deadline);
+        renderResult("unknown", "尚未确认授权结果", checkInWorkBuddy);
+      };
       let submitted = false;
       form.addEventListener("submit", (event) => {
         if (submitted) {
@@ -744,6 +809,7 @@ export function externalMcpAuthorizationPage(input: {
         }
         submitted = true;
         const submitter = event.submitter;
+        const denied = submitter instanceof HTMLButtonElement && submitter.value === "deny";
         if (submitter instanceof HTMLButtonElement && submitter.name) {
           const decision = document.createElement("input");
           decision.type = "hidden";
@@ -755,10 +821,13 @@ export function externalMcpAuthorizationPage(input: {
         for (const button of form.querySelectorAll("button")) button.disabled = true;
         if (status instanceof HTMLElement) {
           status.hidden = false;
-          status.textContent = submitter instanceof HTMLButtonElement && submitter.value === "deny"
+          status.textContent = denied
             ? "正在取消连接，请稍候…"
-            : "正在完成授权，请勿重复点击、刷新或返回…";
+            : workBuddyStatusUrl
+              ? "正在返回 WorkBuddy。如果浏览器询问是否打开 WorkBuddy，请选择「打开」。"
+              : "正在完成授权，请勿重复点击、刷新或返回…";
         }
+        if (workBuddyStatusUrl) void checkWorkBuddy(denied);
       });
     })();
   </script>
@@ -768,7 +837,12 @@ export function externalMcpAuthorizationPage(input: {
 
 export function externalMcpAuthorizationPageCsp(scriptNonce: string, redirectUri: string) {
   const callbackSource = externalMcpRedirectUriCspSource(redirectUri);
-  return `default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; script-src 'nonce-${scriptNonce}'; form-action 'self' ${callbackSource}; frame-ancestors 'none'; base-uri 'none'`;
+  const statusSource = callbackSource === "workbuddy:" ? " connect-src 'self';" : "";
+  return `default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; script-src 'nonce-${scriptNonce}';${statusSource} form-action 'self' ${callbackSource}; frame-ancestors 'none'; base-uri 'none'`;
+}
+
+function externalMcpAuthorizationStatusUrl(requestId: string) {
+  return `/oauth/authorize/status?request_id=${encodeURIComponent(requestId)}`;
 }
 
 export function externalMcpAuthorizationSuccessPage(input: {
@@ -907,14 +981,14 @@ function issueTokens(input: {
   clientId: string;
   scope: string;
   resource: string;
-  familyId?: string;
+  familyId: string;
   parentRefreshTokenId?: string | null;
   issueRefreshToken: boolean;
 }) {
   const timestamp = now();
   const { accessTokenTtlSeconds, refreshTokenTtlSeconds } = externalMcpTokenTtlSeconds();
   const accessToken = randomOAuthToken();
-  const familyId = input.familyId ?? randomUUID();
+  const familyId = input.familyId;
   const accessTokenId = makeId("oauthat");
   run(
     appDb,
@@ -1187,9 +1261,16 @@ export function getExternalMcpAuthorizationStatus(
             oauth_authorization_codes.id as code_id,
             oauth_authorization_codes.expires_at as code_expires_at,
             oauth_authorization_codes.consumed_at as code_consumed_at,
-            case when oauth_authorization_codes.grant_id is not null and (
-              exists(select 1 from oauth_access_tokens where grant_id = oauth_authorization_codes.grant_id)
-              or exists(select 1 from oauth_refresh_tokens where grant_id = oauth_authorization_codes.grant_id)
+            case when exists(
+              select 1 from oauth_access_tokens
+              where family_id = oauth_authorization_codes.id
+                and grant_id = oauth_authorization_codes.grant_id
+                and revoked_at is null
+            ) or exists(
+              select 1 from oauth_refresh_tokens
+              where family_id = oauth_authorization_codes.id
+                and grant_id = oauth_authorization_codes.grant_id
+                and revoked_at is null
             ) then 1 else 0 end as tokens_issued
        from oauth_authorization_requests
        left join oauth_authorization_codes
@@ -1570,7 +1651,10 @@ export function registerExternalMcpOAuthRoutes(app: Hono, api: Hono) {
       userName: user.username || user.account || user.id,
       requestId,
       scopes,
-      scriptNonce
+      scriptNonce,
+      workBuddyStatusUrl: classifyExternalMcpRedirectUri(redirectUri) === "workbuddy"
+        ? externalMcpAuthorizationStatusUrl(requestId)
+        : undefined
     }));
   });
 
@@ -1710,7 +1794,7 @@ export function registerExternalMcpOAuthRoutes(app: Hono, api: Hono) {
     return c.html(externalMcpAuthorizationSuccessPage({
       callbackUrl,
       scriptNonce,
-      statusUrl: `/oauth/authorize/status?request_id=${encodeURIComponent(request.id)}`
+      statusUrl: externalMcpAuthorizationStatusUrl(request.id)
     }));
   });
 
@@ -1784,6 +1868,8 @@ export function registerExternalMcpOAuthRoutes(app: Hono, api: Hono) {
           clientId: row.client_id,
           scope: row.scope,
           resource: row.resource,
+          // Status must identify this exchange, not an older token for the same grant.
+          familyId: row.id,
           issueRefreshToken: externalMcpClientSupportsGrant(client.grant_types_json, "refresh_token")
         });
       })();

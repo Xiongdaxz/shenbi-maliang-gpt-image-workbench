@@ -5,6 +5,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { Hono } from "hono";
 import { APP_COOKIE } from "../server/constants";
+import { smokeWorkBuddyDelivery } from "./smoke-workbuddy-delivery";
 
 const workspace = path.resolve(process.cwd());
 const smokeRoot = path.resolve(workspace, "tmp", `mcp-smoke-${randomUUID().replaceAll("-", "")}`);
@@ -13,8 +14,11 @@ if (!relativeSmokeRoot || relativeSmokeRoot.startsWith("..") || path.isAbsolute(
   throw new Error("Refusing to use a smoke-test directory outside the workspace");
 }
 
-function toolResultJson(result: { content?: Array<{ type: string; text?: string }> }) {
-  const text = result.content?.find((item) => item.type === "text")?.text ?? "";
+function toolResultJson(result: unknown) {
+  if (!result || typeof result !== "object" || !("content" in result) || !Array.isArray(result.content)) {
+    throw new Error("MCP tool result did not contain a content array");
+  }
+  const text = String(result.content.find((item: { type?: string }) => item.type === "text")?.text ?? "");
   const start = text.indexOf("{");
   if (start < 0) throw new Error("MCP tool result did not contain JSON text");
   return JSON.parse(text.slice(start)) as Record<string, unknown>;
@@ -27,12 +31,13 @@ Bun.env.GPT_IMAGE_CONFIG_DB_PATH = ":memory:";
 Bun.env.APP_PUBLIC_URL = "https://maliang-smoke.example";
 Bun.env.MALIANG_PUBLIC_BASE_URL = "";
 
-const [{ appDb, configDb }, { initAppDb, initConfigDb, seedProvider }, oauthModule, mcpModule, distributionModule] = await Promise.all([
+const [{ appDb, configDb }, { initAppDb, initConfigDb, seedProvider }, oauthModule, mcpModule, distributionModule, resultModule] = await Promise.all([
   import("../server/db"),
   import("../server/schema"),
   import("../server/externalMcpOAuth"),
   import("../server/externalMcpServer"),
-  import("../server/internalDistributionRoutes")
+  import("../server/internalDistributionRoutes"),
+  import("../server/externalMcpResults")
 ]);
 
 initAppDb();
@@ -41,6 +46,17 @@ seedProvider();
 
 const api = new Hono();
 const app = new Hono();
+const workBuddyResponseHooks = new Map<string, () => Promise<void>>();
+api.get("/image-jobs/:id", c => c.json({ job: { id: c.req.param("id") } }));
+app.use("/mcp/workbuddy-image-result/:jobId/:imageId", async (c, next) => {
+  const jobId = c.req.param("jobId")!;
+  await next();
+  const hook = workBuddyResponseHooks.get(jobId);
+  if (c.res.ok && hook) {
+    workBuddyResponseHooks.delete(jobId);
+    await hook();
+  }
+});
 const submittedInputs: Array<Record<string, unknown>> = [];
 for (const operation of ["generate", "edit"]) {
   api.post(`/images/${operation}`, async (c) => {
@@ -51,6 +67,7 @@ for (const operation of ["generate", "edit"]) {
 mcpModule.registerExternalMcpProtocolRoute(api);
 oauthModule.registerExternalMcpOAuthRoutes(app, api);
 distributionModule.registerInternalDistributionRoutes(app);
+resultModule.registerExternalMcpResultRoutes(app);
 app.route("/api", api);
 
 const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: app.fetch });
@@ -114,10 +131,12 @@ try {
   }
   const workBuddyRegistration = await workBuddyRegistrationResponse.json() as {
     application_type?: string;
+    client_id?: string;
     redirect_uris?: string[];
   };
+  const workBuddyClientId = workBuddyRegistration.client_id;
   if (
-    workBuddyRegistration.application_type !== "native"
+    !workBuddyClientId || workBuddyRegistration.application_type !== "native"
     || workBuddyRegistration.redirect_uris?.[0] !== workBuddyRedirectUri
   ) throw new Error("WorkBuddy DCR did not preserve its exact native callback");
 
@@ -187,8 +206,13 @@ try {
   const consentUrl = authorizationUrl.replace("127.0.0.1", "localhost");
   const loadConsent = async (params: URLSearchParams) => {
     const consent = await fetch(`${consentUrl}?${params}`, { headers: browserHeaders, redirect: "manual" });
-    const requestId = (await consent.text()).match(/name="request_id" value="([^"]+)"/)?.[1];
+    const html = await consent.text();
+    const requestId = html.match(/name="request_id" value="([^"]+)"/)?.[1];
     if (!consent.ok || !requestId) throw new Error("OAuth consent form did not load");
+    if (params.get("client_id") === workBuddyClientId && (
+      !html.includes(`data-status-url="/oauth/authorize/status?request_id=${encodeURIComponent(requestId)}"`)
+      || !consent.headers.get("Content-Security-Policy")?.includes("connect-src 'self'; form-action 'self' workbuddy:")
+    )) throw new Error("WorkBuddy consent page cannot check the status of its request");
     return requestId;
   };
   const submitConsent = (pageUrl: string, requestId: string, decision: "allow" | "deny") => fetch(pageUrl, {
@@ -210,12 +234,12 @@ try {
     || callback.searchParams.get("state") !== state || callback.searchParams.get("iss") !== metadata.issuer
   ) throw new Error("OAuth callback did not preserve the registered destination, state and issuer");
 
-  const exchangeCode = (codeVerifier: string, callbackUri: string) => fetch(`${origin}/oauth/token`, {
+  const exchangeCode = (codeVerifier: string, callbackUri: string, oauthClientId = clientId, authorizationCode = code) => fetch(`${origin}/oauth/token`, {
     method: "POST",
     body: new URLSearchParams({
       grant_type: "authorization_code",
-      client_id: clientId,
-      code,
+      client_id: oauthClientId,
+      code: authorizationCode,
       code_verifier: codeVerifier,
       redirect_uri: callbackUri
     })
@@ -253,6 +277,36 @@ try {
   const denialParams = denialLocation && new URL(denialLocation).searchParams;
   if (denied.status !== 303 || !denialParams || denialParams.get("error") !== "access_denied"
     || denialParams.get("state") !== state || denialParams.has("code")) throw new Error("OAuth cancellation did not return the expected callback");
+
+  const workBuddyParams = new URLSearchParams(authorizationParams);
+  workBuddyParams.set("client_id", workBuddyClientId);
+  workBuddyParams.set("redirect_uri", workBuddyRedirectUri);
+  const workBuddyRequest = await loadConsent(workBuddyParams);
+  const workBuddyStatusUrl = `${consentUrl}/status?request_id=${encodeURIComponent(workBuddyRequest)}`;
+  const readWorkBuddyStatus = async (expected: string) => {
+    const response = await fetch(workBuddyStatusUrl, { headers: browserHeaders });
+    const result = await response.json() as { status?: string };
+    if (!response.ok || result.status !== expected || Object.keys(result).length !== 1) {
+      throw new Error(`WorkBuddy authorization status did not report ${expected}`);
+    }
+  };
+  await readWorkBuddyStatus("pending");
+  const workBuddyApproved = await submitConsent(consentUrl, workBuddyRequest, "allow");
+  const workBuddyLocation = workBuddyApproved.headers.get("Location");
+  const workBuddyCallback = workBuddyLocation && new URL(workBuddyLocation);
+  const workBuddyCode = workBuddyCallback && workBuddyCallback.searchParams.get("code");
+  if (workBuddyApproved.status !== 303 || workBuddyLocation?.split("?")[0] !== workBuddyRedirectUri
+    || !workBuddyCode || !workBuddyCallback || workBuddyCallback.searchParams.get("state") !== state) {
+    throw new Error("WorkBuddy approval changed the desktop handoff");
+  }
+  await readWorkBuddyStatus("pending");
+  const workBuddyExchange = await exchangeCode(verifier, workBuddyRedirectUri, workBuddyClientId, workBuddyCode);
+  const { access_token: workBuddyToken } = await workBuddyExchange.json() as { access_token?: string };
+  if (!workBuddyExchange.ok || !workBuddyToken) {
+    throw new Error("WorkBuddy did not exchange the authorization code");
+  }
+  await readWorkBuddyStatus("succeeded");
+  if ((await fetch(workBuddyStatusUrl)).status !== 401) throw new Error("WorkBuddy status did not require a session");
 
   const transport = new StreamableHTTPClientTransport(new URL(endpoint), {
     requestInit: { headers: { Authorization: `Bearer ${token}` } }
@@ -305,10 +359,19 @@ try {
   const compatible = await client.callTool({ name: "maliang_generate_image", arguments: { prompt: "fixture compatible model default" } });
   if (compatible.isError || submittedInputs.at(-1)?.model !== "gpt-image-2.6-sunburst") throw new Error("A compatible channel did not retain the 2.6 Sunburst default");
 
+  const submittedBeforeDelivery = submittedInputs.length;
+  const workBuddyDelivery = await smokeWorkBuddyDelivery({
+    db: appDb, origin, root: smokeRoot, accessToken: workBuddyToken, deviceName,
+    beforeResultResponse: (jobId, hook) => { workBuddyResponseHooks.set(jobId, hook); }
+  });
+  if (submittedInputs.length !== submittedBeforeDelivery) throw new Error("WorkBuddy delivery resubmitted a generation job");
+
   console.log(JSON.stringify({
     issuer: metadata.issuer,
     applicationType: registration.application_type,
     workBuddyPrivateCallbackAccepted: workBuddyRegistration.redirect_uris?.[0] === workBuddyRedirectUri,
+    workBuddyStatusConfirmedAfterExchange: true,
+    workBuddyDelivery,
     workBuddyWebCallbackRejected: rejectedWorkBuddyWebResponse.status === 400,
     loopbackAuthorizationRedirectVerified: true,
     sameHostLoopbackBlocked: true,

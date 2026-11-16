@@ -279,7 +279,7 @@ describe("external MCP authorization page", () => {
   test("uses a WorkBuddy scheme CSP source and a readable callback identity", () => {
     const callback = "workbuddy://workbuddy/mcp/custom-mcp%3Amaliang/oauth/callback";
     expect(externalMcpAuthorizationPageCsp("nonce_test", callback)).toBe(
-      "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; script-src 'nonce-nonce_test'; form-action 'self' workbuddy:; frame-ancestors 'none'; base-uri 'none'"
+      "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; script-src 'nonce-nonce_test'; connect-src 'self'; form-action 'self' workbuddy:; frame-ancestors 'none'; base-uri 'none'"
     );
     expect(externalMcpAuthorizationSuccessPageCsp("nonce_test", callback)).toContain("connect-src 'self' workbuddy:");
     expect(externalMcpAuthorizationPageCsp("nonce_test", callback)).not.toContain("null");
@@ -365,7 +365,7 @@ describe("external MCP authorization page", () => {
     expect(externalMcpAuthorizationCallbackMode("native", "https://agent.example/oauth/callback")).toBe("background");
   });
 
-  test("reports authorization success only after the current code is consumed and a token exists", () => {
+  test("reports success only when this authorization has issued tokens", () => {
     const db = createConnectionTestDb();
     try {
       db.query("insert into oauth_clients (id) values ('client-status')").run();
@@ -403,8 +403,13 @@ describe("external MCP authorization page", () => {
       db.query("update oauth_authorization_codes set consumed_at = '2026-08-01T00:02:00.000' where id = 'code-status'").run();
       expect(getExternalMcpAuthorizationStatus(db, "user-status", "request-status")).toBe("failed");
 
-      db.query("insert into oauth_access_tokens (id, grant_id) values ('access-status', 'grant-status')").run();
+      db.query("insert into oauth_access_tokens (id, family_id, grant_id) values ('access-older', 'another-code', 'grant-status')").run();
+      expect(getExternalMcpAuthorizationStatus(db, "user-status", "request-status")).toBe("failed");
+
+      db.query("insert into oauth_access_tokens (id, family_id, grant_id) values ('access-status', 'code-status', 'grant-status')").run();
       expect(getExternalMcpAuthorizationStatus(db, "user-status", "request-status")).toBe("succeeded");
+      db.query("update oauth_access_tokens set revoked_at = '2026-08-01T00:03:00.000' where id = 'access-status'").run();
+      expect(getExternalMcpAuthorizationStatus(db, "user-status", "request-status")).toBe("failed");
     } finally {
       db.close();
     }

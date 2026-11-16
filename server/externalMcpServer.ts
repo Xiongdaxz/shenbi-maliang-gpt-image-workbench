@@ -16,7 +16,7 @@ import {
   getMcpImageUpload,
   markMcpUploadUsed
 } from "./externalMcpUploads";
-import { createMcpImageResultPresentation } from "./externalMcpResults";
+import { createMcpImageResultPresentation, createWorkBuddyImageDelivery, WORKBUDDY_DELIVERY_CHALLENGE_PATTERN } from "./externalMcpResults";
 import { readCodexPluginVersion } from "./internalDistributionRoutes";
 import { LimitedRequestBodyError, requestWithLimitedBody } from "./limitedRequestBody";
 import type { ImageRow, UserRow } from "./types";
@@ -195,7 +195,9 @@ export async function buildMaliangImageJobResult(
   const content: MaliangJobContent[] = [
     {
       type: "text",
-      text: [deliveryInstruction, JSON.stringify(resultSummary, null, 2)]
+      text: [deliveryInstruction,
+        deliveredResultCount ? "WorkBuddy 桌面端请先调用 maliang_workbuddy.prepare_image_delivery，再用同一 jobId 和 workBuddyDeliveryChallenge 查询交付票据；仅在保存后用 present_files 展示。" : "",
+        JSON.stringify(resultSummary, null, 2)]
         .filter(Boolean)
         .join("\n\n")
     },
@@ -412,9 +414,11 @@ async function createMaliangMcpServer(api: Hono) {
 
   server.registerTool("maliang_get_image_job", {
     title: "查询马良图片任务",
-    description: "查询文生图或改图任务。成功时返回轻量 resource_link、可继续改图的 imageId 和结构化下载信息，不返回 base64 图片数据；Codex 插件应调用 bundled maliang_local.save_image_result 持久化原图，再用返回的绝对本地路径直接显示，禁止为生成结果打开浏览器。",
+    description: "查询已有文生图或改图任务。WorkBuddy：有可交付图片后调用本地 maliang_workbuddy.prepare_image_delivery，拿到 deliveryChallenge 后用同一 jobId 再查询并传 workBuddyDeliveryChallenge。把返回的 workBuddyDelivery 交给同一会话的 maliang_workbuddy.save_image_results，再用 present_files 展示返回的 files。Codex 沿用 resource_link 与 maliang_local.save_image_result。查询和保存不重新生图。",
     inputSchema: {
-      jobId: z.string().trim().min(1).describe("生图或改图工具返回的 jobId")
+      jobId: z.string().trim().min(1).describe("生图或改图工具返回的 jobId"),
+      workBuddyDeliveryChallenge: z.string().regex(WORKBUDDY_DELIVERY_CHALLENGE_PATTERN).optional()
+        .describe("仅 WorkBuddy 本地交付使用。原样传入 prepare_image_delivery 为同一 jobId 返回的 deliveryChallenge。")
     },
     outputSchema: {
       jobId: z.string(),
@@ -425,10 +429,15 @@ async function createMaliangMcpServer(api: Hono) {
         downloadUrl: z.string(),
         previewUrl: z.string(),
         expiresAt: z.string()
-      }))
+      })),
+      workBuddyDelivery: z.object({
+        jobId: z.string(),
+        deliveryChallenge: z.string(),
+        images: z.array(z.object({ imageId: z.string(), ticket: z.string(), expiresAt: z.string() }))
+      }).optional()
     },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false }
-  }, async ({ jobId }, extra) => {
+  }, async ({ jobId, workBuddyDeliveryChallenge }, extra) => {
     const context = toolContext(extra as McpToolExtra, "images:generate");
     if (!context) return toolError("当前授权缺少 images:generate 权限，请重新连接神笔马良 MCP。");
     const deviceGate = requireReportedDevice(context);
@@ -468,6 +477,25 @@ async function createMaliangMcpServer(api: Hono) {
       updatedAt: job.updated_at,
       next: job.status === "running" ? "稍后再次调用 maliang_get_image_job" : ""
     };
+    if (workBuddyDeliveryChallenge && images.length) {
+      const delivery = {
+        jobId,
+        deliveryChallenge: workBuddyDeliveryChallenge,
+        images: images.map((image) => createWorkBuddyImageDelivery({
+          imageId: image.id, userId: context.user.id, grantId: context.grantId,
+          grantVersion: context.grantVersion, jobId, challenge: workBuddyDeliveryChallenge
+        }))
+      };
+      // WorkBuddy's text-only relay still receives the proof-bound tickets, never a bearer URL.
+      const result = {
+        jobId, status: job.status, imageIds: summary.imageIds, imageResults: [],
+        ...(summary.error ? { error: summary.error } : {}), workBuddyDelivery: delivery
+      };
+      return {
+        ...toolJson(result, `${job.status === "failed" ? "任务未全部完成，先交付已有图片。" : "图片已生成，等待保存为 WorkBuddy 产物。"}把 workBuddyDelivery 原样传给 maliang_workbuddy.save_image_results，仅把保存工具返回的 files 传给 present_files。不要回显交付票据。`),
+        structuredContent: result
+      };
+    }
     const publicBaseUrl = new URL(context.resource).origin;
     const presentations = images.map((image) => createMcpImageResultPresentation({
       imageId: image.id,

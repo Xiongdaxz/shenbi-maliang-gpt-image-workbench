@@ -2,6 +2,18 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.87 - 2026-11-16
+
+### 中文
+
+- WorkBuddy 完成马良授权后，即使浏览器停留在原页，也会显示「授权成功」。取消和暂时未确认的情况也会给出明确提示。
+- WorkBuddy 桌面端新增马良本地交付工具，可将原图保存到当前任务，并用 WorkBuddy 原生的文件卡片展示。已有任务的原图也能补交付，无需重新生图或重新绑定远程 MCP。
+
+### English
+
+- The Maliang consent page now shows authorization success for WorkBuddy even if the browser stays on the same page. It also shows clear messages for cancellations or results that are not yet confirmed.
+- A new local delivery tool for WorkBuddy Desktop saves original images to the current task and shows them in WorkBuddy's native file cards. It also works with existing jobs, without generating again or reconnecting the remote MCP.
+
 ## v0.1.86 - 2026-11-13
 
 ### 中文

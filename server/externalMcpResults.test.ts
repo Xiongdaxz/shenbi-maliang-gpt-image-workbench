@@ -1,12 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
+import { createHash, randomBytes } from "node:crypto";
 import {
   createMcpImageResultPresentationWithSecret,
   createMcpImageResultToken,
+  createWorkBuddyImageDelivery,
   MCP_IMAGE_RESULT_CACHE_CONTROL,
   mcpImageResultFromToken,
   mcpImageResultGrantIsActive,
-  readMcpImageResultOriginal
+  readMcpImageResultOriginal,
+  workBuddyImageResultFromTicket
 } from "./externalMcpResults";
 
 describe("external MCP image result links", () => {
@@ -45,6 +48,20 @@ describe("external MCP image result links", () => {
     expect(mcpImageResultFromToken(tampered, secret, nowMs)).toBeNull();
     expect(mcpImageResultFromToken(token, "different-secret", nowMs)).toBeNull();
     expect(mcpImageResultFromToken(token, secret, expiresAtMs)).toBeNull();
+  });
+
+  test("requires the local WorkBuddy proof and separates tickets from ordinary download URLs", () => {
+    const proof = randomBytes(32).toString("base64url");
+    const challenge = createHash("sha256").update(proof).digest("base64url");
+    const identity = { imageId: "img_test", userId: "user_test", grantId: "grant_test", grantVersion: 1 };
+    const { ticket, expiresAt } = createWorkBuddyImageDelivery({ ...identity, jobId: "job_one", challenge }, secret, nowMs);
+    expect(workBuddyImageResultFromTicket(ticket, proof, secret, nowMs)).toMatchObject({ ...identity, jobId: "job_one" });
+    expect(workBuddyImageResultFromTicket(ticket, "", secret, nowMs)).toBeNull();
+    expect(workBuddyImageResultFromTicket(ticket, randomBytes(32).toString("base64url"), secret, nowMs)).toBeNull();
+    expect(workBuddyImageResultFromTicket(ticket.replace(/^wb1/, "v2"), proof, secret, nowMs)).toBeNull();
+    expect(workBuddyImageResultFromTicket(ticket, proof, secret, Date.parse(expiresAt))).toBeNull();
+    expect(mcpImageResultFromToken(ticket, secret, nowMs)).toBeNull();
+    expect(workBuddyImageResultFromTicket(createMcpImageResultToken(identity, secret, expiresAtMs), proof, secret, nowMs)).toBeNull();
   });
 
   test("publishes an original download URL while retaining the legacy preview field", () => {

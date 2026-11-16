@@ -10,7 +10,7 @@
 
 - Codex 默认安装完整 Codex 插件。插件已包含 Skill 与 Remote MCP，不重复添加全局 `maliang` MCP。
 - Codex 用户明确说明“只安装 MCP”时，仅安装 Remote MCP。
-- 当前只提供 Codex 专用插件包；Claude Code、TRAE Work、WorkBuddy 和其他客户端统一安装 Remote MCP，不能复用 Codex 插件包。
+- Claude Code、TRAE Work、WorkBuddy 和其他客户端使用 Remote MCP，不能复用 Codex 插件包。WorkBuddy 桌面本地任务另有独立的图片交付工具，用于保存原图并在会话中展示产物。
 - 以后为某个客户端提供专用神笔马良插件包时，再把该客户端及其插件分发信息加入机器清单，由模型自动选择。
 
 机器清单以当前正在执行任务的客户端身份为准，不能仅因同一台电脑存在 `codex` 命令就把 Codex 插件安装到其他 App。
@@ -61,7 +61,21 @@ WorkBuddy 桌面端的 Remote MCP OAuth 可以使用 `workbuddy://workbuddy/mcp/
 
 授权确认页对 WorkBuddy 使用 `workbuddy:` CSP scheme source，显示 `workbuddy://workbuddy` 而不是 URL API 对非 HTTP(S) 协议产生的 `null` origin。用户允许后，服务端以 `303 See Other` 返回原始私有回调，由操作系统唤起 WorkBuddy。Authorization Code 保存的 `redirect_uri` 与 Token 请求提交的值必须逐字一致，不能在 WorkBuddy 私有回调和 loopback 地址之间替换或做等价归一化。
 
+Edge 等浏览器在唤起 WorkBuddy 后可能保留原授权页。保留下来的授权页会查询本次授权的状态：确认 WorkBuddy 已换得令牌后显示「授权成功」，可以关闭网页；暂时查不到结果时，提示先回 WorkBuddy 确认连接，以免重复发起授权。状态查询只返回当前登录用户本次请求的状态，不返回授权码或令牌。
+
 这项适配只消除 WorkBuddy 在私有回调被拒绝后回退、又在 Token 阶段重读原始地址造成的不一致。动态注册成功或浏览器显示允许成功仍不代表安装完成；必须继续确认 WorkBuddy 已获得 Token、完成 MCP initialize 和工具发现，并由当前安装智能体调用 `maliang_report_device` 与 `maliang_account_status`。Codex、TRAE Work、Claude Code 和其他客户端继续优先使用各自已经验证的 HTTPS 或 loopback 回调；只有拿到某个客户端稳定、可验证且边界明确的官方私有协议格式后，才单独增加适配。
+
+## WorkBuddy 图片产物
+
+WorkBuddy 桌面本地任务继续复用已授权的远程 `maliang`。按同源 `/mcp/workbuddy/install.json` 安装 `maliang_workbuddy` stdio 工具（Node.js 20+），先验证下载文件的 SHA-256，不需要重装远程连接器。默认允许写入 `~/WorkBuddy` 下的任务目录；其他项目仅通过 `MALIANG_WORKBUDDY_WORKSPACE_ROOTS` 明确授权。
+
+使用内网 HTTPS 时仍按安装清单的可信地址访问，并正常验证 TLS 证书；无需打开允许局域网 HTTP 的选项。下载期间如果原任务目录被替换，保存会停止，需为原 `jobId` 重新准备交付。
+
+1. 原任务查到图片后，用已有 `jobId` 和当前任务绝对工作目录调用 `prepare_image_delivery`。
+2. 用同一个 `jobId` 调用 `maliang_get_image_job`，传入 `workBuddyDeliveryChallenge`。WorkBuddy 即使只保留文本，也能读取 `workBuddyDelivery`；该票据只有准备交付的本地进程能用，原图的下载凭据不进入对话或工具日志。
+3. 将 `workBuddyDelivery` 原样交给 `save_image_results`。原图保存到当前任务的 `generated-images`，返回 `images[].localPath` 和 `files`。随后调用 WorkBuddy 内置 `present_files` 展示这些文件，与原生图片使用同一种产物卡片。图片部分成功时保留已保存的文件并报告未交付项。
+
+交付票据绑定原任务、图片、账号和授权关系，5 分钟后过期；过期、保存失败或本地进程重启时重新准备原 `jobId` 即可，不重新生图。这个本地交付工具不适用于 WorkBuddy 云端任务；仅安装 Remote MCP 也不能创建本地产物。
 
 ## 所有客户端的设备名称上报
 

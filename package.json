@@ -1,7 +1,7 @@
 {
   "name": "gpt-image-workbench",
   "private": true,
-  "version": "0.1.86",
+  "version": "0.1.87",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -18,7 +18,9 @@
     "restart": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/restart.ps1",
     "preview:app-update": "bun scripts/start-app-update-preview.ts",
     "seed:app-update-preview": "bun scripts/seed-app-update-preview.ts",
-    "check": "tsc -b"
+    "build:workbuddy-mcp": "bun scripts/build-workbuddy-mcp.ts",
+    "check:workbuddy-mcp": "bun scripts/build-workbuddy-mcp.ts --check",
+    "check": "tsc -b && bun run check:workbuddy-mcp"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.12",
