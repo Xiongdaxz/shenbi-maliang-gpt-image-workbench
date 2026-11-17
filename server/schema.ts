@@ -5,6 +5,8 @@ import { DEFAULT_CHATGPT_WEB_IMAGE_MODEL } from "../src/lib/imageModels";
 import { initImageSetSchema } from "./imageSetSchema";
 import { initCodexCredentialSchema } from "./codexCredentials";
 import { initImageAccountStatusSchema } from "./imageAccountStatus";
+import { initMcpSubmissions } from "./externalMcpSubmissions";
+import { initMcpConnectionSchema } from "./externalMcpConnections";
 import {
   DEFAULT_IMAGE_MODEL,
   DEFAULT_IMAGE_QUALITIES,
@@ -542,6 +544,7 @@ export function migrateImageTaskSoundPreferences(db: Database) {
 
 export function initAppDb() {
   initImageSetSchema(appDb);
+  initMcpSubmissions(appDb);
   appDb.run("PRAGMA journal_mode = MEMORY");
   appDb.run("PRAGMA foreign_keys = ON");
 
@@ -1403,7 +1406,7 @@ export function initAppDb() {
   if (!tableColumnExists(appDb, "oauth_grants", "credential_version")) {
     appDb.run("alter table oauth_grants add column credential_version integer not null default 1");
   }
-  appDb.run("create unique index if not exists oauth_grants_user_client_idx on oauth_grants(user_id, client_id)");
+  initMcpConnectionSchema(appDb);
 
   appDb.run(`
     create table if not exists oauth_authorization_requests (

@@ -477,6 +477,11 @@ function Refresh-Selector([string]$DataDirectory) {
   [void](Invoke-CodexJson @("plugin", "add", $Selector, "--json") "codex plugin add" $DataDirectory)
 }
 
+function Expand-MaliangUpdateArchive([string]$ArchivePath, [string]$Destination) {
+  Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
+  [System.IO.Compression.ZipFile]::ExtractToDirectory($ArchivePath, $Destination)
+}
+
 function Install-Transactionally(
   $Latest,
   [string]$CurrentVersion,
@@ -495,7 +500,7 @@ function Install-Transactionally(
   try {
     Save-RemoteArchive $Latest $archivePath
     New-Item -ItemType Directory -Path $extractionDirectory -ErrorAction Stop | Out-Null
-    Expand-Archive -LiteralPath $archivePath -DestinationPath $extractionDirectory -Force
+    Expand-MaliangUpdateArchive $archivePath $extractionDirectory
     $entries = @(Get-ChildItem -LiteralPath $extractionDirectory -Force)
     if ($entries.Count -ne 1 -or -not $entries[0].PSIsContainer -or $entries[0].Name -cne [string]$Latest.archiveRoot) {
       throw "Downloaded archive root mismatch"

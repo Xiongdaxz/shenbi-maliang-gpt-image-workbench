@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, BellRing, Cable, Check, Copy, Database, Github, Info, KeyRound, Leaf, Link2, Monitor, Moon, Palette, Pencil, RefreshCw, ScrollText, Search, Settings, Smile, Sun, Sunset, Trash2, UserRound, Volume1, Volume2, VolumeOff, X } from "lucide-react";
+import { Archive, BellRing, Cable, Check, Copy, Database, Info, KeyRound, Leaf, Link2, Monitor, Moon, Palette, Pencil, RefreshCw, ScrollText, Search, Settings, Smile, Sun, Sunset, Trash2, UserRound, Volume1, Volume2, VolumeOff, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api, type ExternalMcpConnection } from "../../api";
 import {
@@ -38,6 +38,7 @@ import {
 import type { EditSuggestionTone, ImagePreviewOpenMode, ImagePreviewWheelMode, ImageTaskSound, User, UserPreferences } from "../../types";
 import { ConfirmDialog, CustomSelect, useToast } from "../../ui";
 import { MarkdownView } from "../MarkdownView";
+import { GithubMarkIcon } from "../GithubMarkIcon";
 import { PromptColorSchemeSettingsDialog } from "../PromptColorSchemeSettingsDialog";
 import { PromptOptimizeStyleSettingsDialog } from "../PromptOptimizeStyleSettingsDialog";
 import { ImageTaskSoundSelect } from "./ImageTaskSoundSelect";
@@ -57,7 +58,7 @@ const settingsSections: Array<{ id: SettingsSectionId; labelKey: string; icon: L
   { id: "account", labelKey: "settings.nav.account", icon: UserRound },
   { id: "plugins", labelKey: "settings.nav.plugins", icon: Cable },
   { id: "data", labelKey: "settings.nav.data", icon: Database },
-  { id: "about", labelKey: "settings.nav.about", icon: Github }
+  { id: "about", labelKey: "settings.nav.about", icon: GithubMarkIcon }
 ];
 
 const settingsSectionTitleKeys: Record<SettingsSectionId, string> = {
@@ -1251,7 +1252,7 @@ export function AppSettingsDialog({
                   <div className="settings-about-version-actions">
                     {showGithubEntry ? (
                       <a className="secondary-btn" href={PROJECT_REPOSITORY_URL} target="_blank" rel="noreferrer">
-                        <Github size={15} />
+                        <GithubMarkIcon size={15} />
                         GitHub
                       </a>
                     ) : null}

@@ -195,11 +195,12 @@ export function recordExternalMcpGrantAccess(
   if (!isGenericOrPlaceholderExternalMcpDeviceName(deviceName)) {
     run(
       db,
-      `update oauth_clients
+      `update oauth_grants
        set device_name = ?, updated_at = ?
-       where id = ? and device_name <> ?`,
+       where id = ? and client_id = ? and coalesce(device_name, '') <> ?`,
       deviceName,
       timestamp,
+      input.grantId,
       input.clientId,
       deviceName
     );
@@ -208,11 +209,12 @@ export function recordExternalMcpGrantAccess(
   if (deviceType) {
     run(
       db,
-      `update oauth_clients
+      `update oauth_grants
        set device_type = ?, updated_at = ?
-       where id = ? and device_type <> ?`,
+       where id = ? and client_id = ? and coalesce(device_type, '') <> ?`,
       deviceType,
       timestamp,
+      input.grantId,
       input.clientId,
       deviceType
     );
@@ -223,6 +225,7 @@ export function updateExternalMcpClientDevice(
   db: Database,
   input: {
     clientId: string;
+    grantId: string;
     deviceName: unknown;
     deviceType: unknown;
     timestamp?: string;
@@ -234,12 +237,13 @@ export function updateExternalMcpClientDevice(
   const timestamp = input.timestamp ?? now();
   const result = run(
     db,
-    `update oauth_clients
+    `update oauth_grants
      set device_name = ?, device_type = ?, updated_at = ?
-     where id = ?`,
+     where id = ? and client_id = ? and revoked_at is null`,
     deviceName,
     deviceType,
     timestamp,
+    input.grantId,
     input.clientId
   );
   return Number(result.changes ?? 0) === 1
@@ -247,10 +251,11 @@ export function updateExternalMcpClientDevice(
     : null;
 }
 
-export function externalMcpClientNeedsDeviceReport(db: Database, clientId: string) {
+export function externalMcpClientNeedsDeviceReport(db: Database, clientId: string, grantId: string) {
   const client = getOne<{ device_name: string; device_type: string }>(
     db,
-    "select device_name, device_type from oauth_clients where id = ?",
+    "select device_name, device_type from oauth_grants where id = ? and client_id = ? and revoked_at is null",
+    grantId,
     clientId
   );
   return !client

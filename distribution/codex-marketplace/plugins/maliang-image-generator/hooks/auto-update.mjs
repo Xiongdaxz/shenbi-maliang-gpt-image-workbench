@@ -412,7 +412,7 @@ async function validateMarketplaceRoot(marketplaceRoot, expectedVersion, expecte
 function quotePowerShellLiteral(value) {
   return `'${value.replaceAll("'", "''")}'`;
 }
-async function extractArchive(archivePath, destination, runner) {
+export async function extractArchive(archivePath, destination, runner = defaultCommandRunner) {
   await mkdir(destination, { recursive: false });
   let command;
   if (process.platform === "win32") {
@@ -421,7 +421,7 @@ async function extractArchive(archivePath, destination, runner) {
       "-NoProfile",
       "-NonInteractive",
       "-Command",
-      `Expand-Archive -LiteralPath ${quotePowerShellLiteral(archivePath)} -DestinationPath ${quotePowerShellLiteral(destination)} -Force`
+      `$ErrorActionPreference = 'Stop'; Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory(${quotePowerShellLiteral(archivePath)}, ${quotePowerShellLiteral(destination)})`
     ];
   } else if (process.platform === "darwin") {
     command = ["ditto", "-x", "-k", archivePath, destination];

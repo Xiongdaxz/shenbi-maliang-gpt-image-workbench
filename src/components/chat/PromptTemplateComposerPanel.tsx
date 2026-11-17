@@ -54,6 +54,7 @@ import {
   PanelsTopLeft,
   PartyPopper,
   PenTool,
+  PencilSparkles,
   Pizza,
   Plane,
   Podcast,
@@ -1020,7 +1021,7 @@ export function PromptTemplateComposerPanel({
       <section className="composer-prompt-template-panel is-list" aria-label={t("promptTemplates.composer.listAria")}>
         <header className="composer-prompt-template-head">
           <div>
-            <Sparkles size={17} />
+            <PencilSparkles size={17} />
             <strong>{t("sidebar.promptTemplates")}</strong>
             <span>{templates.length > 0 ? t("promptTemplates.composer.availableForms", { count: templates.length }) : t("promptTemplates.composer.selectFormHint")}</span>
           </div>

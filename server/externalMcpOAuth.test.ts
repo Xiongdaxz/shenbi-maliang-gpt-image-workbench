@@ -102,7 +102,10 @@ function createConnectionTestDb() {
       revoked_at text,
       created_at text not null default '',
       updated_at text not null,
-      unique (user_id, client_id),
+      connection_key text not null default '',
+      device_name text,
+      device_type text,
+      unique (user_id, client_id, connection_key),
       foreign key (client_id) references oauth_clients(id) on delete cascade
     );
     create table oauth_access_tokens (
@@ -159,6 +162,7 @@ describe("external MCP authorization page", () => {
       )`).run();
 
       const location = await enrichExternalMcpAccessLocation(db, "user-1", {
+        grant_id: "grant-1",
         client_id: "client-1",
         last_access_at: "2026-07-29T10:00:00.000",
         last_access_ip: "192.168.0.87",
@@ -556,7 +560,7 @@ describe("external MCP authorization page", () => {
         last_access_ip: "192.168.0.87",
         last_user_agent: "codex-mcp-client/0.146.0"
       });
-      expect(db.query("select device_name, device_type, updated_at from oauth_clients where id = 'client-1'").get()).toEqual({
+      expect(db.query("select device_name, device_type, updated_at from oauth_grants where id = 'grant-1'").get()).toEqual({
         device_name: "DESKTOP-D29ACHK",
         device_type: "Windows",
         updated_at: "2026-07-29T11:34:40.142"
@@ -570,7 +574,7 @@ describe("external MCP authorization page", () => {
         deviceType: "Windows",
         timestamp: "2026-07-29T11:35:00.000"
       });
-      expect(db.query("select device_name from oauth_clients where id = 'client-1'").get()).toEqual({
+      expect(db.query("select device_name from oauth_grants where id = 'grant-1'").get()).toEqual({
         device_name: "DESKTOP-D29ACHK"
       });
     } finally {
@@ -582,9 +586,11 @@ describe("external MCP authorization page", () => {
     const db = createConnectionTestDb();
     try {
       db.query("insert into oauth_clients (id) values ('client-1')").run();
+      db.query("insert into oauth_grants (id,user_id,client_id,updated_at) values ('grant-1','user-1','client-1','before')").run();
 
       expect(updateExternalMcpClientDevice(db, {
         clientId: "client-1",
+        grantId: "grant-1",
         deviceName: "WORKSTATION-42",
         deviceType: "Windows_NT",
         timestamp: "2026-07-30T10:00:00.000"
@@ -593,17 +599,19 @@ describe("external MCP authorization page", () => {
         deviceType: "Windows",
         updatedAt: "2026-07-30T10:00:00.000"
       });
-      expect(db.query("select device_name, device_type from oauth_clients where id = 'client-1'").get()).toEqual({
+      expect(db.query("select device_name, device_type from oauth_grants where id = 'grant-1'").get()).toEqual({
         device_name: "WORKSTATION-42",
         device_type: "Windows"
       });
       expect(updateExternalMcpClientDevice(db, {
         clientId: "client-1",
+        grantId: "grant-1",
         deviceName: "Linux",
         deviceType: "Linux"
       })).toBeNull();
       expect(updateExternalMcpClientDevice(db, {
         clientId: "client-1",
+        grantId: "grant-1",
         deviceName: "__ACTUAL_DEVICE_HOSTNAME__",
         deviceType: "Windows"
       })).toBeNull();
@@ -616,14 +624,16 @@ describe("external MCP authorization page", () => {
     const db = createConnectionTestDb();
     try {
       db.query("insert into oauth_clients (id) values ('client-1')").run();
-      expect(externalMcpClientNeedsDeviceReport(db, "client-1")).toBe(true);
+      db.query("insert into oauth_grants (id,user_id,client_id,updated_at) values ('grant-1','user-1','client-1','before')").run();
+      expect(externalMcpClientNeedsDeviceReport(db, "client-1", "grant-1")).toBe(true);
 
       expect(updateExternalMcpClientDevice(db, {
         clientId: "client-1",
+        grantId: "grant-1",
         deviceName: "DESKTOP-D29ACHK",
         deviceType: "Windows"
       })?.deviceName).toBe("DESKTOP-D29ACHK");
-      expect(externalMcpClientNeedsDeviceReport(db, "client-1")).toBe(false);
+      expect(externalMcpClientNeedsDeviceReport(db, "client-1", "grant-1")).toBe(false);
     } finally {
       db.close();
     }
@@ -1078,5 +1088,33 @@ describe("external MCP authorization page", () => {
     } finally {
       db.close();
     }
+  });
+});
+
+
+describe('shared OAuth application connections', () => {
+  test('keeps devices and revocation separate for two CIMD connections and users', () => {
+    const db = createConnectionTestDb();
+    try {
+      const clientId = 'https://chatgpt.com/oauth/codex/client.json';
+      db.query('insert into oauth_clients (id,client_name) values (?,?)').run(clientId,'Codex');
+      const create = (userId: string, connectionKey: string) => upsertExternalMcpGrantForAuthorization(db, {
+        userId, clientId, connectionKey, scope: 'profile:read images:generate', deviceName: '', deviceType: ''
+      });
+      const first = create('user-1','connection-1');
+      const second = create('user-1','connection-2');
+      const anotherUser = create('user-2','connection-3');
+      updateExternalMcpClientDevice(db,{clientId,grantId:first,deviceName:'PC-A',deviceType:'Windows'});
+      updateExternalMcpClientDevice(db,{clientId,grantId:second,deviceName:'PC-B',deviceType:'Windows'});
+      expect(externalMcpClientNeedsDeviceReport(db,clientId,anotherUser)).toBe(true);
+      const rows = getExternalMcpConnectionRows(db,'user-1');
+      expect(new Set(rows.map(row=>row.device_name))).toEqual(new Set(['PC-A','PC-B']));
+      expect(groupExternalMcpConnectionRows(rows)).toHaveLength(2);
+      expect(revokeExternalMcpGrant(db,'user-2',first)).toBe(false);
+      expect(revokeExternalMcpGrant(db,'user-1',first)).toBe(true);
+      expect(db.query('select revoked_at from oauth_grants where id=?').get(second)).toEqual({revoked_at:null});
+      expect(db.query('select device_name from oauth_clients where id=?').get(clientId)).toEqual({device_name:''});
+      expect(updateExternalMcpClientDevice(db,{clientId,grantId:first,deviceName:'WRONG',deviceType:'Linux'})).toBeNull();
+    } finally { db.close(); }
   });
 });

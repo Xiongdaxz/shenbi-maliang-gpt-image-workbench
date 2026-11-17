@@ -17,6 +17,22 @@ const localMcpPath = path.resolve(
 const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
 
 describe("Maliang local MCP protocol negotiation", () => {
+  test("supports modern discovery and rejects unknown per-request versions", async () => {
+    const metadata = {
+      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+      "io.modelcontextprotocol/clientCapabilities": {}
+    };
+    const discovered = await handleMaliangLocalMcpRequest({ jsonrpc: "2.0", id: 1, method: "server/discover", params: { _meta: metadata } });
+    expect(discovered.result.resultType).toBe("complete");
+    expect(discovered.result.supportedVersions).toContain("2026-07-28");
+    const tools = await handleMaliangLocalMcpRequest({ jsonrpc: "2.0", id: 2, method: "tools/list", params: { _meta: metadata } });
+    expect(tools.result.ttlMs).toBe(300_000);
+    expect(tools.result.cacheScope).toBe("private");
+    const invalid = await handleMaliangLocalMcpRequest({ jsonrpc: "2.0", id: 3, method: "tools/list", params: {
+      _meta: { ...metadata, "io.modelcontextprotocol/protocolVersion": "2099-01-01" }
+    } });
+    expect(invalid.error.code).toBe(-32022);
+  });
   test("keeps supported requests and falls back from unknown client versions", async () => {
     const supported = await handleMaliangLocalMcpRequest({
       jsonrpc: "2.0",
@@ -32,7 +48,7 @@ describe("Maliang local MCP protocol negotiation", () => {
     });
 
     expect(supported.result.protocolVersion).toBe("2025-06-18");
-    expect(unknown.result.protocolVersion).toBe("2025-06-18");
+    expect(unknown.result.protocolVersion).toBe("2025-11-25");
   });
 });
 
@@ -402,10 +418,38 @@ describe("Maliang Codex-managed local MCP", () => {
           }
         }
       ];
-      processHandle.stdin.write(`${requests.map((request) => JSON.stringify(request)).join("\n")}\n`);
+      // Keep stdin alive until every reply arrives, as required by the SDK stdio lifecycle.
+      const awaiting = new Map<number, () => void>();
+      let captured = "";
+      const output = (async () => {
+        const reader = processHandle.stdout.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          const text = decoder.decode(chunk.value, { stream: true });
+          captured += text; buffer += text;
+          let newline: number;
+          while ((newline = buffer.indexOf("\n")) >= 0) {
+            const line = buffer.slice(0, newline); buffer = buffer.slice(newline + 1);
+            if (line.trim()) awaiting.get(JSON.parse(line).id)?.();
+          }
+        }
+        return captured;
+      })();
+      for (const request of requests) {
+        let timeout: ReturnType<typeof setTimeout> | undefined;
+        const replied = request.id === undefined ? Promise.resolve() : new Promise<void>((resolve, reject) => {
+          awaiting.set(request.id!, resolve);
+          timeout = setTimeout(() => reject(new Error("Local MCP reply timed out")), 5000);
+        });
+        processHandle.stdin.write(`${JSON.stringify(request)}\n`);
+        try { await replied; } finally { clearTimeout(timeout); }
+      }
       processHandle.stdin.end();
       const [stdout, stderr, exitCode] = await Promise.all([
-        new Response(processHandle.stdout).text(),
+        output,
         new Response(processHandle.stderr).text(),
         processHandle.exited
       ]);

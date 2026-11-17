@@ -1,3 +1,15 @@
+import { Plus, X } from "lucide-react";
+
+export function ComposerAddIcon() {
+  // CSS reveals the untransformed X after rotation; 20px / 2.4 keeps endpoints aligned and the stroke at 2px.
+  return (
+    <span className="composer-add-icon" aria-hidden="true">
+      <Plus className="composer-add-plus" size={24} strokeWidth={2} />
+      <X className="composer-add-close" size={20} strokeWidth={2.4} />
+    </span>
+  );
+}
+
 export function EditReferenceArrowIcon() {
   return (
     <svg

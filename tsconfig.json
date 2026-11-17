@@ -21,7 +21,7 @@
     "src",
     "server",
     "scripts/package-maliang-codex-plugin.ts",
-    "scripts/build-workbuddy-mcp.ts",
+    "scripts/build-maliang-local-mcp.ts",
     "scripts/smoke-external-mcp.ts",
     "scripts/run-chatgpt-web-bridge-tests.ts",
     "scripts/setup-chatgpt-web-python.ts",

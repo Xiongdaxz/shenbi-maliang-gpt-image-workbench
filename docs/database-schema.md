@@ -12,6 +12,32 @@
 
 ## app.db
 
+### 成套出图与品牌产品（2026-10-08）
+
+以下表由 `server/imageSetSchema.ts` 建立，在 `initAppDb` 中统一迁移。业务数据不写入渠道配置库。
+
+| 表 | 主要字段与职责 |
+| --- | --- |
+| `creative_profiles` | `kind` 为 brand/product，`user_id` 所有者，`brand_id` 可选关联品牌；`details_json` 文字事实与规则，`assets_json` 素材及用途，`variants_json` 轻量版本／规格；`shared`、`archived`、`revision` 管理可见性、归档及并发更新；`is_example` 标记系统创建的个人示例，普通创建与复制不继承此标记 |
+| `creative_session_context` | `session_id` 主键，`user_id`、`selection_json` 保存本会话档案选择；读取与写入先校验会话所属用户 |
+| `image_job_profile_context` | `job_id` 主键，`user_id`、`snapshot_json`、`created_at` 保存任务采用的品牌／产品／版本及有效内容，与后续档案修改隔离 |
+| `image_sets` | 项目需求、共同要求、档案选择、临时素材、模型／渠道／质量、内部会话；`revision` 乐观锁，`context_revision` 共同要求轮次；确认、停止、归档、定稿标志；基准版位、采用图及加密参考快照身份；`is_example` 标记示例来源；`execution_mode` 默认为 `provider`，模拟项目为 `demo`；`demo_template` 为空为旧软件示例，或 `tea`／`interior`／`canvas`。两项执行字段仅由服务端设置，普通保存／复制不能伪造 |
+| `image_set_items` | 版位用途、文案、目标尺寸、构图、顺序、`revision`、`removed`；采用图与采用时的共同／版位版本，支持待复核与明确沿用 |
+| `image_set_runs` | 项目、版位、独立 `job_id`、请求标识、候选序号、状态、快照、错误及时间；`job_id` 唯一，`(set_id,client_request_id,item_id,candidate_index)` 唯一，避免重复提交 |
+| `creative_example_seeds` | `(user_id,seed_key)` 联合主键；记录 `brand_id`、`product_id`、`set_id` 与 `created_at`。`completion_state` 为 `building`／`ready`／`skipped`；`manifest_json` 记录多产品及素材 ID、内容摘要、`artworkVersion` 或恢复回执。稳定身份 `defaults-v2:品牌ID` 初始化四品牌，当前成图版本为 3；`defaults-history:*` 留存替换版本，`defaults-restore:v3:请求ID` 按成图版本对恢复去重，`defaults-v2:legacy-retired` 标记旧内容迁移。旧 `starter-v1`、`manual:*`、`catalog-v1:*`、`catalog-manual:*`、`try:*`、`catalog-retirement-v1` 保留兼容。删除或归档后不自动补回，删除用户时清理标记 |
+
+列表按游标分批返回；套图列表只读取每版位的摘要候选，详情读取版本记录。排队索引为状态与创建时间，项目／版位记录保留独立查询索引。
+
+2026-10-23：`image_set_runs.snapshot_json.demo` 的新演示任务加入 `artworkVersion: 2` 与 `style`（`airy`／`dark`／`editorial`）。旧快照缺少该版本字段时仍按原模板渲染。预设复用检查用户、项目、图片、共同轮次、图片修订、文案、默认配色和成功图片存在性；编辑来源及故障演示不作为预设复用。公开响应只为可复用的预设提供 `demoStyle`。本次没有新增表、列或数据库迁移。
+
+版位删除为 `removed=1`，历史运行与图片保留。档案支持归档、恢复和删除；删除仅限所有者，校验修订号，并阻止删除仍被产品、套图或对话引用的档案。套图删除须无排队／运行任务，清理其版位和运行关联，保留已生成图片、历史对话及快照。素材引用只解除关系，不级联删除文件。生成结果仍存入原 `images`，通过原 `image_jobs` 保存执行与恢复信息。套图停止例外保留已提交结果，旧取消接口在未关联套图时保持清理行为。
+
+2026-10-16：现有库增补 `is_example`、`execution_mode` 与示例初始化表及状态。当前初始化完成品牌、产品、两张基准候选、其余五个版位、一个编辑版本、六张采用图及定稿。原草稿仅在套图与关联档案均未修改、未归档、未删除时升级。`building` 任务不参与普通调度，重启继续其原记录，完成后标记 `ready`。模拟图片使用正常 `image_jobs`／`images` 和用户私有加密文件，`provider_id=internal-demo` 仅为内部执行记录，不新增渠道配置。普通恢复、重试与改图入口阻止模拟任务进入真实渠道；不使用 `studio_settings`。
+
+当前三类目录示例按用户分别初始化，每个产品另有两条正常的 `assets` 记录（`space=private`、`shared=0`），带内容校验与真实尺寸，文件使用用户自己的加密路径；`creative_profiles.assets_json` 标记身份／风格用途，确认阶段生成独立加密参考快照。手工初始化中断也会在启动或后续列表访问时继续，原标识和已有文件复用。归档旧软件示例额外检查原采用结果，避免遗漏没有递增修订号的选稿变化。
+
+`image_jobs.request_json` 的 `_creativeDisplayPrompt`、`_imageSet` 为内部快照字段，发送渠道前移除；前者区分用户原文与实际组装内容。参考内容通过现有加密 `message_source_references` 副本保留。更详细流程见 `docs/image-sets.md`。
+
 ### teams
 
 用户团队。
@@ -1080,7 +1106,7 @@ Remote MCP OAuth 令牌有效期配置，固定使用 `default` 单行。保存�
 
 ### image_accounts
 
-图片账号号池，主要用于 ChatGPT Web / CPA 账号同步和额度观察。
+图片账号号池，用于 ChatGPT Web、独立 Codex OAuth 绑定、CPA 账号同步和额度观察。
 
 | 字段 | 说明 |
 | --- | --- |
@@ -1100,10 +1126,30 @@ Remote MCP OAuth 令牌有效期配置，固定使用 `default` 单行。保存�
 | `access_token` | 账号访问令牌；ChatGPT Web 号池调用和 Codex 额度刷新优先使用该字段 |
 | `auth_json` | 原始账号授权 JSON；本地单个/批量导入和 CPA 同步都会保留可解析的授权载荷，运行时可从中兜底提取 `access_token`、邮箱、套餐、账号 ID、Cookie |
 | `auth_info_json` | 附加认证信息 JSON，主要保存 CPA 同步或导入记录里的 `id_token`、账号类型等补充信息；只生图时可为空，运行时仅在 `access_token` / `auth_json` 没有 token 时兜底解析 |
+| `auth_source` | 凭据来源：`legacy` 为原有手动/导入/CPA 来源；`codex_oauth` 由独立凭据服务管理，其 Token 不写入上述明文字段 |
+| `local_enabled` | 用户对本地账号池的启用选择：`NULL` 沿用账号来源状态，`0` 禁用、`1` 启用；单独保存，不被额度刷新和 CPA 同步覆盖 |
+| `auth_status` | 独立授权状态：`authorized` 已授权、`reauth_required` 需要重新授权；旧来源为空 |
+| `token_expires_at` | 独立 OAuth Access Token 到期时间，UTC ISO 格式 |
+| `auth_refreshed_at` / `auth_error` | 最近授权/续期时间及脱敏错误摘要；与额度刷新记录分开 |
 | `note` | 备注 |
 | `sync_status` | 同步来源状态：`local` 本地创建、`synced` CPA 同步；历史或异常值按原样保留 |
 | `last_refreshed_at` | 最近刷新时间 |
 | `created_at` / `updated_at` | 创建和更新时间 |
+
+### image_account_credentials
+
+独立 Codex OAuth 的加密凭据，按账号维护，不依赖 CPA。唯一约束为 `issuer + subject + upstream_account_id`，邮箱不作为合并依据。
+
+| 字段 | 说明 |
+| --- | --- |
+| `account_id` | 对应 `image_accounts.id`，主键；删除账号时在同一事务清理 |
+| `issuer` / `subject` / `upstream_account_id` | 已验证的授权颁发方、用户身份和上游账号/工作区身份 |
+| `encrypted_tokens` | AES-256-GCM 密文，使用账号 ID 作为附加认证数据；包含 Token、协议和客户端身份 |
+| `version` | 版本号，防止旧刷新结果覆盖重新授权的凭据 |
+| `refresh_lock` / `refresh_locked_until` | 跨进程刷新租约与到期毫秒时间戳，串行处理轮换 Token |
+| `next_retry_at` | 暂时性续期失败后的最早重试毫秒时间戳 |
+
+加密密钥独立保存于服务端文件，默认 `data/private/codex-credentials.key`，支持 `GPT_IMAGE_CODEX_KEY_PATH`；不保存到数据库。备份恢复时需要安全恢复配套原密钥，丢失密钥不会自动生成新密钥覆盖旧凭据。
 
 ### cpa_accounts
 

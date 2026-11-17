@@ -14,7 +14,6 @@ import {
   Minimize2,
   MessageCircleMore,
   MessageCirclePlus,
-  Plus,
   Redo2,
   RotateCcw,
   RotateCw,
@@ -24,6 +23,7 @@ import {
   ZoomIn,
   ZoomOut
 } from "lucide-react";
+import { ComposerAddIcon } from "./InlineIcons";
 import { ImageDownloadMenu } from "./ImageDownloadMenu";
 import { ImageLightbox, type ImageLightboxState } from "./ImageLightbox";
 import { EditorSizePicker, ImageCountStepper, ModelPicker, QualityPicker } from "./ImageOptionPickers";
@@ -642,7 +642,7 @@ export function ImageEditorComposer({
               aria-expanded={quickMenuOpen}
               data-tooltip={t("imageEditor.addMaterial")}
             >
-              <Plus size={24} strokeWidth={2} />
+              <ComposerAddIcon />
             </button>
             {quickMenuOpen ? (
               <div className="composer-quick-menu editor-composer-quick-menu" role="menu" aria-label={t("imageEditor.materialOptions")}>

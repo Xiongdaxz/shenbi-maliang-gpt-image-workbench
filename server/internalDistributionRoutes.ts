@@ -12,15 +12,13 @@ const CODEX_PLUGIN_MCP_CONFIG = "plugins/maliang-image-generator/.mcp.json";
 const CODEX_PLUGIN_MANIFEST = "plugins/maliang-image-generator/.codex-plugin/plugin.json";
 const CODEX_PLUGIN_HELPER = "plugins/maliang-image-generator/skills/maliang-image-generator/scripts/maliang-helper.mjs";
 const CODEX_PLUGIN_LOCAL_MCP = "plugins/maliang-image-generator/mcp/maliang-local-mcp.mjs";
-const WORKBUDDY_HELPER_FILE = "maliang-workbuddy-mcp.mjs";
-const WORKBUDDY_HELPER_PATH = path.join(ROOT, "scripts", WORKBUDDY_HELPER_FILE);
-const WORKBUDDY_DELIVERY_MANIFEST = "/mcp/workbuddy/install.json";
-const WORKBUDDY_HELPER_URL = `/mcp/workbuddy/${WORKBUDDY_HELPER_FILE}`;
-const WORKBUDDY_NOTICE_URL = "/mcp/workbuddy/THIRD_PARTY_NOTICES.txt";
-const WORKBUDDY_NOTICE_PATH = path.join(ROOT, "scripts", "WORKBUDDY_MCP_NOTICES.txt");
 const CODEX_PLUGIN_ARCHIVE_DATE = new Date("2026-01-01T00:00:00.000Z");
-const CODEX_PLUGIN_RELEASED_AT = "2026-09-04";
+const CODEX_PLUGIN_RELEASED_AT = "2026-10-10";
 const CODEX_PLUGIN_RELEASE_NOTES = [
+  "同一 MCP 地址兼容 2025 与 2026-07-28 协议；本地上传与保存工具采用官方 SDK，保持免安装依赖的分发。",
+  "生图和改图支持 requestKey 去重及响应丢失恢复，工具补齐结构化输出。",
+  "设备记录按用户授权连接隔离；CIMD 与 issuer 元数据可在互操作验证后单独启用。",
+  "增加 Codex 安装后引导与可移植 Agent Plugins 下载包，原有 stable 自动更新入口保持兼容。",
   "Windows 自动更新优先使用 Node 20+ 或 Bun，PowerShell 兜底改用内置 .NET SHA-256，不再依赖 Get-FileHash 模块自动加载。",
   "成功检查仍缓存 24 小时；检查或安装失败只退避 15 分钟，避免一次临时错误阻止当天后续调用重试。",
   "文生图与改图统一支持透明、不透明和自动背景模式；透明输出使用 PNG 或 WebP，默认不传背景参数。",
@@ -388,12 +386,12 @@ function mcpInstallManifest(c: Context) {
         replacePlaceholdersBeforeWrite: true,
         userConfig: "~/.workbuddy/mcp.json",
         projectConfig: "<project>/.workbuddy/mcp.json",
-        imageDeliveryManifest: `${new URL(endpoint).origin}${WORKBUDDY_DELIVERY_MANIFEST}`,
         steps: [
           "由当前 WorkBuddy 智能体确认版本支持 Remote HTTP 和 OAuth，并选择正在使用的用户或项目配置文件",
           "读取真实主机名和操作系统，替换 configTemplate 占位符后合并 mcp.json；保留其他 mcpServers",
           "重新加载 MCP 并完成 OAuth 后调用 maliang_report_device，再调用 maliang_account_status",
-          "在 WorkBuddy 桌面本地任务中按 imageDeliveryManifest 安装独立的本地图片交付工具，复用已授权的 maliang，再验证本地保存工具和 WorkBuddy 原生 present_files 可用。仅远程 MCP 成功时不得称已支持本地产物。"
+          "图片交付只使用远程 maliang 和 WorkBuddy 自带能力：能原生预览 resource_link 时直接展示；需要落盘或无法预览时，从任务结果的文本 JSON 或 structuredContent 读取 imageResults[].downloadUrl，用已有下载工具或 Bash/PowerShell 保存二进制原图到当前任务已授权目录，再调用 present_files 展示真实绝对本地路径数组。无需安装额外 MCP，不得把远程 URL 当作已保存文件，也不得臆造保存工具。",
+          "用已有图片验证保存和 present_files；确认产物登记后才报告展示成功。工具不可用或下载失败时如实报告，链接过期则重查同一 jobId，不为验证或交付重新生图。"
         ],
         note: "若当前版本拒绝 url 或 headers 字段，停止并报告实际版本与错误；不要改写成不安全的共享密钥，也不要把配置步骤交给用户。"
       },
@@ -501,7 +499,7 @@ function runtimeMarketplaceFile(relativePath: string, source: Buffer, publicBase
   return source;
 }
 
-export async function buildCodexPluginArchive(publicBaseUrl: string, expectedVersion?: string) {
+export async function buildCodexPluginArchive(publicBaseUrl: string, expectedVersion?: string, profile: "codex" | "portable" = "codex") {
   const validatedPublicBaseUrl = validateMaliangPublicOrigin(publicBaseUrl);
   const pluginVersion = await readCodexPluginVersion();
   if (expectedVersion && expectedVersion !== pluginVersion) {
@@ -525,18 +523,45 @@ export async function buildCodexPluginArchive(publicBaseUrl: string, expectedVer
       mode: 0o644
     });
   }
+  if (profile === "portable") {
+    const compatibility = JSON.parse(await readFile(path.join(CODEX_MARKETPLACE_PATH, CODEX_PLUGIN_MANIFEST), "utf8"));
+    const { name, description, author, license, keywords } = compatibility;
+    const portableFiles = {
+      "plugin.json": {
+        $schema: "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+        name, version: pluginVersion, description, author, license, keywords,
+        homepage: `${validatedPublicBaseUrl}/plugin`,
+        extensions: { "com.openai": {
+          interface: compatibility.interface,
+          onboardingSkill: compatibility.extensions["com.openai"].onboardingSkill,
+          // Portable hosts own updates and tool policy; never implicitly load the Codex self-updater.
+          hooks: []
+        } }
+      },
+      "mcp.json": {
+        $schema: "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+        mcpServers: {
+          maliang: { type: "streamable-http", url: `${validatedPublicBaseUrl}/api/external-mcp/mcp` },
+          maliang_local: { type: "stdio", command: "node", args: ["./mcp/maliang-local-mcp.mjs"], cwd: "./" }
+        }
+      }
+    };
+    for (const [file, value] of Object.entries(portableFiles)) archive.append(`${JSON.stringify(value, null, 2)}\n`, {
+      name: `codex-marketplace/plugins/maliang-image-generator/${file}`, date: CODEX_PLUGIN_ARCHIVE_DATE, mode: 0o644
+    });
+  }
   await archive.finalize();
   await completed;
   return Buffer.concat(chunks);
 }
 
-export async function cachedCodexPluginArchive(publicBaseUrl: string) {
+export async function cachedCodexPluginArchive(publicBaseUrl: string, profile: "codex" | "portable" = "codex") {
   const validatedPublicBaseUrl = validateMaliangPublicOrigin(publicBaseUrl);
   const version = await readCodexPluginVersion();
-  const key = `${validatedPublicBaseUrl}\u0000${version}`;
+  const key = `${validatedPublicBaseUrl}\u0000${version}\u0000${profile}`;
   const existing = codexPluginArchiveCache.get(key);
   if (existing) return await existing;
-  const promise = buildCodexPluginArchive(validatedPublicBaseUrl, version).then((buffer) => ({
+  const promise = buildCodexPluginArchive(validatedPublicBaseUrl, version, profile).then((buffer) => ({
     buffer,
     etag: `"${createHash("sha256").update(buffer).digest("base64url")}"`,
     version
@@ -568,6 +593,7 @@ async function pluginLatestManifest(c: Context, cachedArchive?: { buffer: Buffer
     version,
     channel: "stable",
     releasedAt: CODEX_PLUGIN_RELEASED_AT,
+    portableDownloadUrl: `${publicBaseUrl}/plugin/download/portable`,
     releaseNotes: CODEX_PLUGIN_RELEASE_NOTES,
     downloadUrl: `${publicBaseUrl}/plugin/download/latest`,
     sha256: createHash("sha256").update(buffer).digest("hex"),
@@ -723,7 +749,7 @@ async function compatibleInstallManifest(c: Context) {
       "先确认当前正在运行安装任务的 AI 客户端，不以电脑上是否存在 codex 命令作为判断依据",
       "当前客户端是 Codex 时，默认安装 Codex 插件",
       "当前客户端是 Codex，但用户明确要求只安装 MCP 时，仅安装 Remote MCP，不安装插件",
-      "其他客户端使用 Remote MCP；WorkBuddy 桌面本地任务按 MCP 清单追加独立的本地图片交付工具",
+      "其他客户端使用 Remote MCP；图片交付使用客户端原生预览或宿主已有的下载与文件工具，WorkBuddy 只保留远程 maliang，无需额外 MCP",
       "以后只有在安装清单明确新增当前客户端的专用插件包时，才能改为安装该客户端插件；不得复用 Codex 插件包"
     ],
     choices: {
@@ -829,59 +855,16 @@ body,body.is-mcp{--install-card-color:var(--install-primary);color:var(--install
 }
 
 export function registerInternalDistributionRoutes(app: Hono) {
-  app.get(WORKBUDDY_DELIVERY_MANIFEST, async (c) => {
+  app.get("/plugin/download/portable", async (c) => {
     noIndex(c);
-    c.header("Cache-Control", "no-store");
-    const origin = maliangPublicBaseUrl(c);
-    const helper = await readFile(WORKBUDDY_HELPER_PATH).catch(() => null);
-    if (!helper?.length) return c.json({ error: "WorkBuddy 本地图片工具暂未部署" }, 503);
-    return c.json({
-      schemaVersion: 1,
-      type: "workbuddy-local-image-delivery",
-      desktopLocalTasksOnly: true,
-      runtime: "Node.js 20+",
-      helper: {
-        fileName: WORKBUDDY_HELPER_FILE, url: `${origin}${WORKBUDDY_HELPER_URL}`,
-        bytes: helper.length, sha256: createHash("sha256").update(helper).digest("hex"),
-        noticesUrl: `${origin}${WORKBUDDY_NOTICE_URL}`
-      },
-      configTemplate: {
-        mcpServers: {
-          maliang_workbuddy: {
-            type: "stdio", command: "node", args: ["__ABSOLUTE_HELPER_PATH__"], timeout: 180000,
-            env: {
-              MALIANG_WORKBUDDY_ORIGIN: origin,
-              MALIANG_WORKBUDDY_ALLOW_INSECURE_LOCAL: String(new URL(origin).protocol === "http:"),
-              MALIANG_WORKBUDDY_WORKSPACE_ROOTS: "[]"
-            }
-          }
-        }
-      },
-      steps: [
-        "从清单同源地址下载帮助器和许可证说明，校验文件大小和 SHA-256 后存到 WorkBuddy 持久目录。把 __ABSOLUTE_HELPER_PATH__ 换成帮助器的真实绝对路径；Node 命令必须可用。",
-        "仅合并 maliang_workbuddy 到当前 WorkBuddy 正在使用的 MCP 配置，保留已授权的远程 maliang 及其他条目。默认可写 ~/WorkBuddy 的任务目录，使用其他项目目录时仅将当前已获授权的项目根目录追加到 MALIANG_WORKBUDDY_WORKSPACE_ROOTS JSON 数组。",
-        "重新加载后验证 maliang_workbuddy 的 prepare_image_delivery、save_image_results 和 WorkBuddy 的 present_files。先用已有 jobId 验证，绝不为检查交付而重新生图。"
-      ],
-      results: [
-        "有可交付图片后，调用 prepare_image_delivery，传原 jobId 和当前 WorkBuddy 任务的绝对工作目录。",
-        "再次查询同一 jobId，传入 workBuddyDeliveryChallenge；把返回的 workBuddyDelivery 原样交给 save_image_results。",
-        "调用 WorkBuddy 内置 present_files，files 参数用保存工具返回的真实路径数组。确认登记产物后再报告展示成功；部分保存失败时仍展示成功文件。"
-      ]
-    });
-  });
-  app.get(WORKBUDDY_HELPER_URL, async (c) => {
-    noIndex(c);
-    c.header("Cache-Control", "no-store");
-    const helper = await readFile(WORKBUDDY_HELPER_PATH).catch(() => null);
-    if (!helper?.length) return c.text("WorkBuddy 本地图片工具暂未部署", 503);
-    c.header("Content-Type", "application/octet-stream");
-    c.header("Content-Disposition", `attachment; filename="${WORKBUDDY_HELPER_FILE}"`);
-    return c.body(new Uint8Array(helper));
-  });
-  app.get(WORKBUDDY_NOTICE_URL, async (c) => {
-    noIndex(c);
-    const notices = await readFile(WORKBUDDY_NOTICE_PATH, "utf8").catch(() => null);
-    return notices ? c.text(notices) : c.text("许可证说明暂不可用", 503);
+    try {
+      const archive = await cachedCodexPluginArchive(maliangPublicBaseUrl(c), "portable");
+      c.header("Content-Type", "application/zip");
+      c.header("Content-Disposition", `attachment; filename="maliang-agent-plugin-${archive.version}.zip"`);
+      c.header("ETag", archive.etag);
+      c.header("Cache-Control", "private, max-age=300");
+      return c.body(new Uint8Array(archive.buffer));
+    } catch { return c.json({ error: "插件安装包模板不可用" }, 503); }
   });
   app.get("/ai-client-install/links.json", async (c) => {
     noIndex(c);
@@ -945,7 +928,7 @@ export function registerInternalDistributionRoutes(app: Hono) {
     return c.html(pageShell({
       eyebrow: "MCP 安装",
       title: "安装神笔马良 MCP",
-      description: "安装 Remote MCP。WorkBuddy 桌面本地任务可加装原图保存工具，无需安装 Codex 插件。",
+      description: "连接神笔马良 Remote MCP，使用客户端已有工具保存和展示图片。",
       copyText: manifest.userInstruction,
       manifest,
       manualMcpConfig: manifest.manualSetup.config,

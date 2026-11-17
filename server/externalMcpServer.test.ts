@@ -47,12 +47,12 @@ describe("external MCP internal image requests", () => {
     expect(EXTERNAL_MCP_IMAGE_OUTPUT_FORMAT_SCHEMA.safeParse("jpeg").success).toBe(false);
   });
 
-  test("exposes GPT Image 2.6 and earlier model and quality choices", () => {
-    expect(EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.safeParse("gpt-image-2.6-flare").success).toBe(true);
-    expect(EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.safeParse("gpt-image-2.6-sunburst").success).toBe(true);
+  test("exposes GPT Image 2.5 model and quality choices", () => {
     expect(EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.safeParse("gpt-image-2.5-flare").success).toBe(true);
     expect(EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.safeParse("gpt-image-2.5-sunburst").success).toBe(true);
     expect(EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.safeParse("gpt-image-2").success).toBe(true);
+    expect(EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.safeParse("gpt-image-2.6-flare").success).toBe(true);
+    expect(EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.safeParse("gpt-image-2.6-sunburst").success).toBe(true);
     expect(EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.safeParse("gpt-image-2.5").success).toBe(false);
     expect(EXTERNAL_MCP_IMAGE_QUALITY_SCHEMA.safeParse("auto").success).toBe(true);
     expect(EXTERNAL_MCP_IMAGE_QUALITY_SCHEMA.safeParse("xhigh").success).toBe(true);
@@ -89,7 +89,9 @@ describe("external MCP internal image requests", () => {
     expect(instruction).not.toContain("functions.exec");
     expect(instruction).not.toContain(".ts");
     expect(instruction).not.toContain("![");
-    expect(instruction).not.toContain("https://maliang.example");
+    // A text-only host must receive the same originals as a structured MCP client.
+    const textPayload = JSON.parse(instruction.slice(instruction.indexOf("{")));
+    expect(textPayload).toEqual(result.structuredContent);
     expect(result.content[1]).toEqual({
       type: "resource_link",
       uri: "https://maliang.example/mcp/image-result/token_test",

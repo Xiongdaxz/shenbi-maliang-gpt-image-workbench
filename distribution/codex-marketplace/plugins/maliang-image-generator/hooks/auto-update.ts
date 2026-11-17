@@ -530,7 +530,7 @@ function quotePowerShellLiteral(value: string) {
   return `'${value.replaceAll("'", "''")}'`;
 }
 
-async function extractArchive(archivePath: string, destination: string, runner: CommandRunner) {
+export async function extractArchive(archivePath: string, destination: string, runner: CommandRunner = defaultCommandRunner) {
   await mkdir(destination, { recursive: false });
   let command: string[];
   if (process.platform === "win32") {
@@ -539,7 +539,9 @@ async function extractArchive(archivePath: string, destination: string, runner: 
       "-NoProfile",
       "-NonInteractive",
       "-Command",
-      `Expand-Archive -LiteralPath ${quotePowerShellLiteral(archivePath)} -DestinationPath ${quotePowerShellLiteral(destination)} -Force`
+      // Use the inbox .NET API. An inherited PSModulePath can load the PowerShell 7
+      // Archive module in Windows PowerShell 5.1, where its overload is unavailable.
+      `$ErrorActionPreference = 'Stop'; Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::ExtractToDirectory(${quotePowerShellLiteral(archivePath)}, ${quotePowerShellLiteral(destination)})`
     ];
   } else if (process.platform === "darwin") {
     command = ["ditto", "-x", "-k", archivePath, destination];

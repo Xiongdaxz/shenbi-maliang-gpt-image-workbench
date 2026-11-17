@@ -1,11 +1,14 @@
 import { createHash } from "node:crypto";
+import { inflateRawSync } from "node:zlib";
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, test } from "bun:test";
 import { Hono } from "hono";
 import {
   compareSemver,
+  extractArchive,
   parseLatestManifest,
   readPluginManifest,
   readUpdateResponseWithLimit,
@@ -112,6 +115,41 @@ describe("Maliang public URL resolution", () => {
 });
 
 describe("Maliang Codex plugin distribution", () => {
+  test("packages the portable schema separately and keeps the default updater contract", async () => {
+    // Read the ZIP central directory, independently of the production archive builder.
+    const entries = (zip: Buffer) => {
+      const end = zip.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+      expect(end).toBeGreaterThan(0);
+      let offset = zip.readUInt32LE(end + 16);
+      const files = new Map<string, string>();
+      while (zip.readUInt32LE(offset) === 0x02014b50) {
+        const nameLength = zip.readUInt16LE(offset + 28), extraLength = zip.readUInt16LE(offset + 30), commentLength = zip.readUInt16LE(offset + 32);
+        const name = zip.subarray(offset + 46, offset + 46 + nameLength).toString();
+        const local = zip.readUInt32LE(offset + 42);
+        const start = local + 30 + zip.readUInt16LE(local + 26) + zip.readUInt16LE(local + 28);
+        const data = zip.subarray(start, start + zip.readUInt32LE(offset + 20));
+        files.set(name, (zip.readUInt16LE(offset + 10) === 8 ? inflateRawSync(data) : data).toString());
+        offset += 46 + nameLength + extraLength + commentLength;
+      }
+      return files;
+    };
+    const origin = "https://portable.example";
+    const legacy = entries(await buildCodexPluginArchive(origin));
+    const portable = entries(await buildCodexPluginArchive(origin, undefined, "portable"));
+    const root = "codex-marketplace/plugins/maliang-image-generator/";
+    expect(legacy.has(`${root}plugin.json`)).toBe(false);
+    const manifest = JSON.parse(portable.get(`${root}plugin.json`)!);
+    const config = JSON.parse(portable.get(`${root}mcp.json`)!);
+    expect(manifest.version).toBe(await readCodexPluginVersion());
+    expect(manifest.$schema).toBe("https://agent-plugins.org/schemas/1.0.0/plugin.schema.json");
+    expect(manifest.extensions["com.openai"].hooks).toEqual([]);
+    expect(portable.has(`${root}${manifest.extensions["com.openai"].onboardingSkill.slice(2)}`)).toBe(true);
+    expect(config.mcpServers.maliang).toEqual({ type: "streamable-http", url: `${origin}/api/external-mcp/mcp` });
+    expect(config.mcpServers.maliang_local.type).toBe("stdio");
+    expect(JSON.parse(legacy.get(`${root}.mcp.json`)!).mcpServers.maliang.default_tools_approval_mode).toBe("approve");
+    expect(portable.get(`${root}skills/maliang-image-generator/scripts/maliang-helper.mjs`)!.includes("__MALIANG_PUBLIC_BASE_URL__")).toBe(false);
+    expect(portable.has(`${root}mcp/THIRD_PARTY_NOTICES.txt`)).toBe(true);
+  });
   test("streams automatic-update responses through a hard size limit", async () => {
     const response = new Response(new ReadableStream({
       start(controller) {
@@ -175,7 +213,7 @@ describe("Maliang Codex plugin distribution", () => {
     expect(localMcp).toContain("uploadMaliangLocalImage");
     expect(localMcp).toContain("upload_local_image");
     expect(localMcp).toContain("saveMaliangImageResult");
-    expect(localMcp).toContain("此工具不会打开浏览器");
+    expect(localMcp.includes("此工具不会打开浏览器")).toBe(true);
   });
 
   test("uses a Codex-safe Windows Markdown image path", async () => {
@@ -226,7 +264,7 @@ describe("Maliang Codex plugin distribution", () => {
       "distribution/codex-marketplace/plugins/maliang-image-generator/.codex-plugin/plugin.json",
       "utf8"
     )) as { hooks?: string; version?: string };
-    expect(pluginManifest.version).toBe("0.5.1");
+    expect(pluginManifest.version).toBe("0.6.0");
     expect(pluginManifest.hooks).toBe("./hooks/hooks.json");
 
     const hooks = JSON.parse(await readFile(
@@ -528,6 +566,39 @@ if ($actual -cne '${expected}') { throw "Unexpected SHA-256: $actual" }
     }
   });
 
+  test("Windows plugin updaters can unpack the actual distribution without the Archive cmdlet", async () => {
+    if (process.platform !== "win32") return;
+    const directory = await mkdtemp(path.join(tmpdir(), "maliang-windows-archive-"));
+    const archivePath = path.join(directory, "candidate's package.zip");
+    const hookRoot = path.resolve("distribution/codex-marketplace/plugins/maliang-image-generator/hooks");
+    const psOutput = path.join(directory, "ps");
+    const quote = (value: string) => `'${value.replaceAll("'", "''")}'`;
+    const run = async (args: string[]) => {
+      const child = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });
+      const [stdout, stderr, exitCode] = await Promise.all([
+        new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited
+      ]);
+      expect({ stdout, stderr, exitCode }).toEqual({ stdout: "", stderr: "", exitCode: 0 });
+    };
+    try {
+      await writeFile(archivePath, await buildCodexPluginArchive("https://archive-fixture.example"));
+      await extractArchive(archivePath, path.join(directory, "ts"));
+      const module = pathToFileURL(path.join(hookRoot, "auto-update.mjs")).href;
+      await run([Bun.which("node") ?? process.execPath, "--input-type=module", "-e",
+        `import { extractArchive } from ${JSON.stringify(module)}; await extractArchive(${JSON.stringify(archivePath)}, ${JSON.stringify(path.join(directory, "node"))});`]);
+      await run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+        `. ${quote(path.join(hookRoot, "auto-update.ps1"))}; function Expand-Archive { throw 'Unexpected module dependency' }; Expand-MaliangUpdateArchive ${quote(archivePath)} ${quote(psOutput)}`]);
+      const relativeManifest = "codex-marketplace/plugins/maliang-image-generator/.codex-plugin/plugin.json";
+      for (const runner of ["ts", "node", "ps"]) {
+        const manifest = JSON.parse(await readFile(path.join(directory, runner, relativeManifest), "utf8"));
+        expect(manifest.version).toBe(await readCodexPluginVersion());
+        expect(manifest.homepage).toBe("https://archive-fixture.example/plugin");
+      }
+    } finally {
+      await rm(directory, { force: true, recursive: true });
+    }
+  });
+
   test("validates the complete runtime Marketplace before an update switch", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "maliang-marketplace-"));
     const marketplaceRoot = path.join(directory, "codex-marketplace");
@@ -571,7 +642,7 @@ if ($actual -cne '${expected}') { throw "Unexpected SHA-256: $actual" }
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       publicBaseUrl: "https://maliang.example.com",
-      pluginVersion: "0.5.1",
+      pluginVersion: "0.6.0",
       install: {
         href: "https://maliang.example.com/install",
         instruction: "访问 https://maliang.example.com/install，安装神笔马良。"
@@ -615,7 +686,7 @@ if ($actual -cne '${expected}') { throw "Unexpected SHA-256: $actual" }
         supported: boolean;
       };
     };
-    expect(manifest.version).toBe("0.5.1");
+    expect(manifest.version).toBe("0.6.0");
     expect(manifest.execution.owner).toBe("current-ai-agent");
     expect(manifest.execution.mode).toBe("execute-installation");
     expect(manifest.execution.startImmediatelyAfterReading).toBe(true);
@@ -656,7 +727,7 @@ if ($actual -cne '${expected}') { throw "Unexpected SHA-256: $actual" }
     expect(html).not.toContain('<nav class="nav">');
     expect(html).not.toContain('<span class="eyebrow">');
     expect(html).toContain('<div class="title-row"><img class="title-logo" src="/image/logo-small.webp" alt=""><h1>安装神笔马良插件</h1>');
-    expect(html).toContain('<span class="version-badge">v0.5.1</span>');
+    expect(html).toContain('<span class="version-badge">v0.6.0</span>');
     expect(html).toContain('<img class="hero-art" src="/image/install/maliang-plugin-install-hero.webp"');
     expect(html).not.toContain('/image/help/maliang-help-hero-v2.webp');
     expect(html).toContain("Claude Code、TRAE Work、WorkBuddy");
@@ -702,7 +773,7 @@ if ($actual -cne '${expected}') { throw "Unexpected SHA-256: $actual" }
     };
     expect(manifest.version).toBe(await readCodexPluginVersion());
     expect(manifest.channel).toBe("stable");
-    expect(manifest.releasedAt).toBe("2026-09-04");
+    expect(manifest.releasedAt).toBe("2026-10-10");
     expect(manifest.releaseNotes.join("\n")).toContain("透明、不透明和自动背景模式");
     expect(manifest.downloadUrl).toBe("https://open-source.example/plugin/download/latest");
     expect(manifest.mcpResource).toBe("https://open-source.example/api/external-mcp/mcp");

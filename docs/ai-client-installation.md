@@ -10,7 +10,7 @@
 
 - Codex 默认安装完整 Codex 插件。插件已包含 Skill 与 Remote MCP，不重复添加全局 `maliang` MCP。
 - Codex 用户明确说明“只安装 MCP”时，仅安装 Remote MCP。
-- Claude Code、TRAE Work、WorkBuddy 和其他客户端使用 Remote MCP，不能复用 Codex 插件包。WorkBuddy 桌面本地任务另有独立的图片交付工具，用于保存原图并在会话中展示产物。
+- Claude Code、TRAE Work、WorkBuddy 和其他客户端使用 Remote MCP，不能复用 Codex 插件包。图片通过客户端原生预览或宿主已有的下载与文件工具交付，WorkBuddy 只连接远程 `maliang`。
 - 以后为某个客户端提供专用神笔马良插件包时，再把该客户端及其插件分发信息加入机器清单，由模型自动选择。
 
 机器清单以当前正在执行任务的客户端身份为准，不能仅因同一台电脑存在 `codex` 命令就把 Codex 插件安装到其他 App。
@@ -67,15 +67,17 @@ Edge 等浏览器在唤起 WorkBuddy 后可能保留原授权页。保留下来�
 
 ## WorkBuddy 图片产物
 
-WorkBuddy 桌面本地任务继续复用已授权的远程 `maliang`。按同源 `/mcp/workbuddy/install.json` 安装 `maliang_workbuddy` stdio 工具（Node.js 20+），先验证下载文件的 SHA-256，不需要重装远程连接器。默认允许写入 `~/WorkBuddy` 下的任务目录；其他项目仅通过 `MALIANG_WORKBUDDY_WORKSPACE_ROOTS` 明确授权。
+WorkBuddy 继续复用已授权的远程 `maliang`，按当前任务实际可用的能力交付图片：
 
-使用内网 HTTPS 时仍按安装清单的可信地址访问，并正常验证 TLS 证书；无需打开允许局域网 HTTP 的选项。下载期间如果原任务目录被替换，保存会停止，需为原 `jobId` 重新准备交付。
+1. 客户端支持原生预览 `resource_link` 时优先直接展示。
+2. 需要保存原图或无法直接预览时，从任务结果读取 `imageResults[].downloadUrl`。图片信息同时保留在文本 JSON 和 `structuredContent`，只转发文本的客户端也能读取下载地址，不需要额外 MCP。
+3. 使用 WorkBuddy 自带的下载或文件工具保存二进制原图；实际可用的工具只有 Bash/PowerShell 时，也可使用其下载能力。保存位置必须在当前任务已授权目录。核实真实文件后调用 `present_files(files: 绝对本地路径数组)`，确认产物登记后才报告展示成功。不能把远程 URL 当作已保存文件，也不能臆造当前客户端没有的工具。
 
-1. 原任务查到图片后，用已有 `jobId` 和当前任务绝对工作目录调用 `prepare_image_delivery`。
-2. 用同一个 `jobId` 调用 `maliang_get_image_job`，传入 `workBuddyDeliveryChallenge`。WorkBuddy 即使只保留文本，也能读取 `workBuddyDelivery`；该票据只有准备交付的本地进程能用，原图的下载凭据不进入对话或工具日志。
-3. 将 `workBuddyDelivery` 原样交给 `save_image_results`。原图保存到当前任务的 `generated-images`，返回 `images[].localPath` 和 `files`。随后调用 WorkBuddy 内置 `present_files` 展示这些文件，与原生图片使用同一种产物卡片。图片部分成功时保留已保存的文件并报告未交付项。
+2026-11-16 的本机成功记录中，WorkBuddy 没有调用本地交付工具：查询已有任务后用自带 Bash 下载 `puppy.png`，再调用 `present_files` 登记 2,481,104 字节的本地 PNG。这证明当时通过下载后展示完成交付，不能据此认定 WorkBuddy 直接预览了远程链接，也不能认定所有版本均有原生下载工具。
 
-交付票据绑定原任务、图片、账号和授权关系，5 分钟后过期；过期、保存失败或本地进程重启时重新准备原 `jobId` 即可，不重新生图。这个本地交付工具不适用于 WorkBuddy 云端任务；仅安装 Remote MCP 也不能创建本地产物。
+遵守宿主的展示与文件权限规则，临时签名链接仅作为工具调用参数，不回显到正文、不另写日志或长期存储。工具不可用或下载失败时如实报告；链接过期后重查同一 `jobId` 获取新链接，不重新生图。部分任务失败时，仍交付已有图片并说明缺失项。
+
+2026-11-17 起本地源码移除独立 `maliang_workbuddy`、安装与下载入口、交付挑战和票据分支。已安装该临时条目的客户端应仅移除该条目，保留原远程 `maliang` 及其 OAuth 授权。历史发布包仍可能包含旧工具；本轮不发布或部署。
 
 ## 所有客户端的设备名称上报
 

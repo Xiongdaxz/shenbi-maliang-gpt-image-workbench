@@ -1,7 +1,7 @@
 {
   "name": "gpt-image-workbench",
   "private": true,
-  "version": "0.1.87",
+  "version": "0.1.88",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -12,19 +12,19 @@
     "test": "bun test",
     "test:chatgpt-web-bridge": "bun scripts/run-chatgpt-web-bridge-tests.ts",
     "setup:chatgpt-web": "bun scripts/setup-chatgpt-web-python.ts",
-    "package:maliang-plugin": "bun scripts/package-maliang-codex-plugin.ts",
+    "package:maliang-plugin": "bun run build:maliang-local-mcp && bun scripts/package-maliang-codex-plugin.ts",
     "smoke:mcp": "bun scripts/smoke-external-mcp.ts",
     "start": "bun scripts/start-server.ts",
     "restart": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/restart.ps1",
     "preview:app-update": "bun scripts/start-app-update-preview.ts",
     "seed:app-update-preview": "bun scripts/seed-app-update-preview.ts",
-    "build:workbuddy-mcp": "bun scripts/build-workbuddy-mcp.ts",
-    "check:workbuddy-mcp": "bun scripts/build-workbuddy-mcp.ts --check",
-    "check": "tsc -b && bun run check:workbuddy-mcp"
+    "build:maliang-local-mcp": "bun scripts/build-maliang-local-mcp.ts",
+    "check:maliang-plugin": "bun scripts/build-maliang-local-mcp.ts --check",
+    "check": "tsc -b && bun run check:maliang-plugin"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.12",
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/server": "2.4.0",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-tabs": "^1.1.13",
@@ -33,7 +33,7 @@
     "archiver": "^8.0.0",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.12.32",
-    "lucide-react": "^0.562.0",
+    "lucide-react": "1.73.0",
     "nodemailer": "^9.0.3",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
@@ -43,6 +43,7 @@
     "zustand": "^5.0.9"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "2.4.0",
     "@types/archiver": "^8.0.0",
     "@types/bun": "^1.3.6",
     "@types/nodemailer": "^8.0.0",

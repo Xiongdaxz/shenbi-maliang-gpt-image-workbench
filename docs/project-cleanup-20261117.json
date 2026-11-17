@@ -1,0 +1,408 @@
+{
+  "date": "2026-11-17",
+  "scope": "Disposable review caches, browser previews and isolated test data",
+  "removedTargets": 56,
+  "removedFiles": 146908.0,
+  "removedBytes": 3543413950.0,
+  "preserved": [
+    "Git checkouts and history",
+    "source patches and release manifests",
+    "current node_modules and dist",
+    "data and runtime",
+    "output media and historical release packages"
+  ],
+  "targets": [
+    {
+      "path": ".tmp/add-icon-preview-build",
+      "status": "removed",
+      "files": 1,
+      "bytes": 2421952,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/composer-ui-build",
+      "status": "removed",
+      "files": 2,
+      "bytes": 2632025,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/lucide-upgrade-preview-build",
+      "status": "removed",
+      "files": 1,
+      "bytes": 2851298,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/bun-lucide-cache",
+      "status": "removed",
+      "files": 4767,
+      "bytes": 39341678.0,
+      "reason": "Verified internal junction removed without following its target"
+    },
+    {
+      "path": ".tmp/lucide-upgrade-before",
+      "status": "removed",
+      "files": 2,
+      "bytes": 82293,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/maliang-hyperframes/npm-cache",
+      "status": "removed",
+      "files": 476,
+      "bytes": 76236275,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/maliang-hyperframes/cache",
+      "status": "removed",
+      "files": 19,
+      "bytes": 493547,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/v0.1.86-browser/node_modules",
+      "status": "removed",
+      "files": 183,
+      "bytes": 19037800,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/v0.1.86-browser/npm-cache",
+      "status": "removed",
+      "files": 10,
+      "bytes": 39867980,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/codex-binding-tests",
+      "status": "removed",
+      "files": 9,
+      "bytes": 1299184,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/creative-context-cleanup",
+      "status": "removed",
+      "files": 4,
+      "bytes": 2523136,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/creative-defaults-test",
+      "status": "removed",
+      "files": 400,
+      "bytes": 339573042,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/creative-example-integration",
+      "status": "removed",
+      "files": 367,
+      "bytes": 286189259,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/image-set-integration",
+      "status": "removed",
+      "files": 57,
+      "bytes": 1356265,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/release-audit-20261117/data",
+      "status": "removed",
+      "files": 2,
+      "bytes": 0,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/release-audit-targeted/data",
+      "status": "removed",
+      "files": 0,
+      "bytes": 0,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/local-master-sync-060-check/node_modules",
+      "status": "removed",
+      "files": 15816,
+      "bytes": 225254725,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/local-master-sync-060-check/dist",
+      "status": "removed",
+      "files": 158,
+      "bytes": 168638470,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/local-v0.1.87-check-20261116/node_modules",
+      "status": "removed",
+      "files": 15768,
+      "bytes": 224662261,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/local-v0.1.87-check-20261116/dist",
+      "status": "removed",
+      "files": 158,
+      "bytes": 168638470,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/plugin-0.6.0-sdk-2.4.0-review/node_modules",
+      "status": "removed",
+      "files": 15816,
+      "bytes": 225254725,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/plugin-0.6.0-sdk-2.4.0-review/dist",
+      "status": "removed",
+      "files": 77,
+      "bytes": 57343536,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/plugin-0.6.0-v0.1.87-candidate/node_modules",
+      "status": "removed",
+      "files": 15768,
+      "bytes": 224662261,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/plugin-0.6.0-v0.1.87-candidate/dist",
+      "status": "removed",
+      "files": 77,
+      "bytes": 57343536,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/release-v0.1.84-review/node_modules",
+      "status": "removed",
+      "files": 15654,
+      "bytes": 216690725,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/release-v0.1.84-review/dist",
+      "status": "removed",
+      "files": 77,
+      "bytes": 57344000,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/release-v0.1.85-review/node_modules",
+      "status": "removed",
+      "files": 15654,
+      "bytes": 216690725,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/release-v0.1.85-review/dist",
+      "status": "removed",
+      "files": 77,
+      "bytes": 57344000,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/release-v0.1.86/node_modules",
+      "status": "removed",
+      "files": 15654,
+      "bytes": 216690725,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/release-v0.1.86/dist",
+      "status": "removed",
+      "files": 77,
+      "bytes": 57343536,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/release-v0.1.87/node_modules",
+      "status": "removed",
+      "files": 15654,
+      "bytes": 216690725,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/release-v0.1.87/dist",
+      "status": "removed",
+      "files": 77,
+      "bytes": 57343536,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/workbuddy-sdk-v2-review/node_modules",
+      "status": "removed",
+      "files": 13947,
+      "bytes": 223798726,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/workbuddy-sdk-v2-review/dist",
+      "status": "removed",
+      "files": 77,
+      "bytes": 57343536,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/add-icon-compare-1-large.png",
+      "status": "removed",
+      "files": 1,
+      "bytes": 5539,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/add-icon-compare-1.25-large.png",
+      "status": "removed",
+      "files": 1,
+      "bytes": 5667,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/add-icon-compare-1.25.png",
+      "status": "removed",
+      "files": 1,
+      "bytes": 1910,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/add-icon-compare-1.5-large.png",
+      "status": "removed",
+      "files": 1,
+      "bytes": 6459,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/add-icon-compare-1.5.png",
+      "status": "removed",
+      "files": 1,
+      "bytes": 2165,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/add-icon-compare-1.png",
+      "status": "removed",
+      "files": 1,
+      "bytes": 1275,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/add-icon-compare-2-large.png",
+      "status": "removed",
+      "files": 1,
+      "bytes": 6830,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/add-icon-compare-2.png",
+      "status": "removed",
+      "files": 1,
+      "bytes": 2793,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/add-icon-final-1.25.png",
+      "status": "removed",
+      "files": 1,
+      "bytes": 1162,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/add-icon-final-1.5.png",
+      "status": "removed",
+      "files": 1,
+      "bytes": 1362,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/add-icon-final-1.png",
+      "status": "removed",
+      "files": 1,
+      "bytes": 880,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/add-icon-final-2.png",
+      "status": "removed",
+      "files": 1,
+      "bytes": 1818,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/add-icon-mobile-1.25.png",
+      "status": "removed",
+      "files": 1,
+      "bytes": 1198,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/add-icon-mobile-1.5.png",
+      "status": "removed",
+      "files": 1,
+      "bytes": 1348,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/add-icon-mobile-1.png",
+      "status": "removed",
+      "files": 1,
+      "bytes": 892,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/add-icon-mobile-2.png",
+      "status": "removed",
+      "files": 1,
+      "bytes": 1828,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/composer-ui-mobile.png",
+      "status": "removed",
+      "files": 1,
+      "bytes": 29417,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/composer-ui-open.png",
+      "status": "removed",
+      "files": 1,
+      "bytes": 32927,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/lucide-upgrade-desktop.png",
+      "status": "removed",
+      "files": 1,
+      "bytes": 54994,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/lucide-upgrade-mobile.png",
+      "status": "removed",
+      "files": 1,
+      "bytes": 46695,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/lucide-upgrade-settings-dark.png",
+      "status": "removed",
+      "files": 1,
+      "bytes": 95785,
+      "reason": ""
+    },
+    {
+      "path": ".tmp/lucide-upgrade-settings-light.png",
+      "status": "removed",
+      "files": 1,
+      "bytes": 127054,
+      "reason": ""
+    }
+  ]
+}

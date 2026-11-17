@@ -1,6 +1,6 @@
 {
   "name": "maliang-image-generator",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "登录神笔马良后，在 Codex 中完成文生图、改图和异步任务查询。",
   "author": {
     "name": "神笔马良团队"
@@ -34,5 +34,10 @@
     "composerIcon": "./assets/logo-small.webp",
     "logo": "./assets/logo.png"
   },
-  "mcpServers": "./.mcp.json"
+  "mcpServers": "./.mcp.json",
+  "extensions": {
+    "com.openai": {
+      "onboardingSkill": "./skills/maliang-connection-help/SKILL.md"
+    }
+  }
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createPortal } from "react-dom";
-import { Ellipsis, GalleryHorizontalEnd, ShieldCheck, Sparkles } from "lucide-react";
+import { Ellipsis, GalleryHorizontalEnd, PencilSparkles, ShieldCheck } from "lucide-react";
 import { api } from "../../api";
 import { useI18n } from "../../i18n";
 import { cx } from "../../lib/cx";
@@ -158,7 +158,7 @@ export function MoreToolsMenu({
               data-placement="bottom-start"
             >
               <button type="button" role="menuitem" onClick={() => choose("/prompt-templates")}>
-                <Sparkles size={17} />
+                <PencilSparkles size={17} />
                 <span>{t("more.prompt.title")}</span>
               </button>
               {SERIES_CREATION_AVAILABLE ? (

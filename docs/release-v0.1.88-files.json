@@ -1,0 +1,360 @@
+{
+  "version": "0.1.88",
+  "pluginVersion": "0.6.0",
+  "baseVersion": "0.1.87",
+  "baseCommit": "b6d87a7d979bf3cb6d636ef234af45db484b9145",
+  "changedFiles": [
+    {
+      "path": "bun.lock",
+      "action": "modified",
+      "bytes": 79326,
+      "sha256": "5fb9d636792f01ec4ecd5c152703188ab8e8f95de73b0c9a67237f7b0f5198e5"
+    },
+    {
+      "path": "distribution/codex-marketplace/plugins/maliang-image-generator/.codex-plugin/plugin.json",
+      "action": "modified",
+      "bytes": 1583,
+      "sha256": "bec4c222b028fcc1cfc79577aadd1e56087007e134ba995144caf6990072d2d7"
+    },
+    {
+      "path": "distribution/codex-marketplace/plugins/maliang-image-generator/hooks/auto-update.mjs",
+      "action": "modified",
+      "bytes": 34069,
+      "sha256": "fa564d79e267b178482edbd09a2438230209e49fc2c25b49ed5ac2f39baa1b8e"
+    },
+    {
+      "path": "distribution/codex-marketplace/plugins/maliang-image-generator/hooks/auto-update.ps1",
+      "action": "modified",
+      "bytes": 30830,
+      "sha256": "5941d557e177892bea0ffe0c47281e2926a49910777077c3b7c28453c737547b"
+    },
+    {
+      "path": "distribution/codex-marketplace/plugins/maliang-image-generator/hooks/auto-update.ts",
+      "action": "modified",
+      "bytes": 37334,
+      "sha256": "91026cb1cac5656b56d9f9e212730b37a1d3eb855fe4addb15336dee62a02982"
+    },
+    {
+      "path": "distribution/codex-marketplace/plugins/maliang-image-generator/mcp/THIRD_PARTY_NOTICES.txt",
+      "action": "added",
+      "bytes": 26082,
+      "sha256": "cec2e6a2df1328009ce4ae29f83fdedbe69e119b9e88e577afd5dbae8a3b0bcb"
+    },
+    {
+      "path": "distribution/codex-marketplace/plugins/maliang-image-generator/mcp/maliang-local-mcp.mjs",
+      "action": "modified",
+      "bytes": 626474,
+      "sha256": "994590841729c2cce52aaaeca939a2343b516ba3810ce84fbb03def257fab096"
+    },
+    {
+      "path": "distribution/codex-marketplace/plugins/maliang-image-generator/skills/maliang-connection-help/SKILL.md",
+      "action": "modified",
+      "bytes": 9805,
+      "sha256": "f9b609357b81861acd0446d2ea3f52317787c481c15abedce951be1b4bcf0c2b"
+    },
+    {
+      "path": "distribution/codex-marketplace/plugins/maliang-image-generator/skills/maliang-image-generator/SKILL.md",
+      "action": "modified",
+      "bytes": 14087,
+      "sha256": "d19bf6ebdcff6fcbbd56b47a7a5b79acf059b07e2a6346c5adf6073c5f945445"
+    },
+    {
+      "path": "docs/ai-client-installation.md",
+      "action": "modified",
+      "bytes": 28275,
+      "sha256": "81505b91e0c89ae258cbddcb558df4382dfc46e7e09ae987ee62ac862113c20e"
+    },
+    {
+      "path": "docs/changelog.md",
+      "action": "modified",
+      "bytes": 77073,
+      "sha256": "ec1b8b98f56adfd480ea3b6e792ec4c21a1384bf8f324bbc265ee748dd1cab42"
+    },
+    {
+      "path": "docs/database-schema.md",
+      "action": "modified",
+      "bytes": 76625,
+      "sha256": "7c64227cb4c7ba3879093a9431e628cecbf9200208e25b0d1875a81a0578385e"
+    },
+    {
+      "path": "docs/lucide-upgrade-review-20261117.md",
+      "action": "added",
+      "bytes": 2818,
+      "sha256": "244b92cb80809c5b5c56adc628fbc34f46f439342ff634170a1aee819090c7a9"
+    },
+    {
+      "path": "docs/maliang-plugin-versioning.md",
+      "action": "modified",
+      "bytes": 13456,
+      "sha256": "0710faee5a3b7b3bc62280ac2c1332bb1ae095f366508b4b19588e87c62a4a62"
+    },
+    {
+      "path": "docs/mcp-2026-07-28-compatibility.md",
+      "action": "modified",
+      "bytes": 5546,
+      "sha256": "9c241d751d11362a490c48cc392565a4e23cb48fe6a6bad25a32957397404c3b"
+    },
+    {
+      "path": "docs/project-cleanup-20261117.json",
+      "action": "added",
+      "bytes": 9365,
+      "sha256": "1ba6f6978bf9aae20a1969f48641b5216f4b54fed7226a4c695af0a14d6a806e"
+    },
+    {
+      "path": "docs/release-review-v0.1.88.md",
+      "action": "added",
+      "bytes": 7360,
+      "sha256": "d106d63cf9f4d4784c3aa87f783481951f9d331486ba500142ebf995eaba2436"
+    },
+    {
+      "path": "docs/workbuddy-remote-mcp-delivery-20261117.md",
+      "action": "added",
+      "bytes": 2702,
+      "sha256": "972d0d9fc84836c9b9be7a9b3a126c9a2cd633affcf127c25e565f75a04b3915"
+    },
+    {
+      "path": "package.json",
+      "action": "modified",
+      "bytes": 2293,
+      "sha256": "4db0b1822c525d5f912c50f2cc31214b29e500c9654ccf90a5a466c269065a80"
+    },
+    {
+      "path": "public/third-party-notices/github-octicons.txt",
+      "action": "added",
+      "bytes": 1240,
+      "sha256": "861c83429fce2a1019c81bcba728d712c6e818ee05699c68cfbe0646dca7a6db"
+    },
+    {
+      "path": "scripts/build-maliang-local-mcp.ts",
+      "action": "added",
+      "bytes": 2413,
+      "sha256": "ccfe9759344726c61f855fbde54d99724abce56e478008e8d4bb9a8e6815ee0a"
+    },
+    {
+      "path": "scripts/maliang-local-mcp-entry.mjs",
+      "action": "added",
+      "bytes": 7224,
+      "sha256": "04e91a07ee124aa69c79831d809e3b259c470c23a4cf1a4e0f16592e230a175b"
+    },
+    {
+      "path": "scripts/package-maliang-codex-plugin.ts",
+      "action": "modified",
+      "bytes": 2164,
+      "sha256": "d87b28e7fc149b169c54ceda72bf2c467cbd601c232bbe836bc5b18131b68e2a"
+    },
+    {
+      "path": "scripts/smoke-external-mcp.ts",
+      "action": "modified",
+      "bytes": 25650,
+      "sha256": "e88a640766bf36687cd82fada9aba7cdf4b5274037365114b26ba5de3b678173"
+    },
+    {
+      "path": "scripts/smoke-mcp-image-delivery.ts",
+      "action": "added",
+      "bytes": 5270,
+      "sha256": "a939bebed954fb6084d6179855b681a3cdb773bb7c997f11526dbf767561c5d4"
+    },
+    {
+      "path": "server/externalMcpAuth.ts",
+      "action": "modified",
+      "bytes": 17881,
+      "sha256": "25c5614757752cb146ba8b641043ddf3ebfebeec9307da045525fc36e02bca18"
+    },
+    {
+      "path": "server/externalMcpCimd.test.ts",
+      "action": "added",
+      "bytes": 2140,
+      "sha256": "9679a11c9f065b0f78f4f5451dab1e6895b9af561d681455396add593abe1fba"
+    },
+    {
+      "path": "server/externalMcpCimd.ts",
+      "action": "added",
+      "bytes": 5910,
+      "sha256": "5945c4953eb7c36a4526fb2618abefd33335c3c27db0d72632d25acea3bbe061"
+    },
+    {
+      "path": "server/externalMcpConnections.test.ts",
+      "action": "added",
+      "bytes": 1532,
+      "sha256": "9b08b69db837b1da3a39eccee2a9210b678970f872aeb33623b75139a814cc5e"
+    },
+    {
+      "path": "server/externalMcpConnections.ts",
+      "action": "added",
+      "bytes": 1228,
+      "sha256": "59c2b00de9e823695ebba38881974e30e0c249992c9771c42360ee533ba6025e"
+    },
+    {
+      "path": "server/externalMcpDistribution.test.ts",
+      "action": "modified",
+      "bytes": 53869,
+      "sha256": "52f24247afcdb47c0fe6195e1668caf79c96573112561419d48d5aa4618f2435"
+    },
+    {
+      "path": "server/externalMcpLocalImage.test.ts",
+      "action": "modified",
+      "bytes": 22080,
+      "sha256": "469974fe2721e2b04d445a1e2519314faeccbd37cf867c5de70cee982a0dbf8f"
+    },
+    {
+      "path": "server/externalMcpOAuth.test.ts",
+      "action": "modified",
+      "bytes": 56192,
+      "sha256": "30ea4ddb9e9417f9603be3954eea79777ae9d3bf42eb513bbb21eecbd2b55506"
+    },
+    {
+      "path": "server/externalMcpOAuth.ts",
+      "action": "modified",
+      "bytes": 95271,
+      "sha256": "7ca3b293d22011ff939ac33918a5c146974f5832cb24a2b2a231910bd8895f96"
+    },
+    {
+      "path": "server/externalMcpResults.test.ts",
+      "action": "modified",
+      "bytes": 3734,
+      "sha256": "efa46cdd663416df5e670a96a93e01fa81e71ef15a1fd31e31683b86c544b82b"
+    },
+    {
+      "path": "server/externalMcpResults.ts",
+      "action": "modified",
+      "bytes": 7351,
+      "sha256": "5369d503073e0c43c226cc60c2828172f677ac042fb5da1a8c37e859732af378"
+    },
+    {
+      "path": "server/externalMcpServer.test.ts",
+      "action": "modified",
+      "bytes": 7714,
+      "sha256": "cc9e0e8076c9e21c8400c1cb271ab38abbfdcfff424151d1cd88d67fb8ce50c1"
+    },
+    {
+      "path": "server/externalMcpServer.ts",
+      "action": "modified",
+      "bytes": 31715,
+      "sha256": "09523d775e4337a4ec2869af4253112612f268e293b07e28945bc960665b4297"
+    },
+    {
+      "path": "server/externalMcpSubmissions.test.ts",
+      "action": "added",
+      "bytes": 3931,
+      "sha256": "36b6b2b1a69880c3bf1bf5ad91af022952843557cba548ce4f859a0b54c04994"
+    },
+    {
+      "path": "server/externalMcpSubmissions.ts",
+      "action": "added",
+      "bytes": 4149,
+      "sha256": "ddecd1e067481ebac4bd26aa5c7c70610034d148de6b76461b7e9fc3fbc53171"
+    },
+    {
+      "path": "server/internalDistributionRoutes.ts",
+      "action": "modified",
+      "bytes": 71913,
+      "sha256": "3182ea0f66e01589c52e226825ab3dc1ca0657f5bf8cb74af50d6d15fe732f62"
+    },
+    {
+      "path": "server/schema.ts",
+      "action": "modified",
+      "bytes": 120657,
+      "sha256": "ad9f0bb497a7a505c590c0149bcc2ccaa13dd335048b792654681d3a981b227d"
+    },
+    {
+      "path": "src/components/FeatureIntroModal.tsx",
+      "action": "modified",
+      "bytes": 15046,
+      "sha256": "20e684d1cd7739deebe8fa3152e71dfd73e8c0aab7a653b89510c5b86785d3be"
+    },
+    {
+      "path": "src/components/GithubMarkIcon.tsx",
+      "action": "added",
+      "bytes": 2484,
+      "sha256": "e1fabedecc799fa63f34e76988763e26759d7ce2cffb89f6acb8e0d946eadee7"
+    },
+    {
+      "path": "src/components/ImageEditorControls.tsx",
+      "action": "modified",
+      "bytes": 27615,
+      "sha256": "582491960ca44e9ac383e9812a36c248d60a697cff624707ed93cc08f35125a9"
+    },
+    {
+      "path": "src/components/InlineIcons.tsx",
+      "action": "modified",
+      "bytes": 1939,
+      "sha256": "c59fed7496ea1afb041f737508527b8ba1ee02b570900962dee3a85a37da9586"
+    },
+    {
+      "path": "src/components/SharedWorkbenchShell.tsx",
+      "action": "modified",
+      "bytes": 6255,
+      "sha256": "abef397340305e610f96907e623d96ca48d9c3ce82533e58b9f2e80f032ac64b"
+    },
+    {
+      "path": "src/components/chat/ChatComposer.tsx",
+      "action": "modified",
+      "bytes": 49954,
+      "sha256": "20f0e03ef08855ab2641705beb50c026a44fe1abc145ce25b37bef6b7c487d07"
+    },
+    {
+      "path": "src/components/chat/PromptTemplateComposerPanel.tsx",
+      "action": "modified",
+      "bytes": 62221,
+      "sha256": "ec9ef833176f03d53201fc874f7729da865dd8c9a9d61878a7f5b1334de73027"
+    },
+    {
+      "path": "src/components/settings/AppSettingsDialog.tsx",
+      "action": "modified",
+      "bytes": 74498,
+      "sha256": "3385c1a67e24c803646ca0126774aee69ee5c39a070e3cbe5d0ab31d4d247224"
+    },
+    {
+      "path": "src/components/sidebar/MoreToolsMenu.tsx",
+      "action": "modified",
+      "bytes": 6908,
+      "sha256": "df779194298203dedef9a5572cb70b0ce791ced7645f7a994cf3ff4eae5b23ac"
+    },
+    {
+      "path": "src/pages/PromptTemplatesPage.tsx",
+      "action": "modified",
+      "bytes": 169394,
+      "sha256": "38caec8c18c84fc4a7d05d8f5e1b66452ad057a983b628bedb6c096e5d6fe402"
+    },
+    {
+      "path": "src/styles/starter-composer.css",
+      "action": "modified",
+      "bytes": 61100,
+      "sha256": "954073e84e5df492de7b650dfbdde4408e8231b36e694223f838bcd855964173"
+    },
+    {
+      "path": "tsconfig.json",
+      "action": "modified",
+      "bytes": 1056,
+      "sha256": "a746938d20c2e6c41a3fe7c5b6346a83e41d2b3feac6f4cd1fc423d7477be94d"
+    }
+  ],
+  "deletedFiles": [
+    "scripts/WORKBUDDY_MCP_NOTICES.txt",
+    "scripts/build-workbuddy-mcp.ts",
+    "scripts/maliang-workbuddy-file-store.mjs",
+    "scripts/maliang-workbuddy-mcp-entry.mjs",
+    "scripts/maliang-workbuddy-mcp.mjs",
+    "scripts/smoke-workbuddy-delivery.ts",
+    "server/externalMcpWorkBuddy.test.ts"
+  ],
+  "status": "release-preparation-snapshot",
+  "publishedToGitHub": false,
+  "deployed": false,
+  "packagesCreated": false,
+  "rootFiles": [
+    "package.json",
+    "bun.lock",
+    "tsconfig.json"
+  ],
+  "folders": [
+    "server/",
+    "scripts/",
+    "distribution/codex-marketplace/",
+    "src/",
+    "public/third-party-notices/"
+  ],
+  "changelog": "docs/changelog.md",
+  "deploymentNotes": "docs/release-review-v0.1.88.md",
+  "reviewedAt": "2026-11-17"
+}

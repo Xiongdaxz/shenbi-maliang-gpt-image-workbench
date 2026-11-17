@@ -1,11 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { Hono } from "hono";
 import { APP_COOKIE } from "../server/constants";
-import { smokeWorkBuddyDelivery } from "./smoke-workbuddy-delivery";
+import { smokeMcpImageDelivery } from "./smoke-mcp-image-delivery";
 
 const workspace = path.resolve(process.cwd());
 const smokeRoot = path.resolve(workspace, "tmp", `mcp-smoke-${randomUUID().replaceAll("-", "")}`);
@@ -46,22 +45,22 @@ seedProvider();
 
 const api = new Hono();
 const app = new Hono();
-const workBuddyResponseHooks = new Map<string, () => Promise<void>>();
+const submittedInputs: Array<{ clientRequestId: string; prompt: string; model?: string }> = [];
 api.get("/image-jobs/:id", c => c.json({ job: { id: c.req.param("id") } }));
-app.use("/mcp/workbuddy-image-result/:jobId/:imageId", async (c, next) => {
-  const jobId = c.req.param("jobId")!;
-  await next();
-  const hook = workBuddyResponseHooks.get(jobId);
-  if (c.res.ok && hook) {
-    workBuddyResponseHooks.delete(jobId);
-    await hook();
-  }
-});
-const submittedInputs: Array<Record<string, unknown>> = [];
-for (const operation of ["generate", "edit"]) {
+// The local provider fixture records request bodies and jobs without generating any images.
+for (const operation of ["generate", "edit"] as const) {
   api.post(`/images/${operation}`, async (c) => {
-    submittedInputs.push(await c.req.json() as Record<string, unknown>);
-    return c.json({ sessionId: "smoke-image-session", job: { id: `smoke-${operation}-job`, status: "pending" } }, 202);
+    const input = await c.req.json() as typeof submittedInputs[number];
+    submittedInputs.push(input);
+    const jobId = `smoke-job-${submittedInputs.length}`;
+    const jobType = operation === "generate" ? "generation" : "edit";
+    const timestamp = new Date().toISOString();
+    appDb.query("insert or ignore into sessions (id,user_id,title,created_at,updated_at) values ('smoke-session','smoke-user','smoke',?,?)")
+      .run(timestamp, timestamp);
+    appDb.query(`insert into image_jobs (id,user_id,session_id,type,status,prompt,provider_id,source_image_ids,request_json,client_request_id,created_at,updated_at)
+      values (?,'smoke-user','smoke-session',?,'running',?,'smoke-provider','[]','{}',?,?,?)`)
+      .run(jobId, jobType, input.prompt, input.clientRequestId, timestamp, timestamp);
+    return c.json({ sessionId: "smoke-session", job: { id: jobId, status: "running" } }, 202);
   });
 }
 mcpModule.registerExternalMcpProtocolRoute(api);
@@ -87,7 +86,6 @@ try {
     throw new Error("OAuth metadata must omit the rmcp 1.8.0-incompatible RFC 9207 support flag");
   }
   const oauthResource = `${metadata.issuer}/api/external-mcp/mcp`;
-
   const redirectUri = "http://127.0.0.1:43123/callback";
 
   const registrationResponse = await fetch(`${origin}/oauth/register`, {
@@ -311,8 +309,11 @@ try {
   const transport = new StreamableHTTPClientTransport(new URL(endpoint), {
     requestInit: { headers: { Authorization: `Bearer ${token}` } }
   });
-  client = new Client({ name: "maliang-smoke-agent", version: "1.0.0" }, { capabilities: {} });
+  client = new Client({ name: "maliang-smoke-agent", version: "1.0.0" }, {
+    capabilities: {}, versionNegotiation: { mode: "legacy" }
+  });
   await client.connect(transport);
+  if (client.getProtocolEra() !== "legacy") throw new Error("The compatibility client did not use the legacy HTTP handshake");
   const serverVersion = client.getServerVersion();
   const tools = await client.listTools();
   const deviceName = process.platform === "win32" ? Bun.env.COMPUTERNAME || "" : Bun.env.HOSTNAME || "";
@@ -348,9 +349,45 @@ try {
   if (pluginManifest.version !== expectedPluginVersion) throw new Error("Plugin manifest version does not match plugin.json");
   if (serverVersion?.version !== pluginManifest.version) throw new Error("MCP server version did not match the plugin version source");
 
-  const generated = await client.callTool({ name: "maliang_generate_image", arguments: { prompt: "fixture legacy channel default" } });
+  let modernRequestId = 100;
+  const modernRpc = async (method: string, params: Record<string, unknown> = {}, headerOverrides: Record<string, string> = {}) => {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "content-type": "application/json", accept: "application/json, text/event-stream",
+        "MCP-Protocol-Version": "2026-07-28", "Mcp-Method": method,
+        ...(typeof params.name === "string" ? { "Mcp-Name": params.name } : {}), ...headerOverrides },
+      body: JSON.stringify({ jsonrpc: "2.0", id: modernRequestId++, method, params: { ...params, _meta: {
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {},
+        "io.modelcontextprotocol/clientInfo": { name: "maliang-modern-smoke", version: "1" }
+      } } })
+    });
+    return await response.json() as { result?: Record<string, any>; error?: { code: number } };
+  };
+  const discovery = await modernRpc("server/discover");
+  if (discovery.result?.resultType !== "complete" || !discovery.result.supportedVersions?.includes("2026-07-28")) {
+    throw new Error(`Modern discovery failed: ${JSON.stringify(discovery)}`);
+  }
+  const modernTools = await modernRpc("tools/list");
+  if (modernTools.result?.tools?.length !== requiredTools.length || modernTools.result.ttlMs !== 300_000 || modernTools.result.cacheScope !== "private") {
+    throw new Error(`Modern tool catalog failed: ${JSON.stringify(modernTools)}`);
+  }
+  if (!modernTools.result.tools.every((tool: { outputSchema?: unknown }) => tool.outputSchema)) throw new Error("A remote tool is missing its output schema");
+  const modernAccount = await modernRpc("tools/call", { name: "maliang_account_status", arguments: {} });
+  if (modernAccount.result?.structuredContent?.authenticated !== true) throw new Error(`Modern auth context was lost: ${JSON.stringify(modernAccount)}`);
+  const mismatch = await modernRpc("tools/call", { name: "maliang_account_status", arguments: {} }, { "Mcp-Name": "maliang_generate_image" });
+  if (mismatch.error?.code !== -32020) throw new Error("Modern header mismatch was not rejected");
+
+  const submitInput = { requestKey: "smoke-deduplication", prompt: "local contract fixture" };
+  const submitted = await client.callTool({ name: "maliang_generate_image", arguments: submitInput });
+  const submittedData = submitted.structuredContent as { jobId?: string } | undefined;
+  if (submittedData?.jobId !== "smoke-job-1") throw new Error(`Legacy submission failed: ${JSON.stringify(submitted)}`);
+  const replayed = await modernRpc("tools/call", { name: "maliang_generate_image", arguments: submitInput });
+  const replayCount = submittedInputs.length;
+  if (replayed.result?.structuredContent?.jobId !== submittedData.jobId || replayCount !== 1) throw new Error("Cross-era submission was duplicated");
+
   const edited = await client.callTool({ name: "maliang_edit_image", arguments: { prompt: "fixture legacy edit default", imageIds: ["smoke-source-image"] } });
-  if (generated.isError || edited.isError || submittedInputs.length !== 2 || submittedInputs.some(input => Object.hasOwn(input, "model"))) {
+  if (edited.isError || submittedInputs.length !== 2 || submittedInputs.some(input => Object.hasOwn(input, "model"))) {
     throw new Error("Omitted generation/edit model did not preserve the legacy channel default");
   }
   const explicit = await client.callTool({ name: "maliang_generate_image", arguments: { prompt: "fixture explicit model", model: "gpt-image-2.5-sunburst" } });
@@ -360,9 +397,9 @@ try {
   if (compatible.isError || submittedInputs.at(-1)?.model !== "gpt-image-2.6-sunburst") throw new Error("A compatible channel did not retain the 2.6 Sunburst default");
 
   const submittedBeforeDelivery = submittedInputs.length;
-  const workBuddyDelivery = await smokeWorkBuddyDelivery({
+  const imageDelivery = await smokeMcpImageDelivery({
     db: appDb, origin, root: smokeRoot, accessToken: workBuddyToken, deviceName,
-    beforeResultResponse: (jobId, hook) => { workBuddyResponseHooks.set(jobId, hook); }
+    fixtureImagePath: Bun.env.MALIANG_MCP_SMOKE_IMAGE_PATH
   });
   if (submittedInputs.length !== submittedBeforeDelivery) throw new Error("WorkBuddy delivery resubmitted a generation job");
 
@@ -371,7 +408,7 @@ try {
     applicationType: registration.application_type,
     workBuddyPrivateCallbackAccepted: workBuddyRegistration.redirect_uris?.[0] === workBuddyRedirectUri,
     workBuddyStatusConfirmedAfterExchange: true,
-    workBuddyDelivery,
+    imageDelivery,
     workBuddyWebCallbackRejected: rejectedWorkBuddyWebResponse.status === 400,
     loopbackAuthorizationRedirectVerified: true,
     sameHostLoopbackBlocked: true,
@@ -389,6 +426,11 @@ try {
     deviceReported: reportData.reported,
     deviceName: reportData.deviceName,
     authenticated: accountData.authenticated,
+    modernProtocol: "2026-07-28",
+    modernDiscovery: true,
+    modernHeaderMismatchRejected: true,
+    outputSchemasVerified: true,
+    crossEraSubmissionDeduplicated: true,
     account: accountData.user?.username
   }, null, 2));
 } finally {

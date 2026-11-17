@@ -18,6 +18,7 @@ import {
   MessageSquarePlus,
   MousePointer2,
   Palette,
+  PencilSparkles,
   Repeat2,
   Shield,
   Share2,
@@ -69,7 +70,7 @@ const SLIDE_ICON_BY_ID: Record<string, LucideIcon> = {
   "chat-manage": Shield,
   editor: Brush,
   images: Images,
-  "prompt-templates": Sparkles
+  "prompt-templates": PencilSparkles
 };
 
 const TAG_ICON_BY_ID: Record<string, LucideIcon> = {

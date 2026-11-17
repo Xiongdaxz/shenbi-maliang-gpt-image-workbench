@@ -21,6 +21,7 @@ import {
 } from "./externalMcpAuth";
 import { isPublicIpAddress, normalizeIpAddress, resolvePublicIpLocation } from "./ipLocation";
 import { externalMcpTokenTtlSeconds } from "./externalMcpSettings";
+import { cimdEnabled, cimdRedirectMatches, resolveCimdMetadata } from "./externalMcpCimd";
 import { localTimestamp, makeId, now, parseJsonArray, utcNow } from "./utils";
 
 const AUTHORIZATION_CODE_TTL_SECONDS = 5 * 60;
@@ -169,6 +170,7 @@ export async function readExternalMcpFormBody(
 }
 
 type ExternalMcpAccessLocationRow = {
+  grant_id: string;
   client_id: string;
   last_access_at: string | null;
   last_access_ip: string;
@@ -193,9 +195,9 @@ export async function enrichExternalMcpAccessLocation(
     if (row.last_access_public_ip || row.last_access_region || row.last_access_geo_at) {
       run(
         db,
-        "update oauth_grants set last_access_public_ip = '', last_access_region = '', last_access_geo_at = null where user_id = ? and client_id = ?",
+        "update oauth_grants set last_access_public_ip = '', last_access_region = '', last_access_geo_at = null where user_id = ? and id = ?",
         userId,
-        row.client_id
+        row.grant_id
       );
     }
     return {
@@ -220,10 +222,10 @@ export async function enrichExternalMcpAccessLocation(
     if (currentPublicIp !== row.last_access_public_ip.trim()) {
       run(
         db,
-        "update oauth_grants set last_access_public_ip = ?, last_access_region = '', last_access_geo_at = null where user_id = ? and client_id = ?",
+        "update oauth_grants set last_access_public_ip = ?, last_access_region = '', last_access_geo_at = null where user_id = ? and id = ?",
         currentPublicIp,
         userId,
-        row.client_id
+        row.grant_id
       );
     }
     return { ip: currentPublicIp, region: currentRegion, status: "available" as const };
@@ -231,12 +233,12 @@ export async function enrichExternalMcpAccessLocation(
 
   run(
     db,
-    "update oauth_grants set last_access_public_ip = ?, last_access_region = ?, last_access_geo_at = ? where user_id = ? and client_id = ?",
+    "update oauth_grants set last_access_public_ip = ?, last_access_region = ?, last_access_geo_at = ? where user_id = ? and id = ?",
     location.ip,
     location.region,
     now(),
     userId,
-    row.client_id
+    row.grant_id
   );
   return { ...location, status: "available" as const };
 }
@@ -261,6 +263,7 @@ type OAuthClientRow = {
 
 type ExternalMcpDeviceGrantRow = {
   grant_id: string;
+  connection_key?: string;
   client_id: string;
   client_name: string;
   software_id: string;
@@ -270,7 +273,8 @@ type ExternalMcpDeviceGrantRow = {
   revoked_at: string | null;
 };
 
-export function externalMcpConnectionDeviceId(row: Omit<ExternalMcpDeviceGrantRow, "grant_id" | "revoked_at">) {
+export function externalMcpConnectionDeviceId(row: Omit<ExternalMcpDeviceGrantRow, "grant_id" | "revoked_at"> & { grant_id?: string }) {
+  if (row.connection_key && row.grant_id) return row.grant_id;
   return externalMcpLogicalDeviceId({
     clientName: row.client_name,
     softwareId: row.software_id,
@@ -283,9 +287,10 @@ export function externalMcpConnectionDeviceId(row: Omit<ExternalMcpDeviceGrantRo
 function externalMcpDeviceGrantRows(db: Database, userId: string) {
   return getAll<ExternalMcpDeviceGrantRow>(
     db,
-    `select oauth_grants.id as grant_id, oauth_grants.client_id, oauth_grants.revoked_at,
-            oauth_clients.client_name, oauth_clients.software_id, oauth_clients.device_name,
-            oauth_clients.device_type, oauth_clients.user_agent
+    `select oauth_grants.id as grant_id, oauth_grants.client_id, oauth_grants.revoked_at, oauth_grants.connection_key,
+            oauth_clients.client_name, oauth_clients.software_id,
+            coalesce(oauth_grants.device_name, oauth_clients.device_name) as device_name,
+            coalesce(oauth_grants.device_type, oauth_clients.device_type) as device_type, oauth_clients.user_agent
      from oauth_grants
      join oauth_clients on oauth_clients.id = oauth_grants.client_id
      where oauth_grants.user_id = ?`,
@@ -296,7 +301,7 @@ function externalMcpDeviceGrantRows(db: Database, userId: string) {
 function externalMcpDeviceGrantGroup(db: Database, userId: string, deviceIdOrClientId: string) {
   const rows = externalMcpDeviceGrantRows(db, userId);
   const target = rows.find((row) => (
-    row.client_id === deviceIdOrClientId || externalMcpConnectionDeviceId(row) === deviceIdOrClientId
+    (!row.connection_key && row.client_id === deviceIdOrClientId) || externalMcpConnectionDeviceId(row) === deviceIdOrClientId
   ));
   if (!target) return [];
   const deviceId = externalMcpConnectionDeviceId(target);
@@ -1162,14 +1167,16 @@ export function restoreExternalMcpGrant(
 
 export function upsertExternalMcpGrantForAuthorization(
   db: Database,
-  input: { userId: string; clientId: string; scope: string; timestamp?: string }
+  input: { userId: string; clientId: string; scope: string; timestamp?: string; connectionKey?: string; deviceName?: string; deviceType?: string }
 ) {
   const timestamp = input.timestamp ?? now();
+  const connectionKey = input.connectionKey ?? "";
   const existing = getOne<{ id: string; scope: string }>(
     db,
-    "select id, scope from oauth_grants where user_id = ? and client_id = ?",
+    "select id, scope from oauth_grants where user_id = ? and client_id = ? and connection_key = ?",
     input.userId,
-    input.clientId
+    input.clientId,
+    connectionKey
   );
   const grantId = existing?.id ?? makeId("oauthgrant");
   if (existing) {
@@ -1177,10 +1184,12 @@ export function upsertExternalMcpGrantForAuthorization(
   }
   run(
     db,
-    `insert into oauth_grants (id, user_id, client_id, scope, last_access_at, credential_version, revoked_at, created_at, updated_at)
-     values (?, ?, ?, ?, null, 1, null, ?, ?)
-     on conflict(user_id, client_id) do update set
+    `insert into oauth_grants (id, user_id, client_id, connection_key, device_name, device_type, scope, last_access_at, credential_version, revoked_at, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, null, 1, null, ?, ?)
+     on conflict(user_id, client_id, connection_key) do update set
        scope = excluded.scope,
+       device_name = coalesce(excluded.device_name, oauth_grants.device_name),
+       device_type = coalesce(excluded.device_type, oauth_grants.device_type),
        last_access_at = null,
        credential_version = oauth_grants.credential_version + 1,
        revoked_at = null,
@@ -1188,6 +1197,9 @@ export function upsertExternalMcpGrantForAuthorization(
     grantId,
     input.userId,
     input.clientId,
+    connectionKey,
+    input.deviceName ?? null,
+    input.deviceType ?? null,
     input.scope,
     timestamp,
     timestamp
@@ -1331,6 +1343,8 @@ export function externalMcpAuthorizationServerMetadata(publicBaseUrl: string) {
     grant_types_supported: ["authorization_code", "refresh_token"],
     code_challenge_methods_supported: ["S256"],
     token_endpoint_auth_methods_supported: ["none"],
+    ...(cimdEnabled() ? { client_id_metadata_document_supported: true } : {}),
+    ...(Bun.env.MALIANG_MCP_ISSUER_RESPONSE === "true" ? { authorization_response_iss_parameter_supported: true } : {}),
     scopes_supported: [...MALIANG_MCP_SCOPES],
     service_documentation: `${publicBaseUrl}/mcp`
   };
@@ -1433,8 +1447,10 @@ export function groupExternalMcpConnectionRows(rows: ExternalMcpConnectionListRo
 export function getExternalMcpConnectionRows(db: Database, userId: string, validAfter = utcNow()) {
   return getAll<ExternalMcpConnectionListRow>(
     db,
-    `select oauth_grants.id as grant_id, oauth_grants.client_id, oauth_clients.client_name, oauth_clients.client_uri,
-            oauth_clients.software_id, oauth_clients.software_version, oauth_clients.device_name, oauth_clients.device_type,
+    `select oauth_grants.id as grant_id, oauth_grants.client_id, oauth_grants.connection_key, oauth_clients.client_name, oauth_clients.client_uri,
+            oauth_clients.software_id, oauth_clients.software_version,
+            coalesce(oauth_grants.device_name, oauth_clients.device_name) as device_name,
+            coalesce(oauth_grants.device_type, oauth_clients.device_type) as device_type,
             oauth_clients.user_agent, oauth_clients.grant_types_json, oauth_grants.scope, oauth_grants.user_label,
             oauth_grants.last_access_at, oauth_grants.last_access_ip, oauth_grants.last_access_public_ip,
             oauth_grants.last_access_region, oauth_grants.last_access_geo_at, oauth_grants.last_user_agent,
@@ -1596,8 +1612,27 @@ export function registerExternalMcpOAuthRoutes(app: Hono, api: Hono) {
     const codeChallenge = String(c.req.query("code_challenge") ?? "").trim();
     const codeChallengeMethod = String(c.req.query("code_challenge_method") ?? "").trim();
     const scopes = requestedScopes(c.req.query("scope"));
+    if (clientId.startsWith("https://")) {
+      if (!cimdEnabled()) return c.html(externalMcpAuthorizationErrorPage("此客户端注册方式尚未启用，请使用 DCR 重新连接。"), 400);
+      if (externalMcpRegistrationLimiter.consume(externalMcpRequestMetadata(c).accessIp || "unknown")) {
+        return c.html(externalMcpAuthorizationErrorPage("连接请求过于频繁，请稍后再试。"), 429);
+      }
+      try {
+        const metadata = await resolveCimdMetadata(clientId);
+        run(appDb, `insert into oauth_clients (id, application_type, client_name, redirect_uris_json, grant_types_json,
+          response_types_json, token_endpoint_auth_method, created_at, updated_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          on conflict(id) do update set client_name=excluded.client_name, redirect_uris_json=excluded.redirect_uris_json,
+          grant_types_json=excluded.grant_types_json, response_types_json=excluded.response_types_json, updated_at=excluded.updated_at`,
+          clientId, metadata.application_type, metadata.client_name, JSON.stringify(metadata.redirect_uris),
+          JSON.stringify(metadata.grant_types), JSON.stringify(metadata.response_types), metadata.token_endpoint_auth_method, now(), now());
+      } catch {
+        return c.html(externalMcpAuthorizationErrorPage("无法验证客户端元数据，请稍后重试或使用 DCR 连接。"), 400);
+      }
+    }
     const client = clientId ? getOne<OAuthClientRow>(appDb, "select * from oauth_clients where id = ?", clientId) : null;
-    if (!client || !redirectUri || !clientRedirectUris(client).includes(redirectUri)) {
+    if (!client || !redirectUri || !(clientId.startsWith("https://")
+      ? cimdRedirectMatches(clientRedirectUris(client), redirectUri)
+      : clientRedirectUris(client).includes(redirectUri))) {
       return c.html(externalMcpAuthorizationErrorPage("智能体信息或回调地址无效。请回到智能体重新发起连接。"), 400);
     }
     if (
@@ -1723,7 +1758,7 @@ export function registerExternalMcpOAuthRoutes(app: Hono, api: Hono) {
           registeredClient?.device_name ?? "",
           authorizationUserAgent
         );
-        if (authorizedDeviceName !== "未知设备" && authorizedDeviceName !== registeredClient?.device_name) {
+        if (!request.client_id.startsWith("https://") && authorizedDeviceName !== "未知设备" && authorizedDeviceName !== registeredClient?.device_name) {
           run(
             appDb,
             "update oauth_clients set device_name = ?, updated_at = ? where id = ?",
@@ -1736,7 +1771,7 @@ export function registerExternalMcpOAuthRoutes(app: Hono, api: Hono) {
           registeredClient?.device_type ?? "",
           authorizationUserAgent
         );
-        if (authorizedDeviceType && authorizedDeviceType !== registeredClient?.device_type) {
+        if (!request.client_id.startsWith("https://") && authorizedDeviceType && authorizedDeviceType !== registeredClient?.device_type) {
           run(
             appDb,
             "update oauth_clients set device_type = ?, updated_at = ? where id = ?",
@@ -1748,6 +1783,9 @@ export function registerExternalMcpOAuthRoutes(app: Hono, api: Hono) {
         const grantId = upsertExternalMcpGrantForAuthorization(appDb, {
           userId: user.id,
           clientId: request.client_id,
+          connectionKey: request.client_id.startsWith("https://") ? request.id : "",
+          deviceName: request.client_id.startsWith("https://") ? "" : authorizedDeviceName === "未知设备" ? "" : authorizedDeviceName,
+          deviceType: request.client_id.startsWith("https://") ? "" : authorizedDeviceType,
           scope: request.scope,
           timestamp
         });

@@ -61,6 +61,7 @@ import {
   PartyPopper,
   PenTool,
   Pencil,
+  PencilSparkles,
   Pizza,
   Plane,
   Plus,
@@ -2016,7 +2017,7 @@ export function PromptTemplatesPage() {
         {renderTemplateLibrary(selectedId)}
         <section className="prompt-template-canvas">
           <div className="prompt-template-empty prompt-template-empty-inline">
-            <Sparkles size={28} />
+            <PencilSparkles size={28} />
             <strong>{t("promptTemplates.empty.title")}</strong>
             <span>{t("promptTemplates.empty.desc")}</span>
           </div>
@@ -2727,7 +2728,7 @@ function TemplatePreview({
     return (
       <div className={cx("template-preview-surface", "empty", selectable && "editing")}>
         <div className="template-preview-empty">
-          <Sparkles size={28} />
+          <PencilSparkles size={28} />
           <strong>{t("promptTemplates.preview.emptyTitle")}</strong>
           <span>{t("promptTemplates.preview.emptyDesc")}</span>
           {onEmptyAction ? (

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FolderOpen, Images, Lightbulb, MessageCircle, MessageCirclePlus, PanelLeft, Search, Sparkles } from "lucide-react";
+import { FolderOpen, Images, Lightbulb, MessageCircle, MessageCirclePlus, PanelLeft, PencilSparkles, Search } from "lucide-react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n";
 import { cx } from "../lib/cx";
@@ -11,7 +11,7 @@ const guestNavigation = [
   { path: "/cases", labelKey: "sidebar.inspiration", icon: Lightbulb },
   { path: "/assets", labelKey: "sidebar.assets", icon: FolderOpen },
   { path: "/images", labelKey: "sidebar.images", icon: Images },
-  { path: "/prompt-templates", labelKey: "sidebar.promptCreation", icon: Sparkles }
+  { path: "/prompt-templates", labelKey: "sidebar.promptCreation", icon: PencilSparkles }
 ] as const;
 
 export function SharedWorkbenchShell() {

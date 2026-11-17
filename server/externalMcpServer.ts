@@ -1,6 +1,4 @@
-import { randomUUID } from "node:crypto";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import { createMcpHandler, McpServer, type ServerContext } from "@modelcontextprotocol/server";
 import type { Hono } from "hono";
 import * as z from "zod";
 import { appDb, getAll, getOne } from "./db";
@@ -16,31 +14,24 @@ import {
   getMcpImageUpload,
   markMcpUploadUsed
 } from "./externalMcpUploads";
-import { createMcpImageResultPresentation, createWorkBuddyImageDelivery, WORKBUDDY_DELIVERY_CHALLENGE_PATTERN } from "./externalMcpResults";
+import { createMcpImageResultPresentation } from "./externalMcpResults";
 import { readCodexPluginVersion } from "./internalDistributionRoutes";
 import { LimitedRequestBodyError, requestWithLimitedBody } from "./limitedRequestBody";
 import type { ImageRow, UserRow } from "./types";
 import { MAX_IMAGE_COUNT, MIN_IMAGE_COUNT } from "../src/lib/imagePromptCount";
+import { McpSubmissionRejected, submitMcpImageOnce } from "./externalMcpSubmissions";
 import { preferredDefaultImageModel } from "./providerRuntime";
 import {
   DEFAULT_EDIT_IMAGE_MODEL,
   DEFAULT_GENERATION_IMAGE_MODEL,
   DEFAULT_IMAGE_QUALITY,
-  GPT_IMAGE_26_COMPLEXITIES,
   GPT_IMAGE_EXTENDED_QUALITIES,
-  IMAGE_MODEL_IDS,
-  imageModelDisplayName
+  GPT_IMAGE_26_COMPLEXITIES,
+  imageModelDisplayName,
+  IMAGE_MODEL_IDS
 } from "../src/lib/imageModels";
 
-type McpToolExtra = {
-  authInfo?: {
-    clientId?: string;
-    token?: string;
-    scopes?: string[];
-    resource?: URL;
-    extra?: Record<string, unknown>;
-  };
-};
+type McpToolExtra = ServerContext;
 
 const MCP_PROTOCOL_REQUEST_MAX_BYTES = 1024 * 1024;
 
@@ -52,24 +43,31 @@ export const EXTERNAL_MCP_IMAGE_BACKGROUND_SCHEMA = z.enum(["auto", "opaque", "t
 export const EXTERNAL_MCP_IMAGE_OUTPUT_FORMAT_SCHEMA = z.enum(["png", "webp"]);
 export const EXTERNAL_MCP_IMAGE_MODEL_SCHEMA = z.enum(IMAGE_MODEL_IDS);
 export const EXTERNAL_MCP_IMAGE_QUALITY_SCHEMA = z.enum([DEFAULT_IMAGE_QUALITY, ...GPT_IMAGE_EXTENDED_QUALITIES]);
+export const EXTERNAL_MCP_IMAGE_COMPLEXITY_SCHEMA = z.enum(GPT_IMAGE_26_COMPLEXITIES);
+const REQUEST_KEY_SCHEMA = z.string().trim().min(1).max(160).regex(/^[A-Za-z0-9_.:-]+$/).optional()
+  .describe("一次用户图片请求的唯一标识（例如 UUID）。首次生成一次，超时或重试时必须复用；新任务使用新值。旧客户端可省略。");
+const SUBMISSION_OUTPUT_SCHEMA = z.object({
+  sessionId: z.string(), jobId: z.string(), status: z.string(), requestKey: z.string().optional(), next: z.string()
+});
 
 function toolError(message: string) {
   return { isError: true as const, content: [{ type: "text" as const, text: message }] };
 }
 
-function toolJson(value: unknown, lead?: string) {
+function toolJson(value: Record<string, unknown>, lead?: string) {
   const json = JSON.stringify(value, null, 2);
-  return { content: [{ type: "text" as const, text: lead ? `${lead}\n\n${json}` : json }] };
+  return { content: [{ type: "text" as const, text: lead ? `${lead}\n\n${json}` : json }], structuredContent: value };
 }
 
 function toolContext(extra: McpToolExtra, requiredScope: MaliangMcpScope) {
-  const clientId = String(extra.authInfo?.clientId ?? "").trim();
-  const grantId = String(extra.authInfo?.extra?.grantId ?? "").trim();
-  const grantVersion = Number(extra.authInfo?.extra?.grantVersion);
-  const userId = String(extra.authInfo?.extra?.userId ?? "").trim();
-  const token = String(extra.authInfo?.token ?? "").trim();
-  const scopes = Array.isArray(extra.authInfo?.scopes) ? extra.authInfo.scopes : [];
-  const resource = String(extra.authInfo?.resource ?? "").trim();
+  const auth = extra.http?.authInfo;
+  const clientId = String(auth?.clientId ?? "").trim();
+  const grantId = String(auth?.extra?.grantId ?? "").trim();
+  const grantVersion = Number(auth?.extra?.grantVersion);
+  const userId = String(auth?.extra?.userId ?? "").trim();
+  const token = String(auth?.token ?? "").trim();
+  const scopes = Array.isArray(auth?.scopes) ? auth.scopes : [];
+  const resource = String(auth?.resource ?? "").trim();
   if (!clientId || !grantId || !Number.isSafeInteger(grantVersion) || grantVersion <= 0 || !userId || !token || !resource) return null;
   if (!scopes.includes(requiredScope)) return null;
   const user = getOne<UserRow>(appDb, "select * from users where id = ? and disabled = 0", userId);
@@ -79,7 +77,7 @@ function toolContext(extra: McpToolExtra, requiredScope: MaliangMcpScope) {
 export const DEVICE_REPORT_REQUIRED_MESSAGE = "当前连接尚未上报真实设备信息。当前 AI 智能体必须立即读取本机真实主机名和操作系统，调用 maliang_report_device；不得等待用户下一条消息，也不得让用户手工填写设备名。maliang_report_device 返回 reported=true 后，重试刚才的工具。";
 
 function requireReportedDevice(context: NonNullable<ReturnType<typeof toolContext>>) {
-  return externalMcpClientNeedsDeviceReport(appDb, context.clientId)
+  return externalMcpClientNeedsDeviceReport(appDb, context.clientId, context.grantId)
     ? toolError(DEVICE_REPORT_REQUIRED_MESSAGE)
     : null;
 }
@@ -106,6 +104,7 @@ async function internalImageRequest(
   const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
   if (!response.ok) {
     const message = String(payload.error ?? payload.error_description ?? `神笔马良接口请求失败（HTTP ${response.status}）`);
+    if (response.status >= 400 && response.status < 500) throw new McpSubmissionRejected(message);
     throw new Error(message);
   }
   return payload;
@@ -189,15 +188,15 @@ export async function buildMaliangImageJobResult(
   }));
   const deliveryInstruction = deliveredResultCount > 0
     ? status === "failed"
-      ? `图片任务未能全部完成，但已有 ${deliveredResultCount} 张原图通过标准 resource_link 内容块返回，并保留在 structuredContent.imageResults 中。客户端应先交付这些部分结果，同时明确报告任务错误；需要本地持久化时，使用 downloadUrl 保存原图并引用真实文件。下载链接短期有效，不要回显到对话正文、日志或长期存储。不要把部分结果描述为整个任务成功。`
-      : `图片任务已成功，${deliveredResultCount} 张原图已通过标准 resource_link 内容块返回，并保留在 structuredContent.imageResults 中。为避免超大工具响应被客户端截断，本工具不返回 base64 图片数据。客户端应交付资源链接；需要本地持久化时，使用 downloadUrl 保存原图并引用真实文件。下载链接短期有效，不要回显到对话正文、日志或长期存储。保存能力不可用或保存失败时应报告图片交付未完成。不要只回复 jobId、imageId 或任务状态，也不要把尚未完成的本地保存描述为成功。`
+      ? `图片任务未能全部完成，但已有 ${deliveredResultCount} 张原图通过标准 resource_link 内容块返回，并保留在 structuredContent.imageResults 中。客户端应先交付这些部分结果，同时明确报告任务错误，不要把部分结果描述为整个任务成功。`
+      : `图片任务已成功，${deliveredResultCount} 张原图已通过标准 resource_link 内容块返回，并保留在 structuredContent.imageResults 中。为避免超大工具响应被客户端截断，本工具不返回 base64 图片数据。`
     : "";
   const content: MaliangJobContent[] = [
     {
       type: "text",
       text: [deliveryInstruction,
-        deliveredResultCount ? "WorkBuddy 桌面端请先调用 maliang_workbuddy.prepare_image_delivery，再用同一 jobId 和 workBuddyDeliveryChallenge 查询交付票据；仅在保存后用 present_files 展示。" : "",
-        JSON.stringify(resultSummary, null, 2)]
+        deliveredResultCount ? "按当前客户端实际能力交付：支持原生图片预览时优先直接展示 resource_link；需要本地持久化或无法预览资源链接时，使用宿主已有的下载或文件工具读取 imageResults[].downloadUrl，将二进制原图保存到当前任务已授权目录。只转发文本的客户端可从下方 JSON 读取同一 imageResults。WorkBuddy 只需远程 maliang：使用自带的下载工具，或已有 Bash/PowerShell 的下载能力保存原图，再调用 present_files，files 参数传已核实存在的绝对本地路径数组；确认产物登记后再报告展示成功。不能把远程 URL 直接传给 present_files，也不要用文本文件内容代替图片。无需安装额外 MCP，不得臆造客户端工具。下载链接短期有效，仅用于交付工具调用，不要回显到对话正文、日志或长期存储，也不要为展示结果打开浏览器。图片交付未完成时如实报告；不要只回复 jobId、imageId 或任务状态，不要把尚未完成的本地保存描述为成功，也不要为交付问题重新生图。" : "",
+        JSON.stringify({ ...resultSummary, imageResults: deliveredPresentations }, null, 2)]
         .filter(Boolean)
         .join("\n\n")
     },
@@ -206,9 +205,7 @@ export async function buildMaliangImageJobResult(
   return {
     content,
     structuredContent: {
-      jobId: resultSummary.jobId,
-      status,
-      imageIds: summaryImageIds,
+      ...resultSummary,
       imageResults: deliveredPresentations
     },
     ...(status === "failed" && deliveredResultCount === 0 ? { isError: true as const } : {})
@@ -221,13 +218,16 @@ async function createMaliangMcpServer(api: Hono) {
     title: "神笔马良",
     version: await readCodexPluginVersion()
   }, {
-    instructions: "神笔马良提供文生图、改图和异步任务查询。maliang_report_device 只在新 OAuth 安装完成后的同一安装流程中调用一次，或在其他工具明确返回“设备尚未上报”时调用；reported=true 后同一 OAuth 客户端不要在每次任务、生图或改图前重复上报。服务端已保存设备时，直接调用 maliang_account_status 或图片工具。生成或改图后，使用 maliang_get_image_job 轮询到 succeeded 或 failed；成功时通过 resource_link 和 structuredContent.imageResults.downloadUrl 交付原图，不返回 base64 图片数据。Codex 插件必须调用 bundled maliang_local.save_image_result 保存到 generated_images，再用绝对本地路径直接显示；保存失败时报告交付未完成，绝不为生成结果打开浏览器。不要只回复 jobId、imageId 或任务状态。编辑 Codex 本地附件时，先用 maliang_create_image_upload 获取一次性地址，再调用 bundled maliang_local.upload_local_image；只有宿主未提供可读附件路径或本地 MCP 未启动时才使用浏览器上传页。"
+    maxToolInputElements: 256,
+    cacheHints: { "tools/list": { ttlMs: 300_000, cacheScope: "private" } },
+    instructions: "神笔马良提供文生图、改图和异步任务查询。每次新的生图或改图请求生成一次 requestKey；超时或重试时复用原 key 和参数，已有 jobId 时只查询任务，避免重复消耗额度。maliang_report_device 只在新 OAuth 安装完成后的同一安装流程中调用一次，或在其他工具明确返回“设备尚未上报”时调用；reported=true 后同一 OAuth 客户端不要在每次任务、生图或改图前重复上报。服务端已保存设备时，直接调用 maliang_account_status 或图片工具。生成或改图后，使用 maliang_get_image_job 轮询到 succeeded 或 failed；通过 resource_link 和 imageResults.downloadUrl 交付原图，不返回 base64 图片数据，imageResults 同时保留在文本 JSON 和 structuredContent 中。Codex 插件必须调用 bundled maliang_local.save_image_result 保存到 generated_images，再用绝对本地路径直接显示。其他客户端优先使用实际支持的原生预览；需要落盘或不能预览资源链接时，使用宿主已有的下载或文件工具保存二进制原图。WorkBuddy 只需远程 maliang：读取 imageResults[].downloadUrl，用自带下载工具或已有 Bash/PowerShell 保存到当前任务已授权目录，再调用 present_files 展示真实存在的绝对本地路径数组，确认产物登记后再回复。不能把远程 URL 直接当作本地文件，无需安装额外 MCP，不得臆造工具。临时链接仅用于工具调用，不要回显到正文或自行写入日志。保存失败时报告交付未完成，不为交付问题重新生图，绝不为生成结果打开浏览器。不要只回复 jobId、imageId 或任务状态。编辑 Codex 本地附件时，先用 maliang_create_image_upload 获取一次性地址，再调用 bundled maliang_local.upload_local_image；只有宿主未提供可读附件路径或本地 MCP 未启动时才使用浏览器上传页。"
   });
 
   server.registerTool("maliang_account_status", {
     title: "查看马良账号状态",
     description: "确认当前 MCP 授权对应的神笔马良账号。可直接调用；只有服务端返回设备尚未上报时，才读取真实主机名和操作系统并调用一次 maliang_report_device。",
     inputSchema: {},
+    outputSchema: z.object({ authenticated: z.boolean(), user: z.object({ id: z.string(), username: z.string(), account: z.string() }), resource: z.string() }),
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false }
   }, async (_input, extra) => {
     const context = toolContext(extra as McpToolExtra, "profile:read");
@@ -252,12 +252,14 @@ async function createMaliangMcpServer(api: Hono) {
       deviceName: z.string().trim().min(1).max(120).describe("当前电脑的真实主机名，例如 DESKTOP-ABC123 或 studio-mac"),
       deviceType: z.enum(["Windows", "macOS", "Linux", "iOS", "Android"]).describe("当前客户端实际运行的操作系统")
     },
+    outputSchema: z.object({ reported: z.boolean(), deviceName: z.string(), deviceType: z.string(), updatedAt: z.string() }),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false }
   }, async ({ deviceName, deviceType }, extra) => {
     const context = toolContext(extra as McpToolExtra, "profile:read");
     if (!context) return toolError("当前授权缺少 profile:read 权限，请重新连接神笔马良 MCP。");
     const reported = updateExternalMcpClientDevice(appDb, {
       clientId: context.clientId,
+      grantId: context.grantId,
       deviceName,
       deviceType
     });
@@ -269,11 +271,12 @@ async function createMaliangMcpServer(api: Hono) {
     title: "神笔马良文生图",
     description: "提交一个异步文生图任务，返回 jobId。随后调用 maliang_get_image_job 获取结果。",
     inputSchema: {
+      requestKey: REQUEST_KEY_SCHEMA,
       prompt: z.string().trim().min(1).max(8000).describe("图片描述或绘图提示词"),
-      model: EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.optional().describe(`图片模型：GPT Image 2.6、2.5 的 Flare/Sunburst，或 GPT Image 2；优先使用 ${imageModelDisplayName(DEFAULT_GENERATION_IMAGE_MODEL)}，没有兼容渠道时使用当前渠道的默认模型`),
+      model: EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.optional().describe(`图片模型：GPT Image 2.6、2.5 的 Flare/Sunburst，或 GPT Image 2；省略时优先 ${imageModelDisplayName(DEFAULT_GENERATION_IMAGE_MODEL)}，没有兼容渠道时使用当前渠道的默认模型`),
       size: z.string().trim().optional().describe("图片尺寸，例如 1024x1024、1024x1536 或 1536x1024"),
       quality: EXTERNAL_MCP_IMAGE_QUALITY_SCHEMA.optional().describe("生成质量：auto、low、medium、high、xhigh 或 max"),
-      complexity: z.enum(GPT_IMAGE_26_COMPLEXITIES).optional().describe("仅 GPT Image 2.6：出图前的规划复杂度，省略时使用模型默认值"),
+      complexity: EXTERNAL_MCP_IMAGE_COMPLEXITY_SCHEMA.optional().describe("仅 GPT Image 2.6 支持的图片复杂度；省略使用模型默认值"),
       imageCount: EXTERNAL_MCP_IMAGE_COUNT_SCHEMA.optional()
         .describe(`生成数量，范围 ${MIN_IMAGE_COUNT}-${MAX_IMAGE_COUNT}，默认 ${MIN_IMAGE_COUNT}；提示词中明确指定的数量优先`),
       background: EXTERNAL_MCP_IMAGE_BACKGROUND_SCHEMA.optional()
@@ -281,6 +284,7 @@ async function createMaliangMcpServer(api: Hono) {
       outputFormat: EXTERNAL_MCP_IMAGE_OUTPUT_FORMAT_SCHEMA.optional()
         .describe("透明背景输出格式；省略时使用 PNG")
     },
+    outputSchema: SUBMISSION_OUTPUT_SCHEMA,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
   }, async (input, extra) => {
     const context = toolContext(extra as McpToolExtra, "images:generate");
@@ -288,7 +292,9 @@ async function createMaliangMcpServer(api: Hono) {
     const deviceGate = requireReportedDevice(context);
     if (deviceGate) return deviceGate;
     try {
-      const payload = await internalImageRequest(api, "/images/generate", context.token, context.resource, {
+      const result = await submitMcpImageOnce(appDb, {
+        userId: context.user.id, operation: "generation", requestKey: input.requestKey, parameters: input
+      }, async (clientRequestId) => asyncJobSummary(await internalImageRequest(api, "/images/generate", context.token, context.resource, {
         prompt: input.prompt,
         model: input.model ?? preferredDefaultImageModel(DEFAULT_GENERATION_IMAGE_MODEL),
         ...(input.size ? { size: input.size } : {}),
@@ -297,9 +303,9 @@ async function createMaliangMcpServer(api: Hono) {
         ...(input.imageCount ? { n: input.imageCount } : {}),
         ...(input.background ? { background: input.background } : {}),
         ...(input.outputFormat ? { outputFormat: input.outputFormat } : {}),
-        clientRequestId: `mcp-${randomUUID()}`
-      });
-      return toolJson(asyncJobSummary(payload), "文生图任务已提交。");
+        clientRequestId
+      })));
+      return toolJson({ ...result, next: "使用 maliang_get_image_job 查询，直到状态变为 succeeded、failed 或 cancelled" }, "文生图任务已提交。");
     } catch (error) {
       return toolError(error instanceof Error ? error.message : "文生图任务提交失败");
     }
@@ -309,6 +315,10 @@ async function createMaliangMcpServer(api: Hono) {
     title: "创建改图上传链接",
     description: "为本地图片创建一个 15 分钟有效、成功后即失效的安全上传地址。Codex 插件已有可读附件路径时应调用 bundled maliang_local.upload_local_image；其他客户端可直接以 POST multipart/form-data 上传。只有宿主没有提供可读路径或本地 MCP 未启动时才使用浏览器兜底。",
     inputSchema: {},
+    outputSchema: z.object({
+      uploadId: z.string(), uploadUrl: z.string(), expiresAt: z.string(), maxBytes: z.number(), acceptedMimeTypes: z.array(z.string()),
+      uploadRequest: z.object({ method: z.string(), encoding: z.string(), fieldName: z.string() })
+    }),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }
   }, async (_input, extra) => {
     const context = toolContext(extra as McpToolExtra, "images:generate");
@@ -332,6 +342,7 @@ async function createMaliangMcpServer(api: Hono) {
     inputSchema: {
       uploadId: z.string().trim().min(1).describe("maliang_create_image_upload 返回的 uploadId")
     },
+    outputSchema: z.object({ uploadId: z.string(), status: z.string(), assetId: z.string(), fileName: z.string(), mimeType: z.string(), size: z.number(), expiresAt: z.string(), usedAt: z.string() }),
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false }
   }, async ({ uploadId }, extra) => {
     const context = toolContext(extra as McpToolExtra, "images:generate");
@@ -356,13 +367,14 @@ async function createMaliangMcpServer(api: Hono) {
     title: "神笔马良改图",
     description: "使用马良历史图片 imageIds 或已完成的一次性上传 uploadIds 提交异步改图任务。返回 jobId 后调用 maliang_get_image_job。",
     inputSchema: {
+      requestKey: REQUEST_KEY_SCHEMA,
       prompt: z.string().trim().min(1).max(8000).describe("希望如何修改图片"),
-      model: EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.optional().describe(`图片模型；优先使用 ${imageModelDisplayName(DEFAULT_EDIT_IMAGE_MODEL)}，没有兼容渠道时使用当前渠道的默认模型`),
+      model: EXTERNAL_MCP_IMAGE_MODEL_SCHEMA.optional().describe(`图片模型；省略时优先 ${imageModelDisplayName(DEFAULT_EDIT_IMAGE_MODEL)}，没有兼容渠道时使用当前渠道的默认模型`),
       imageIds: z.array(z.string().trim().min(1)).max(8).optional().describe("当前账号中的马良历史图片 ID"),
       uploadIds: z.array(z.string().trim().min(1)).max(8).optional().describe("已上传完成的 MCP uploadId"),
       size: z.string().trim().optional(),
       quality: EXTERNAL_MCP_IMAGE_QUALITY_SCHEMA.optional(),
-      complexity: z.enum(GPT_IMAGE_26_COMPLEXITIES).optional().describe("仅 GPT Image 2.6：改图前的规划复杂度，省略时使用模型默认值"),
+      complexity: EXTERNAL_MCP_IMAGE_COMPLEXITY_SCHEMA.optional().describe("仅 GPT Image 2.6 支持的图片复杂度"),
       imageCount: EXTERNAL_MCP_IMAGE_COUNT_SCHEMA.optional()
         .describe(`生成数量，范围 ${MIN_IMAGE_COUNT}-${MAX_IMAGE_COUNT}，默认 ${MIN_IMAGE_COUNT}；提示词中明确指定的数量优先`),
       background: EXTERNAL_MCP_IMAGE_BACKGROUND_SCHEMA.optional()
@@ -371,6 +383,7 @@ async function createMaliangMcpServer(api: Hono) {
         .describe("透明背景输出格式；省略时使用 PNG"),
       inputFidelity: z.enum(["low", "high"]).optional()
     },
+    outputSchema: SUBMISSION_OUTPUT_SCHEMA,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
   }, async (input, extra) => {
     const context = toolContext(extra as McpToolExtra, "images:generate");
@@ -382,31 +395,36 @@ async function createMaliangMcpServer(api: Hono) {
     if (imageIds.length === 0 && uploadIds.length === 0) {
       return toolError("请至少提供一个 imageId 或已上传完成的 uploadId。");
     }
-    const sourceAssetIds: string[] = [];
-    for (const uploadId of uploadIds) {
-      const upload = getMcpImageUpload(context.user.id, uploadId);
-      if (!upload || upload.status !== "uploaded" || !upload.asset_id) {
-        return toolError(`上传 ${uploadId} 尚未完成、已失效或不属于当前账号。`);
-      }
-      sourceAssetIds.push(upload.asset_id);
-    }
     try {
-      const payload = await internalImageRequest(api, "/images/edit", context.token, context.resource, {
-        prompt: input.prompt,
-        model: input.model ?? preferredDefaultImageModel(DEFAULT_EDIT_IMAGE_MODEL),
-        ...(input.complexity ? { complexity: input.complexity } : {}),
-        sourceImageIds: imageIds,
-        sourceAssetIds,
-        ...(input.size ? { size: input.size } : {}),
-        quality: input.quality ?? DEFAULT_IMAGE_QUALITY,
-        ...(input.imageCount ? { n: input.imageCount } : {}),
-        ...(input.background ? { background: input.background } : {}),
-        ...(input.outputFormat ? { outputFormat: input.outputFormat } : {}),
-        ...(input.inputFidelity ? { inputFidelity: input.inputFidelity } : {}),
-        clientRequestId: `mcp-${randomUUID()}`
+      const result = await submitMcpImageOnce(appDb, {
+        userId: context.user.id, operation: "edit", requestKey: input.requestKey, parameters: input
+      }, async (clientRequestId) => {
+        const sourceAssetIds: string[] = [];
+        for (const uploadId of uploadIds) {
+          const upload = getMcpImageUpload(context.user.id, uploadId);
+          if (!upload || upload.status !== "uploaded" || !upload.asset_id) {
+            throw new McpSubmissionRejected(`上传 ${uploadId} 尚未完成、已失效或不属于当前账号。`);
+          }
+          sourceAssetIds.push(upload.asset_id);
+        }
+        const payload = await internalImageRequest(api, "/images/edit", context.token, context.resource, {
+          prompt: input.prompt,
+          model: input.model ?? preferredDefaultImageModel(DEFAULT_EDIT_IMAGE_MODEL),
+          sourceImageIds: imageIds,
+          sourceAssetIds,
+          ...(input.size ? { size: input.size } : {}),
+          quality: input.quality ?? DEFAULT_IMAGE_QUALITY,
+          ...(input.complexity ? { complexity: input.complexity } : {}),
+          ...(input.imageCount ? { n: input.imageCount } : {}),
+          ...(input.background ? { background: input.background } : {}),
+          ...(input.outputFormat ? { outputFormat: input.outputFormat } : {}),
+          ...(input.inputFidelity ? { inputFidelity: input.inputFidelity } : {}),
+          clientRequestId
+        });
+        for (const assetId of sourceAssetIds) markMcpUploadUsed(context.user.id, assetId);
+        return asyncJobSummary(payload);
       });
-      for (const assetId of sourceAssetIds) markMcpUploadUsed(context.user.id, assetId);
-      return toolJson(asyncJobSummary(payload), "改图任务已提交。");
+      return toolJson({ ...result, next: "使用 maliang_get_image_job 查询，直到状态变为 succeeded、failed 或 cancelled" }, "改图任务已提交。");
     } catch (error) {
       return toolError(error instanceof Error ? error.message : "改图任务提交失败");
     }
@@ -414,30 +432,25 @@ async function createMaliangMcpServer(api: Hono) {
 
   server.registerTool("maliang_get_image_job", {
     title: "查询马良图片任务",
-    description: "查询已有文生图或改图任务。WorkBuddy：有可交付图片后调用本地 maliang_workbuddy.prepare_image_delivery，拿到 deliveryChallenge 后用同一 jobId 再查询并传 workBuddyDeliveryChallenge。把返回的 workBuddyDelivery 交给同一会话的 maliang_workbuddy.save_image_results，再用 present_files 展示返回的 files。Codex 沿用 resource_link 与 maliang_local.save_image_result。查询和保存不重新生图。",
+    description: "查询已有文生图或改图任务。返回原图 resource_link，文本 JSON 和 structuredContent 均包含 imageResults[].downloadUrl。优先原生预览；需要落盘或不能预览时用宿主已有的下载或文件工具保存二进制原图。WorkBuddy 使用自带下载工具或已有 Bash/PowerShell 保存到当前任务目录，再调用 present_files 展示真实绝对本地路径数组，无需额外 MCP。Codex 插件沿用 maliang_local.save_image_result。交付失败时重查同一 jobId 获取新链接，不重新生图。",
     inputSchema: {
-      jobId: z.string().trim().min(1).describe("生图或改图工具返回的 jobId"),
-      workBuddyDeliveryChallenge: z.string().regex(WORKBUDDY_DELIVERY_CHALLENGE_PATTERN).optional()
-        .describe("仅 WorkBuddy 本地交付使用。原样传入 prepare_image_delivery 为同一 jobId 返回的 deliveryChallenge。")
+      jobId: z.string().trim().min(1).describe("生图或改图工具返回的 jobId")
     },
     outputSchema: {
       jobId: z.string(),
       status: z.string(),
+      error: z.string().optional(),
+      next: z.string().optional(),
       imageIds: z.array(z.string()),
       imageResults: z.array(z.object({
         imageId: z.string(),
         downloadUrl: z.string(),
         previewUrl: z.string(),
         expiresAt: z.string()
-      })),
-      workBuddyDelivery: z.object({
-        jobId: z.string(),
-        deliveryChallenge: z.string(),
-        images: z.array(z.object({ imageId: z.string(), ticket: z.string(), expiresAt: z.string() }))
-      }).optional()
+      }))
     },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false }
-  }, async ({ jobId, workBuddyDeliveryChallenge }, extra) => {
+  }, async ({ jobId }, extra) => {
     const context = toolContext(extra as McpToolExtra, "images:generate");
     if (!context) return toolError("当前授权缺少 images:generate 权限，请重新连接神笔马良 MCP。");
     const deviceGate = requireReportedDevice(context);
@@ -477,25 +490,6 @@ async function createMaliangMcpServer(api: Hono) {
       updatedAt: job.updated_at,
       next: job.status === "running" ? "稍后再次调用 maliang_get_image_job" : ""
     };
-    if (workBuddyDeliveryChallenge && images.length) {
-      const delivery = {
-        jobId,
-        deliveryChallenge: workBuddyDeliveryChallenge,
-        images: images.map((image) => createWorkBuddyImageDelivery({
-          imageId: image.id, userId: context.user.id, grantId: context.grantId,
-          grantVersion: context.grantVersion, jobId, challenge: workBuddyDeliveryChallenge
-        }))
-      };
-      // WorkBuddy's text-only relay still receives the proof-bound tickets, never a bearer URL.
-      const result = {
-        jobId, status: job.status, imageIds: summary.imageIds, imageResults: [],
-        ...(summary.error ? { error: summary.error } : {}), workBuddyDelivery: delivery
-      };
-      return {
-        ...toolJson(result, `${job.status === "failed" ? "任务未全部完成，先交付已有图片。" : "图片已生成，等待保存为 WorkBuddy 产物。"}把 workBuddyDelivery 原样传给 maliang_workbuddy.save_image_results，仅把保存工具返回的 files 传给 present_files。不要回显交付票据。`),
-        structuredContent: result
-      };
-    }
     const publicBaseUrl = new URL(context.resource).origin;
     const presentations = images.map((image) => createMcpImageResultPresentation({
       imageId: image.id,
@@ -511,13 +505,18 @@ async function createMaliangMcpServer(api: Hono) {
 }
 
 export function registerExternalMcpProtocolRoute(api: Hono) {
+  const handler = createMcpHandler(() => createMaliangMcpServer(api), {
+    legacy: "stateless",
+    responseMode: "auto",
+    maxRequestBodySize: MCP_PROTOCOL_REQUEST_MAX_BYTES
+  });
   api.all("/external-mcp/mcp", async (c) => {
     if (c.req.method === "OPTIONS") {
       c.header("Access-Control-Allow-Origin", "*");
       c.header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
       c.header(
         "Access-Control-Allow-Headers",
-        "Authorization, Content-Type, MCP-Protocol-Version, MCP-Session-Id, Last-Event-ID, X-Maliang-Device-Name, X-Maliang-Device-Hostname, X-Maliang-Device-Os, X-Maliang-Device-Ostype"
+        "Authorization, Content-Type, MCP-Protocol-Version, Mcp-Method, Mcp-Name, MCP-Session-Id, Last-Event-ID, X-Maliang-Device-Name, X-Maliang-Device-Hostname, X-Maliang-Device-Os, X-Maliang-Device-Ostype"
       );
       c.header("Access-Control-Expose-Headers", "MCP-Protocol-Version, MCP-Session-Id");
       return c.body(null, 204);
@@ -540,13 +539,7 @@ export function registerExternalMcpProtocolRoute(api: Hono) {
         }, tooLarge ? 413 : 400);
       }
     }
-    const transport = new WebStandardStreamableHTTPServerTransport({
-      sessionIdGenerator: undefined,
-      enableJsonResponse: true
-    });
-    const server = await createMaliangMcpServer(api);
-    await server.connect(transport);
-    const response = await transport.handleRequest(request, {
+    const response = await handler.fetch(request, {
       authInfo: {
         token: principal.token,
         clientId: principal.clientId,

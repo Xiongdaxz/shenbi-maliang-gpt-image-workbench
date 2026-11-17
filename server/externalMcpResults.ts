@@ -7,13 +7,10 @@ import { readStoredFile } from "./secureFiles";
 import type { ImageRow } from "./types";
 
 const MCP_IMAGE_RESULT_TOKEN_VERSION = "v2";
-const WORKBUDDY_RESULT_TICKET_VERSION = "wb1";
 const MCP_IMAGE_RESULT_TOKEN_SCOPE = "mcp-image-result";
 const MCP_IMAGE_RESULT_SECRET_ID = "default";
 const MCP_IMAGE_RESULT_TTL_MS = 60 * 60 * 1000;
 export const MCP_IMAGE_RESULT_CACHE_CONTROL = "private, no-store";
-export const WORKBUDDY_DELIVERY_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43}$/;
-const WORKBUDDY_RESULT_TTL_MS = 5 * 60 * 1000;
 
 type McpImageResultTokenPayload = {
   i: string;
@@ -21,8 +18,6 @@ type McpImageResultTokenPayload = {
   g: string;
   v: number;
   e: number;
-  j?: string;
-  d?: string;
 };
 
 type ImageResultOwner = { imageId: string; userId: string; grantId: string; grantVersion: number };
@@ -85,7 +80,7 @@ function readSignedImageResult(token: string, secret: string, nowMs: number, ver
       || !Number.isSafeInteger(grantVersion) || grantVersion <= 0
     ) return null;
     if (!Number.isSafeInteger(expiresAt) || expiresAt <= Math.floor(nowMs / 1000)) return null;
-    return { imageId, userId, grantId, grantVersion, expiresAt, jobId: payload.j, challenge: payload.d };
+    return { imageId, userId, grantId, grantVersion, expiresAt };
   } catch {
     return null;
   }
@@ -96,27 +91,6 @@ export function mcpImageResultFromToken(token: string, secret: string, nowMs = D
   if (!result) return null;
   const { imageId, userId, grantId, grantVersion, expiresAt } = result;
   return { imageId, userId, grantId, grantVersion, expiresAt };
-}
-
-export function createWorkBuddyImageDelivery(
-  input: ImageResultOwner & { jobId: string; challenge: string },
-  secret = mcpImageResultSigningSecret(),
-  nowMs = Date.now()
-) {
-  const expiresAt = nowMs + WORKBUDDY_RESULT_TTL_MS;
-  const ticket = signImageResult({
-    i: input.imageId, u: input.userId, g: input.grantId, v: input.grantVersion,
-    e: Math.floor(expiresAt / 1000), j: input.jobId, d: input.challenge
-  }, secret, WORKBUDDY_RESULT_TICKET_VERSION);
-  return { imageId: input.imageId, ticket, expiresAt: new Date(expiresAt).toISOString() };
-}
-
-export function workBuddyImageResultFromTicket(ticket: string, proof: string, secret: string, nowMs = Date.now()) {
-  if (!WORKBUDDY_DELIVERY_CHALLENGE_PATTERN.test(proof)) return null;
-  const result = readSignedImageResult(ticket, secret, nowMs, WORKBUDDY_RESULT_TICKET_VERSION);
-  if (!result?.jobId || typeof result.challenge !== "string" || !WORKBUDDY_DELIVERY_CHALLENGE_PATTERN.test(result.challenge)) return null;
-  const expected = createHash("sha256").update(proof).digest("base64url");
-  return timingSafeEqual(Buffer.from(expected), Buffer.from(result.challenge)) ? result : null;
 }
 
 export function createMcpImageResultPresentation(input: {
@@ -189,7 +163,7 @@ export function mcpImageResultGrantIsActive(db: Database, grantId: string, grant
   ));
 }
 
-async function sendOriginalImage(c: Context, payload: ImageResultOwner, jobId?: string) {
+async function sendOriginalImage(c: Context, payload: ImageResultOwner) {
 
     if (!mcpImageResultGrantIsActive(appDb, payload.grantId, payload.grantVersion, payload.userId)) return missingResult(c);
 
@@ -199,7 +173,7 @@ async function sendOriginalImage(c: Context, payload: ImageResultOwner, jobId?: 
       payload.imageId,
       payload.userId
     );
-    if (!image || (jobId && image.job_id !== jobId)) return missingResult(c);
+    if (!image) return missingResult(c);
 
     try {
       const { buffer, mimeType } = await readMcpImageResultOriginal(image);
@@ -219,16 +193,6 @@ export function registerExternalMcpResultRoutes(app: Hono) {
     try {
       const payload = mcpImageResultFromToken(c.req.param("token"), mcpImageResultSigningSecret());
       return payload ? sendOriginalImage(c, payload) : missingResult(c);
-    } catch { return missingResult(c); }
-  });
-  app.post("/mcp/workbuddy-image-result/:jobId/:imageId", (c) => {
-    const proof = c.req.header("Authorization")?.match(/^Bearer ([A-Za-z0-9_-]{43})$/)?.[1];
-    const ticket = c.req.header("X-Maliang-Delivery-Ticket");
-    if (!proof || !ticket) return missingResult(c);
-    try {
-      const payload = workBuddyImageResultFromTicket(ticket, proof, mcpImageResultSigningSecret());
-      if (!payload || payload.jobId !== c.req.param("jobId") || payload.imageId !== c.req.param("imageId")) return missingResult(c);
-      return sendOriginalImage(c, payload, payload.jobId);
     } catch { return missingResult(c); }
   });
 }

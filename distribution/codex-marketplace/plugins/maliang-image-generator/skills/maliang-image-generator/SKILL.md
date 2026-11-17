@@ -25,6 +25,8 @@ After that completion gate succeeds, do not call `maliang_report_device` before 
 
 ## Plugin version
 
+The separate portable package has root `plugin.json` and disables the Codex self-update Hook. In that package, use the host's update workflow; the automatic-update rules below apply only when the installed package actually enables and trusts the Hook. These skills target Codex desktop; the portable manifest alone does not establish compatibility with another host's local files or authentication workflow.
+
 - The trusted plugin `PreToolUse` Hook defaults to `auto`. Before a Maliang MCP tool call it checks the deployment's stable `/plugin/latest.json`; successful checks are cached for 24 hours, while check or installation failures may retry after 15 minutes.
 - A compatible newer SemVer is downloaded and verified by size and SHA-256, extracted beside the durable Marketplace, validated, switched transactionally, and refreshed only through `maliang-image-generator@maliang-internal`. The updater rejects a different origin, archive root, plugin identity, MCP endpoint, Hook/Skill entry, or any symbolic link.
 - The current task keeps its already loaded tools. After a successful update, continue the current call accurately and tell the user that the new version activates in the next task or after restarting Codex; never claim hot reload.
@@ -33,6 +35,8 @@ After that completion gate succeeds, do not call `maliang_report_device` before 
 - The first installed Hook, or a changed Hook definition, must be reviewed and trusted by the user before Codex runs it. Default mode is recorded in `PLUGIN_DATA/update-settings.json`; an explicit `MALIANG_PLUGIN_UPDATE_MODE=notify` or `off` overrides it.
 
 ## Workflow
+
+If the current generate/edit tool schema offers `requestKey`, create one unique key (for example, a UUID) for each new user request. Preserve that key and all parameters when retrying after a timeout or uncertain response. A deliberately new user request gets a new key. With an older server that does not offer `requestKey`, omit it and do not resubmit an uncertain request automatically. Once a `jobId` is available, query that job instead of resubmitting. Prefer `structuredContent` for IDs and status; text is retained for older clients.
 
 1. Call `maliang_account_status` before the first image request in a task. If the MCP host reports that authentication is required, follow the foreground login and browser fallback flow above and let the user finish in the browser.
 2. For text-to-image, call `maliang_generate_image`. Keep the user's prompt intact and only pass size, quality, count, background, or output format when requested. Image count follows the web workbench contract: use an integer from 1 through 10, clamp larger requests to 10, and keep `imageCount` consistent with an explicit count in the prompt; the server treats the prompt's explicit count as authoritative.

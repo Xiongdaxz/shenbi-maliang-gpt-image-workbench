@@ -5,6 +5,10 @@ description: Diagnose and safely complete Shenbi Maliang Codex plugin installati
 
 # Maliang connection help
 
+This is also the plugin's installation setup entry point. Check the installed plugin, remote endpoint, and availability of both `maliang` and `maliang_local` before starting a new login. If the existing account is authorized, preserve that connection. Setup alone does not authorize a sample image generation.
+
+The server can support both MCP protocol eras at the same URL. Let the client negotiate; do not turn on experimental Codex flags or replace its MCP configuration to force a version. CIMD is an optional server rollout; DCR remains supported. Device information belongs to the current authorized connection, so a new connection may require one device report even when the OAuth client ID was used before.
+
 Treat the Codex CLI as the owner of OAuth state. Browser capabilities only display the authorization URL created by the CLI; they do not create or repair the OAuth request.
 
 ## Diagnose
@@ -51,6 +55,8 @@ Report partial states precisely: distinguish plugin installed, MCP configured, b
 Once `maliang_report_device` has returned `reported=true`, do not repeat it before every task or image call for the same OAuth client. Repeat only for a new OAuth client, an explicit server `device report required` response, or an actual device change.
 
 ## Update
+
+The default Codex package uses the Hook below. The separate portable package disables it in root `plugin.json`; update that package through the host, and do not install the default Codex ZIP over it automatically. A portable manifest is not proof that another host supports the bundled local file or OAuth workflow.
 
 1. Automatic updates default to `auto` through the plugin's trusted `PreToolUse` Hook. It checks the stable channel before Maliang tool use; successful checks are cached for 24 hours, while check or installation failures may retry after 15 minutes. Equal or older remote SemVer versions are a no-op.
 2. Version `0.3.0` is the first release that contains this Hook. An installed `0.2.x` or older plugin cannot bootstrap code it does not have; update it manually once to `0.3.0` or newer, then use the automatic flow.

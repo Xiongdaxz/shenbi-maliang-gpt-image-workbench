@@ -88,7 +88,7 @@
 
 `0.3.0` 是第一个包含自动更新 Hook 的版本。已经安装的 `0.2.x` 或更早版本没有本地 Hook，服务端不能隔空执行用户电脑上的更新器，因此发布后必须先人工更新一次到 `0.3.0` 或更高版本；从这次引导更新之后，兼容 stable 更新才默认自动完成。
 
-Hook 命令从 `PLUGIN_ROOT` 运行受版本控制的更新器，只把设置、检查状态、锁和诊断日志写入可写的 `PLUGIN_DATA`。各平台优先用 Node 20+ 执行 `auto-update.mjs`，Node 不满足时由 Bun 执行过渡兼容的 `auto-update.ts`；macOS/Linux 分别通过 `ditto`/`unzip` 解压。Windows 在两者都不可用时才进入 `auto-update.ps1`，PowerShell 兜底通过 .NET 直接计算 SHA-256，再执行 `Invoke-WebRequest`、`Expand-Archive` 和精确的 `codex plugin add`，不依赖 `Get-FileHash` 模块自动加载。插件首次安装或 Hook 定义发生变化后，用户必须审查并信任该 Hook；信任的是精确定义，未信任时 Codex 会跳过。
+Hook 命令从 `PLUGIN_ROOT` 运行受版本控制的更新器，只把设置、检查状态、锁和诊断日志写入可写的 `PLUGIN_DATA`。各平台优先用 Node 20+ 执行 `auto-update.mjs`，Node 不满足时由 Bun 执行过渡兼容的 `auto-update.ts`；macOS/Linux 分别通过 `ditto`/`unzip` 解压。Windows 在两者都不可用时才进入 `auto-update.ps1`。Windows 路径在校验下载大小和 SHA-256 后使用 .NET 解包，避免 Windows PowerShell 误加载继承的 PowerShell 7 Archive 模块；兜底也通过 .NET 计算 SHA-256，不依赖 `Get-FileHash`。插件首次安装或 Hook 需要重新审查时，用户必须信任该 Hook；未信任时 Codex 会跳过。
 
 `0.4.0` 开始，本地附件上传和原图持久化统一由普通 ESM 文件 `maliang-helper.mjs` 实现，Node 20+ 与 Bun 执行同一份代码，不维护 Python 或 TypeScript 业务副本。`auto-update.ts` 和 `windows-update-gate.ts` 暂时保留在 ZIP 中，仅用于兼容已安装 `0.3.x` 的更新包校验；新版校验器同时要求 `auto-update.mjs` 与 `maliang-helper.mjs` 存在，避免安装缺少权威运行文件的归档。
 

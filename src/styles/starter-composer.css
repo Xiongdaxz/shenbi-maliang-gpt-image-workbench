@@ -1331,6 +1331,49 @@
   display: block;
 }
 
+.composer-add-icon {
+  --composer-add-duration: 180ms;
+  --composer-add-swap-delay: 0s;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+}
+
+.composer-add-icon > svg {
+  grid-area: 1 / 1;
+  transition: opacity 0s linear var(--composer-add-swap-delay);
+}
+
+.composer-add-plus {
+  opacity: 1;
+  transform: rotate(0deg);
+  transform-origin: center;
+}
+
+.composer-add-icon > .composer-add-plus {
+  transition:
+    transform var(--composer-add-duration) ease,
+    opacity 0s linear var(--composer-add-swap-delay);
+}
+
+.composer-add-close {
+  opacity: 0;
+}
+
+.composer-quick-wrap > .composer-tool-btn[aria-expanded="true"] > .composer-add-icon {
+  --composer-add-swap-delay: var(--composer-add-duration);
+}
+
+.composer-quick-wrap > .composer-tool-btn[aria-expanded="true"] .composer-add-plus {
+  transform: rotate(45deg);
+  opacity: 0;
+}
+
+.composer-quick-wrap > .composer-tool-btn[aria-expanded="true"] .composer-add-close {
+  opacity: 1;
+}
+
 .composer-actions [data-tooltip] {
   position: relative;
 }
@@ -2673,6 +2716,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .composer-add-icon {
+    --composer-add-duration: 0s;
+  }
+
   .quality-settings-tabs::before {
     transition: none;
   }

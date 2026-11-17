@@ -2,6 +2,26 @@
 
 记录系统近期面向用户的功能更新、体验优化和问题修复。
 
+## v0.1.88 - 2026-11-17
+
+### 中文
+
+- 对话输入框的添加菜单打开时，加号会顺时针旋转为关闭图标，关闭后自动复位，并改善旋转结束后的图标清晰度。
+- 统一“创作提示词”菜单、面板、侧栏和功能介绍的图标，更新图标库并保持设置页 GitHub 入口正常显示。
+- WorkBuddy 图片交付只保留远程马良 MCP，使用客户端已有工具保存原图并通过原生文件卡片展示，不再安装独立的 `maliang_workbuddy`。已有任务可以继续交付，无需重新生图或重新授权。
+- 图片任务结果同时在文本和结构化数据中提供原图下载信息，兼容只读取文本结果的客户端；部分图片生成成功时，仍可保存和展示已完成的原图。
+- 改进 AI 客户端请求重试和设备连接管理，网络重试可复用已有图片任务，减少重复提交，并分别记录各次授权连接的设备信息。
+- 随应用提供 Codex 插件 0.6.0，统一使用新版 MCP SDK，并保留旧版协议兼容；改进插件安装引导、可移植包分发和 Windows 自动更新解压兼容性。
+
+### English
+
+- The composer add button rotates clockwise into a close icon when its menu opens and rotates back when it closes, with sharper rendering after the animation.
+- Unified the Prompt Creation icons across menus, panels, the sidebar and the feature introduction. Updated the icon library while preserving the GitHub entry in Settings.
+- WorkBuddy image delivery now uses only the remote Maliang MCP and the client's existing tools to save original images and show native file cards. The separate `maliang_workbuddy` MCP is no longer needed. Existing jobs can still be delivered without generating again or reauthorizing.
+- Image job results now include original download information in both text and structured data for clients that read only text. Completed originals remain available when a job succeeds only partially.
+- Improved request retries and device connection management. Network retries can reuse existing image jobs to reduce duplicate submissions, and device information is tracked per authorized connection.
+- The application includes Codex plugin 0.6.0 with the newer MCP SDK and legacy protocol compatibility, improved installation guidance and portable packages, and more compatible Windows update extraction.
+
 ## v0.1.87 - 2026-11-16
 
 ### 中文

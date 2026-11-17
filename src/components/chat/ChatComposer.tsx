@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEventHandler, type CSSProperties, type RefObject } from "react";
-import { ArrowUp, Brush, BrushCleaning, Check, ImageIcon, Lightbulb, LoaderCircle, Maximize2, Minimize2, Palette, Plus, RotateCw, Sparkles, Square, Undo2, WandSparkles, X } from "lucide-react";
+import { ArrowUp, Brush, BrushCleaning, Check, ImageIcon, Lightbulb, LoaderCircle, Maximize2, Minimize2, Palette, PencilSparkles, RotateCw, Square, Undo2, WandSparkles, X } from "lucide-react";
+import { ComposerAddIcon } from "../InlineIcons";
 import { ImageLightbox, type ImageLightboxState } from "../ImageLightbox";
 import { MaterialPickerDrawer } from "../MaterialPicker";
 import { BackgroundPicker, ImageCountStepper, ModelPicker, QualityPicker, SizePicker } from "../ImageOptionPickers";
@@ -937,7 +938,7 @@ export function ChatComposer({
               data-tooltip={t("composer.addMenu")}
               onClick={openQuickMenuFromPlus}
             >
-              <Plus size={24} strokeWidth={2} />
+              <ComposerAddIcon />
             </button>
             {quickMenuOpen ? (
               <div
@@ -979,7 +980,7 @@ export function ChatComposer({
                   onFocus={() => setQuickMenuActiveIndex(2)}
                   onClick={openPromptTemplateFromMenu}
                 >
-                  <Sparkles size={17} />
+                  <PencilSparkles size={17} />
                   <strong>{t("composer.promptTemplates")}</strong>
                 </button>
                 <button
